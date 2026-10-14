@@ -1,8 +1,8 @@
 // Keyboard and touch controls. Every player gets a controller that reports held buttons
 // (left, right, up, down, block) and presses (punch, kick, special) since the last poll.
 
-const BUTTONS = ['left', 'right', 'up', 'down', 'block', 'punch', 'kick', 'special'];
-const TAPS = new Set(['punch', 'kick', 'special']);
+const BUTTONS = ['left', 'right', 'up', 'down', 'block', 'punch', 'kick', 'special', 'taunt'];
+const TAPS = new Set(['punch', 'kick', 'special', 'taunt']);
 
 const SOLO = {
   KeyW: 'up', ArrowUp: 'up', KeyA: 'left', ArrowLeft: 'left', KeyS: 'down', ArrowDown: 'down', KeyD: 'right', ArrowRight: 'right',
@@ -10,12 +10,14 @@ const SOLO = {
   KeyK: 'kick', KeyX: 'kick', KeyG: 'kick',
   KeyL: 'block', KeyC: 'block', KeyH: 'block',
   Space: 'special', KeyV: 'special', KeyR: 'special',
+  KeyT: 'taunt', KeyB: 'taunt',
 };
-const P1 = { KeyW: 'up', KeyA: 'left', KeyS: 'down', KeyD: 'right', KeyF: 'punch', KeyG: 'kick', KeyH: 'block', KeyR: 'special' };
+const P1 = { KeyW: 'up', KeyA: 'left', KeyS: 'down', KeyD: 'right', KeyF: 'punch', KeyG: 'kick', KeyH: 'block', KeyR: 'special', KeyT: 'taunt' };
 const P2 = {
   ArrowUp: 'up', ArrowLeft: 'left', ArrowDown: 'down', ArrowRight: 'right',
   Comma: 'punch', Numpad1: 'punch', Period: 'kick', Numpad2: 'kick', Slash: 'block', Numpad3: 'block', KeyL: 'special', Numpad0: 'special',
   Numpad8: 'up', Numpad4: 'left', Numpad5: 'down', Numpad6: 'right',
+  Semicolon: 'taunt', Numpad7: 'taunt',
 };
 
 export class Pad {
@@ -133,4 +135,40 @@ export function bindTouch(root) {
     btn.addEventListener('pointercancel', up);
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
   }
+}
+
+// ---------- gamepads ----------
+// Standard mapping: X / Square punch, A / Cross kick, B / Circle or bumpers block,
+// Y / Triangle or triggers special, Select taunt, Start pause. D-pad or left stick to move.
+
+const padPrev = new Map();
+const GP_TAP = { 2: 'punch', 0: 'kick', 3: 'special', 6: 'special', 7: 'special', 8: 'taunt' };
+const GP_HOLD = { 1: 'block', 4: 'block', 5: 'block', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
+
+export function pollGamepads(onStart, onAny) {
+  if (!navigator.getGamepads) return 0;
+  const list = [...navigator.getGamepads()].filter(Boolean);
+  pads.forEach((p) => p.extra.clear());
+  list.forEach((gp, n) => {
+    const player = mode === '2p' ? Math.min(n, 1) : 0;
+    const pad = pads[player];
+    const prev = padPrev.get(gp.index) || [];
+    const now = gp.buttons.map((b) => b.pressed || b.value > 0.5);
+    now.forEach((on, i) => {
+      if (on && !prev[i]) {
+        if (GP_TAP[i]) pad.taps.add(GP_TAP[i]);
+        if (i === 9 && onStart) onStart();
+        if (onAny) onAny(i);
+      }
+      if (on && GP_HOLD[i]) pad.extra.add(GP_HOLD[i]);
+    });
+    const ax = gp.axes[0] || 0;
+    const ay = gp.axes[1] || 0;
+    if (ax < -0.5) pad.extra.add('left');
+    if (ax > 0.5) pad.extra.add('right');
+    if (ay < -0.6) pad.extra.add('up');
+    if (ay > 0.6) pad.extra.add('down');
+    padPrev.set(gp.index, now);
+  });
+  return list.length;
 }

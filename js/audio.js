@@ -254,4 +254,102 @@ export const sfx = {
     if (!ready()) return;
     glide('square', 1000, 1000, 0.04, 0.04);
   },
+  strum() {
+    if (!ready()) return;
+    // a quick dombra strum down the two strings
+    [196, 294, 392, 294].forEach((f, k) => glide('sawtooth', f, f * 0.995, 0.35, 0.06, k * 0.03));
+    noise(0.05, 0.08, 'highpass', 3000);
+  },
+  flick() {
+    if (!ready()) return;
+    noise(0.06, 0.2, 'bandpass', 2600, 0, 2);
+    glide('sine', 900, 1600, 0.06, 0.05);
+  },
+  coin() {
+    if (!ready()) return;
+    glide('square', 1320, 1320, 0.05, 0.05);
+    glide('square', 1760, 1760, 0.12, 0.05, 0.05);
+  },
+  horn() {
+    if (!ready()) return;
+    // a car horn, two beeps
+    for (const d of [0, 0.22]) for (const f of [392, 494]) glide('square', f, f, 0.16, 0.06, d);
+  },
+  door() {
+    if (!ready()) return;
+    noise(0.08, 0.3, 'lowpass', 900);
+    glide('sine', 160, 90, 0.1, 0.25);
+  },
+  yawn() {
+    if (!ready()) return;
+    glide('sawtooth', 300, 520, 0.4, 0.04, 0, 'lin');
+    glide('sawtooth', 520, 220, 0.8, 0.05, 0.4, 'lin');
+  },
+  whirl() {
+    if (!ready()) return;
+    noise(0.25, 0.14, 'bandpass', 700, 0, 3, 1600);
+  },
+  sneeze() {
+    if (!ready()) return;
+    glide('sawtooth', 700, 1200, 0.15, 0.08);
+    noise(0.6, 0.5, 'highpass', 900, 0.12, 0.6, 3000);
+  },
+  stomp() {
+    if (!ready()) return;
+    glide('sine', 80, 30, 0.6, 0.6);
+    noise(0.5, 0.4, 'lowpass', 400);
+  },
+  bleat() {
+    if (!ready()) return;
+    const c = sound.ctx;
+    const t = c.currentTime;
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    const base = 330 + Math.random() * 120;
+    o.frequency.setValueAtTime(base, t);
+    o.frequency.linearRampToValueAtTime(base * 0.85, t + 0.45);
+    const lfo = c.createOscillator();
+    lfo.frequency.value = 13;
+    const depth = c.createGain();
+    depth.gain.value = base * 0.07;
+    lfo.connect(depth).connect(o.frequency);
+    const f = c.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 1300;
+    f.Q.value = 2;
+    const g = c.createGain();
+    env(g, t, 0.12, 0.05, 0.45);
+    o.connect(f).connect(g).connect(sound.out);
+    o.start(t);
+    lfo.start(t);
+    o.stop(t + 0.52);
+    lfo.stop(t + 0.52);
+  },
+  bonk() {
+    if (!ready()) return;
+    glide('sine', 220, 120, 0.15, 0.3);
+    noise(0.08, 0.2, 'lowpass', 600);
+  },
+  fallback() {
+    if (!ready()) return;
+    // the slide whistle of someone coming back down from the sky
+    glide('sine', 2200, 300, 1.1, 0.12, 0, 'lin');
+  },
+  pop() {
+    if (!ready()) return;
+    glide('sine', 600, 1200, 0.07, 0.12);
+  },
+  taunt() {
+    if (!ready()) return;
+    // a cheeky "na-na" on a squeaky horn
+    [660, 520, 660, 520].forEach((f, k) => glide('square', f, f, 0.1, 0.035, k * 0.11));
+  },
+  // short gibberish when someone talks: pitch depends on the fighter
+  babble(pitch = 1, n = 4) {
+    if (!ready()) return;
+    for (let k = 0; k < n; k++) {
+      const f = (180 + Math.random() * 140) * pitch;
+      glide('triangle', f, f * (0.8 + Math.random() * 0.5), 0.07, 0.05, k * 0.075);
+    }
+  },
 };

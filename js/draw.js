@@ -1,74 +1,44 @@
 import { solve } from './pose.js';
-import { roundRect } from './util.js';
+import { TAU, shade, seg, dot, baursakAt, star, roundRect } from './paint.js';
+import { LOOKS, businessCard, perchedEagle, kazan, whiteScarf } from './looks.js';
 
 // Fighters, props and effects, drawn in world space: x right, y down, ground at y = 0.
 
-const TAU = Math.PI * 2;
-
-function shade(hex, k) {
-  const n = parseInt(hex.slice(1), 16);
-  const r = Math.round(((n >> 16) & 255) * k);
-  const g = Math.round(((n >> 8) & 255) * k);
-  const b = Math.round((n & 255) * k);
-  return `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`;
-}
-
-function seg(c, a, b, w, color) {
-  c.strokeStyle = color;
-  c.lineWidth = w;
-  c.lineCap = 'round';
-  c.beginPath();
-  c.moveTo(a[0], a[1]);
-  c.lineTo(b[0], b[1]);
-  c.stroke();
-}
-
-function dot(c, p, r, color) {
-  c.fillStyle = color;
-  c.beginPath();
-  c.arc(p[0], p[1], r, 0, TAU);
-  c.fill();
-}
-
-const along = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
-const dirOf = (ang) => [Math.sin(ang), Math.cos(ang)];
+export { star, kazan };
 
 // ---------- fighter ----------
 
 export function drawFighter(c, f, opts = {}) {
+  if (f.hidden) return;
   const b = f.def.body;
-  const p = f.pose;
-  const J = solve(p, b);
+  const J = solve(f.pose, b);
   const pal = f.pal;
-  const id = f.def.id;
+  const look = LOOKS[f.def.id] || LOOKS.batyr;
   c.save();
   c.translate(f.x, -f.y);
   if (!opts.noShadow) {
-    // shadow stays on the ground
     const h = Math.min(1, f.y / 300);
     c.fillStyle = `rgba(0,0,0,${0.32 * (1 - h)})`;
     c.beginPath();
-    c.ellipse(0, f.y, 40 * (1 - h * 0.5), 9 * (1 - h * 0.5), 0, 0, TAU);
+    c.ellipse(0, f.y, (b.w + 46) * (1 - h * 0.5), 9 * (1 - h * 0.5), 0, 0, TAU);
     c.fill();
   }
   c.translate(0, -J.lift);
   c.scale(f.face, 1);
-  const lean = J.angles;
-
   const dark = (col) => shade(col, 0.72);
-  const limbs = id === 'apa' ? apaLimbs : batyrLimbs;
+  const same = (col) => col;
 
-  // far side first, darker
-  limbs.arm(c, J, 'F', pal, dark, f);
-  limbs.leg(c, J, 'F', pal, dark, f);
-  if (id === 'batyr') spear(c, J, pal);
-  limbs.leg(c, J, 'N', pal, (x) => x, f);
-  limbs.body(c, J, pal, b, f);
-  drawHead(c, J, f);
-  limbs.arm(c, J, 'N', pal, (x) => x, f);
+  look.arm(c, J, 'F', pal, dark, f);
+  look.leg(c, J, 'F', pal, dark, f);
+  if (look.back) look.back(c, J, pal, f);
+  look.leg(c, J, 'N', pal, same, f);
+  look.body(c, J, pal, b, f);
+  drawHead(c, J, f, look, opts);
+  look.arm(c, J, 'N', pal, same, f);
+  // giving up: anyone can wave a white scarf
+  if (f.state === 'flag') whiteScarf(c, J.handF, f.t);
 
   if (f.flash > 0) {
-    // a quick white outline on a hit
     c.globalAlpha = f.flash / 8;
     c.strokeStyle = '#fff';
     c.lineWidth = 3;
@@ -78,45 +48,83 @@ export function drawFighter(c, f, opts = {}) {
     c.globalAlpha = 1;
   }
   c.restore();
-  void lean;
 
-  // stars over a dizzy head, in world space
+  const big = opts.bigHead ? 1.7 : 1;
+  const hx = f.x + J.headC[0] * f.face;
+  const hy = -f.y - J.lift + J.headC[1] - (big - 1) * b.head;
   if (['stun', 'dizzy', 'out'].includes(f.state) || (f.state === 'hit' && f.hp <= 0)) {
-    const hx = f.x + J.headC[0] * f.face;
-    const hy = -f.y - J.lift + J.headC[1] - b.head - 14;
-    stars(c, hx, hy, opts.time || 0, f.state === 'out' ? 0.8 : 1);
+    stars(c, hx, hy - b.head * big - 14, opts.time || 0, f.state === 'out' ? 0.8 : 1);
   }
   if (f.state === 'dance' && f.dance > 2.2) {
-    // sweat drops
-    const hx = f.x + J.headC[0] * f.face;
-    const hy = -f.y - J.lift + J.headC[1];
     const tt = (opts.time || 0) * 0.08;
     for (let k = 0; k < 2; k++) {
       const ph = (tt + k * 0.5) % 1;
       drop(c, hx + (k ? 22 : -20) * f.face, hy - 10 + ph * 26, 1 - ph);
     }
   }
+  if (f.meterT > 0) meter(c, hx, hy - b.head * big - 40, f);
+}
+
+function drawHead(c, J, f, look, opts) {
+  const r = f.def.body.head;
+  const [x, y] = J.headC;
+  const a = J.angles.head - Math.PI;
+  c.save();
+  c.translate(x, y);
+  c.rotate(-a);
+  if (opts.bigHead) {
+    // "Бас-бас": a big head that still sits on the neck
+    c.translate(0, -r * 0.7);
+    c.scale(1.7, 1.7);
+  }
+  const md = mood(f);
+  const talking = (!!f.bubble && f.bubble.t > 30 && Math.floor(f.bubble.t / 5) % 2 === 0) || f.state === 'yawn';
+  look.head(c, r, f, md, talking);
+  if (f.hood) hood(c, r);
+  c.restore();
+}
+
+function mood(f) {
+  const st = f.state;
+  if (st === 'out' || st === 'ko' || st === 'blast' || (st === 'fall' && f.hp <= 0)) return 'x';
+  if (st === 'stun' || st === 'dizzy' || (st === 'hit' && f.hp <= 0)) return 'spin';
+  if (st === 'blush') return 'blush';
+  if (st === 'sleep') return 'sleep';
+  if (st === 'yawn') return 'sleep';
+  if (['hit', 'fall', 'thrown', 'pulled', 'down', 'carried', 'blind', 'flag'].includes(st)) return 'hurt';
+  if (['win', 'clap', 'play', 'taunt', 'wave', 'keys'].includes(st)) return 'happy';
+  if (st === 'lose') return 'sad';
+  if (st === 'dance') return f.dance > 2.6 ? 'hurt' : 'happy';
+  if (st === 'attack' || st === 'special' || st === 'throwing') return 'angry';
+  return 'calm';
+}
+
+// томаға: the little leather hood hunters put on an eagle
+function hood(c, r) {
+  c.fillStyle = '#7a4a26';
+  c.beginPath();
+  c.moveTo(-r * 1.0, r * 0.25);
+  c.quadraticCurveTo(-r * 1.1, -r * 1.2, r * 0.1, -r * 1.15);
+  c.quadraticCurveTo(r * 1.15, -r * 1.0, r * 1.1, r * 0.25);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = '#ffc94a';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(-r * 1.0, r * 0.2);
+  c.lineTo(r * 1.1, r * 0.2);
+  c.stroke();
+  c.fillStyle = '#e0392f';
+  c.beginPath();
+  c.ellipse(r * 0.05, -r * 1.35, r * 0.18, r * 0.35, 0.2, 0, TAU);
+  c.fill();
 }
 
 function stars(c, x, y, t, s) {
   for (let k = 0; k < 3; k++) {
     const a = t * 0.12 + (k * TAU) / 3;
-    const sx = x + Math.cos(a) * 26 * s;
-    const sy = y + Math.sin(a) * 7 * s;
-    star(c, sx, sy, 6.5 * s, Math.sin(a) > 0 ? '#ffe680' : '#ffc94a');
+    star(c, x + Math.cos(a) * 26 * s, y + Math.sin(a) * 7 * s, 6.5 * s, Math.sin(a) > 0 ? '#ffe680' : '#ffc94a');
   }
-}
-
-export function star(c, x, y, r, color) {
-  c.fillStyle = color;
-  c.beginPath();
-  for (let k = 0; k < 10; k++) {
-    const a = (k * Math.PI) / 5 - Math.PI / 2;
-    const rr = k % 2 ? r * 0.45 : r;
-    c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-  }
-  c.closePath();
-  c.fill();
 }
 
 function drop(c, x, y, a) {
@@ -130,464 +138,25 @@ function drop(c, x, y, a) {
   c.globalAlpha = 1;
 }
 
-// ---------- batyr ----------
-
-const batyrLimbs = {
-  arm(c, J, side, pal, tint, f) {
-    const sh = J.shoulder;
-    const el = J['elbow' + side];
-    const hand = J['hand' + side];
-    seg(c, sh, el, 13, tint(pal.robe));
-    seg(c, el, hand, 11.5, tint(pal.robe));
-    // gold cuff
-    seg(c, along(el, hand, 0.78), along(el, hand, 0.86), 12.5, tint(pal.trim));
-    const fist = f.state === 'attack' || f.state === 'throwing' || f.state === 'special';
-    dot(c, hand, fist ? 7.5 : 6.5, tint(pal.skin));
-    if (side === 'N') shield(c, el, hand, J.angles.faN, pal, f);
-  },
-  leg(c, J, side, pal, tint) {
-    const hip = J.hip;
-    const knee = J['knee' + side];
-    const foot = J['foot' + side];
-    seg(c, hip, knee, 16, tint(pal.pants));
-    seg(c, knee, along(knee, foot, 0.35), 14, tint(pal.pants));
-    seg(c, along(knee, foot, 0.3), foot, 14.5, tint(pal.boots));
-    boot(c, foot, J.angles['sh' + side], tint(pal.boots), 1.2);
-  },
-  body(c, J, pal, b) {
-    const { hip, shoulder } = J;
-    const t = J.angles.torso;
-    const perp = [-Math.cos(t), Math.sin(t)];
-    const w = b.w / 2;
-    // chapan: shoulders down to just above the knees
-    const hemN = along(hip, J.kneeN, 0.62);
-    const hemF = along(hip, J.kneeF, 0.62);
-    c.fillStyle = pal.robe;
-    c.beginPath();
-    c.moveTo(shoulder[0] - perp[0] * w * 0.9, shoulder[1] - perp[1] * w * 0.9);
-    c.lineTo(shoulder[0] + perp[0] * w, shoulder[1] + perp[1] * w);
-    c.lineTo(hip[0] + perp[0] * (w + 3), hip[1] + perp[1] * (w + 3));
-    c.lineTo(hemN[0] + perp[0] * 10, hemN[1] + 6);
-    c.lineTo(hemF[0] - perp[0] * 12, hemF[1] + 6);
-    c.lineTo(hip[0] - perp[0] * (w + 2), hip[1] - perp[1] * (w + 2));
-    c.closePath();
-    c.fill();
-    // trim down the front and along the hem
-    c.strokeStyle = pal.trim;
-    c.lineWidth = 3.5;
-    c.lineJoin = 'round';
-    c.beginPath();
-    c.moveTo(shoulder[0] + perp[0] * (w - 4), shoulder[1] + perp[1] * (w - 4));
-    c.lineTo(hip[0] + perp[0] * (w - 1), hip[1] + perp[1] * (w - 1));
-    c.lineTo(hemN[0] + perp[0] * 8, hemN[1] + 4);
-    c.lineTo(hemF[0] - perp[0] * 10, hemF[1] + 4);
-    c.stroke();
-    // belt with a buckle
-    const belt = along(hip, shoulder, 0.16);
-    seg(c, [belt[0] - perp[0] * (w + 2), belt[1] - perp[1] * (w + 2)], [belt[0] + perp[0] * (w + 2), belt[1] + perp[1] * (w + 2)], 7, pal.belt);
-    dot(c, [belt[0] + perp[0] * (w - 3), belt[1] + perp[1] * (w - 3)], 4, pal.trim);
-    // collar
-    seg(c, along(shoulder, hip, 0.02), along(shoulder, hip, 0.12), 6, pal.robe2);
-  },
-};
-
-function spear(c, J, pal) {
-  // carried on the back, diagonally
-  const t = J.angles.torso;
-  const back = [Math.cos(t), -Math.sin(t)];
-  const s0 = along(J.hip, J.shoulder, -0.1);
-  const base = [s0[0] + back[0] * 12, s0[1] + back[1] * 12];
-  const up = dirOf(t + 0.35);
-  const tip = [base[0] + up[0] * 120, base[1] + up[1] * 120];
-  seg(c, base, tip, 4, '#6b4424');
-  c.fillStyle = pal.metal;
-  const d = dirOf(t + 0.35);
-  const n = [d[1], -d[0]];
-  c.beginPath();
-  c.moveTo(tip[0] + d[0] * 22, tip[1] + d[1] * 22);
-  c.lineTo(tip[0] + n[0] * 5, tip[1] + n[1] * 5);
-  c.lineTo(tip[0] - n[0] * 5, tip[1] - n[1] * 5);
-  c.closePath();
-  c.fill();
-  dot(c, tip, 4.5, pal.plume);
-}
-
-function shield(c, el, hand, ang, pal, f) {
-  const up = f.state === 'block' || f.state === 'blockstun';
-  const pos = along(el, hand, up ? 0.75 : 0.55);
-  const r = up ? 27 : 24;
-  c.save();
-  c.translate(pos[0], pos[1]);
-  // seen a little from the side unless raised
-  c.scale(up ? 0.9 : 0.62, 1);
-  dot(c, [0, 0], r, pal.shield);
-  c.strokeStyle = pal.metal;
-  c.lineWidth = 4;
-  c.beginPath();
-  c.arc(0, 0, r - 2, 0, TAU);
-  c.stroke();
-  // қошқар мүйіз: a pair of ram horns above and the same pair mirrored below
-  c.strokeStyle = pal.trim;
-  c.lineWidth = 2.4;
-  c.lineCap = 'round';
-  ramHorns(c, 0.95);
-  c.save();
-  c.scale(1, -1);
-  ramHorns(c, 0.95);
-  c.restore();
-  dot(c, [0, 0], 6, pal.metal);
-  dot(c, [-1.5, -1.5], 2.2, '#fff');
-  c.restore();
-  void ang;
-}
-
-function boot(c, foot, shinAng, color, big) {
-  // the foot points forward, at a right angle to the shin
-  const a = shinAng - Math.PI / 2;
-  const d = [Math.sin(a + Math.PI), Math.cos(a + Math.PI)];
-  c.save();
-  c.translate(foot[0], foot[1]);
-  c.rotate(Math.atan2(d[1], d[0]));
-  c.fillStyle = color;
-  roundRect(c, -6 * big, -6, 22 * big, 11, 5);
-  c.fill();
-  c.restore();
-}
-
-// two horns curling outwards from a short stem, mirror-symmetric
-export function ramHorns(c, k) {
-  for (const s of [-1, 1]) {
-    c.beginPath();
-    c.moveTo(0, -4 * k);
-    c.bezierCurveTo(0, -14 * k, s * 12 * k, -17 * k, s * 14 * k, -10 * k);
-    c.bezierCurveTo(s * 15 * k, -5 * k, s * 9 * k, -4 * k, s * 9 * k, -8.5 * k);
-    c.stroke();
-  }
-}
-
-// ---------- apa ----------
-
-const apaLimbs = {
-  arm(c, J, side, pal, tint, f) {
-    const sh = J.shoulder;
-    const el = J['elbow' + side];
-    const hand = J['hand' + side];
-    seg(c, sh, el, 13, tint(pal.robe));
-    seg(c, el, hand, 11.5, tint(pal.robe));
-    dot(c, hand, 6.5, tint(pal.skin));
-    if (side === 'N') {
-      const kazan = f.state === 'attack' && f.move && f.move.id === 'upper';
-      if (kazan) drawKazan(c, hand, J.angles.faN);
-      else ladle(c, hand, J.angles.faN, pal, f);
-    }
-    if (side === 'F' && f.state === 'special' && f.t < f.def.spec.s) baursakAt(c, hand[0], hand[1], 0);
-  },
-  leg(c, J, side, pal, tint) {
-    const knee = J['knee' + side];
-    const foot = J['foot' + side];
-    seg(c, J.hip, knee, 15, tint(pal.robe2));
-    seg(c, knee, foot, 11, tint(pal.socks));
-    boot(c, foot, J.angles['sh' + side], tint(pal.shoes), 1);
-  },
-  body(c, J, pal, b, f) {
-    const { hip, shoulder } = J;
-    const t = J.angles.torso;
-    const perp = [-Math.cos(t), Math.sin(t)];
-    const w = b.w / 2;
-    // long dress, flares down to mid-shin
-    const hemN = along(J.kneeN, J.footN, 0.45);
-    const hemF = along(J.kneeF, J.footF, 0.45);
-    const flare = f.state === 'dance' ? 6 : 0;
-    c.fillStyle = pal.robe;
-    c.beginPath();
-    c.moveTo(shoulder[0] - perp[0] * w * 0.85, shoulder[1] - perp[1] * w * 0.85);
-    c.lineTo(shoulder[0] + perp[0] * w * 0.9, shoulder[1] + perp[1] * w * 0.9);
-    c.quadraticCurveTo(hip[0] + perp[0] * (w + 8), hip[1] + perp[1] * (w + 8) - 10, hip[0] + perp[0] * (w + 4), hip[1] + perp[1] * (w + 4));
-    c.lineTo(Math.max(hemN[0], hemF[0]) + 14 + flare, Math.max(hemN[1], hemF[1]) + 4);
-    c.lineTo(Math.min(hemN[0], hemF[0]) - 14 - flare, Math.max(hemN[1], hemF[1]) + 4);
-    c.lineTo(hip[0] - perp[0] * (w + 4), hip[1] - perp[1] * (w + 4));
-    c.closePath();
-    c.fill();
-    // hem ribbon
-    seg(c, [Math.min(hemN[0], hemF[0]) - 12 - flare, Math.max(hemN[1], hemF[1])], [Math.max(hemN[0], hemF[0]) + 12 + flare, Math.max(hemN[1], hemF[1])], 3, pal.trim);
-    // vest (kamzol) over the dress
-    const v0 = along(shoulder, hip, 0.05);
-    const v1 = along(shoulder, hip, 1.05);
-    c.fillStyle = pal.vest;
-    c.beginPath();
-    c.moveTo(v0[0] - perp[0] * w * 0.85, v0[1] - perp[1] * w * 0.85);
-    c.lineTo(v0[0] + perp[0] * w * 0.55, v0[1] + perp[1] * w * 0.55);
-    c.lineTo(v1[0] + perp[0] * w * 0.75, v1[1] + perp[1] * w * 0.75);
-    c.lineTo(v1[0] - perp[0] * (w + 4), v1[1] - perp[1] * (w + 4));
-    c.closePath();
-    c.fill();
-    c.strokeStyle = pal.trim;
-    c.lineWidth = 2.5;
-    c.beginPath();
-    c.moveTo(v0[0] + perp[0] * w * 0.55, v0[1] + perp[1] * w * 0.55);
-    c.lineTo(v1[0] + perp[0] * w * 0.75, v1[1] + perp[1] * w * 0.75);
-    c.stroke();
-    // buttons
-    for (let k = 1; k < 4; k++) dot(c, along([v0[0] + perp[0] * w * 0.5, v0[1] + perp[1] * w * 0.5], [v1[0] + perp[0] * w * 0.68, v1[1] + perp[1] * w * 0.68], k / 4), 2, pal.trim);
-  },
-};
-
-function ladle(c, hand, ang, pal, f) {
-  // шөміш: a long handle and a deep bowl at the end
-  const swing = f.state === 'attack' && f.move && (f.move.id === 'jab' || f.move.id === 'sweep' || f.move.id === 'airP');
-  const a = ang + (swing ? 0 : 0.5);
-  const d = dirOf(a);
-  const end = [hand[0] + d[0] * 46, hand[1] + d[1] * 46];
-  seg(c, [hand[0] - d[0] * 8, hand[1] - d[1] * 8], end, 4, pal.metal2);
-  // the bowl hangs off the end of the handle, its rim along the handle
-  c.save();
-  c.translate(end[0], end[1]);
-  c.rotate(Math.atan2(d[1], d[0]));
-  c.fillStyle = pal.metal;
-  c.beginPath();
-  c.ellipse(4, 0, 13, 12, 0, 0, Math.PI);
-  c.closePath();
-  c.fill();
-  seg(c, [-10, 0], [18, 0], 3, pal.metal2);
-  c.fillStyle = 'rgba(255,255,255,0.45)';
-  c.beginPath();
-  c.ellipse(0, 5, 3, 4.5, 0.3, 0, Math.PI * 2);
-  c.fill();
-  c.restore();
-}
-
-function drawKazan(c, hand, ang) {
-  const d = dirOf(ang);
-  const p = [hand[0] + d[0] * 18, hand[1] + d[1] * 18];
-  c.save();
-  c.translate(p[0], p[1]);
-  c.fillStyle = '#26262b';
-  c.beginPath();
-  c.ellipse(0, 0, 26, 20, 0, 0, TAU);
-  c.fill();
-  c.fillStyle = '#3a3a42';
-  c.beginPath();
-  c.ellipse(0, -14, 24, 7, 0, 0, TAU);
-  c.fill();
-  c.strokeStyle = '#1a1a1e';
-  c.lineWidth = 3;
-  c.beginPath();
-  c.arc(-26, -6, 5, 0, TAU);
-  c.arc(26, -6, 5, 0, TAU);
-  c.stroke();
-  c.fillStyle = 'rgba(255,255,255,0.25)';
-  c.beginPath();
-  c.ellipse(-9, 4, 5, 9, 0.4, 0, TAU);
-  c.fill();
-  c.restore();
-}
-
-export function baursakAt(c, x, y, spin) {
+// the taxi meter running over a rival's head
+function meter(c, x, y, f) {
+  const paid = Math.floor((300 - f.meterT) / 30) * 150 + 450;
   c.save();
   c.translate(x, y);
-  c.rotate(spin);
-  c.fillStyle = '#d98a2b';
-  roundRect(c, -14, -12, 28, 24, 10);
+  c.fillStyle = '#1d1d22';
+  roundRect(c, -34, -16, 68, 26, 6);
   c.fill();
-  c.fillStyle = '#f2b354';
-  roundRect(c, -11, -10, 20, 16, 8);
-  c.fill();
-  c.fillStyle = 'rgba(255,255,255,0.55)';
-  c.beginPath();
-  c.ellipse(-4, -5, 4, 2.5, -0.5, 0, TAU);
-  c.fill();
+  c.fillStyle = '#ffcc33';
+  c.fillRect(-34, -16, 68, 6);
+  c.fillStyle = '#7dff8a';
+  c.font = '800 13px "Cascadia Mono", Consolas, monospace';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(`${paid} ₸`, 0, 1);
   c.restore();
 }
 
-// ---------- heads and faces ----------
-
-function mood(f) {
-  const st = f.state;
-  if (st === 'out' || st === 'ko' || (st === 'fall' && f.hp <= 0)) return 'x';
-  if (st === 'stun' || st === 'dizzy' || (st === 'hit' && f.hp <= 0)) return 'spin';
-  if (st === 'hit' || st === 'fall' || st === 'thrown' || st === 'pulled' || st === 'down' || st === 'carried') return 'hurt';
-  if (st === 'win' || st === 'clap') return 'happy';
-  if (st === 'lose') return 'sad';
-  if (st === 'dance') return f.dance > 2.6 ? 'hurt' : 'happy';
-  if (st === 'attack' || st === 'special' || st === 'throwing') return 'angry';
-  return 'calm';
-}
-
-function drawHead(c, J, f) {
-  const r = f.def.body.head;
-  const pal = f.pal;
-  const [x, y] = J.headC;
-  const a = J.angles.head - Math.PI;
-  c.save();
-  c.translate(x, y);
-  c.rotate(-a);
-  const md = mood(f);
-  const talking = !!f.bubble && f.bubble.t > 30 && Math.floor(f.bubble.t / 5) % 2 === 0;
-  if (f.def.id === 'apa') {
-    // headscarf behind the head, tied under the chin
-    dot(c, [-r * 0.16, -r * 0.06], r * 1.2, pal.scarf);
-    c.fillStyle = pal.scarf2;
-    c.beginPath();
-    c.moveTo(-r * 0.9, r * 0.6);
-    c.lineTo(-r * 1.55, r * 1.35);
-    c.lineTo(-r * 0.6, r * 1.1);
-    c.closePath();
-    c.fill();
-    c.fillStyle = pal.skin;
-    c.beginPath();
-    c.ellipse(r * 0.2, r * 0.14, r * 0.8, r * 0.86, 0, 0, TAU);
-    c.fill();
-    // scarf edge over the forehead
-    c.fillStyle = pal.scarf;
-    c.beginPath();
-    c.ellipse(r * 0.05, -r * 0.62, r * 1.02, r * 0.46, 0.12, Math.PI, TAU);
-    c.fill();
-    seg(c, [-r * 0.7, -r * 0.55], [r * 0.95, -r * 0.42], 2, pal.scarf2);
-    face(c, r, md, talking, f);
-    // round glasses
-    c.strokeStyle = pal.glasses;
-    c.lineWidth = 1.6;
-    for (const ex of [0.22, 0.7]) {
-      c.beginPath();
-      c.arc(r * ex, -r * 0.02, r * 0.21, 0, TAU);
-      c.stroke();
-    }
-    seg(c, [r * 0.43, -r * 0.04], [r * 0.49, -r * 0.04], 1.6, pal.glasses);
-    seg(c, [r * 0.01, -r * 0.04], [-r * 0.45, -r * 0.12], 1.6, pal.glasses);
-    c.fillStyle = 'rgba(255,255,255,0.5)';
-    c.beginPath();
-    c.arc(r * 0.64, -r * 0.1, r * 0.06, 0, TAU);
-    c.fill();
-  } else {
-    dot(c, [0, 0], r, pal.skin);
-    // ear
-    dot(c, [-r * 0.15, r * 0.08], r * 0.22, shade(pal.skin, 0.88));
-    face(c, r, md, talking, f);
-    // moustache
-    c.fillStyle = pal.hair;
-    c.beginPath();
-    c.moveTo(r * 0.5, r * 0.36);
-    c.quadraticCurveTo(r * 0.75, r * 0.22, r * 1.02, r * 0.36);
-    c.quadraticCurveTo(r * 1.06, r * 0.62, r * 0.88, r * 0.66);
-    c.quadraticCurveTo(r * 0.78, r * 0.45, r * 0.5, r * 0.5);
-    c.closePath();
-    c.fill();
-    // pointed helmet with a plume and a mail curtain at the back
-    c.fillStyle = pal.metal2;
-    c.beginPath();
-    c.moveTo(-r * 1.05, -r * 0.05);
-    c.quadraticCurveTo(-r * 1.15, r * 0.75, -r * 0.55, r * 0.95);
-    c.lineTo(-r * 0.25, r * 0.55);
-    c.lineTo(-r * 0.4, -r * 0.05);
-    c.closePath();
-    c.fill();
-    c.fillStyle = pal.metal;
-    c.beginPath();
-    c.moveTo(-r * 1.08, -r * 0.08);
-    c.quadraticCurveTo(-r * 1.0, -r * 1.05, -r * 0.05, -r * 1.95);
-    c.quadraticCurveTo(r * 0.75, -r * 1.05, r * 1.08, -r * 0.18);
-    c.closePath();
-    c.fill();
-    c.fillStyle = 'rgba(255,255,255,0.35)';
-    c.beginPath();
-    c.moveTo(-r * 0.55, -r * 0.3);
-    c.quadraticCurveTo(-r * 0.45, -r * 1.05, -r * 0.08, -r * 1.65);
-    c.quadraticCurveTo(-r * 0.25, -r * 0.9, -r * 0.3, -r * 0.3);
-    c.fill();
-    seg(c, [-r * 1.08, -r * 0.1], [r * 1.08, -r * 0.2], 4.5, pal.trim);
-    // nose guard
-    seg(c, [r * 0.62, -r * 0.2], [r * 0.66, r * 0.28], 3, pal.metal2);
-    c.fillStyle = pal.plume;
-    c.beginPath();
-    c.moveTo(-r * 0.05, -r * 1.95);
-    c.quadraticCurveTo(-r * 0.9, -r * 2.5, -r * 1.5, -r * 1.7);
-    c.quadraticCurveTo(-r * 0.8, -r * 2.0, -r * 0.05, -r * 1.85);
-    c.fill();
-  }
-  c.restore();
-}
-
-function face(c, r, md, talking, f) {
-  const ink = '#1d1310';
-  const eyes = [[r * 0.22, -r * 0.02], [r * 0.7, -r * 0.02]];
-  c.strokeStyle = ink;
-  c.fillStyle = ink;
-  c.lineCap = 'round';
-  if (md === 'x') {
-    c.lineWidth = 2;
-    for (const [ex, ey] of eyes) {
-      c.beginPath();
-      c.moveTo(ex - 3.5, ey - 3.5);
-      c.lineTo(ex + 3.5, ey + 3.5);
-      c.moveTo(ex + 3.5, ey - 3.5);
-      c.lineTo(ex - 3.5, ey + 3.5);
-      c.stroke();
-    }
-  } else if (md === 'spin') {
-    c.lineWidth = 1.5;
-    const t = (f.t || 0) * 0.3;
-    for (const [ex, ey] of eyes) {
-      c.beginPath();
-      for (let k = 0; k < 18; k++) {
-        const a = t + k * 0.7;
-        const rr = 0.4 + k * 0.22;
-        c.lineTo(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr);
-      }
-      c.stroke();
-    }
-  } else if (md === 'hurt') {
-    c.lineWidth = 2;
-    for (const [ex, ey] of eyes) {
-      c.beginPath();
-      c.moveTo(ex - 3.5, ey - 3);
-      c.lineTo(ex + 1.5, ey);
-      c.lineTo(ex - 3.5, ey + 3);
-      c.stroke();
-    }
-  } else if (md === 'happy') {
-    c.lineWidth = 2;
-    for (const [ex, ey] of eyes) {
-      c.beginPath();
-      c.arc(ex, ey + 1.5, 3.2, Math.PI * 1.1, Math.PI * 1.9);
-      c.stroke();
-    }
-  } else {
-    for (const [ex, ey] of eyes) dot(c, [ex, ey], md === 'sad' ? 2 : 2.4, ink);
-  }
-  // brows
-  c.lineWidth = f.def.id === 'apa' ? 1.8 : 2.6;
-  const angry = md === 'angry' ? 1 : md === 'sad' ? -1 : 0;
-  for (const [ex, ey] of eyes) {
-    c.beginPath();
-    c.moveTo(ex - 4, ey - 6.5 - angry * 1.5);
-    c.lineTo(ex + 4, ey - 6.5 + angry * 1.5);
-    c.stroke();
-  }
-  // nose and cheek
-  dot(c, [r * 0.98, r * 0.18], r * 0.16, shade(f.pal.skin, 0.9));
-  c.fillStyle = 'rgba(232, 96, 96, 0.28)';
-  c.beginPath();
-  c.arc(r * 0.45, r * 0.4, r * 0.18, 0, TAU);
-  c.fill();
-  // mouth
-  const mx = r * 0.66;
-  const my = r * 0.58;
-  c.fillStyle = '#5a1c1c';
-  if (talking || md === 'hurt' || md === 'angry' || md === 'x') {
-    c.beginPath();
-    c.ellipse(mx, my, md === 'angry' ? 4.5 : 3.6, talking || md === 'hurt' ? 4.2 : 2.6, 0, 0, TAU);
-    c.fill();
-  } else {
-    c.strokeStyle = '#5a1c1c';
-    c.lineWidth = 2;
-    c.beginPath();
-    if (md === 'sad') c.arc(mx, my + 4, 4, Math.PI * 1.15, Math.PI * 1.85);
-    else c.arc(mx, my - 2, 4, Math.PI * 0.15, Math.PI * 0.85);
-    c.stroke();
-  }
-}
-
-// ---------- lasso, projectiles, eagle ----------
+// ---------- lasso, projectiles, eagle, car ----------
 
 export function drawLasso(c, f) {
   const L = f.lasso;
@@ -602,8 +171,7 @@ export function drawLasso(c, f) {
   c.lineCap = 'round';
   c.beginPath();
   c.moveTo(hx, hy);
-  const sag = L.out ? 18 : 6;
-  c.quadraticCurveTo((hx + lx) / 2, (hy + sy) / 2 + sag, lx, sy);
+  c.quadraticCurveTo((hx + lx) / 2, (hy + sy) / 2 + (L.out ? 18 : 6), lx, sy);
   c.stroke();
   c.lineWidth = 3.4;
   c.beginPath();
@@ -612,35 +180,157 @@ export function drawLasso(c, f) {
 }
 
 export function drawProjectile(c, p) {
-  baursakAt(c, p.x, -p.y, p.spin);
+  if (p.k === 'baursak') baursakAt(c, p.x, -p.y, p.spin);
+  else if (p.k === 'card') businessCard(c, p.x, -p.y, p.spin);
+  else if (p.k === 'wave') wave(c, p);
+  else if (p.k === 'words') wordBubble(c, p);
+  else if (p.k === 'stomp') quake(c, p);
+  else if (p.k === 'eagle') drawEagle(c, { x: p.x, y: p.y, flap: p.t * 0.45, dive: p.phase === 'dive', dir: p.dir, scale: 0.62 });
+  else if (p.k === 'melon') melon(c, p);
+  else if (p.k === 'sheep') sheep(c, p);
+  else if (p.k === 'weed') tumbleweed(c, p);
+}
+
+function wave(c, p) {
+  c.save();
+  c.translate(p.x, -p.y);
+  c.scale(p.dir, 1);
+  for (let k = 0; k < 3; k++) {
+    const r = 16 + k * 13 + ((p.t * 2) % 13);
+    c.strokeStyle = `rgba(159, 224, 255, ${0.85 - k * 0.22})`;
+    c.lineWidth = 4 - k;
+    c.beginPath();
+    c.arc(-20, 0, r, -0.9, 0.9);
+    c.stroke();
+  }
+  c.scale(p.dir, 1);
+  c.fillStyle = '#ffe680';
+  c.font = '900 22px "Segoe UI", system-ui, sans-serif';
+  c.textAlign = 'center';
+  c.fillText('♪', -p.dir * 8, -22 + Math.sin(p.t * 0.4) * 4);
+  c.fillText('♫', p.dir * 10, 30 + Math.cos(p.t * 0.4) * 4);
+  c.restore();
+}
+
+function wordBubble(c, p) {
+  c.save();
+  c.translate(p.x, -p.y);
+  c.rotate(Math.sin(p.t * 0.3) * 0.08);
+  c.font = '900 18px "Segoe UI", system-ui, sans-serif';
+  const w = c.measureText(p.text).width + 22;
+  c.fillStyle = '#fffaf0';
+  c.strokeStyle = '#c0392b';
+  c.lineWidth = 3;
+  roundRect(c, -w / 2, -18, w, 34, 14);
+  c.fill();
+  c.stroke();
+  c.fillStyle = '#c0392b';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(p.text, 0, 0);
+  c.restore();
+}
+
+function quake(c, p) {
+  // a ripple running along the ground with rocks hopping out of it
+  c.save();
+  c.translate(p.x, 0);
+  c.fillStyle = '#8a6a44';
+  c.beginPath();
+  c.ellipse(0, 0, 46, 18 + Math.sin(p.t * 0.6) * 4, 0, Math.PI, TAU);
+  c.fill();
+  for (let k = 0; k < 4; k++) {
+    const ph = (p.t * 0.12 + k * 0.25) % 1;
+    c.fillStyle = k % 2 ? '#6b5236' : '#9b7e52';
+    c.fillRect(-30 + k * 18, -10 - Math.sin(ph * Math.PI) * 40, 8, 8);
+  }
+  c.restore();
+}
+
+function melon(c, p) {
+  c.save();
+  c.translate(p.x, -p.y - 26);
+  c.rotate(p.spin);
+  dot(c, [0, 0], 26, '#2f7a32');
+  c.strokeStyle = '#1e5222';
+  c.lineWidth = 4;
+  for (let k = -2; k <= 2; k++) {
+    c.beginPath();
+    c.ellipse(0, 0, Math.abs(k) * 9 + 3, 26, 0, 0, TAU);
+    c.stroke();
+  }
+  c.restore();
+}
+
+function tumbleweed(c, p) {
+  c.save();
+  c.translate(p.x, -p.y - 24);
+  c.rotate(p.spin);
+  c.strokeStyle = '#a8864e';
+  c.lineWidth = 2;
+  for (let k = 0; k < 10; k++) {
+    c.beginPath();
+    c.ellipse(0, 0, 24, 10 + (k % 3) * 5, k * 0.35, 0, TAU);
+    c.stroke();
+  }
+  c.restore();
+}
+
+function sheep(c, p) {
+  // a fluffy sheep running across the arena
+  const legs = Math.sin(p.t * 0.6) * 0.5;
+  c.save();
+  c.translate(p.x, -p.y);
+  c.scale(p.dir, 1);
+  c.strokeStyle = '#2a2420';
+  c.lineWidth = 5;
+  c.lineCap = 'round';
+  for (const [x, s] of [[-18, 1], [-8, -1], [12, 1], [22, -1]]) {
+    c.beginPath();
+    c.moveTo(x, -20);
+    c.lineTo(x + legs * 12 * s, 0);
+    c.stroke();
+  }
+  c.fillStyle = '#f2ece0';
+  for (const [x, y, r] of [[-20, -36, 15], [-4, -42, 17], [12, -38, 15], [0, -30, 18], [20, -32, 13]]) dot(c, [x, y], r, '#f2ece0');
+  c.fillStyle = '#2a2420';
+  c.beginPath();
+  c.ellipse(34, -40, 10, 8, 0.3, 0, TAU);
+  c.fill();
+  dot(c, [37, -43], 1.8, '#fff');
+  c.restore();
 }
 
 export function drawEagle(c, e) {
   if (!e) return;
-  const flap = Math.sin(e.flap) * 0.9;
-  const dir = e.carry ? (e.x > (e.px ?? e.x) ? 1 : -1) : 1;
-  e.px = e.x;
+  const flap = e.dive ? 0.2 : Math.sin(e.flap) * 0.9;
+  let dir = e.dir;
+  if (dir == null) {
+    dir = e.carry ? (e.x > (e.px ?? e.x) ? 1 : -1) : 1;
+    e.px = e.x;
+  }
+  const k = e.scale || 1;
   c.save();
   c.translate(e.x, -e.y);
-  c.scale(dir, 1);
-  // wings
+  c.scale(dir * k, k);
+  if (e.dive) c.rotate(0.9);
   for (const s of [-1, 1]) {
     c.save();
     c.rotate(s * (0.15 + flap * 0.5));
     c.fillStyle = s < 0 ? '#4a2f1c' : '#5d3b22';
     c.beginPath();
     c.moveTo(0, 0);
-    c.quadraticCurveTo(s * 50, -40, s * 110, -18);
-    c.lineTo(s * 96, -8);
-    c.lineTo(s * 104, 2);
-    c.lineTo(s * 86, 6);
-    c.lineTo(s * 90, 14);
+    const span = e.dive ? 60 : 110;
+    c.quadraticCurveTo(s * span * 0.45, -40, s * span, -18);
+    c.lineTo(s * span * 0.87, -8);
+    c.lineTo(s * span * 0.95, 2);
+    c.lineTo(s * span * 0.78, 6);
+    c.lineTo(s * span * 0.82, 14);
     c.quadraticCurveTo(s * 40, 16, 0, 12);
     c.closePath();
     c.fill();
     c.restore();
   }
-  // body, golden head, hooked beak
   c.fillStyle = '#6b4526';
   c.beginPath();
   c.ellipse(0, 6, 22, 14, 0.15, 0, TAU);
@@ -657,7 +347,6 @@ export function drawEagle(c, e) {
   c.closePath();
   c.fill();
   dot(c, [23, -7], 2, '#111');
-  // tail and talons
   c.fillStyle = '#3e2716';
   c.beginPath();
   c.moveTo(-18, 4);
@@ -667,6 +356,112 @@ export function drawEagle(c, e) {
   c.fill();
   seg(c, [4, 16], [6, 30], 3, '#ffcf4d');
   seg(c, [-6, 16], [-6, 30], 3, '#ffcf4d');
+  if (e.hood) {
+    // carrying the little hood in its talons
+    c.fillStyle = '#7a4a26';
+    c.beginPath();
+    c.arc(0, 36, 9, Math.PI, TAU);
+    c.fill();
+    dot(c, [0, 26], 3, '#e0392f');
+  }
+  c.restore();
+}
+
+// the white taxi, side view. heads show in the windows
+export function drawCar(c, car) {
+  if (!car) return;
+  c.save();
+  c.translate(car.x, 0);
+  c.scale(car.dir, 1);
+  const bump = car.moving ? Math.sin(car.t * 0.8) * 1.5 : 0;
+  c.translate(0, bump);
+  // body
+  c.fillStyle = '#f4f4f2';
+  c.beginPath();
+  c.moveTo(-205, -38);
+  c.quadraticCurveTo(-210, -82, -170, -88);
+  c.lineTo(-110, -92);
+  c.quadraticCurveTo(-80, -148, -10, -150);
+  c.lineTo(60, -148);
+  c.quadraticCurveTo(100, -140, 130, -96);
+  c.lineTo(190, -86);
+  c.quadraticCurveTo(212, -78, 210, -40);
+  c.closePath();
+  c.fill();
+  c.fillStyle = '#dcdcd8';
+  c.fillRect(-205, -52, 415, 14);
+  // windows with whoever is inside
+  c.fillStyle = '#3d4f63';
+  c.beginPath();
+  c.moveTo(-92, -94);
+  c.quadraticCurveTo(-70, -136, -18, -138);
+  c.lineTo(-18, -94);
+  c.closePath();
+  c.fill();
+  c.beginPath();
+  c.moveTo(-6, -94);
+  c.lineTo(-6, -138);
+  c.lineTo(52, -136);
+  c.quadraticCurveTo(88, -128, 112, -94);
+  c.closePath();
+  c.fill();
+  for (const [who, wx] of [[car.back, -52], [car.front, 40]]) {
+    if (!who) continue;
+    const look = LOOKS[who.def.id] || LOOKS.batyr;
+    c.save();
+    c.beginPath();
+    c.rect(-100, -140, 215, 48);
+    c.clip();
+    c.translate(wx, -112);
+    c.scale(0.9, 0.9);
+    look.head(c, who.def.body.head, { ...who, state: 'idle', t: car.t }, who === car.back ? 'hurt' : 'happy', car.t % 30 < 15);
+    c.restore();
+  }
+  // door lines, handles, lights
+  c.strokeStyle = 'rgba(0,0,0,0.25)';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(-12, -92);
+  c.lineTo(-12, -42);
+  c.moveTo(-110, -90);
+  c.lineTo(-114, -44);
+  c.moveTo(118, -92);
+  c.lineTo(122, -44);
+  c.stroke();
+  c.fillStyle = '#9aa0a8';
+  c.fillRect(-40, -78, 16, 4);
+  c.fillRect(80, -78, 16, 4);
+  c.fillStyle = '#ffe680';
+  c.fillRect(196, -76, 12, 12);
+  c.fillStyle = '#e0392f';
+  c.fillRect(-206, -76, 8, 14);
+  // the roof sign
+  c.fillStyle = '#ffcc33';
+  roundRect(c, -40, -172, 70, 22, 5);
+  c.fill();
+  c.fillStyle = '#1d1d22';
+  c.font = '900 14px "Segoe UI", system-ui, sans-serif';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText('TAXI', -5, -160);
+  // wheels
+  for (const wx of [-130, 130]) {
+    dot(c, [wx, -28], 30, '#1d1d22');
+    dot(c, [wx, -28], 15, '#b8bec6');
+    c.save();
+    c.translate(wx, -28);
+    c.rotate(car.wheel || 0);
+    c.strokeStyle = '#7a828c';
+    c.lineWidth = 3;
+    for (let k = 0; k < 5; k++) {
+      c.rotate(TAU / 5);
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.lineTo(0, 13);
+      c.stroke();
+    }
+    c.restore();
+  }
   c.restore();
 }
 
@@ -705,20 +500,20 @@ export function drawFx(c, e) {
     c.globalAlpha = 1;
   } else if (e.k === 'dust') {
     c.globalAlpha = (1 - k) * 0.5;
-    c.fillStyle = '#e9d3a8';
+    c.fillStyle = e.color || '#e9d3a8';
     c.beginPath();
     c.arc(e.x, -e.y - k * 14, (10 + k * 22) * e.s, 0, TAU);
     c.fill();
     c.globalAlpha = 1;
   } else if (e.k === 'crumb') {
-    c.fillStyle = '#e09a3a';
+    c.fillStyle = e.color || '#e09a3a';
     c.fillRect(e.x - 3, -e.y - 3, 6, 6);
   } else if (e.k === 'word') {
     const pop = k < 0.15 ? 0.6 + (k / 0.15) * 0.6 : 1.2 - Math.min(0.2, (k - 0.15) * 0.5);
     c.save();
     c.translate(e.x, -e.y - k * 30);
     c.rotate(-0.12);
-    c.scale(pop, pop);
+    c.scale(pop * (e.size || 1), pop * (e.size || 1));
     c.globalAlpha = k > 0.75 ? (1 - k) / 0.25 : 1;
     c.font = '900 34px "Segoe UI", system-ui, sans-serif';
     c.textAlign = 'center';
@@ -727,43 +522,92 @@ export function drawFx(c, e) {
     c.lineWidth = 8;
     c.strokeStyle = '#2a0f06';
     c.strokeText(e.text, 0, 0);
-    c.fillStyle = '#ffd25a';
+    c.fillStyle = e.color || '#ffd25a';
     c.fillText(e.text, 0, 0);
     c.restore();
     c.globalAlpha = 1;
+  } else if (e.k === 'coin') {
+    c.save();
+    c.translate(e.x, -e.y);
+    c.globalAlpha = 1 - k;
+    dot(c, [0, 0], 10, '#ffcf3a');
+    c.strokeStyle = '#b8860b';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(0, 0, 10, 0, TAU);
+    c.stroke();
+    c.fillStyle = '#8a5a00';
+    c.font = '900 13px "Segoe UI", system-ui, sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('₸', 0, 1);
+    c.restore();
+    c.globalAlpha = 1;
+  } else if (e.k === 'note' || e.k === 'zzz') {
+    c.globalAlpha = k > 0.6 ? (1 - k) / 0.4 : 1;
+    c.fillStyle = e.k === 'zzz' ? '#cfe6ff' : e.color || '#9fe0ff';
+    c.font = `900 ${e.k === 'zzz' ? 18 + k * 18 : 22}px "Segoe UI", system-ui, sans-serif`;
+    c.textAlign = 'center';
+    c.fillText(e.k === 'zzz' ? 'Z' : e.text || '♪', e.x + Math.sin(e.t * 0.15) * 8, -e.y);
+    c.globalAlpha = 1;
+  } else if (e.k === 'letter') {
+    c.save();
+    c.translate(e.x, -e.y);
+    c.rotate(e.rot);
+    c.font = '900 30px "Segoe UI", system-ui, sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.lineWidth = 5;
+    c.strokeStyle = '#2a0f06';
+    c.strokeText(e.text, 0, 0);
+    c.fillStyle = e.color;
+    c.fillText(e.text, 0, 0);
+    c.restore();
+  } else if (e.k === 'twinkle') {
+    const s = k < 0.3 ? k / 0.3 : 1 - (k - 0.3) / 0.7;
+    c.save();
+    c.translate(e.x, -e.y);
+    c.rotate(e.t * 0.1);
+    star(c, 0, 0, 22 * s + 2, '#fff6c2');
+    c.restore();
+  } else if (e.k === 'gust') {
+    c.globalAlpha = 1 - k;
+    c.strokeStyle = '#e8f6ff';
+    c.lineWidth = 4;
+    c.lineCap = 'round';
+    for (let n = 0; n < 5; n++) {
+      const y = -e.y - 60 + n * 30;
+      const x0 = e.x + e.dir * (k * 500 + n * 20);
+      c.beginPath();
+      c.moveTo(x0, y);
+      c.quadraticCurveTo(x0 + e.dir * 60, y - 14, x0 + e.dir * 120, y);
+      c.stroke();
+    }
+    c.globalAlpha = 1;
+  } else if (e.k === 'bubble') {
+    bubbleAt(c, e.x, -e.y, e.text, e.scale || 1, Math.min(1, (e.life - e.t) / 12));
+  } else if (e.k === 'confetti') {
+    c.save();
+    c.translate(e.x, -e.y);
+    c.rotate(e.t * 0.2 + e.rot);
+    c.fillStyle = e.color;
+    c.fillRect(-4, -2, 8, 4);
+    c.restore();
   }
 }
 
-export function drawBubble(c, f, scale, bounds, raise = 0) {
-  const bub = f.bubble;
-  if (!bub) return;
-  const J = solve(f.pose, f.def.body);
-  const hx = f.x + J.headC[0] * f.face;
-  const top = -f.y - J.lift + J.headC[1] - f.def.body.head - 40;
-  const s = 1 / Math.max(0.6, Math.min(1.4, scale));
+export function bubbleAt(c, x, y, text, s, alpha, tailX = 0) {
   c.save();
-  c.translate(hx, top);
+  c.translate(x, y);
   c.scale(s, s);
-  c.translate(0, -raise);
-  const appear = Math.min(1, (95 - bub.t) / 6);
-  c.globalAlpha = Math.min(1, bub.t / 12);
-  c.scale(0.7 + appear * 0.3, 0.7 + appear * 0.3);
+  c.globalAlpha = alpha;
   c.font = '800 17px "Segoe UI", system-ui, sans-serif';
-  const w = c.measureText(bub.text).width + 24;
+  const w = c.measureText(text).width + 24;
   const h = 32;
-  let x = -w / 2 + f.face * 18;
-  if (bounds) {
-    // keep the bubble on screen, the tail still points at the head
-    const k = s * (0.7 + appear * 0.3);
-    const left = hx + x * k;
-    const right = hx + (x + w) * k;
-    if (left < bounds[0]) x += (bounds[0] - left) / k;
-    if (right > bounds[1]) x -= (right - bounds[1]) / k;
-  }
   c.fillStyle = '#fffaf0';
   c.strokeStyle = '#2a1a10';
   c.lineWidth = 2.5;
-  roundRect(c, x, -h, w, h, 14);
+  roundRect(c, -w / 2 + tailX, -h, w, h, 14);
   c.fill();
   c.stroke();
   c.beginPath();
@@ -780,7 +624,45 @@ export function drawBubble(c, f, scale, bounds, raise = 0) {
   c.fillStyle = '#1a120c';
   c.textAlign = 'center';
   c.textBaseline = 'middle';
-  c.fillText(bub.text, x + w / 2, -h / 2 + 1);
+  c.fillText(text, tailX, -h / 2 + 1);
   c.restore();
   c.globalAlpha = 1;
 }
+
+export function drawBubble(c, f, scale, bounds, raise = 0, bigHead = false) {
+  const bub = f.bubble;
+  if (!bub || f.hidden) return;
+  const J = solve(f.pose, f.def.body);
+  const hx = f.x + J.headC[0] * f.face;
+  const big = bigHead ? 1.7 : 1;
+  const top = -f.y - J.lift + J.headC[1] - f.def.body.head * (2 * big - 1) - 40;
+  const s = 1 / Math.max(0.6, Math.min(1.4, scale));
+  c.save();
+  c.translate(hx, top);
+  c.scale(s, s);
+  c.translate(0, -raise);
+  const appear = Math.min(1, (95 - bub.t) / 6);
+  c.globalAlpha = Math.min(1, bub.t / 12);
+  c.scale(0.7 + appear * 0.3, 0.7 + appear * 0.3);
+  c.font = '800 17px "Segoe UI", system-ui, sans-serif';
+  const w = c.measureText(bub.text).width + 24;
+  let x = f.face * 18;
+  if (bounds) {
+    // keep the bubble on screen, the tail still points at the head
+    const k = s * (0.7 + appear * 0.3);
+    const left = hx + (x - w / 2) * k;
+    const right = hx + (x + w / 2) * k;
+    if (left < bounds[0]) x += (bounds[0] - left) / k;
+    if (right > bounds[1]) x -= (right - bounds[1]) / k;
+  }
+  c.restore();
+  c.save();
+  c.translate(hx, top);
+  c.scale(s, s);
+  c.translate(0, -raise);
+  const sc = 0.7 + appear * 0.3;
+  bubbleAt(c, 0, 0, bub.text, sc, Math.min(1, bub.t / 12), x);
+  c.restore();
+}
+
+export { perchedEagle };

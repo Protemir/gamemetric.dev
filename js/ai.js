@@ -18,7 +18,7 @@ export class AI {
   }
 
   input(me, op, m) {
-    const out = { left: false, right: false, up: false, down: false, block: false, punch: false, kick: false, special: false };
+    const out = { left: false, right: false, up: false, down: false, block: false, punch: false, kick: false, special: false, taunt: false };
     const toward = op.x >= me.x ? 1 : -1;
     if (this.hold) {
       const h = this.hold;
@@ -83,7 +83,18 @@ export class AI {
     const opMove = op.state === 'attack' && op.move ? op.move : null;
     const threat = opMove && opMove.t < opMove.d.s + opMove.d.a && dist < 170;
     const recovering = opMove && opMove.t >= opMove.d.s + opMove.d.a && !opMove.d.air;
-    const proj = m.proj.find((p) => p.owner === op && Math.sign(me.x - p.x) === Math.sign(p.vx) && Math.abs(me.x - p.x) < 380);
+    const proj = m.proj.find((p) => p.owner === op && p.k !== 'stomp' && p.k !== 'eagle' && Math.sign(me.x - p.x) === Math.sign(p.vx) && Math.abs(me.x - p.x) < 380);
+    // things running along the ground are jumped over
+    const ground = m.proj.find((p) => (p.k === 'stomp' && p.owner === op) || (!p.owner && !p.hitSet.includes(me.idx)));
+    if (ground && Math.sign(me.x - ground.x) === Math.sign(ground.vx) && Math.abs(me.x - ground.x) < 230 && R() < lv.block + 0.3) {
+      go(0, 4, { up: true });
+      return;
+    }
+    const eagle = m.proj.find((p) => p.k === 'eagle' && p.owner === op && p.phase !== 'back');
+    if (eagle && R() < lv.block) {
+      go(0, 24, { block: true });
+      return;
+    }
     const lasso = op.lasso && op.lasso.out;
 
     if ((proj || lasso) && R() < lv.block + 0.15) {
@@ -109,7 +120,8 @@ export class AI {
       return;
     }
     if (op.state === 'down' || op.state === 'rise' || op.state === 'fall') {
-      if (R() < 0.5) go(1, 10);
+      if (op.state === 'down' && dist > 140 && R() < 0.3) hit('taunt');
+      else if (R() < 0.5) go(1, 10);
       else this.hold = null;
       return;
     }
@@ -124,6 +136,10 @@ export class AI {
         this.airKick = true;
       } else if (R() < lv.aggro) go(1, 14 + Math.floor(R() * 20));
       else go(R() < 0.5 ? -1 : 0, 10);
+      return;
+    }
+    if (me.def.spec.kind === 'grab' && me.cool <= 0 && dist > 110 && dist < 270 && op.y <= 0 && R() < lv.special * 0.7) {
+      hit('special');
       return;
     }
     if (dist > 115) {

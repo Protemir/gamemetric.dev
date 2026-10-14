@@ -51,6 +51,20 @@ export const POSES = {
   whistle: P({ lean: -0.05, head: -0.25, aF: [1.0, 2.5] }),
   clap: P({ lean: 0.05, aN: [1.4, 1.0], aF: [1.4, 1.0] }),
   carried: P({ lean: 0, head: -0.35, aN: [3.0, 0.1], aF: [2.9, 0.2], lN: [0.15, 0], lF: [-0.1, 0], pin: 150 }),
+
+  blind: P({ lean: 0.08, head: -0.1, aN: [1.55, 0.15], aF: [1.45, 0.25] }),
+  yawn: P({ lean: -0.15, head: -0.5, aN: [2.9, 0.4], aF: [2.8, 0.5] }),
+  sleep: P({ lean: 0.3, head: 0.5, aN: [1.6, 1.8], aF: [1.4, 2.0], lN: [1.2, -1.6], lF: [0.9, -1.4], rot: -1.5 }),
+  taunt: P({ lean: -0.1, head: -0.2, aF: [1.6, 1.2], aN: [0.6, 2.1] }),
+  blush: P({ lean: 0.2, head: 0.35, aN: [1.2, 2.4], aF: [1.1, 2.5], lN: [0.25, -0.15], lF: [-0.2, -0.1] }),
+  sneezeIn: P({ lean: -0.3, head: -0.55, aN: [0.3, 0.5], aF: [0.2, 0.6] }),
+  sneezeOut: P({ lean: 0.45, head: 0.25, aN: [1.2, 0.4], aF: [1.0, 0.5] }),
+  stompWind: P({ lean: -0.1, head: -0.2, aN: [1.2, 1.2], aF: [1.4, 1.0], lN: [1.7, -1.6], lF: [-0.1, -0.05] }),
+  stomp: P({ lean: 0.25, head: -0.3, aN: [0.9, 0.8], aF: [1.0, 0.7], lN: [0.45, -0.1], lF: [-0.25, -0.1] }),
+  dash: P({ lean: 0.55, head: -0.2, aN: [1.35, 0.3], aF: [1.45, 0.3], lN: [0.9, -0.9], lF: [-0.5, -0.4] }),
+  eagleLaunch: P({ lean: -0.05, head: -0.25, aN: [2.5, 0.1] }),
+  wave: P({ lean: -0.05, head: -0.15, aF: [2.7, 0.4] }),
+  keys: P({ lean: -0.05, head: -0.2, aF: [1.9, 1.6] }),
 };
 
 // Apa holds the ladle in the near hand, so her ladle moves use that arm.
@@ -71,7 +85,66 @@ const APA = {
   toss: P({ lean: 0.3, aN: [2.3, 0.1], aF: [0.6, 2.0] }),
 };
 
-export const posesFor = (id) => (id === 'apa' ? { ...POSES, ...APA } : POSES);
+// Burkitshi holds the eagle on his gloved near hand
+const BURKIT = {
+  stance: P({ aN: [1.1, 1.5] }),
+  crouch: P({ ...POSES.crouch, aN: [1.2, 1.4] }),
+  tuck: P({ ...POSES.tuck, aN: [1.3, 1.3] }),
+  win: P({ lean: -0.05, head: -0.25, aN: [2.6, 0.3], aF: [0.6, 2.0] }),
+};
+
+// the dombra: strumming hand near the hip, the other hand on the neck
+const DOMBRA = {
+  stance: P({ lean: 0.08, aN: [0.5, 1.3], aF: [1.2, 0.5] }),
+  crouch: P({ ...POSES.crouch, aN: [0.8, 1.4], aF: [1.4, 0.5] }),
+  jabWind: P({ lean: -0.05, head: -0.2, aN: [2.9, 0.5], aF: [2.6, 0.6] }),
+  jab: P({ lean: 0.3, head: -0.1, aN: [1.7, 0.1], aF: [1.55, 0.3] }),
+  upperWind: P({ lean: 0.5, head: -0.3, aN: [0.1, 0.3], aF: [0.2, 0.4], lN: [1.2, -1.9], lF: [0.45, -1.8] }),
+  upper: P({ lean: -0.15, head: -0.35, aN: [2.7, 0.1], aF: [2.5, 0.2], lN: [0.3, -0.2], lF: [-0.2, -0.1] }),
+  sweepWind: P({ lean: 0.5, head: -0.3, aN: [2.0, 0.3], lN: [1.3, -2.1], lF: [0.6, -2.0] }),
+  sweep: P({ lean: 0.75, head: -0.5, aN: [1.35, 0.05], aF: [1.2, 0.2], lN: [1.4, -2.2], lF: [0.6, -2.0] }),
+  airP: P({ lean: 0.2, aN: [1.2, 0.1], aF: [1.1, 0.3], lN: [1.3, -2.0], lF: [0.7, -1.7] }),
+  block: P({ lean: -0.05, head: -0.2, aN: [1.3, 1.1], aF: [1.7, 0.6] }),
+  crouchBlock: P({ ...POSES.crouchBlock, aN: [1.2, 1.2], aF: [1.6, 0.6] }),
+  play: P({ lean: 0.04, head: 0.15, aN: [0.5, 1.3], aF: [1.2, 0.5] }),
+  win: P({ lean: -0.1, head: -0.3, aN: [0.5, 1.3], aF: [1.5, 0.4] }),
+};
+
+const TAXI = {
+  stance: P({ lean: 0.06, aN: [0.55, 2.0], aF: [0.75, 2.1] }),
+  win: P({ lean: -0.05, head: -0.15, aF: [2.7, 0.4], aN: [0.5, 2.1] }),
+};
+
+// a wrestler leans in with both hands ready to grab the belt
+const BALUAN = {
+  stance: P({ lean: 0.35, head: -0.25, aN: [1.0, 1.0], aF: [1.2, 0.9], lN: [0.55, -0.6], lF: [-0.2, -0.3] }),
+  win: P({ lean: 0, head: -0.2, aN: [1.6, 2.4], aF: [1.6, 2.4] }),
+};
+
+const AKYN = {
+  stance: P({ lean: 0.05, aN: [0.5, 1.9], aF: [0.9, 1.6] }),
+  jabWind: P({ lean: 0.1, aF: [1.2, 1.6] }),
+  jab: P({ lean: 0.25, head: -0.1, aF: [1.75, 0.15], aN: [0.5, 2.0] }),
+  win: P({ lean: 0.25, head: 0.2, aN: [2.2, 0.2], aF: [2.4, 0.2] }),
+  taunt: P({ lean: -0.1, head: 0.2, aF: [1.0, 2.6], aN: [0.5, 1.9] }),
+};
+
+// Dau holds a big club in the near hand, so his club moves use that arm
+const DAU = {
+  stance: P({ lean: 0.15, head: 0.05, aN: [0.4, 1.4], aF: [0.6, 1.6] }),
+  jabWind: P({ lean: -0.05, head: -0.2, aN: [2.8, 0.4] }),
+  jab: P({ lean: 0.3, head: -0.1, aN: [1.6, 0.1], aF: [0.6, 1.8] }),
+  upperWind: P({ lean: 0.5, head: -0.3, aN: [0.1, 0.3], aF: [0.3, 0.5], lN: [1.2, -1.9], lF: [0.45, -1.8] }),
+  upper: P({ lean: -0.15, head: -0.35, aN: [2.7, 0.1], aF: [2.0, 0.6], lN: [0.3, -0.2], lF: [-0.2, -0.1] }),
+  sweepWind: P({ lean: 0.4, head: -0.3, aN: [2.0, 0.3], lN: [1.2, -1.9], lF: [0.5, -1.8] }),
+  sweep: P({ lean: 0.6, head: -0.4, aN: [1.3, 0.05], aF: [0.6, 1.4], lN: [1.3, -2.0], lF: [0.5, -1.9] }),
+  airP: P({ lean: 0.2, aN: [1.3, 0.1], aF: [1.0, 1.6], lN: [1.3, -2.0], lF: [0.7, -1.7] }),
+  win: P({ lean: -0.1, head: -0.35, aN: [2.9, 0.3], aF: [1.2, 2.2] }),
+};
+
+const OWN = { apa: APA, burkit: BURKIT, dombra: DOMBRA, taxi: TAXI, baluan: BALUAN, akyn: AKYN, dau: DAU };
+const merged = {};
+export const posesFor = (id) => (merged[id] ||= { ...POSES, ...(OWN[id] || {}) });
 
 const lerp = (a, b, k) => a + (b - a) * k;
 

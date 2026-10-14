@@ -1,18 +1,21 @@
 # gamemetric.dev
 
-**Жекпе-жек**: a browser fighting game, one on one, with Kazakh characters. Batyr with a shield and a lasso against Apa with a ladle and hot baursaks. Rounds, combos, throws, a computer opponent with three levels, two players on one keyboard, touch controls on phones. No blood: knockouts end with stars over the head, and the finishers are an eagle that carries the loser away and a kara zhorga dance until they drop.
+**Жекпе-жек**: a browser fighting game, one on one, with Kazakh characters and no blood. Knockouts end with stars over the head or a trip into the sky, the finishers are silly on purpose.
 
-Plain ES modules in `js/`, no build step, no images, no requests. Everything is drawn on canvas, sound and music are made with WebAudio.
+Fighters: Batyr (shield and lasso), Apa (ladle, kazan and baursaks), the eagle hunter Burkitshi, the dombra player, the taxi driver with a white Camry, the kures wrestler Baluan, the aitys poet Akyn, and the giant Dau as the arcade boss (playable once the arcade is cleared). Arenas: an aul at sunset, the Medeu ice rink (slippery), Kok-Tobe at night, the Charyn canyon and the bazaar, with a sheep, tumbleweeds or watermelons crossing now and then.
 
-- `js/fight.js`: the fight itself (fighters, moves, hitboxes, rounds), no DOM
-- `js/fighters.js`: fighter data, frame data, phrases
-- `js/pose.js`, `js/draw.js`: skeleton, poses and drawing
-- `js/arena.js`: the aul at sunset and the crowd
+Modes: arcade (six fights and Dau, a story and an ending for every fighter, scores and local records), versus the computer on three levels, two players on one keyboard or with gamepads, online with a friend over WebRTC (no server: a link with an offer and an answer code back, a public Google STUN server only helps the browsers find each other), training with a dummy and hitboxes, a replay of the last round. Stars unlock big heads, gold costumes, turbo and Dau.
+
+Plain ES modules in `js/`, no build step, no images. Everything is drawn on canvas, sound and music are made with WebAudio, the announcer uses the browser's speech synthesis.
+
+- `js/fight.js`: the fight (fighters, moves, specials, finishers, hazards, rounds), no DOM, deterministic
+- `js/fighters.js`: fighter data, frame data, phrases, stories
+- `js/pose.js`, `js/looks.js`, `js/paint.js`, `js/draw.js`: skeleton, poses, what everyone looks like, effects
+- `js/arena.js`: the five arenas and the crowd
 - `js/ai.js`: the computer opponent
+- `js/arcade.js`, `js/online.js`, `js/voice.js`, `js/input.js`, `js/audio.js`, `js/music.js`
 - `js/main.js`: menus, HUD, camera, loop
 
-Run it with any static server (modules don't load from `file://`). `?debug` exposes `window.__fight` to step frames and press buttons by hand, `?boxes` shows hitboxes, `?og` renders the frame used for `og.png`.
+Run it with any static server (modules don't load from `file://`). `?debug` exposes `window.__fight` to step frames, press buttons and freeze the loop, `?boxes` shows hitboxes, `?og` renders the frame used for `og.png`.
 
-The reaction test that used to be the home page lives in [`/test/`](https://gamemetric.dev/test/): reaction, aim, clicks per second and memory, with a rank and a challenge link.
-
-`og.png`, `icon-180.png` and `test/og.png` are headless Chrome screenshots of `?og`, `tools/icon.html` and `tools/og-test.html`.
+The reaction test that used to be the home page lives in [`/test/`](https://gamemetric.dev/test/).
