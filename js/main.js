@@ -97,6 +97,7 @@ function newDemo() {
   setArena(arena);
   app.match = new Match({ p1, p2, seed, arena });
   app.demoAI = [new AI('normal', r), new AI('normal', r)];
+  app.isDemo = true;
   app.overTimer = 0;
 }
 
@@ -121,6 +122,7 @@ function startMatch(o) {
   setArena(opts.arena);
   app.mode = 'fight';
   app.match = new Match({ ...opts, onEvent });
+  app.isDemo = false;
   app.rec = { opts, inputs: [], rounds: [] };
   app.overTimer = 0;
   app.lag = [app.match.f[0].hpMax, app.match.f[1].hpMax];
@@ -448,7 +450,7 @@ function panel(cls, ...children) {
   p.append(...children.filter(Boolean));
   ui.replaceChildren(p);
   const first = p.querySelector('.btn.primary, .menu-item:not([disabled])');
-  if (first && !isTouch) setTimeout(() => first.focus({ preventScroll: true }), 30);
+  if (first && !isTouch) setTimeout(() => first.focus({ preventScroll: true }), /\bresult\b/.test(cls || '') ? 900 : 30);
   p.scrollTop = 0;
   return p;
 }
@@ -516,7 +518,9 @@ function toMenu() {
 
 // menus run a demo fight in the background
 function backdrop() {
-  if (app.mode === 'fight' || app.mode === 'paused' || app.mode === 'result') return;
+  if (app.mode === 'fight' || app.mode === 'paused') return;
+  // a finished fight is replaced by a fresh demo so the menu never sits on a frozen frame
+  if (!app.isDemo) newDemo();
   app.mode = 'menu';
   showHud(false);
 }
@@ -775,7 +779,7 @@ function arcadeAfter(m) {
   if (!won) {
     app.mode = 'result';
     showHud(false);
-    panel('', el('h2', 'result-title', t('lostQ')), el('p', 'tag', t('score', { s: A.score })), row(btn(t('retry'), 'primary', () => { A.continues++; startFight(); }), btn(t('giveUp'), '', () => screenMain())));
+    panel('result', el('h2', 'result-title', t('lostQ')), el('p', 'tag', t('score', { s: A.score })), row(btn(t('retry'), 'primary', () => { A.continues++; startFight(); }), btn(t('giveUp'), '', toMenu)));
     return;
   }
   const step = A.ladder[A.step];
@@ -786,7 +790,7 @@ function arcadeAfter(m) {
   if (A.step >= A.ladder.length) return arcadeEnding();
   app.mode = 'result';
   showHud(false);
-  panel('', el('h2', 'result-title', `${fighterById(A.player).kk.toUpperCase()} ЖЕҢДІ!`), el('p', 'keys', t('scoreLine', sc)), el('p', 'tag', t('score', { s: A.score })), row(btn(t('ladder'), 'primary', screenLadder), btn(t('replay'), '', startReplay)));
+  panel('result', el('h2', 'result-title', `${fighterById(A.player).kk.toUpperCase()} ЖЕҢДІ!`), el('p', 'keys', t('scoreLine', sc)), el('p', 'tag', t('score', { s: A.score })), row(btn(t('ladder'), 'primary', screenLadder), btn(t('replay'), '', startReplay)));
 }
 
 function arcadeEnding() {
@@ -989,7 +993,7 @@ function showResult() {
     buttons = row(btn(t('rematch'), 'primary', startFight), btn(t('otherFighter'), '', () => { app.mode = 'menu'; screenSelect(); }), btn(t('menu'), '', toMenu));
   }
   const replayBtn = app.rec && app.rec.rounds.length ? btn(t('replay'), '', startReplay) : null;
-  panel('', title, el('p', 'tag', sub), stats, note, record, buttons, row(replayBtn, shareBtn), shareNote);
+  panel('result', title, el('p', 'tag', sub), stats, note, record, buttons, row(replayBtn, shareBtn), shareNote);
 }
 
 async function share(w, note) {

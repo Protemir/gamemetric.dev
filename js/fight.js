@@ -1,5 +1,5 @@
 import { fighterById, VICTIM, goldPalette } from './fighters.js';
-import { posesFor, mixPose, copyPose } from './pose.js';
+import { posesFor, mixPose, copyPose, solve } from './pose.js';
 import { rng } from './util.js';
 
 // The fight itself: two fighters, projectiles, hazards, effects, rounds. No DOM and no sound here,
@@ -170,6 +170,8 @@ export class Fighter {
     // directions held when the button was pressed still count (presses made during a hit freeze)
     const down = inp.down || (buf && buf.down);
     const toward = fwd || (buf && buf.fwd);
+    // a direction pressed while crouching for the jump still counts
+    if (this.state === 'prejump' && (fwd || back)) this.jdir = fwd ? 1 : -1;
     if (this.actionable || (this.state === 'land' && buf)) {
       if (buf) {
         this.buffer = null;
@@ -374,7 +376,7 @@ export class Fighter {
     this.crouching = false;
     op.set('thrown');
     op.move = null;
-    op.lasso = null;
+    op.dropLasso();
     op.face = -this.face;
     op.crouching = false;
     this.say('throw', true);
@@ -443,6 +445,19 @@ export class Fighter {
     m.damage(this, op, this.grab ? this.grab.dmg : this.def.throw.dmg);
     m.shake = Math.max(m.shake, 8);
     m.emit('throw', { f: this, op });
+  }
+
+  // a throw that gets interrupted drops the rival instead of keeping them in the air
+  dropGrab() {
+    const g = this.grab;
+    this.grab = null;
+    if (!g || g.op.state !== 'thrown') return;
+    const op = g.op;
+    op.set('fall');
+    op.vx = 0;
+    op.vy = 200;
+    op.y = Math.max(op.y, 1);
+    op.throwRot = 0;
   }
 
   endThrow() {
@@ -562,6 +577,13 @@ export class Fighter {
   lassoPoint() {
     return [this.x + this.face * (40 + this.lasso.dist), 128];
   }
+
+  // drop the lasso; whoever it was pulling is free again
+  dropLasso() {
+    const L = this.lasso;
+    if (L && L.caught && L.caught.state === 'pulled') L.caught.set('idle');
+    this.lasso = null;
+  }
 }
 
 export class Match {
@@ -642,6 +664,7 @@ export class Match {
     }
 
     const [a, b] = this.f;
+    this.prevX = [a.x, b.x];
     for (const [f, o, i] of [[a, b, 0], [b, a, 1]]) {
       // a fighter hit by the kui moves at half speed for a while
       if (f.slowT > 0) {
@@ -739,7 +762,7 @@ export class Match {
     this.pt = 0;
     this.clearProj();
     for (const f of this.f) {
-      f.lasso = null;
+      f.dropLasso();
       f.move = null;
       if (f.y <= 0 && !['down', 'rise', 'fall'].includes(f.state)) f.set('idle');
     }
@@ -795,11 +818,18 @@ export class Match {
     for (const f of this.f) if (!SCRIPTED.has(f.state) && f.state !== 'blast') f.x = Math.max(-STAGE, Math.min(STAGE, f.x));
     // never further apart than one screen
     const dx = b.x - a.x;
-    if (Math.abs(dx) > MAX_SEP && solid(a) && solid(b)) {
-      const over = (Math.abs(dx) - MAX_SEP) / 2;
+    const free = (f) => !SCRIPTED.has(f.state) && f.state !== 'blast' && !f.hidden;
+    if (Math.abs(dx) > MAX_SEP && free(a) && free(b)) {
+      const over = Math.abs(dx) - MAX_SEP;
       const s = Math.sign(dx);
-      a.x += s * over;
-      b.x -= s * over;
+      // whoever moved away this frame is held back; if nobody did (knockback), both share it
+      const px = this.prevX || [a.x, b.x];
+      const awayA = Math.max(0, (px[0] - a.x) * s);
+      const awayB = Math.max(0, (b.x - px[1]) * s);
+      const sum = awayA + awayB;
+      const ka = sum > 0 ? awayA / sum : 0.5;
+      a.x += s * over * ka;
+      b.x -= s * over * (1 - ka);
     }
     for (const [f, o] of [[a, b], [b, a]]) {
       if (TURNABLE.has(f.state) && f.y <= 0 && Math.abs(o.x - f.x) > 6) f.face = o.x > f.x ? 1 : -1;
@@ -840,11 +870,8 @@ export class Match {
     const dmg = Math.max(1, Math.round(d.dmg * scale));
     def.combo++;
     def.flash = 6;
-    if (def.lasso) {
-      if (def.lasso.caught) def.lasso.caught.set('idle');
-      def.lasso = null;
-    }
-    if (def.state === 'throwing' && def.grab) def.grab = null;
+    def.dropLasso();
+    if (def.grab) def.dropGrab();
     att.stats.hits++;
     att.stats.maxCombo = Math.max(att.stats.maxCombo, def.combo);
     const heavy = d.sfx === 'heavy' || d.sfx === 'pot' || !!d.launch;
@@ -910,7 +937,7 @@ export class Match {
     this.loser = def;
     this.wins[att.idx]++;
     this.clearProj();
-    att.lasso = null;
+    att.dropLasso();
     def.meterT = 0;
     def.slowT = 0;
     const final = this.wins[att.idx] >= WINS;
@@ -1113,7 +1140,7 @@ export class Match {
     L.caught = op;
     op.set('pulled');
     op.move = null;
-    op.lasso = null;
+    op.dropLasso();
     op.y = 0;
     op.vx = 0;
     op.vy = 0;
@@ -1174,7 +1201,8 @@ export class Match {
         p.hitSet.push(f.idx);
         f.set('fall');
         f.move = null;
-        f.lasso = null;
+        f.dropLasso();
+        f.dropGrab();
         f.vx = p.dir * 140;
         f.vy = 420;
         f.y = 1;
@@ -1193,7 +1221,7 @@ export class Match {
     this.fin = { kind: w.def.finisher || 'eagle', w, v };
     this.log.finishers[w.idx]++;
     w.move = null;
-    w.lasso = null;
+    w.dropLasso();
     v.bubble = null;
     w.say('finisher', true);
     this.emit('finisher', { f: w, kind: this.fin.kind });
@@ -1526,6 +1554,12 @@ const smooth = (p, target, k) => {
   return m;
 };
 
+const lifts = new Map();
+const tuckLift = (f) => {
+  if (!lifts.has(f.def.id)) lifts.set(f.def.id, solve(f.poses.tuck, f.def.body).lift);
+  return lifts.get(f.def.id);
+};
+
 const walkCycle = (f, P, speed = 0.22) => {
   const ph = f.t * speed * (f.def.walk / 200);
   const s = P.stance;
@@ -1557,7 +1591,7 @@ export function animate(f) {
     target = st === 'land' ? P.land : P.prejump;
     k = 0.5;
   } else if (st === 'air') {
-    target = f.flip ? { ...P.tuck, rot: f.flipRot(), pin: 55 } : P.tuck;
+    target = f.flip ? { ...P.tuck, rot: f.flipRot(), pin: tuckLift(f) } : P.tuck;
     k = f.flip ? 1 : 0.3;
   } else if (st === 'attack') {
     const mv = f.move;

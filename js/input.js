@@ -85,7 +85,13 @@ export function bindTouch(root) {
   let oy = 0;
   const dirs = ['left', 'right', 'up', 'down'];
   const set = (dx, dy) => {
-    const on = { left: dx < -16, right: dx > 16, up: dy < -24, down: dy > 20 };
+    // eight directions by angle, so a thumb drifting a little up while walking does not jump
+    const on = { left: false, right: false, up: false, down: false };
+    if (Math.hypot(dx, dy) > 18) {
+      const sector = Math.round(Math.atan2(-dy, dx) / (Math.PI / 4));
+      const dirsBy = { 0: ['right'], 1: ['right', 'up'], 2: ['up'], 3: ['left', 'up'], 4: ['left'], '-4': ['left'], '-3': ['left', 'down'], '-2': ['down'], '-1': ['right', 'down'] };
+      for (const d of dirsBy[sector] || []) on[d] = true;
+    }
     for (const d of dirs) {
       if (on[d]) pad.held.add(d);
       else pad.held.delete(d);
