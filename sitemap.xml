@@ -2,7 +2,12 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://gamemetric.dev/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/"/>
     <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/?lang=en"/>
+  </url>
+  <url>
+    <loc>https://gamemetric.dev/test/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/test/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/test/?lang=ru"/>
   </url>
 </urlset>

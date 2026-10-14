@@ -1,120 +1,70 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>GameMetric: how fast is your gamer brain?</title>
-<meta name="description" content="Four quick browser tests: reaction time, aim, clicks per second and memory. Get a game-style rank and challenge friends with a link.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Жекпе-жек: файтинг с казахскими героями</title>
+<meta name="description" content="Браузерный файтинг один на один: Батыр с арканом против Апы с шөмішем и бауырсаками. Раунды, добивания без крови, игра против компьютера и вдвоём на одной клавиатуре.">
 <link rel="canonical" href="https://gamemetric.dev/">
-<link rel="alternate" hreflang="en" href="https://gamemetric.dev/">
 <link rel="alternate" hreflang="ru" href="https://gamemetric.dev/?lang=ru">
-<link rel="alternate" hreflang="x-default" href="https://gamemetric.dev/">
+<link rel="alternate" hreflang="en" href="https://gamemetric.dev/?lang=en">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
-<meta name="theme-color" content="#0f1011" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#f2f3f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#170f22">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://gamemetric.dev/">
-<meta property="og:title" content="GameMetric: how fast is your gamer brain?">
-<meta property="og:description" content="Reaction, aim, clicks per second and memory. Two minutes, then a rank and a link to challenge friends.">
+<meta property="og:title" content="Жекпе-жек: Батыр против Апы">
+<meta property="og:description" content="Файтинг в браузере с казахскими героями. Аркан, шөміш, бауырсаки и смешные добивания вместо крови.">
 <meta property="og:image" content="https://gamemetric.dev/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<script>
+  // old challenge links of the reaction test (gamemetric.dev/#c=...) now live in /test/
+  if (location.hash.indexOf('#c=') === 0) location.replace('/test/' + location.search + location.hash);
+</script>
 <link rel="stylesheet" href="style.css">
-<script src="app.js" defer></script>
+<script type="module" src="js/main.js"></script>
 </head>
 <body>
-<header class="top wrap">
-  <a class="brand" href="./" id="homeLink"><span class="mark" aria-hidden="true"></span>GameMetric</a>
-  <div class="langs" role="group" aria-label="Language">
-    <button type="button" data-lang="en" aria-pressed="true">EN</button>
-    <button type="button" data-lang="ru" aria-pressed="false">RU</button>
+<canvas id="game" aria-label="Жекпе-жек"></canvas>
+
+<div class="hud" id="hud" hidden>
+  <div class="side" id="side0">
+    <div class="who"><b class="nm"></b><span class="wins"><i></i><i></i></span></div>
+    <div class="bar"><i class="lag"></i><i class="hp"></i></div>
+    <div class="sp"><i></i></div>
   </div>
-</header>
-
-<main class="wrap">
-  <section id="home" class="view">
-    <div class="challenge" id="challenge" hidden>
-      <p class="challenge-text" id="challengeText"></p>
-      <dl class="challenge-stats" id="challengeStats"></dl>
+  <div class="mid">
+    <p class="timer" id="timer">60</p>
+    <div class="hud-btns">
+      <button type="button" class="icon-btn" id="pauseBtn" aria-label="Пауза">II</button>
+      <button type="button" class="icon-btn" id="musicBtn" aria-label="Музыка">♪</button>
+      <button type="button" class="icon-btn" id="muteBtn">Звук</button>
     </div>
+  </div>
+  <div class="side right" id="side1">
+    <div class="who"><span class="wins"><i></i><i></i></span><b class="nm"></b></div>
+    <div class="bar"><i class="lag"></i><i class="hp"></i></div>
+    <div class="sp"><i></i></div>
+  </div>
+</div>
+<div class="combo" id="combo0"></div>
+<div class="combo right" id="combo1"></div>
+<div class="banner" id="banner" aria-live="polite"></div>
 
-    <div class="hero">
-      <div class="hero-copy">
-        <h1 data-i18n="h1">How fast is your gamer brain?</h1>
-        <p class="sub" data-i18n="sub">Four quick tests: reaction, aim, clicking, memory. Two minutes, then a rank and a card to send friends.</p>
-        <button type="button" class="btn primary" id="startRun" data-i18n="start">Play all four</button>
-      </div>
+<div class="touch" id="touch" hidden>
+  <div class="stick"><i class="base"><i class="knob"></i></i></div>
+  <div class="btns">
+    <button type="button" class="tbtn punch" data-btn="punch">Рука</button>
+    <button type="button" class="tbtn kick" data-btn="kick">Нога</button>
+    <button type="button" class="tbtn block" data-btn="block">Блок</button>
+    <button type="button" class="tbtn special" data-btn="special">Супер</button>
+  </div>
+</div>
 
-      <div class="tiles">
-        <button type="button" class="tile tile-reaction" data-test="reaction">
-          <span class="tile-name" data-i18n="reaction.name">Reaction</span>
-          <span class="tile-desc" data-i18n="reaction.desc">Click the moment the screen turns green.</span>
-          <span class="tile-best" data-best="reaction"></span>
-        </button>
-        <button type="button" class="tile tile-aim" data-test="aim">
-          <span class="tile-art" aria-hidden="true"></span>
-          <span class="tile-name" data-i18n="aim.name">Aim</span>
-          <span class="tile-desc" data-i18n="aim.desc">Hit 20 targets as fast as you can.</span>
-          <span class="tile-best" data-best="aim"></span>
-        </button>
-        <button type="button" class="tile tile-cps" data-test="cps">
-          <span class="tile-name" data-i18n="cps.name">Clicks</span>
-          <span class="tile-desc" data-i18n="cps.desc">How many clicks per second you get in 5 seconds.</span>
-          <span class="tile-best" data-best="cps"></span>
-        </button>
-        <button type="button" class="tile tile-memory" data-test="memory">
-          <span class="tile-art" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-          <span class="tile-name" data-i18n="memory.name">Memory</span>
-          <span class="tile-desc" data-i18n="memory.desc">Repeat the pattern. It grows by one square every round.</span>
-          <span class="tile-best" data-best="memory"></span>
-        </button>
-      </div>
-    </div>
+<div id="ui"></div>
 
-    <section class="ranks" aria-labelledby="ranksTitle">
-      <h2 id="ranksTitle" data-i18n="ranks.title">Ranks</h2>
-      <p data-i18n="ranks.text">Thresholds are rough, based on typical results from public browser tests. Screens and mice add their own delay, so the fairest fight is on the same device.</p>
-      <ol class="tier-list" id="tierList"></ol>
-      <p class="last-run" id="lastRun" hidden></p>
-    </section>
-  </section>
-
-  <section id="play" class="view" hidden>
-    <div class="playbar">
-      <button type="button" class="icon-btn" id="quit" aria-label="Quit">&times;</button>
-      <h2 id="playTitle"></h2>
-      <span class="step" id="playStep"></span>
-      <button type="button" class="chip" id="soundToggle" hidden></button>
-    </div>
-    <div class="arena" id="arena" tabindex="-1"></div>
-    <p class="status" id="status" aria-live="polite"></p>
-  </section>
-
-  <section id="final" class="view" hidden>
-    <div class="final-grid">
-      <article class="card" id="card" aria-live="polite"></article>
-      <div class="final-actions">
-        <label for="nick" data-i18n="final.nick">Name on the card (optional)</label>
-        <input id="nick" type="text" maxlength="16" autocomplete="nickname" spellcheck="false">
-        <div class="btn-stack">
-          <button type="button" class="btn primary" id="shareBtn" data-i18n="share">Share</button>
-          <button type="button" class="btn" id="copyBtn" data-i18n="copy">Copy link</button>
-          <button type="button" class="btn" id="saveBtn" data-i18n="save">Save image</button>
-        </div>
-        <p class="note" id="shareNote" aria-live="polite"></p>
-        <button type="button" class="btn ghost" id="againBtn" data-i18n="again">Play again</button>
-      </div>
-    </div>
-  </section>
-
-  <noscript><p class="noscript">This page needs JavaScript to run the tests.</p></noscript>
-</main>
-
-<footer class="foot wrap">
-  <p data-i18n="footer.privacy">Nothing is sent anywhere. Results live in your browser and in the link you share.</p>
-  <a href="https://github.com/Protemir/gamemetric.dev" data-i18n="footer.source">Source code</a>
-</footer>
+<noscript><p class="noscript">Для игры нужен JavaScript.</p></noscript>
 </body>
 </html>

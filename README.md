@@ -1,11 +1,18 @@
 # gamemetric.dev
 
-Four small browser tests: reaction time, aim, clicks per second and sequence memory. At the end you get a game-style rank (Iron to Grandmaster) and a link you can send to a friend so they can try to beat you.
+**Жекпе-жек**: a browser fighting game, one on one, with Kazakh characters. Batyr with a shield and a lasso against Apa with a ladle and hot baursaks. Rounds, combos, throws, a computer opponent with three levels, two players on one keyboard, touch controls on phones. No blood: knockouts end with stars over the head, and the finishers are an eagle that carries the loser away and a kara zhorga dance until they drop.
 
-Plain HTML, CSS and JS, no build step, no requests to anything. Results stay in localStorage and in the `#c=...` part of the share link.
+Plain ES modules in `js/`, no build step, no images, no requests. Everything is drawn on canvas, sound and music are made with WebAudio.
 
-Run locally with any static server, for example `npx serve .`, and open the page.
+- `js/fight.js`: the fight itself (fighters, moves, hitboxes, rounds), no DOM
+- `js/fighters.js`: fighter data, frame data, phrases
+- `js/pose.js`, `js/draw.js`: skeleton, poses and drawing
+- `js/arena.js`: the aul at sunset and the crowd
+- `js/ai.js`: the computer opponent
+- `js/main.js`: menus, HUD, camera, loop
 
-Rank thresholds live in `CURVES` at the top of `app.js`. They are rough, based on typical results from public browser tests, so if they feel off, open an issue.
+Run it with any static server (modules don't load from `file://`). `?debug` exposes `window.__fight` to step frames and press buttons by hand, `?boxes` shows hitboxes, `?og` renders the frame used for `og.png`.
 
-`og.png` and `icon-180.png` are screenshots of `tools/og.html` and `tools/icon.html` from headless Chrome.
+The reaction test that used to be the home page lives in [`/test/`](https://gamemetric.dev/test/): reaction, aim, clicks per second and memory, with a rank and a challenge link.
+
+`og.png`, `icon-180.png` and `test/og.png` are headless Chrome screenshots of `?og`, `tools/icon.html` and `tools/og-test.html`.
