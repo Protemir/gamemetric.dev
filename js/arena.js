@@ -9,6 +9,7 @@ export const ARENAS = [
   { id: 'koktobe', name: { ru: 'Көктөбе ночью', en: 'Kok-Tobe at night' }, note: { ru: 'Огни города внизу', en: 'City lights below' } },
   { id: 'charyn', name: { ru: 'Чарын', en: 'Charyn canyon' }, note: { ru: 'Катится перекати-поле', en: 'Tumbleweeds roll by' } },
   { id: 'bazaar', name: { ru: 'Базар', en: 'The bazaar' }, note: { ru: 'Катятся арбузы', en: 'Watermelons roll by' } },
+  { id: 'astana', name: { ru: 'Астана, бульвар', en: 'Astana boulevard' }, note: { ru: 'Дует степной ветер', en: 'The steppe wind blows' } },
 ];
 
 const LOOKS = {
@@ -17,6 +18,7 @@ const LOOKS = {
   koktobe: ['cap', 'scarf', 'kid', 'phone', 'cap', 'takiya', 'phone', 'kid'],
   charyn: ['cap', 'panama', 'kid', 'panama', 'cap', 'scarf', 'panama', 'kid'],
   bazaar: ['scarf', 'takiya', 'apron', 'kid', 'scarf', 'apron', 'cap', 'kalpak'],
+  astana: ['beanie', 'cap', 'scarf', 'phone', 'earflap', 'kid', 'beanie', 'takiya'],
 };
 
 export class Arena {
@@ -37,6 +39,10 @@ export class Arena {
     this.city = Array.from({ length: 420 }, () => ({ x: (r() - 0.5) * 3400, y: r(), c: r() }));
     this.skaters = Array.from({ length: 4 }, (_, k) => ({ x: (r() - 0.5) * 1400, v: (r() < 0.5 ? -1 : 1) * (40 + r() * 50), c: coats[(k * 2) % coats.length], p: r() * 6 }));
     this.fireworks = [];
+    // Astana: towers with lit windows and bits the wind carries around
+    this.towers = Array.from({ length: 16 }, (_, k) => ({ x: -1500 + k * 190 + r() * 60, w: 50 + r() * 50, h: 120 + r() * 220, top: Math.floor(r() * 3), lit: r() }));
+    this.bits = Array.from({ length: 40 }, () => ({ x: r(), y: r(), s: 0.6 + r(), p: r() * 6, leaf: r() < 0.6 }));
+    this.wind = null;
   }
 
   burst(t) {
@@ -48,6 +54,7 @@ export class Arena {
   draw(c, v, m) {
     const { W, H, s, camX, ground, t } = v;
     const th = THEMES[this.id];
+    this.wind = m ? m.wind : null;
     const layer = (p, q, fn) => {
       c.save();
       c.translate(W / 2 - camX * s * p, ground - 34 * s);
@@ -769,9 +776,247 @@ function sign(c, x, y, text, bg) {
   c.fillText(text, x, y - 4);
 }
 
+// ---------- astana ----------
+
+// a tall white tower like a tree holding a golden egg in its branches
+function goldTower(c, x, t) {
+  const top = -290;
+  c.strokeStyle = '#e9edf3';
+  c.lineWidth = 3;
+  c.beginPath();
+  c.moveTo(x - 30, 0);
+  c.lineTo(x - 9, top);
+  c.moveTo(x + 30, 0);
+  c.lineTo(x + 9, top);
+  for (let k = 0; k < 10; k++) {
+    const y0 = -k * 29;
+    const w0 = 30 - (k * 21) / 10;
+    const w1 = 30 - ((k + 1) * 21) / 10;
+    c.moveTo(x - w0, y0);
+    c.lineTo(x + w1, y0 - 30);
+    c.moveTo(x + w0, y0);
+    c.lineTo(x - w1, y0 - 30);
+  }
+  c.stroke();
+  // the crown: branches open up like fingers around the egg
+  const egg = top - 70;
+  c.lineWidth = 4;
+  for (let n = -4; n <= 4; n++) {
+    c.beginPath();
+    c.moveTo(x + n * 2, top);
+    c.quadraticCurveTo(x + n * 17, top - 30, x + n * 12, egg - 40 + Math.abs(n) * 9);
+    c.stroke();
+  }
+  const glow = c.createRadialGradient(x, egg, 10, x, egg, 110);
+  glow.addColorStop(0, 'rgba(255, 210, 110, 0.55)');
+  glow.addColorStop(1, 'rgba(255, 200, 100, 0)');
+  c.fillStyle = glow;
+  c.fillRect(x - 110, egg - 110, 220, 220);
+  const g = c.createRadialGradient(x - 10, egg - 12, 4, x, egg, 38);
+  g.addColorStop(0, '#fff3b8');
+  g.addColorStop(0.5, '#ffc93c');
+  g.addColorStop(1, '#c78a12');
+  c.fillStyle = g;
+  c.beginPath();
+  c.ellipse(x, egg, 34, 38, 0, 0, TAU);
+  c.fill();
+  // the front branches over the egg
+  c.strokeStyle = 'rgba(233, 237, 243, 0.85)';
+  c.lineWidth = 3;
+  for (const n of [-1.5, 0, 1.5]) {
+    c.beginPath();
+    c.moveTo(x + n * 2, top);
+    c.quadraticCurveTo(x + n * 14, egg + 10, x + n * 10, egg - 30);
+    c.stroke();
+  }
+  // a little red light on top for planes
+  c.fillStyle = Math.floor(t / 40) % 2 ? '#ff3b3b' : '#7a1c1c';
+  c.beginPath();
+  c.arc(x, egg - 46, 4, 0, TAU);
+  c.fill();
+}
+
+// a big leaning tent made of glass panels
+function glassTent(c, x, t) {
+  const h = 250;
+  c.fillStyle = 'rgba(150, 190, 225, 0.55)';
+  c.beginPath();
+  c.moveTo(x - 130, 0);
+  c.quadraticCurveTo(x - 40, -h * 0.55, x + 24, -h);
+  c.quadraticCurveTo(x + 70, -h * 0.5, x + 140, 0);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = 'rgba(220, 240, 255, 0.45)';
+  c.lineWidth = 1.5;
+  for (let k = 1; k < 7; k++) {
+    const y = -k * (h / 7);
+    const half = 135 * (1 - k / 7.4);
+    c.beginPath();
+    c.moveTo(x + 24 * (k / 7) - half, y);
+    c.lineTo(x + 24 * (k / 7) + half, y);
+    c.stroke();
+  }
+  for (let k = -3; k <= 3; k++) {
+    c.beginPath();
+    c.moveTo(x + k * 40, 0);
+    c.lineTo(x + 24, -h);
+    c.stroke();
+  }
+  c.strokeStyle = '#d6dde6';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(x + 24, -h);
+  c.lineTo(x + 30, -h - 40);
+  c.stroke();
+  // lights inside come and go
+  c.fillStyle = 'rgba(255, 220, 140, 0.35)';
+  c.globalAlpha = 0.6 + 0.4 * Math.sin(t * 0.02);
+  c.beginPath();
+  c.ellipse(x, -30, 70, 18, 0, 0, TAU);
+  c.fill();
+  c.globalAlpha = 1;
+}
+
+function tower(c, b, t) {
+  const { x, w, h } = b;
+  c.fillStyle = '#1b2547';
+  c.beginPath();
+  c.moveTo(x - w / 2, 0);
+  c.lineTo(x - w / 2, -h);
+  if (b.top === 1) c.lineTo(x, -h - 40);
+  else if (b.top === 2) c.quadraticCurveTo(x, -h - 34, x + w / 2, -h);
+  c.lineTo(x + w / 2, -h);
+  c.lineTo(x + w / 2, 0);
+  c.closePath();
+  c.fill();
+  for (let y = -h + 14; y < -12; y += 18) {
+    for (let wx = x - w / 2 + 8; wx < x + w / 2 - 8; wx += 14) {
+      const on = Math.sin(wx * 12.9 + y * 7.3 + b.lit * 50) > 0.1;
+      if (!on) continue;
+      c.fillStyle = (wx + y) % 3 > 1 ? '#ffd98a' : '#cfe3ff';
+      c.fillRect(wx, y, 6, 8);
+    }
+  }
+}
+
+// a pennant on a pole that flaps with the wind
+function pennant(c, x, t, w) {
+  c.strokeStyle = '#c9ced8';
+  c.lineWidth = 3;
+  c.beginPath();
+  c.moveTo(x, 0);
+  c.lineTo(x, -150);
+  c.stroke();
+  const dir = w ? w.dir : 1;
+  const k = w ? w.k : 0;
+  const flap = Math.sin(t * (0.12 + k * 0.4) + x) * (6 + k * 6);
+  const len = 46 + k * 24;
+  c.fillStyle = Math.round(x / 300) % 2 ? '#2fa4d9' : '#ffc93c';
+  c.beginPath();
+  c.moveTo(x, -150);
+  c.quadraticCurveTo(x + dir * len * 0.5, -150 + flap - 4 + (1 - k) * 10, x + dir * len, -136 + flap * 0.5 + (1 - k) * 22);
+  c.lineTo(x, -112);
+  c.closePath();
+  c.fill();
+}
+
+function streetLamp(c, x, t) {
+  c.strokeStyle = '#3a4466';
+  c.lineWidth = 4;
+  c.beginPath();
+  c.moveTo(x, 0);
+  c.lineTo(x, -120);
+  c.quadraticCurveTo(x, -132, x + 16, -132);
+  c.stroke();
+  const g = c.createRadialGradient(x + 18, -126, 2, x + 18, -126, 46);
+  g.addColorStop(0, 'rgba(255, 230, 160, 0.8)');
+  g.addColorStop(1, 'rgba(255, 220, 150, 0)');
+  c.fillStyle = g;
+  c.fillRect(x - 30, -175, 96, 96);
+}
+
+function granite(c, s, below) {
+  const { back, front, half } = floorShape(c, s, below, '#8a919c');
+  c.strokeStyle = 'rgba(40, 46, 60, 0.28)';
+  c.lineWidth = 2;
+  for (let y = back + 14; y < front; y += 26) {
+    c.beginPath();
+    c.moveTo(-half - 200, y);
+    c.lineTo(half + 200, y);
+    c.stroke();
+  }
+  for (let x = -half - 200; x < half + 200; x += 60) {
+    c.beginPath();
+    c.moveTo(x, back);
+    c.lineTo(x * 1.12, front);
+    c.stroke();
+  }
+  medallion(c, 'rgba(255, 215, 120, 0.5)', 120, true);
+}
+
 // ---------- themes ----------
 
 const THEMES = {
+  astana: {
+    floor: ['#6d7480', '#454b56'],
+    sky(c, v, a) {
+      gradientSky(c, v, ['#0d1838', '#1f3a74', '#4a74b0', '#f0a76c']);
+      nightStars(c, { ...v, ground: v.ground * 0.5 }, a);
+    },
+    back(c, v, a, layer) {
+      const t = v.t;
+      // flat steppe on the horizon, the city stands right in it
+      layer(0.06, 0.9, () => {
+        c.fillStyle = '#2a3a5e';
+        c.fillRect(-2600, -40, 5200, 400);
+        glassTent(c, 620, t);
+      });
+      layer(0.1, 0.8, () => {
+        for (const b of a.towers) tower(c, b, t);
+      });
+      layer(0.16, 0.9, () => {
+        goldTower(c, -300, t);
+      });
+      layer(0.4, 1, () => {
+        c.fillStyle = '#1a2240';
+        c.fillRect(-2600, -14, 5200, 400);
+        for (let x = -1500; x <= 1500; x += 300) streetLamp(c, x, t);
+        for (let x = -1350; x <= 1500; x += 300) pennant(c, x, t, a.wind);
+      });
+    },
+    ground: (c, s, below) => granite(c, s, below),
+    weather(c, v, a) {
+      const w = a.wind;
+      if (!w) return;
+      // before the gust a few leaves start to move, then everything flies
+      const k = Math.max(w.k, w.t < 40 ? w.t / 120 : 0);
+      if (k <= 0) return;
+      const speed = 6 + k * 22;
+      c.strokeStyle = `rgba(230, 240, 255, ${0.35 * k})`;
+      c.lineWidth = 2;
+      for (const b of a.bits) {
+        const x = ((b.x * v.W + w.dir * v.t * speed * b.s) % v.W + v.W) % v.W;
+        const y = (b.y * v.H * 0.8 + Math.sin(v.t * 0.05 + b.p) * 30) % v.H;
+        if (b.leaf) {
+          c.fillStyle = b.p > 3 ? '#d9a33a' : '#a7c25a';
+          c.save();
+          c.translate(x, y);
+          c.rotate(v.t * 0.2 * b.s + b.p);
+          c.globalAlpha = Math.min(1, k * 1.5);
+          c.beginPath();
+          c.ellipse(0, 0, 6 * v.s * 0.8 + 2, 3 * v.s * 0.8 + 1, 0, 0, TAU);
+          c.fill();
+          c.restore();
+          c.globalAlpha = 1;
+        } else {
+          c.beginPath();
+          c.moveTo(x, y);
+          c.lineTo(x - w.dir * (30 + 60 * k) * b.s, y);
+          c.stroke();
+        }
+      }
+    },
+  },
   aul: {
     floor: ['#9b7e52', '#5e4a2e'],
     sky(c, v, a) {

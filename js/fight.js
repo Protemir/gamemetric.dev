@@ -31,7 +31,12 @@ const ARENA_RULES = {
   koktobe: {},
   charyn: { hazard: 'weed' },
   bazaar: { hazard: 'melon' },
+  astana: { hazard: 'wind' },
 };
+
+// the steppe wind in Astana: a warning, then a long push to one side
+const WIND = { warn: 40, rise: 20, hold: 100, fall: 30 };
+const WIND_LIFE = WIND.warn + WIND.rise + WIND.hold + WIND.fall;
 
 export class Fighter {
   constructor(def, idx, palette, m, gold) {
@@ -685,6 +690,7 @@ export class Match {
     this.eagle = null;
     this.car = null;
     this.hazardT = 600 + Math.floor(this.rand() * 600);
+    this.wind = null;
     this.final = this.wins[0] === WINS - 1 && this.wins[1] === WINS - 1;
   }
 
@@ -740,6 +746,7 @@ export class Match {
     this.stepLasso(a, b);
     this.stepLasso(b, a);
     this.stepMeter();
+    this.stepWind();
     if (this.phase === 'fight') {
       this.stepHazard();
       if (!this.training) {
@@ -1275,9 +1282,38 @@ export class Match {
     if (!this.hazardKind || --this.hazardT > 0) return;
     this.hazardT = 900 + Math.floor(this.rand() * 700);
     const dir = this.rand() < 0.5 ? 1 : -1;
+    if (this.hazardKind === 'wind') {
+      this.wind = { dir, t: 0, k: 0 };
+      this.emit('hazard', { kind: 'wind' });
+      return;
+    }
     const speed = this.hazardKind === 'sheep' ? 430 : this.hazardKind === 'melon' ? 360 : 300;
     this.proj.push({ k: this.hazardKind, owner: null, x: -dir * (STAGE + 220), y: 0, vx: dir * speed, dir, t: 0, spin: 0, hitSet: [] });
     this.emit('hazard', { kind: this.hazardKind });
+  }
+
+  stepWind() {
+    const w = this.wind;
+    if (!w) return;
+    w.t++;
+    if (w.t >= WIND_LIFE) {
+      this.wind = null;
+      return;
+    }
+    const t = w.t - WIND.warn;
+    w.k = t < 0 ? 0 : t < WIND.rise ? t / WIND.rise : t < WIND.rise + WIND.hold ? 1 : 1 - (t - WIND.rise - WIND.hold) / WIND.fall;
+    if (t === 0) {
+      this.emit('gust', { wind: true });
+      this.word((this.f[0].x + this.f[1].x) / 2, 250, 'ЖЕЛ!');
+    }
+    if (w.k <= 0 || this.phase !== 'fight') return;
+    for (const f of this.f) {
+      if (SCRIPTED.has(f.state) || f.hidden || f.state === 'blast') continue;
+      // blocking or crouching you hold on better, in the air you fly
+      const hold = f.state === 'block' || f.state === 'blockstun' || f.crouching;
+      f.x = clamp(f.x + w.dir * w.k * (f.y > 0 ? 170 : hold ? 40 : 95) * DT, -STAGE, STAGE);
+    }
+    for (const p of this.proj) if (p.owner && FALLING.has(p.k)) p.x += w.dir * w.k * 120 * DT;
   }
 
   stepHazardProj(p) {

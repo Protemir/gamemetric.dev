@@ -11,7 +11,7 @@ Plain ES modules in `js/`, no build step, no images. Everything is drawn on canv
 - `js/fight.js`: the fight (fighters, moves, specials, finishers, hazards, rounds), no DOM, deterministic
 - `js/fighters.js`: fighter data, frame data, phrases, stories
 - `js/pose.js`, `js/looks.js`, `js/paint.js`, `js/draw.js`: skeleton, poses, what everyone looks like, effects
-- `js/arena.js`: the five arenas and the crowd
+- `js/arena.js`: the six arenas and the crowd
 - `js/ai.js`: the computer opponent
 - `js/arcade.js`, `js/online.js`, `js/voice.js`, `js/input.js`, `js/audio.js`, `js/music.js`
 - `js/main.js`: menus, HUD, camera, loop
