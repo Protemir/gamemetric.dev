@@ -13,6 +13,7 @@ import { voice, say, setVoice, hasVoice } from './voice.js';
 import { makeLadder, scoreFor, UNLOCKS } from './arcade.js';
 import { Net, netSupported, encode, decode, fingerprint } from './online.js';
 import { goldPalette } from './fighters.js';
+import { hasServer, getBoard, sendScore, makeRoom, getRoom, answerRoom, cleanCode } from './server.js';
 
 const $ = (id) => document.getElementById(id);
 const isTouch = window.matchMedia('(pointer: coarse)').matches;
@@ -835,6 +836,13 @@ function arcadeEnding() {
     saveProgress();
     note.textContent = t('saved');
     saveBtn.disabled = true;
+    if (hasServer() && nick !== '???') {
+      sendScore({ d: A.diff, name: nick, score: A.score, f: A.player })
+        .then((r) => {
+          if (r.rank) note.textContent = t('worldRank', { n: r.rank });
+        })
+        .catch(() => {});
+    }
   });
   const box = el('div', 'name-box');
   box.append(el('label', '', t('yourName')), row(name, saveBtn), note);
@@ -914,7 +922,34 @@ function screenRecords() {
     li.append(el('span', 'pos', String(k + 1)), el('span', 'who', `${r.name} · ${L(fighterById(r.f).name)} · ${t(r.d)}`), el('span', 'val', String(r.score)));
     table.append(li);
   });
-  panel('wide', head(t('records'), () => screenMain()), starsLine, el('p', 'hint', t('starsHow')), el('h3', '', t('unlocksTitle')), list, el('h3', '', t('recordsTitle')), table);
+  const world = hasServer() ? worldBoard() : [];
+  panel('wide', head(t('records'), () => screenMain()), starsLine, el('p', 'hint', t('starsHow')), el('h3', '', t('unlocksTitle')), list, el('h3', '', t('recordsTitle')), table, ...world);
+}
+
+function worldBoard() {
+  const table = el('ol', 'board');
+  const chips = el('div', 'chips');
+  let diff = progress.diff || 'normal';
+  const load = () => {
+    chips.replaceChildren(...['easy', 'normal', 'hard'].map((d) => chip(t(d), d === diff, () => {
+      diff = d;
+      load();
+    })));
+    table.replaceChildren(el('li', 'empty', '...'));
+    getBoard(diff)
+      .then((r) => {
+        table.replaceChildren();
+        if (!r.entries.length) table.append(el('li', 'empty', t('worldEmpty')));
+        r.entries.forEach((e, k) => {
+          const li = el('li', 'row-entry');
+          li.append(el('span', 'pos', String(k + 1)), el('span', 'who', `${e.name} · ${L(fighterById(e.f).name)}`), el('span', 'val', String(e.score)));
+          table.append(li);
+        });
+      })
+      .catch(() => table.replaceChildren(el('li', 'empty', t('worldFail'))));
+  };
+  load();
+  return [el('h3', '', t('worldTitle')), chips, table];
 }
 
 function screenHowTo() {
@@ -1074,7 +1109,7 @@ function endReplay() {
 
 // ---------- online ----------
 
-function screenOnline(joinCode) {
+function screenOnline(joinCode, room) {
   backdrop();
   if (app.net) leaveNet();
   const status = el('p', 'note', '');
@@ -1107,6 +1142,20 @@ function screenOnline(joinCode) {
       status.textContent = getText();
     }
   });
+  if (room) {
+    // the friend's room: take the offer from the server, send the answer back the same way
+    app.net.role = 'guest';
+    app.net.local = 1;
+    status.textContent = t('joining');
+    box.replaceChildren(el('p', 'room-code', room));
+    getRoom(room)
+      .then((r) => n.join(r.offer))
+      .then((answer) => answerRoom(room, answer))
+      .then(() => { status.textContent = t('waitingFriend'); })
+      .catch((err) => { status.textContent = err && err.status === 404 ? t('roomGone') : t('badCode'); });
+    panel('wide', head(t('onlineTitle'), () => { leaveNet(); toMenu(); }), box, status);
+    return;
+  }
   if (joinCode) {
     app.net.role = 'guest';
     app.net.local = 1;
@@ -1128,6 +1177,27 @@ function screenOnline(joinCode) {
     status.textContent = t('making');
     try {
       const offer = await n.host();
+      let code = null;
+      if (hasServer()) code = await makeRoom(offer).catch(() => null);
+      if (code) {
+        // the friend opens the short link or types the code, the answer comes back through the server
+        const url = `${location.origin}${location.pathname}#room=${code}`;
+        const area = el('textarea', 'code');
+        area.readOnly = true;
+        area.value = url;
+        const shareLink = navigator.share ? btn(t('share'), '', () => navigator.share({ title: 'Жекпе-жек', url }).catch(() => {})) : null;
+        box.replaceChildren(el('p', 'tag', t('roomReady')), el('p', 'room-code', code), area, row(copyBtn(() => url, t('copyLink')), shareLink));
+        status.textContent = t('waitingFriend');
+        const until = Date.now() + 10 * 60 * 1000;
+        const poll = () => {
+          if (!app.net || app.net.conn !== n || n.open || Date.now() > until) return;
+          getRoom(code)
+            .then((r) => (r.answer ? n.accept(r.answer) : setTimeout(poll, 2000)))
+            .catch(() => setTimeout(poll, 4000));
+        };
+        setTimeout(poll, 2000);
+        return;
+      }
       const url = `${location.origin}${location.pathname}#join=${offer}`;
       const area = el('textarea', 'code');
       area.readOnly = true;
@@ -1150,7 +1220,23 @@ function screenOnline(joinCode) {
     }
   });
   box.append(hostBtn);
-  panel('wide', head(t('onlineTitle'), () => { leaveNet(); toMenu(); }), el('p', 'tag', t('onlineIntro')), box, status);
+  if (hasServer()) {
+    // or join a friend's room by its code
+    const input = el('input', 'room-input');
+    input.type = 'text';
+    input.maxLength = 6;
+    input.placeholder = 'ABC123';
+    input.autocapitalize = 'characters';
+    const go = btn(t('join'), '', () => {
+      const code = cleanCode(input.value);
+      if (code.length === 6) {
+        leaveNet();
+        screenOnline(null, code);
+      } else status.textContent = t('roomGone');
+    });
+    box.append(el('p', 'tag', t('joinByCode')), row(input, go));
+  }
+  panel('wide', head(t('onlineTitle'), () => { leaveNet(); toMenu(); }), el('p', 'tag', t(hasServer() ? 'onlineIntroRoom' : 'onlineIntro')), box, status);
 }
 
 function onNet(msg) {
@@ -1346,7 +1432,7 @@ function leaveNet() {
   app.net.conn.send({ t: 'bye' });
   app.net.conn.close();
   app.net = null;
-  if (location.hash.startsWith('#join=')) history.replaceState(null, '', location.pathname + location.search);
+  if (location.hash.startsWith('#join=') || location.hash.startsWith('#room=')) history.replaceState(null, '', location.pathname + location.search);
 }
 
 // ---------- audio, keys, language ----------
@@ -1569,6 +1655,7 @@ checkUnlocks();
 toMenu();
 requestAnimationFrame(frame);
 if (location.hash.startsWith('#join=')) screenOnline(location.hash.slice(6));
+else if (location.hash.startsWith('#room=')) screenOnline(null, cleanCode(location.hash.slice(6)));
 
 // ?og renders a still frame for the link preview (og.png)
 if (params.has('og')) {
