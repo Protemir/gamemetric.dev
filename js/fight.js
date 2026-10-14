@@ -662,7 +662,9 @@ export class Match {
     this.arena = arena;
     const rules = ARENA_RULES[arena] || {};
     this.ice = !!rules.ice;
-    this.hazardKind = opts.training || opts.noHazards ? null : rules.hazard || null;
+    // calm by default: arena hazards and flying into the sky come only with the full chaos mode
+    this.chaos = !!opts.chaos;
+    this.hazardKind = opts.training || opts.noHazards || !this.chaos ? null : rules.hazard || null;
     this.training = !!opts.training;
     this.f = [new Fighter(fighterById(p1), 0, 0, this, gold[0]), new Fighter(fighterById(p2), 1, pal2, this, gold[1])];
     this.wins = [0, 0];
@@ -1049,7 +1051,7 @@ export class Match {
       return;
     }
     if (!thrown) {
-      if (heavy && this.rand() < 0.35) {
+      if (heavy && this.chaos && this.rand() < 0.35) {
         // sometimes a big hit just sends them into the sky
         def.set('blast');
         def.vx = dir * 520;
@@ -1737,7 +1739,7 @@ export class Match {
   }
 }
 
-const MATCH_FIXED = new Set(['opts', 'emit', 'rand', 'f', 'muted', 'arena', 'ice', 'hazardKind', 'training']);
+const MATCH_FIXED = new Set(['opts', 'emit', 'rand', 'f', 'muted', 'arena', 'ice', 'hazardKind', 'training', 'chaos']);
 const FIGHTER_FIXED = new Set(['def', 'idx', 'pal', 'm', 'hpMax', 'poses']);
 
 // fighter definitions and their poses: shared between snapshots, never copied

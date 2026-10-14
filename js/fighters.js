@@ -451,7 +451,7 @@ const SECOND = {
     say2: ['Қошқар!'],
   },
   akyn: {
-    spec2: { kind: 'candy', s: 10, r: 14, cd: 200, vx: 500, dmg: 3 },
+    spec2: { kind: 'candy', s: 10, r: 14, cd: 190, vx: 500, dmg: 4 },
     special2: { ru: 'Шашу: горсть конфет веером', en: 'Shashu: a handful of sweets thrown in a fan' },
     say2: ['Шашу!', 'Тәтті болсын!'],
   },

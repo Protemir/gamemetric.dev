@@ -23,7 +23,7 @@ const DUMMIES = ['stand', 'block', 'crouch', 'jump', 'cpu'];
 const KK_NUM = ['', 'бір', 'екі', 'үш', 'төрт', 'бес', 'алты'];
 
 const progress = Object.assign(
-  { wins: { easy: 0, normal: 0, hard: 0 }, diff: 'normal', p1: 'batyr', p2: 'random', p2b: 'apa', p2t: 'apa', arena: 'random', stars: 0, seen: {}, clears: {}, records: [], unlockSeen: [], bighead: false, gold: false, turbo: false, dummy: 'stand', name: '' },
+  { wins: { easy: 0, normal: 0, hard: 0 }, diff: 'normal', p1: 'batyr', p2: 'random', p2b: 'apa', p2t: 'apa', arena: 'random', stars: 0, seen: {}, clears: {}, records: [], unlockSeen: [], bighead: false, gold: false, turbo: false, dummy: 'stand', name: '', chaos: false },
   store.get('jekpe.progress', {}),
 );
 const saveProgress = () => store.set('jekpe.progress', progress);
@@ -96,7 +96,7 @@ function newDemo() {
   if (p2 === p1) p2 = ids[(ids.indexOf(p1) + 1) % ids.length];
   const arena = ARENAS[Math.floor(r() * ARENAS.length)].id;
   setArena(arena);
-  app.match = new Match({ p1, p2, seed, arena });
+  app.match = new Match({ p1, p2, seed, arena, chaos: progress.chaos });
   app.demoAI = [new AI('normal', r), new AI('normal', r)];
   app.isDemo = true;
   app.overTimer = 0;
@@ -119,7 +119,7 @@ function pickArena() {
 // one place that starts every kind of fight
 function startMatch(o) {
   const seed = o.seed ?? Math.floor(Math.random() * 1e9);
-  const opts = { p1: o.p1, p2: o.p2, seed, arena: o.arena, gold: o.gold || [false, false], bossFight: !!o.bossFight, training: !!o.training, noHazards: !!o.noHazards, friendship: o.friendship ?? isOpen('friend') };
+  const opts = { p1: o.p1, p2: o.p2, seed, arena: o.arena, gold: o.gold || [false, false], bossFight: !!o.bossFight, training: !!o.training, noHazards: !!o.noHazards, friendship: o.friendship ?? isOpen('friend'), chaos: o.chaos ?? progress.chaos };
   setArena(opts.arena);
   app.mode = 'fight';
   app.match = new Match({ ...opts, onEvent });
@@ -254,7 +254,7 @@ function onEvent(type, d) {
       if (d.combo >= 2) showCombo(d.att.idx, d.combo);
       if (d.heavy || d.combo >= 4) {
         sfx.crowd(false);
-        if (d.combo >= 4 || Math.random() < 0.3) shout();
+        if (app.match.chaos && (d.combo >= 4 || Math.random() < 0.3)) shout();
       }
       break;
     case 'block': sfx.block(d.f.def.id === 'batyr'); break;
@@ -717,6 +717,14 @@ function screenSelect() {
     const chips = el('div', 'chips');
     for (const d of DUMMIES) chips.append(chip(t('dm_' + d), progress.dummy === d, () => { progress.dummy = d; saveProgress(); screenSelect(); }));
     box.append(chips, el('p', 'hint', t('trainHint')));
+    parts.push(box);
+  }
+  if (!net || app.net.role === 'host') {
+    const box = el('div', 'pick-col');
+    box.append(el('b', '', t('fightMode')));
+    const chips = el('div', 'chips');
+    for (const on of [false, true]) chips.append(chip(t(on ? 'chaosOn' : 'chaosOff'), progress.chaos === on, () => { progress.chaos = on; saveProgress(); screenSelect(); }));
+    box.append(chips, el('p', 'hint', t(progress.chaos ? 'chaosOnHint' : 'chaosOffHint')));
     parts.push(box);
   }
   const extras = ['bighead', 'gold', 'turbo'].filter((x) => isOpen(x) && !(net && x === 'turbo' && app.net.role !== 'host'));
@@ -1279,7 +1287,7 @@ function netStart() {
     toast(t('waitPick'));
     return;
   }
-  const msg = { t: 'start', seed: Math.floor(Math.random() * 1e9), p1: progress.p1, p2: N.friendPick, arena: pickArena(), turbo: isOpen('turbo') && progress.turbo, friendship: isOpen('friend') };
+  const msg = { t: 'start', seed: Math.floor(Math.random() * 1e9), p1: progress.p1, p2: N.friendPick, arena: pickArena(), turbo: isOpen('turbo') && progress.turbo, friendship: isOpen('friend'), chaos: progress.chaos };
   N.conn.send(msg);
   netBegin(msg);
 }
@@ -1310,7 +1318,7 @@ function netBegin(msg) {
     N.inp[1].set(f, 0);
   }
   app.kind = 'net';
-  startMatch({ p1: msg.p1, p2: msg.p2, arena: msg.arena, seed: msg.seed, turbo: msg.turbo, friendship: !!msg.friendship, bighead: false });
+  startMatch({ p1: msg.p1, p2: msg.p2, arena: msg.arena, seed: msg.seed, turbo: msg.turbo, friendship: !!msg.friendship, chaos: !!msg.chaos, bighead: false });
 }
 
 // Rollback: we don't wait for the friend's buttons. Each frame is played right away with a guess
@@ -1548,7 +1556,7 @@ function render(dt) {
   const lim = STAGE + 90 - halfW;
   cam.x = lim > 0 ? clamp(cam.x, -lim, lim) : 0;
 
-  const shake = m.shake * cam.s * 0.9;
+  const shake = m.shake * cam.s * (m.chaos ? 0.9 : 0.35);
   const sx = shake ? (Math.random() - 0.5) * shake : 0;
   const sy = shake ? (Math.random() - 0.5) * shake : 0;
   ctx.save();
@@ -1579,7 +1587,7 @@ function render(dt) {
   ctx.restore();
 
   if (m.flash > 0.02) {
-    ctx.fillStyle = `rgba(255,255,255,${m.flash * 0.45})`;
+    ctx.fillStyle = `rgba(255,255,255,${m.flash * (m.chaos ? 0.45 : 0.18)})`;
     ctx.fillRect(0, 0, W, H);
   }
 }
