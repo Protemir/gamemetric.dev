@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>og</title>
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #0f1011; color: #ecedee;
+               font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+  .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 14px; background: #c2ec5a; }
+  .brand { position: absolute; left: 72px; top: 60px; display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: 36px; letter-spacing: -0.02em; }
+  .mark { width: 26px; height: 26px; border-radius: 6px; background: #c2ec5a; }
+  h1 { position: absolute; left: 72px; top: 150px; width: 560px; margin: 0; font-size: 84px; line-height: 1.02; letter-spacing: -0.04em; font-weight: 800; }
+  .url { position: absolute; left: 72px; bottom: 60px; font-size: 30px; color: #9ba0a6; font-weight: 600; }
+  .tiles { position: absolute; right: 64px; top: 64px; width: 440px; height: 502px; display: grid; grid-template-columns: 1fr 1fr;
+           grid-template-rows: 1fr 1fr 0.8fr; grid-template-areas: "r a" "r c" "m m"; gap: 14px; }
+  .tile { position: relative; overflow: hidden; border: 1px solid #2c2f33; border-radius: 16px; background: #17181b; padding: 22px; font-weight: 800; font-size: 30px; letter-spacing: -0.01em; }
+  .r { grid-area: r; background: #c2ec5a; border-color: #c2ec5a; color: #12160a; font-size: 40px; letter-spacing: -0.03em; }
+  .a { grid-area: a; } .c { grid-area: c; } .m { grid-area: m; }
+  .a::after { content: ""; position: absolute; right: -20px; top: -20px; width: 100px; height: 100px; border-radius: 50%;
+              background: radial-gradient(circle, #c2ec5a 0 16%, transparent 17% 33%, #2c2f33 34% 50%, transparent 51% 67%, #2c2f33 68% 84%, transparent 85%); }
+  .c { background-image: radial-gradient(#2c2f33 2px, transparent 2.2px); background-size: 18px 18px; }
+  .grid { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); display: grid; grid-template-columns: repeat(3, 22px); gap: 6px; }
+  .grid i { width: 22px; height: 22px; border-radius: 5px; background: #222428; }
+  .grid i:nth-child(5) { background: #c2ec5a; }
+</style>
+</head>
+<body>
+  <div class="bar"></div>
+  <div class="brand"><span class="mark"></span>GameMetric</div>
+  <h1>How fast is your gamer brain?</h1>
+  <div class="url">gamemetric.dev</div>
+  <div class="tiles">
+    <div class="tile r">Reaction</div>
+    <div class="tile a">Aim</div>
+    <div class="tile c">Clicks</div>
+    <div class="tile m">Memory<span class="grid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+  </div>
+</body>
+</html>
