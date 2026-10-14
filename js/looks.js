@@ -761,6 +761,33 @@ const akyn = {
   },
 };
 
+// кесе: a small white tea bowl with a blue pattern and a bit of steam
+export function kese(c, hand, t) {
+  const [x, y] = hand;
+  c.fillStyle = '#ffffff';
+  c.beginPath();
+  c.moveTo(x - 11, y - 14);
+  c.lineTo(x + 11, y - 14);
+  c.quadraticCurveTo(x + 10, y - 2, x, y - 1);
+  c.quadraticCurveTo(x - 10, y - 2, x - 11, y - 14);
+  c.fill();
+  c.strokeStyle = '#2f6db0';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(x - 9, y - 10);
+  c.lineTo(x + 9, y - 10);
+  c.stroke();
+  c.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+  c.lineWidth = 1.6;
+  for (let n = -1; n <= 1; n += 2) {
+    const o = Math.sin(t * 0.15 + n) * 2;
+    c.beginPath();
+    c.moveTo(x + n * 4, y - 17);
+    c.quadraticCurveTo(x + n * 4 + o + 3, y - 23, x + n * 4 + o, y - 29);
+    c.stroke();
+  }
+}
+
 export function whiteScarf(c, hand, t) {
   const w = Math.sin(t * 0.4);
   c.fillStyle = '#ffffff';

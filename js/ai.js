@@ -71,7 +71,7 @@ export class AI {
 
     if (m.phase === 'finish' && m.winner === me) {
       if (dist > 200) go(1, 10);
-      else if (R() < (lv === LEVELS.easy ? 0.4 : 0.9)) hit('special');
+      else if (R() < (lv === LEVELS.easy ? 0.4 : 0.9)) hit('special', { down: !!m.opts.friendship && R() < 0.15 });
       return;
     }
     if (m.phase !== 'fight') {

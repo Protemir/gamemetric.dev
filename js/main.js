@@ -118,7 +118,7 @@ function pickArena() {
 // one place that starts every kind of fight
 function startMatch(o) {
   const seed = o.seed ?? Math.floor(Math.random() * 1e9);
-  const opts = { p1: o.p1, p2: o.p2, seed, arena: o.arena, gold: o.gold || [false, false], bossFight: !!o.bossFight, training: !!o.training, noHazards: !!o.noHazards };
+  const opts = { p1: o.p1, p2: o.p2, seed, arena: o.arena, gold: o.gold || [false, false], bossFight: !!o.bossFight, training: !!o.training, noHazards: !!o.noHazards, friendship: o.friendship ?? isOpen('friend') };
   setArena(opts.arena);
   app.mode = 'fight';
   app.match = new Match({ ...opts, onEvent });
@@ -316,6 +316,13 @@ function onEvent(type, d) {
       break;
     case 'lullaby':
       if (audioUnlocked) playMusic('lullaby');
+      break;
+    case 'friend':
+      sfx.win();
+      shout();
+      banner('ДОСТЫҚ!', t('friendSub'), 2.4, true);
+      say('Достық!', { pitch: 0.6, rate: 0.85 });
+      if (app.arena.id === 'koktobe') app.arena.burst(app.time);
       break;
     case 'ujat':
       sfx.ujat();
@@ -1177,7 +1184,7 @@ function netStart() {
     toast(t('waitPick'));
     return;
   }
-  const msg = { t: 'start', seed: Math.floor(Math.random() * 1e9), p1: progress.p1, p2: N.friendPick, arena: pickArena(), turbo: isOpen('turbo') && progress.turbo };
+  const msg = { t: 'start', seed: Math.floor(Math.random() * 1e9), p1: progress.p1, p2: N.friendPick, arena: pickArena(), turbo: isOpen('turbo') && progress.turbo, friendship: isOpen('friend') };
   N.conn.send(msg);
   netBegin(msg);
 }
@@ -1195,7 +1202,7 @@ function netBegin(msg) {
     N.inp[1].set(f, 0);
   }
   app.kind = 'net';
-  startMatch({ p1: msg.p1, p2: msg.p2, arena: msg.arena, seed: msg.seed, turbo: msg.turbo, bighead: false });
+  startMatch({ p1: msg.p1, p2: msg.p2, arena: msg.arena, seed: msg.seed, turbo: msg.turbo, friendship: !!msg.friendship, bighead: false });
 }
 
 function netStep() {

@@ -1,6 +1,6 @@
 import { solve } from './pose.js';
 import { TAU, shade, seg, dot, baursakAt, star, roundRect } from './paint.js';
-import { LOOKS, businessCard, perchedEagle, kazan, whiteScarf } from './looks.js';
+import { LOOKS, businessCard, perchedEagle, kazan, whiteScarf, kese } from './looks.js';
 
 // Fighters, props and effects, drawn in world space: x right, y down, ground at y = 0.
 
@@ -37,6 +37,7 @@ export function drawFighter(c, f, opts = {}) {
   look.arm(c, J, 'N', pal, same, f);
   // giving up: anyone can wave a white scarf
   if (f.state === 'flag') whiteScarf(c, J.handF, f.t);
+  if (f.cup) kese(c, J.handF, f.t);
 
   if (f.flash > 0) {
     c.globalAlpha = f.flash / 8;
@@ -101,7 +102,7 @@ function mood(f) {
   if (st === 'sleep') return 'sleep';
   if (st === 'yawn') return 'sleep';
   if (['hit', 'fall', 'thrown', 'pulled', 'down', 'carried', 'blind', 'flag', 'wrapped'].includes(st)) return 'hurt';
-  if (['win', 'clap', 'play', 'taunt', 'wave', 'keys'].includes(st)) return 'happy';
+  if (['win', 'clap', 'play', 'taunt', 'wave', 'keys', 'offer', 'thank', 'drink'].includes(st)) return 'happy';
   if (st === 'lose') return 'sad';
   if (st === 'dance') return f.dance > 2.6 ? 'hurt' : 'happy';
   if (st === 'attack' || st === 'special' || st === 'throwing') return 'angry';

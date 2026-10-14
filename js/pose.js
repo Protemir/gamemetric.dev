@@ -64,6 +64,10 @@ export const POSES = {
   dash: P({ lean: 0.55, head: -0.2, aN: [1.35, 0.3], aF: [1.45, 0.3], lN: [0.9, -0.9], lF: [-0.5, -0.4] }),
   eagleLaunch: P({ lean: -0.05, head: -0.25, aN: [2.5, 0.1] }),
   wave: P({ lean: -0.05, head: -0.15, aF: [2.7, 0.4] }),
+  // Достық: holding out a bowl of tea, a bow with a hand on the chest, drinking
+  offer: P({ lean: 0.12, head: 0.05, aF: [1.45, 0.35], aN: [0.5, 0.6] }),
+  thank: P({ lean: 0.3, head: 0.25, aN: [0.75, 2.4], aF: [0.25, 0.3] }),
+  drink: P({ lean: -0.05, head: -0.2, aF: [2.15, 2.35], aN: [0.4, 0.5] }),
   keys: P({ lean: -0.05, head: -0.2, aF: [1.9, 1.6] }),
   charge: P({ lean: 0.45, head: -0.1, aN: [1.65, 1.1], aF: [0.9, 1.9], lN: [0.75, -0.5], lF: [-0.55, -0.2] }),
   ram: P({ lean: 1.05, head: 0.35, aN: [-0.3, 0.4], aF: [-0.2, 0.5], lN: [0.8, -0.8], lF: [-0.55, -0.3] }),

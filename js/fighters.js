@@ -398,6 +398,23 @@ export const VICTIM = {
   blush: ['Ұят болды...'],
   slow: ['Не... болып... жатыр...'],
   meter: ['Ақшам кетіп жатыр!'],
+  thanks: ['Рахмет!', 'Рахмет, досым!'],
+};
+
+// Достық: the finisher anyone can do, down + special on АЯҚТА once it is unlocked
+export const FRIEND = {
+  name: { ru: 'Достық', en: 'Dostyq (friendship)' },
+  text: { ru: 'вместо нокаута угостить соперника чаем и помириться', en: 'instead of a knockout, share a bowl of tea and make peace' },
+};
+const FRIEND_SAY = {
+  batyr: ['Дос болайық!'],
+  apa: ['Шай іш, балам!'],
+  burkit: ['Татуласайық!'],
+  dombra: ['Бірге ән салайық!'],
+  taxi: ['Тегін апарам!'],
+  baluan: ['Құшақтасайық!'],
+  akyn: ['Саған арнау!'],
+  dau: ['Достық жеңеді!'],
 };
 
 // Second specials: back, forward + punch (like in the arcade classics) or down + special.
@@ -450,6 +467,7 @@ for (const f of FIGHTERS) {
   f.spec2 = s2.spec2;
   f.special2 = s2.special2;
   f.say.special2 = s2.say2;
+  f.say.friend = FRIEND_SAY[f.id];
 }
 
 export const fighterById = (id) => FIGHTERS.find((f) => f.id === id) || FIGHTERS[0];

@@ -20,7 +20,7 @@ export const NO_INPUT = Object.freeze({ left: false, right: false, up: false, do
 const ACTIONABLE = new Set(['idle', 'walk', 'crouch', 'block']);
 const TURNABLE = new Set(['idle', 'walk', 'crouch', 'block', 'land', 'stun', 'dizzy', 'prejump', 'blush', 'wrapped']);
 const THROWABLE = new Set(['idle', 'walk', 'crouch', 'block', 'land', 'prejump', 'attack', 'taunt', 'blush', 'stun', 'wrapped']);
-const NO_HURT = new Set(['down', 'rise', 'out', 'thrown', 'carried', 'dance', 'pulled', 'win', 'lose', 'blast', 'blind', 'yawn', 'sleep', 'flag', 'inCar', 'play', 'keys', 'wave', 'clap', 'whistle', 'eagleLaunch', 'sneezeIn', 'sneezeOut', 'heli', 'heliLift', 'stroll']);
+const NO_HURT = new Set(['down', 'rise', 'out', 'thrown', 'carried', 'dance', 'pulled', 'win', 'lose', 'blast', 'blind', 'yawn', 'sleep', 'flag', 'inCar', 'play', 'keys', 'wave', 'clap', 'whistle', 'eagleLaunch', 'sneezeIn', 'sneezeOut', 'heli', 'heliLift', 'stroll', 'offer', 'thank', 'drink']);
 const SCRIPTED = new Set(['thrown', 'carried', 'inCar', 'blind', 'heli', 'stroll']);
 const PROJ_SOLID = new Set(['baursak', 'wave', 'card', 'words', 'blanket', 'horn', 'candy']);
 const FALLING = new Set(['baursak', 'blanket', 'candy', 'boulder']);
@@ -159,7 +159,7 @@ export class Fighter {
     // the winner can start a finisher during "АЯҚТА!"
     if (m.phase === 'finish' && m.winner === this && buf && buf.b === 'special' && this.actionable && Math.abs(op.x - this.x) < 330) {
       this.buffer = null;
-      m.startFinisher(this, op);
+      m.startFinisher(this, op, buf.down && m.opts.friendship ? 'friend' : null);
       return;
     }
     if (inp.taunt && this.actionable && m.phase === 'fight') {
@@ -1309,18 +1309,20 @@ export class Match {
 
   // ---------- finishers ----------
 
-  startFinisher(w, v) {
+  startFinisher(w, v, pick) {
     this.phase = 'finisher';
     this.pt = 0;
-    this.fin = { kind: w.def.finisher || 'eagle', w, v };
+    this.fin = { kind: pick || w.def.finisher || 'eagle', w, v };
     this.log.finishers[w.idx]++;
     w.move = null;
     w.dropLasso();
     v.bubble = null;
-    w.say('finisher', true);
+    w.say(this.fin.kind === 'friend' ? 'friend' : 'finisher', true);
     this.emit('finisher', { f: w, kind: this.fin.kind });
     const kind = this.fin.kind;
-    if (kind === 'eagle') {
+    if (kind === 'friend') {
+      w.set('stroll');
+    } else if (kind === 'eagle') {
       w.set('whistle');
       this.emit('whistle', { f: w });
     } else if (kind === 'dance') {
@@ -1359,7 +1361,43 @@ export class Match {
     const { kind, w, v } = this.fin;
     const t = this.pt;
     const away = Math.sign(v.x - w.x) || w.face;
-    if (kind === 'eagle') {
+    if (kind === 'friend') {
+      // Достық: nobody gets knocked out, the winner brings a bowl of tea and they make peace
+      if (w.state === 'stroll') {
+        w.face = away;
+        if (Math.abs(v.x - w.x) > 112 && t < 70) w.x += away * 3.2;
+        else {
+          w.set('offer');
+          w.cup = true;
+        }
+      }
+      if (t === 80) {
+        v.set('thank');
+        v.face = -away;
+        v.say('thanks', true);
+      }
+      if (t === 120) {
+        w.cup = false;
+        v.cup = true;
+        v.set('drink');
+        w.set('clap');
+      }
+      if (t === 150) v.hp = Math.round(v.hpMax * 0.3);
+      if (t === 175) {
+        v.cup = false;
+        v.set('wave');
+        w.set('win');
+        this.crowd = 1;
+        this.word((w.x + v.x) / 2, 270, 'ДОСТЫҚ!');
+        this.confetti((w.x + v.x) / 2, 40);
+        this.emit('friend', {});
+      }
+      if (t >= 120 && t < 230 && t % 9 === 0) {
+        const x = (w.x + v.x) / 2 + (this.rand() - 0.5) * 120;
+        this.fx.push({ k: 'note', x, y: 170 + this.rand() * 40, t: 0, life: 60, text: '♥', color: '#ff6b8a' });
+      }
+      if (t === 300) this.endFinisher();
+    } else if (kind === 'eagle') {
       const side = -w.face;
       if (t === 30) {
         this.eagle = { x: v.x + side * 700, y: 560, t: 0, carry: false, flap: 0 };
@@ -1772,6 +1810,12 @@ export function animate(f) {
     target = P[st];
     if (st === 'sneezeIn') target = { ...target, lean: target.lean - Math.min(0.25, t * 0.005), head: target.head - Math.min(0.3, t * 0.006) };
     k = 0.3;
+  } else if (st === 'offer' || st === 'thank' || st === 'drink' || st === 'wave') {
+    target = P[st];
+    if (st === 'wave') target = { ...target, aF: [target.aF[0] + Math.sin(t * 0.3) * 0.25, target.aF[1] + Math.sin(t * 0.3) * 0.3] };
+    if (st === 'drink') target = { ...target, head: target.head - Math.min(0.3, t * 0.012), lean: target.lean - Math.min(0.12, t * 0.005) };
+    if (st === 'thank') target = { ...target, lean: target.lean + Math.sin(Math.min(t, 40) * 0.08) * 0.15 };
+    k = 0.25;
   } else if (st === 'clap') {
     const c = Math.sin(t * 0.5);
     target = { ...P.clap, aN: [P.clap.aN[0] + c * 0.25, P.clap.aN[1] - c * 0.4], aF: [P.clap.aF[0] - c * 0.25, P.clap.aF[1] + c * 0.4], lean: 0.05 + Math.abs(c) * 0.04 };

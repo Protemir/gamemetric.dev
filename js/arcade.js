@@ -53,5 +53,6 @@ export const UNLOCKS = [
   { id: 'bighead', stars: 3, name: { ru: 'Режим «Бас-бас»: большие головы', en: '"Bas-bas" mode: big heads' } },
   { id: 'gold', stars: 8, name: { ru: 'Золотые костюмы', en: 'Golden costumes' } },
   { id: 'turbo', stars: 12, name: { ru: 'Турбо: игра быстрее на четверть', en: 'Turbo: a quarter faster' } },
+  { id: 'friend', stars: 15, name: { ru: 'Добивание «Достық»: вниз + супер на АЯҚТА', en: 'The Dostyq finisher: down + special on FINISH HIM' } },
   { id: 'dau', stars: null, name: { ru: 'Дәу как боец', en: 'Dau as a fighter' }, how: { ru: 'пройди аркаду', en: 'clear the arcade' } },
 ];
