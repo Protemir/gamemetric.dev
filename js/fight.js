@@ -1,4 +1,4 @@
-import { fighterById, VICTIM, goldPalette } from './fighters.js';
+import { FIGHTERS, fighterById, VICTIM, goldPalette } from './fighters.js';
 import { posesFor, mixPose, copyPose, solve } from './pose.js';
 import { rng, clamp } from './util.js';
 
@@ -653,7 +653,12 @@ export class Match {
     const pal2 = p1 === p2 ? 1 : 0;
     this.opts = opts;
     this.rand = rng(seed);
-    this.emit = opts.onEvent || (() => {});
+    // events go out for sounds and banners; while re-simulating after a rollback they are muted
+    const on = opts.onEvent || (() => {});
+    this.muted = false;
+    this.emit = (type, d) => {
+      if (!this.muted) on(type, d);
+    };
     this.arena = arena;
     const rules = ARENA_RULES[arena] || {};
     this.ice = !!rules.ice;
@@ -695,6 +700,33 @@ export class Match {
   }
 
   get timeScale() { return this.slow > 0 ? 0.3 : 1; }
+
+  // ---------- snapshots for rollback ----------
+  // Everything that changes during a fight is copied. Fighter definitions and poses never change,
+  // so they are shared, and links to fighters are stored as their index.
+
+  save() {
+    const s = { rng: this.rand.get(), f: [] };
+    for (const k of Object.keys(this)) if (!MATCH_FIXED.has(k)) s[k] = snap(this[k]);
+    for (const f of this.f) {
+      const o = {};
+      for (const k of Object.keys(f)) if (!FIGHTER_FIXED.has(k)) o[k] = snap(f[k]);
+      s.f.push(o);
+    }
+    return s;
+  }
+
+  load(s) {
+    const back = (v) => revive(v, this.f);
+    for (const k of Object.keys(this)) if (!MATCH_FIXED.has(k) && !(k in s)) delete this[k];
+    for (const k of Object.keys(s)) if (k !== 'f' && k !== 'rng') this[k] = back(s[k]);
+    this.f.forEach((f, i) => {
+      const o = s.f[i];
+      for (const k of Object.keys(f)) if (!FIGHTER_FIXED.has(k) && !(k in o)) delete f[k];
+      for (const k of Object.keys(o)) f[k] = back(o[k]);
+    });
+    this.rand.set(s.rng);
+  }
 
   control(f) {
     return this.phase === 'fight' || (this.phase === 'finish' && f === this.winner);
@@ -1703,6 +1735,47 @@ export class Match {
     }
     this.fx = this.fx.filter((e) => e.t < e.life);
   }
+}
+
+const MATCH_FIXED = new Set(['opts', 'emit', 'rand', 'f', 'muted', 'arena', 'ice', 'hazardKind', 'training']);
+const FIGHTER_FIXED = new Set(['def', 'idx', 'pal', 'm', 'hpMax', 'poses']);
+
+// fighter definitions and their poses: shared between snapshots, never copied
+let fixed = null;
+function isFixed(o) {
+  if (!fixed) {
+    fixed = new WeakSet();
+    const walk = (v) => {
+      if (!v || typeof v !== 'object' || fixed.has(v)) return;
+      fixed.add(v);
+      for (const k of Object.keys(v)) walk(v[k]);
+    };
+    for (const d of FIGHTERS) {
+      walk(d);
+      walk(posesFor(d.id));
+    }
+    walk(VICTIM);
+  }
+  return fixed.has(o);
+}
+
+function snap(v) {
+  if (v === null || typeof v !== 'object') return v;
+  if (v instanceof Fighter) return { __f: v.idx };
+  if (isFixed(v)) return v;
+  if (Array.isArray(v)) return v.map(snap);
+  const o = {};
+  for (const k of Object.keys(v)) o[k] = snap(v[k]);
+  return o;
+}
+
+function revive(v, fs) {
+  if (v === null || typeof v !== 'object' || isFixed(v)) return v;
+  if (Array.isArray(v)) return v.map((x) => revive(x, fs));
+  if (typeof v.__f === 'number') return fs[v.__f];
+  const o = {};
+  for (const k of Object.keys(v)) o[k] = revive(v[k], fs);
+  return o;
 }
 
 function overlap(a, b) {

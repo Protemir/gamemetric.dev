@@ -4,7 +4,7 @@
 
 Fighters: Batyr (shield and lasso), Apa (ladle, kazan and baursaks), the eagle hunter Burkitshi, the dombra player, the taxi driver with a white Camry, the kures wrestler Baluan, the aitys poet Akyn, and the giant Dau as the arcade boss (playable once the arcade is cleared). Arenas: an aul at sunset, the Medeu ice rink (slippery), Kok-Tobe at night, the Charyn canyon and the bazaar, with a sheep, tumbleweeds or watermelons crossing now and then.
 
-Modes: arcade (six fights and Dau, a story and an ending for every fighter, scores and local records), versus the computer on three levels, two players on one keyboard or with gamepads, online with a friend over WebRTC (no server: a link with an offer and an answer code back, a public Google STUN server only helps the browsers find each other), training with a dummy and hitboxes, a replay of the last round. Stars unlock big heads, gold costumes, turbo and Dau.
+Modes: arcade (six fights and Dau, a story and an ending for every fighter, scores and local records), versus the computer on three levels, two players on one keyboard or with gamepads, online with a friend over WebRTC (no server: a link with an offer and an answer code back, a public Google STUN server only helps the browsers find each other; rollback with a two-frame delay, so ping is barely felt), training with a dummy and hitboxes, a replay of the last round. Stars unlock big heads, gold costumes, turbo, the Dostyq finisher and Dau.
 
 Plain ES modules in `js/`, no build step, no images. Everything is drawn on canvas, sound and music are made with WebAudio, the announcer uses the browser's speech synthesis.
 

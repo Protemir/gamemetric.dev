@@ -6,12 +6,18 @@ export const wrap = (v, max) => ((v % max) + max) % max;
 export const fogAt = (d, density) => 1 / Math.exp(d * d * density);
 export const overlap = (x1, w1, x2, w2) => !(x1 + w1 / 2 < x2 - w2 / 2 || x1 - w1 / 2 > x2 + w2 / 2);
 
+// a seeded random generator whose state can be read and put back (for rollback)
 export function rng(seed) {
   let s = seed >>> 0;
-  return () => {
+  const r = () => {
     s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
     return s / 4294967296;
   };
+  r.get = () => s;
+  r.set = (v) => {
+    s = v >>> 0;
+  };
+  return r;
 }
 
 export function hex(c) {

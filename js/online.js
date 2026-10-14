@@ -1,8 +1,10 @@
 // Playing over the internet without a server of our own. The host makes a link with a WebRTC
 // offer inside, the friend opens it and sends back an answer code. After that both browsers talk
-// directly over a data channel and exchange only button presses. The fight runs in lockstep:
-// every frame waits for both players' buttons, a few frames of delay hide the ping.
+// directly over a data channel and exchange only button presses. The fight uses rollback:
+// each side plays on with a guess for the other's buttons and replays a few frames when it was wrong.
 // To find each other through home routers the browsers ask a public STUN server (Google's).
+
+const LAG = typeof location !== 'undefined' ? +new URLSearchParams(location.search).get('lag') || 0 : 0;
 
 const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
 
@@ -117,7 +119,18 @@ export class Net {
   }
 
   send(obj) {
-    if (this.ch && this.ch.readyState === 'open') this.ch.send(JSON.stringify(obj));
+    if (!this.ch || this.ch.readyState !== 'open') return;
+    const data = JSON.stringify(obj);
+    if (!LAG) {
+      this.ch.send(data);
+      return;
+    }
+    // ?lag=120 for testing: every message leaves later, with a bit of jitter but in order
+    const at = Math.max(this.lagAt || 0, performance.now() + LAG * (0.8 + Math.random() * 0.4));
+    this.lagAt = at;
+    setTimeout(() => {
+      if (this.ch && this.ch.readyState === 'open') this.ch.send(data);
+    }, at - performance.now());
   }
 
   close() {

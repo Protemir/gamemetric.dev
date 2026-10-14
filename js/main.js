@@ -198,6 +198,9 @@ function inputFor(i) {
   return inp;
 }
 
+const NET_DELAY = 2;
+const NET_AHEAD = 12;
+
 function stepOnce() {
   const m = app.match;
   if (app.replay) return stepReplay();
@@ -1095,7 +1098,7 @@ function screenOnline(joinCode) {
     },
     message: onNet,
   });
-  app.net = { conn: n, role: null, local: 0, friendPick: null, delay: 4 };
+  app.net = { conn: n, role: null, local: 0, friendPick: null, delay: NET_DELAY };
   const copyBtn = (getText, label) => btn(label, '', async () => {
     try {
       await navigator.clipboard.writeText(getText());
@@ -1159,7 +1162,13 @@ function onNet(msg) {
   } else if (msg.t === 'start') {
     netBegin(msg);
   } else if (msg.t === 'i') {
-    N.inp[1 - N.local].set(msg.f, msg.i);
+    if (!N.inp) return;
+    const them = 1 - N.local;
+    N.inp[them].set(msg.f, msg.i);
+    N.theirLead = msg.a || 0;
+    while (N.inp[them].has(N.known + 1)) N.known++;
+    // we already played this frame with a guess and the guess was wrong: go back and fix it
+    if (N.used.has(msg.f) && N.used.get(msg.f) !== msg.i) N.redo = N.redo == null ? msg.f : Math.min(N.redo, msg.f);
   } else if (msg.t === 'h') {
     N.hashes[msg.f] = N.hashes[msg.f] ?? null;
     if (N.mine[msg.f] != null && N.mine[msg.f] !== msg.h) N.desync = true;
@@ -1191,7 +1200,20 @@ function netStart() {
 
 function netBegin(msg) {
   const N = app.net;
+  // confirmed buttons of both players by frame
   N.inp = [new Map(), new Map()];
+  // the friend's buttons we actually played each frame with (a guess until they arrive)
+  N.used = new Map();
+  // the fight right before each frame that is not confirmed yet
+  N.snaps = new Map();
+  // the friend's buttons are known up to this frame, and everything up to done is final
+  N.known = N.delay - 1;
+  N.done = -1;
+  N.redo = null;
+  N.rolled = 0;
+  N.theirLead = 0;
+  N.sinceWait = 0;
+  N.warned = false;
   N.mine = {};
   N.theirs = {};
   N.hashes = {};
@@ -1205,38 +1227,104 @@ function netBegin(msg) {
   startMatch({ p1: msg.p1, p2: msg.p2, arena: msg.arena, seed: msg.seed, turbo: msg.turbo, friendship: !!msg.friendship, bighead: false });
 }
 
+// Rollback: we don't wait for the friend's buttons. Each frame is played right away with a guess
+// (they keep pressing what they pressed last), and the fight is saved before it. When their real
+// buttons arrive and differ from the guess, the fight goes back to that frame and quietly replays
+// up to now. A two-frame input delay keeps those corrections rare and short.
+
+// the friend's buttons for a frame: the real ones if we have them, otherwise the last known
+function netGuess(N, f) {
+  const them = N.inp[1 - N.local];
+  if (them.has(f)) return them.get(f);
+  return them.get(N.known) ?? 0;
+}
+
+function netPlay(N, m) {
+  const f = m.frame;
+  N.snaps.set(f, m.save());
+  const theirs = netGuess(N, f);
+  N.used.set(f, theirs);
+  const ins = [];
+  ins[N.local] = decode(N.inp[N.local].get(f) ?? 0);
+  ins[1 - N.local] = decode(theirs);
+  m.step(ins);
+}
+
+function netRollback(N, m) {
+  const from = N.redo;
+  N.redo = null;
+  const s = N.snaps.get(from);
+  if (!s) {
+    // too far back to fix, should never happen with the limit on running ahead
+    N.desync = true;
+    return;
+  }
+  const to = m.frame;
+  m.load(s);
+  m.muted = true;
+  while (m.frame < to) netPlay(N, m);
+  m.muted = false;
+  N.rolled += to - from;
+}
+
+// frames where both players' buttons are known are final: record them, check the fingerprint
+function netConfirm(N, m) {
+  const upTo = Math.min(N.known, m.frame - 1);
+  while (N.done < upTo) {
+    const f = ++N.done;
+    const pair = [];
+    pair[N.local] = N.inp[N.local].get(f) ?? 0;
+    pair[1 - N.local] = N.inp[1 - N.local].get(f) ?? 0;
+    app.rec.inputs.push(pair);
+    if ((f + 1) % 120 === 0) {
+      const after = f + 1 === m.frame ? m : N.snaps.get(f + 1);
+      if (after) {
+        const h = fingerprint(after);
+        N.mine[f + 1] = h;
+        N.conn.send({ t: 'h', f: f + 1, h });
+        if (N.theirs[f + 1] != null && N.theirs[f + 1] !== h) N.desync = true;
+      }
+    }
+    N.snaps.delete(f);
+    N.used.delete(f);
+    N.inp[0].delete(f - 1);
+    N.inp[1].delete(f - 1);
+  }
+}
+
 function netStep() {
   const N = app.net;
   const m = app.match;
-  if (!N) return false;
-  const idx = m.frame;
-  const want = idx + N.delay;
+  if (!N || !N.inp) return false;
+  // our buttons go out a couple of frames ahead
+  const want = m.frame + N.delay;
   if (!N.inp[N.local].has(want)) {
     const inp = pads[0].poll();
     for (const b of app.hold[0]) inp[b] = true;
     const v = app.netMenu ? 0 : encode(inp);
     N.inp[N.local].set(want, v);
-    N.conn.send({ t: 'i', f: want, i: v });
+    N.conn.send({ t: 'i', f: want, i: v, a: m.frame - N.known });
   }
-  const a = N.inp[0].get(idx);
-  const b = N.inp[1].get(idx);
-  if (a === undefined || b === undefined) {
+  if (N.redo != null) netRollback(N, m);
+  // keep both sides in step: whoever runs ahead of the other waits a frame now and then
+  const lead = m.frame - N.known - N.theirLead;
+  if (lead >= 3 && N.sinceWait >= 6) {
+    N.sinceWait = 0;
+    netConfirm(N, m);
+    return false;
+  }
+  // don't run too far ahead of what the friend has sent
+  if (m.frame - N.known > NET_AHEAD) {
     N.stall++;
     if (N.stall === 45) badge(t('waitingInput'));
+    netConfirm(N, m);
     return false;
   }
   if (N.stall >= 45) badge('');
   N.stall = 0;
-  N.inp[0].delete(idx);
-  N.inp[1].delete(idx);
-  app.rec.inputs.push([a, b]);
-  m.step([decode(a), decode(b)]);
-  if (m.frame % 120 === 0) {
-    const h = fingerprint(m);
-    N.mine[m.frame] = h;
-    N.conn.send({ t: 'h', f: m.frame, h });
-    if (N.theirs[m.frame] != null && N.theirs[m.frame] !== h) N.desync = true;
-  }
+  N.sinceWait++;
+  netPlay(N, m);
+  netConfirm(N, m);
   if (N.desync && !N.warned) {
     N.warned = true;
     toast(t('desync'), true);
