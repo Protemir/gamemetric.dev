@@ -1,7 +1,7 @@
 // Our small server: shared arcade records and short room codes for playing online.
-// It is a Cloudflare Worker (worker/worker.js in this repo). Empty until the worker is deployed:
-// then records stay on this device and online play uses the long link and answer code.
-const PROD = '';
+// It is a Cloudflare Worker (worker/worker.js in this repo). If it can't be reached,
+// records stay on this device and online play falls back to the long link and answer code.
+const PROD = 'https://jekpe-api.protemir.workers.dev';
 // for local testing: ?api=http://localhost:8787 (only localhost is accepted)
 const override = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('api') : null;
 export const API = override && /^http:\/\/localhost:\d+$/.test(override) ? override : PROD;
