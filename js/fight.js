@@ -1,6 +1,6 @@
 import { fighterById, VICTIM, goldPalette } from './fighters.js';
 import { posesFor, mixPose, copyPose, solve } from './pose.js';
-import { rng } from './util.js';
+import { rng, clamp } from './util.js';
 
 // The fight itself: two fighters, projectiles, hazards, effects, rounds. No DOM and no sound here,
 // everything the outside world cares about goes out through emit(type, data).
@@ -18,11 +18,12 @@ const MAX_SEP = 640;
 export const NO_INPUT = Object.freeze({ left: false, right: false, up: false, down: false, block: false, punch: false, kick: false, special: false, taunt: false });
 
 const ACTIONABLE = new Set(['idle', 'walk', 'crouch', 'block']);
-const TURNABLE = new Set(['idle', 'walk', 'crouch', 'block', 'land', 'stun', 'dizzy', 'prejump', 'blush']);
-const THROWABLE = new Set(['idle', 'walk', 'crouch', 'block', 'land', 'prejump', 'attack', 'taunt', 'blush', 'stun']);
+const TURNABLE = new Set(['idle', 'walk', 'crouch', 'block', 'land', 'stun', 'dizzy', 'prejump', 'blush', 'wrapped']);
+const THROWABLE = new Set(['idle', 'walk', 'crouch', 'block', 'land', 'prejump', 'attack', 'taunt', 'blush', 'stun', 'wrapped']);
 const NO_HURT = new Set(['down', 'rise', 'out', 'thrown', 'carried', 'dance', 'pulled', 'win', 'lose', 'blast', 'blind', 'yawn', 'sleep', 'flag', 'inCar', 'play', 'keys', 'wave', 'clap', 'whistle', 'eagleLaunch', 'sneezeIn', 'sneezeOut', 'heli', 'heliLift', 'stroll']);
 const SCRIPTED = new Set(['thrown', 'carried', 'inCar', 'blind', 'heli', 'stroll']);
-const PROJ_SOLID = new Set(['baursak', 'wave', 'card', 'words']);
+const PROJ_SOLID = new Set(['baursak', 'wave', 'card', 'words', 'blanket', 'horn', 'candy']);
+const FALLING = new Set(['baursak', 'blanket', 'candy', 'boulder']);
 const LETTERS = ['Ә', 'Ғ', 'Қ', 'Ң', 'Ө', 'Ұ', 'Ү', 'І', 'А', 'Ж', 'С', 'Т'];
 const ARENA_RULES = {
   aul: { hazard: 'sheep' },
@@ -40,7 +41,7 @@ export class Fighter {
     this.pal = gold ? goldPalette(pal) : pal;
     this.m = m;
     // the giant gets his full health only as the arcade boss
-    this.hpMax = def.boss && !m.opts.bossFight ? 100 : def.hp || 100;
+    this.hpMax = def.boss && !m.opts.bossFight ? 90 : def.hp || 100;
     this.poses = posesFor(def.id);
     this.stats = { hits: 0, maxCombo: 0, dmg: 0 };
     this.reset();
@@ -103,6 +104,8 @@ export class Fighter {
 
   hurtbox() {
     if (NO_HURT.has(this.state) || this.hidden) return null;
+    // once knocked out nothing can touch them again, outside the АЯҚТА window
+    if (this.hp <= 0 && this.m.phase !== 'finish') return null;
     if (this.state === 'fall' && this.juggle >= 4) return null;
     // the loser can't be touched until "АЯҚТА!" has been shown
     if (this.m.phase === 'finish' && this.m.loser === this && this.m.pt < 40) return null;
@@ -144,7 +147,12 @@ export class Fighter {
 
     const fwd = this.face > 0 ? inp.right : inp.left;
     const back = this.face > 0 ? inp.left : inp.right;
-    for (const b of ['punch', 'kick', 'special']) if (inp[b]) this.buffer = { b, t: 9, down: inp.down, fwd };
+    // back, then forward: the classic motion for the second special
+    if (back) this.backAt = m.frame;
+    if (fwd && !this.fwdHeld) this.fwdStart = m.frame;
+    this.fwdHeld = !!fwd;
+    const motion = !!fwd && this.backAt != null && this.fwdStart > this.backAt && m.frame - this.backAt <= 14;
+    for (const b of ['punch', 'kick', 'special']) if (inp[b]) this.buffer = { b, t: 9, down: inp.down, fwd, motion };
     const buf = this.buffer;
     if (buf && --buf.t <= 0) this.buffer = null;
 
@@ -176,12 +184,13 @@ export class Fighter {
       if (buf) {
         this.buffer = null;
         if (buf.b === 'punch') {
+          if (buf.motion && this.def.spec2 && this.cool <= 0) return this.startSpecial(op, 2);
           if (toward && this.canThrow(op)) return this.startThrow(op);
           return this.startMove(down ? 'upper' : 'jab');
         }
         if (buf.b === 'kick') return this.startMove(down ? 'sweep' : 'kick');
         if (buf.b === 'special') {
-          if (this.cool <= 0) return this.startSpecial(op);
+          if (this.cool <= 0) return this.startSpecial(op, down && this.def.spec2 ? 2 : 1);
           this.m.emit('nope', { f: this });
         }
       }
@@ -211,11 +220,12 @@ export class Fighter {
 
     // combos: a move that hit can be cancelled into the next one
     if (this.state === 'attack' && this.move.hit && buf && this.move.d.cancel && !this.move.d.air) {
-      const want = buf.b === 'punch' ? (down ? 'upper' : 'jab') : buf.b === 'kick' ? (down ? 'sweep' : 'kick') : 'special';
+      const two = (buf.b === 'punch' && buf.motion) || (buf.b === 'special' && down);
+      const want = two || buf.b === 'special' ? 'special' : buf.b === 'punch' ? (down ? 'upper' : 'jab') : buf.b === 'kick' ? (down ? 'sweep' : 'kick') : 'special';
       if (this.move.d.cancel.includes(want)) {
         this.buffer = null;
         if (want !== 'special') return this.startMove(want);
-        if (this.cool <= 0) return this.startSpecial(op);
+        if (this.cool <= 0) return this.startSpecial(op, two && this.def.spec2 ? 2 : 1);
       }
       return;
     }
@@ -245,6 +255,8 @@ export class Fighter {
       const mv = this.move;
       mv.t++;
       const d = mv.d;
+      if (d.dash && !mv.hit && mv.t >= d.s - 2 && mv.t < d.s + d.a) this.x += this.face * d.dash * DT;
+      if (d.multi && mv.hit && mv.t > d.s && mv.t < d.s + d.a && (mv.t - d.s) % d.multi === 0) mv.hit = false;
       if (!d.air && mv.t >= d.s + d.a + d.r) {
         this.move = null;
         this.crouching = false;
@@ -269,7 +281,7 @@ export class Fighter {
       this.combo = 0;
     }
     if ((st === 'recover' || st === 'taunt') && this.t >= this.dur) this.set('idle');
-    if ((st === 'stun' || st === 'blush') && this.t >= this.dur) {
+    if ((st === 'stun' || st === 'blush' || st === 'wrapped') && this.t >= this.dur) {
       this.set('idle');
       this.combo = 0;
     }
@@ -465,18 +477,26 @@ export class Fighter {
     this.set('idle');
   }
 
-  startSpecial(op) {
-    const sp = this.def.spec;
-    this.set('special');
+  startSpecial(op, which = 1) {
+    const sp = which === 2 && this.def.spec2 ? this.def.spec2 : this.def.spec;
+    this.curSpec = sp;
     this.cool = sp.cd;
+    this.coolMax = sp.cd;
     this.crouching = false;
-    this.say('special', true);
+    this.say(which === 2 ? 'special2' : 'special', true);
     this.target = op.x;
     this.m.emit('special', { f: this, kind: sp.kind });
+    if (sp.kind === 'move') {
+      this.move = { id: 'special2', d: sp.move, t: 0, hit: false };
+      this.set('attack');
+      this.m.emit('whoosh', { f: this, heavy: true });
+      return;
+    }
+    this.set('special');
   }
 
   tickSpecial(op) {
-    const sp = this.def.spec;
+    const sp = this.curSpec || this.def.spec;
     const m = this.m;
     const f = this.face;
     const t = this.t;
@@ -554,6 +574,42 @@ export class Fighter {
           m.shake = Math.max(m.shake, 14);
           m.dust(this.x + f * 40, 1.6);
           m.emit('stomp', { f: this });
+        }
+        break;
+      case 'blanket':
+        if (t === sp.s) {
+          m.proj.push({ k: 'blanket', sp, owner: this, x: this.x + f * 40, y: 140, vx: f * sp.vx, vy: sp.vy, g: sp.g, spin: 0, t: 0 });
+          m.emit('toss', { f: this });
+        }
+        break;
+      case 'gust':
+        if (t === sp.s) {
+          m.proj.push({ k: 'gust', sp, owner: this, x: this.x + f * 60, y: 110, vx: f * sp.vx, dir: f, dist: 0, t: 0 });
+          m.emit('gust', { f: this });
+        }
+        break;
+      case 'horn':
+        if (t === sp.s) {
+          m.proj.push({ k: 'horn', sp, owner: this, x: this.x + f * 60, y: 125, vx: f * sp.vx, dir: f, dist: 0, t: 0 });
+          m.emit('horn', { f: this });
+        }
+        break;
+      case 'candy':
+        if (t === sp.s) {
+          for (let k = 0; k < 3; k++) {
+            m.proj.push({ k: 'candy', sp, owner: this, x: this.x + f * 40, y: 130, vx: f * sp.vx * (0.75 + k * 0.22), vy: 220 + k * 150, g: 900, spin: k, color: k, t: 0 });
+          }
+          m.emit('words', { f: this });
+        }
+        break;
+      case 'boulder':
+        if (t === sp.s) {
+          // a lob aimed at where the rival stands right now
+          const x0 = this.x + f * 50;
+          const fly = (sp.vy + Math.sqrt(sp.vy * sp.vy + 2 * sp.g * 200)) / sp.g;
+          const vx = clamp(Math.abs(op.x - x0) / fly, 160, sp.vx);
+          m.proj.push({ k: 'boulder', sp, owner: this, x: x0, y: 230, vx: f * vx, vy: sp.vy, g: sp.g, spin: 0, t: 0 });
+          m.emit('whoosh', { f: this, heavy: true });
         }
         break;
       case 'grab':
@@ -653,7 +709,7 @@ export class Match {
     this.inputs = ins;
     const keep = (f, i) => {
       const fwd = f.face > 0 ? ins[i].right : ins[i].left;
-      for (const b of ['punch', 'kick', 'special']) if (ins[i][b]) f.buffer = { b, t: 9, down: ins[i].down, fwd };
+      for (const b of ['punch', 'kick', 'special']) if (ins[i][b]) f.buffer = { b, t: 9, down: ins[i].down, fwd, motion: false };
     };
 
     if (this.hitstop > 0) {
@@ -993,19 +1049,55 @@ export class Match {
       const sp = p.owner.def.spec;
       const hurt = op.hurtbox();
       const touch = (r, h = r) => hurt && overlap([p.x - r, p.y - h, p.x + r, p.y + h], hurt);
-      if (p.k === 'baursak') {
+      const ps = p.sp || sp;
+      if (FALLING.has(p.k)) {
         p.vy -= p.g * DT;
         p.x += p.vx * DT;
         p.y += p.vy * DT;
-        p.spin += 0.3;
-        if (p.y < 10 || Math.abs(p.x) > STAGE + 300) {
+        p.spin += p.k === 'boulder' ? 0.12 : 0.3;
+        const r = p.k === 'boulder' ? 30 : p.k === 'candy' ? 10 : p.k === 'blanket' ? 26 : 16;
+        const floor = p.k === 'boulder' ? 28 : 10;
+        if (p.y < floor || Math.abs(p.x) > STAGE + 300) {
           p.dead = true;
-          if (p.y < 10) this.crumbs(p.x, 12, 6);
-        } else if (touch(16)) {
+          if (p.y < floor && p.k === 'boulder') {
+            this.dust(p.x, 1.4);
+            this.shake = Math.max(this.shake, 9);
+            this.emit('thud', { big: true });
+          } else if (p.y < floor && p.k === 'baursak') this.crumbs(p.x, 12, 6);
+        } else if (touch(r)) {
           p.dead = true;
-          this.crumbs(p.x, p.y, 10);
-          this.projHit(p, op, { dmg: sp.dmg, lvl: 'mid', hs: 22, bs: 14, push: 280, sfx: 'mid', word: 'ТАРС!' }, p.x, p.y);
-          this.emit('splat', { f: op });
+          if (p.k === 'baursak') {
+            this.crumbs(p.x, p.y, 10);
+            this.projHit(p, op, { dmg: ps.dmg, lvl: 'mid', hs: 22, bs: 14, push: 280, sfx: 'mid', word: 'ТАРС!' }, p.x, p.y);
+            this.emit('splat', { f: op });
+          } else if (p.k === 'blanket') {
+            const res = this.projHit(p, op, { dmg: ps.dmg, lvl: 'mid', hs: 14, bs: 12, push: 60, sfx: 'light', word: 'ОРАЛДЫ!' }, p.x, p.y);
+            if (res === 'hit' && op.hp > 0 && op.state === 'hit') {
+              op.set('wrapped', ps.stun);
+              op.bubble = { text: 'Ммм-ммм!', t: 70 };
+            }
+          } else if (p.k === 'candy') {
+            this.projHit(p, op, { dmg: ps.dmg, lvl: 'mid', hs: 10, bs: 6, push: 70, sfx: 'light' }, p.x, p.y);
+            this.emit('splat', { f: op });
+          } else {
+            this.projHit(p, op, { dmg: ps.dmg, lvl: 'mid', trip: true, bs: 16, push: 220, sfx: 'heavy', word: 'ГҮРС!' }, p.x, p.y);
+            this.shake = Math.max(this.shake, 12);
+          }
+        }
+      } else if (p.k === 'gust' || p.k === 'horn') {
+        p.x += p.vx * DT;
+        p.dist += Math.abs(p.vx) * DT;
+        if (p.dist > ps.range || Math.abs(p.x) > STAGE + 300) {
+          p.dead = true;
+          continue;
+        }
+        if (!touch(30, p.k === 'gust' ? 80 : 50)) continue;
+        p.dead = true;
+        if (p.k === 'gust') {
+          this.projHit(p, op, { dmg: ps.dmg, lvl: 'mid', bs: 12, push: 200, launch: [ps.push, 420], sfx: 'light', word: 'ЖЕЛ!' }, p.x, p.y);
+        } else {
+          const res = this.projHit(p, op, { dmg: ps.dmg, lvl: 'mid', hs: 10, bs: 10, push: 140, sfx: 'mid', word: 'БИИП!' }, p.x, p.y);
+          if (res === 'hit' && op.hp > 0 && op.state === 'hit') op.set('stun', ps.stun);
         }
       } else if (p.k === 'wave' || p.k === 'card' || p.k === 'words' || p.k === 'stomp') {
         p.x += p.vx * DT;
@@ -1046,16 +1138,18 @@ export class Match {
         this.stepEagle(p, op, sp);
       }
     }
-    // two flying things from different sides knock each other out
+    // two flying things from different sides knock each other out; a boulder or a gust wins
+    const strong = (k) => k === 'boulder' || k === 'gust';
     for (let i = 0; i < this.proj.length; i++) {
       const p = this.proj[i];
-      if (p.dead || !p.owner || !PROJ_SOLID.has(p.k)) continue;
+      if (p.dead || !p.owner || !(PROJ_SOLID.has(p.k) || strong(p.k))) continue;
       for (let j = i + 1; j < this.proj.length; j++) {
         const q = this.proj[j];
-        if (q.dead || !q.owner || q.owner === p.owner || !PROJ_SOLID.has(q.k)) continue;
-        if (Math.abs(p.x - q.x) < 36 && Math.abs(p.y - q.y) < 40) {
-          p.dead = true;
-          q.dead = true;
+        if (q.dead || !q.owner || q.owner === p.owner || !(PROJ_SOLID.has(q.k) || strong(q.k))) continue;
+        if (Math.abs(p.x - q.x) < 36 && Math.abs(p.y - q.y) < 46) {
+          if (strong(p.k) && strong(q.k)) continue;
+          p.dead = !strong(p.k);
+          q.dead = !strong(q.k);
           this.crumbs((p.x + q.x) / 2, (p.y + q.y) / 2, 8);
           this.word((p.x + q.x) / 2, p.y + 40, 'ПУФ!');
           this.emit('splat', {});
@@ -1599,7 +1693,11 @@ export function animate(f) {
     const names = ANIMS[d.anim] || ANIMS.jab;
     const wind = P[names[0]];
     const hit = P[names[1]];
-    if (mv.t < d.s) {
+    if (d.anim === 'flurry' && mv.t >= d.s && mv.t < d.s + d.a) {
+      const sw = Math.sin(mv.t * 1.7);
+      target = { ...hit, aN: [hit.aN[0] + sw * 0.35, hit.aN[1] - sw * 0.3], lean: hit.lean + 0.15 };
+      k = 0.8;
+    } else if (mv.t < d.s) {
       target = mv.t < d.s * 0.55 ? wind : hit;
       k = mv.t < d.s * 0.55 ? 0.45 : 0.6;
     } else if (mv.t < d.s + d.a) {
@@ -1637,6 +1735,10 @@ export function animate(f) {
   } else if (st === 'stun' || st === 'dizzy') {
     target = { ...P.dizzy, lean: 0.08 + Math.sin(t * 0.12) * 0.18, head: 0.25 + Math.sin(t * 0.21) * 0.3, aN: [0.2 + Math.sin(t * 0.12) * 0.3, 0.3], aF: [0.1 - Math.sin(t * 0.12) * 0.3, 0.4] };
     k = 0.3;
+  } else if (st === 'wrapped') {
+    const w = Math.sin(t * 0.6);
+    target = { ...P.crouch, lean: 0.45 + w * 0.12, head: -0.2, aN: [1.6 + w * 0.5, 0.6], aF: [1.4 - w * 0.5, 0.7] };
+    k = 0.5;
   } else if (st === 'blush') {
     target = { ...P.blush, lean: P.blush.lean + Math.sin(t * 0.3) * 0.05 };
     k = 0.4;
@@ -1734,7 +1836,7 @@ function zhorga(f, P) {
 }
 
 function specialPose(f, P) {
-  const sp = f.def.spec;
+  const sp = f.curSpec || f.def.spec;
   const t = f.t;
   switch (sp.kind) {
     case 'lasso':
@@ -1752,6 +1854,12 @@ function specialPose(f, P) {
       return t < sp.s ? P.stompWind : P.stomp;
     case 'grab':
       return t < sp.s ? P.crouch : P.dash;
+    case 'gust':
+      return t < sp.s ? { ...P.stance, aN: [0.8, 2.0] } : P.eagleLaunch;
+    case 'boulder':
+      return t < sp.s ? P.lift : P.toss;
+    case 'candy':
+      return t < sp.s ? P.throwWind : { ...P.throwOut, aN: [2.0, 0.2] };
     default:
       return t < sp.s ? P.throwWind : P.throwOut;
   }
@@ -1783,4 +1891,7 @@ const ANIMS = {
   airLadle: ['tuck', 'airP'],
   airDombra: ['tuck', 'airP'],
   airK: ['tuck', 'airK'],
+  charge: ['block', 'charge'],
+  ram: ['prejump', 'ram'],
+  flurry: ['play', 'play'],
 };

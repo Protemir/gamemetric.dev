@@ -63,6 +63,15 @@ export function drawFighter(c, f, opts = {}) {
     }
   }
   if (f.meterT > 0) meter(c, hx, hy - b.head * big - 40, f);
+  if (f.state === 'wrapped') {
+    // under the quilt: only the feet stick out and the lump wriggles
+    const w = Math.sin((opts.time || 0) * 0.5);
+    c.save();
+    c.translate(f.x, -f.y - 74);
+    c.rotate(w * 0.08);
+    quilt(c, 0, 0, 0, 1.85, true);
+    c.restore();
+  }
 }
 
 function drawHead(c, J, f, look, opts) {
@@ -91,7 +100,7 @@ function mood(f) {
   if (st === 'blush') return 'blush';
   if (st === 'sleep') return 'sleep';
   if (st === 'yawn') return 'sleep';
-  if (['hit', 'fall', 'thrown', 'pulled', 'down', 'carried', 'blind', 'flag'].includes(st)) return 'hurt';
+  if (['hit', 'fall', 'thrown', 'pulled', 'down', 'carried', 'blind', 'flag', 'wrapped'].includes(st)) return 'hurt';
   if (['win', 'clap', 'play', 'taunt', 'wave', 'keys'].includes(st)) return 'happy';
   if (st === 'lose') return 'sad';
   if (st === 'dance') return f.dance > 2.6 ? 'hurt' : 'happy';
@@ -189,6 +198,11 @@ export function drawProjectile(c, p) {
   else if (p.k === 'melon') melon(c, p);
   else if (p.k === 'sheep') sheep(c, p);
   else if (p.k === 'weed') tumbleweed(c, p);
+  else if (p.k === 'blanket') quilt(c, p.x, -p.y, p.spin, 1);
+  else if (p.k === 'gust') gustProj(c, p);
+  else if (p.k === 'horn') hornProj(c, p);
+  else if (p.k === 'candy') candy(c, p);
+  else if (p.k === 'boulder') boulder(c, p);
 }
 
 function wave(c, p) {
@@ -244,6 +258,147 @@ function quake(c, p) {
     c.fillStyle = k % 2 ? '#6b5236' : '#9b7e52';
     c.fillRect(-30 + k * 18, -10 - Math.sin(ph * Math.PI) * 40, 8, 8);
   }
+  c.restore();
+}
+
+// көрпе: a quilted blanket with a red and gold pattern
+function quilt(c, x, y, spin, k, draped) {
+  c.save();
+  c.translate(x, y);
+  c.rotate(spin);
+  c.scale(k, k);
+  c.fillStyle = '#b3302a';
+  c.beginPath();
+  if (draped) {
+    c.moveTo(-34, 28);
+    c.quadraticCurveTo(-40, -30, -8, -40);
+    c.quadraticCurveTo(30, -44, 36, -10);
+    c.lineTo(38, 28);
+    c.quadraticCurveTo(0, 36, -34, 28);
+  } else {
+    c.moveTo(-26, -16);
+    c.lineTo(26, -16);
+    c.quadraticCurveTo(30, 0, 26, 16);
+    c.lineTo(-26, 16);
+    c.quadraticCurveTo(-30, 0, -26, -16);
+  }
+  c.closePath();
+  c.fill();
+  c.strokeStyle = '#ffd25a';
+  c.lineWidth = 2.5 / k;
+  c.stroke();
+  c.strokeStyle = 'rgba(255, 210, 90, 0.8)';
+  c.lineWidth = 1.6 / k;
+  for (let n = -2; n <= 2; n++) {
+    c.beginPath();
+    c.moveTo(n * 12 - 6, draped ? -30 : -12);
+    c.lineTo(n * 12 + 6, draped ? 26 : 12);
+    c.stroke();
+  }
+  c.restore();
+}
+
+function gustProj(c, p) {
+  c.save();
+  c.translate(p.x, -p.y);
+  c.scale(p.dir, 1);
+  c.strokeStyle = 'rgba(230, 245, 255, 0.85)';
+  c.lineCap = 'round';
+  for (let n = 0; n < 5; n++) {
+    const y = -60 + n * 30;
+    const o = ((p.t * 6 + n * 13) % 40) - 20;
+    c.lineWidth = 4 - (n % 2);
+    c.beginPath();
+    c.moveTo(-50 + o, y);
+    c.quadraticCurveTo(-10 + o, y - 16, 30 + o, y);
+    c.quadraticCurveTo(44 + o, y + 6, 36 + o, y + 12);
+    c.stroke();
+  }
+  // a couple of leaves caught in it
+  c.fillStyle = '#7fbf4a';
+  for (let n = 0; n < 2; n++) {
+    c.save();
+    c.translate(-10 + n * 30, -30 + n * 50);
+    c.rotate(p.t * 0.4 + n);
+    c.beginPath();
+    c.ellipse(0, 0, 7, 3.5, 0, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+  }
+  c.restore();
+}
+
+function hornProj(c, p) {
+  c.save();
+  c.translate(p.x, -p.y);
+  c.scale(p.dir, 1);
+  for (let k = 0; k < 3; k++) {
+    c.strokeStyle = `rgba(255, 210, 90, ${0.9 - k * 0.25})`;
+    c.lineWidth = 4;
+    c.beginPath();
+    c.arc(-30, 0, 18 + k * 12 + ((p.t * 2) % 12), -0.8, 0.8);
+    c.stroke();
+  }
+  c.scale(p.dir, 1);
+  c.rotate(-0.1);
+  c.font = '900 26px "Segoe UI", system-ui, sans-serif';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.lineJoin = 'round';
+  c.lineWidth = 6;
+  c.strokeStyle = '#2a0f06';
+  c.strokeText('БИИП!', p.dir * 10, -4);
+  c.fillStyle = '#ffd25a';
+  c.fillText('БИИП!', p.dir * 10, -4);
+  c.restore();
+}
+
+function candy(c, p) {
+  const cols = ['#ff6b9a', '#7fd4ff', '#ffd25a'];
+  c.save();
+  c.translate(p.x, -p.y);
+  c.rotate(p.spin);
+  c.fillStyle = cols[p.color % 3];
+  c.beginPath();
+  c.ellipse(0, 0, 9, 6, 0, 0, Math.PI * 2);
+  c.fill();
+  c.beginPath();
+  c.moveTo(-8, 0);
+  c.lineTo(-16, -6);
+  c.lineTo(-16, 6);
+  c.closePath();
+  c.moveTo(8, 0);
+  c.lineTo(16, -6);
+  c.lineTo(16, 6);
+  c.closePath();
+  c.fill();
+  c.fillStyle = 'rgba(255,255,255,0.6)';
+  c.fillRect(-4, -3, 4, 2);
+  c.restore();
+}
+
+function boulder(c, p) {
+  c.save();
+  c.translate(p.x, -p.y);
+  c.rotate(p.spin);
+  c.fillStyle = '#7d7468';
+  c.beginPath();
+  const pts = [[-30, -8], [-18, -28], [8, -32], [28, -14], [32, 10], [14, 30], [-14, 28], [-32, 12]];
+  pts.forEach(([x, y], k) => (k ? c.lineTo(x, y) : c.moveTo(x, y)));
+  c.closePath();
+  c.fill();
+  c.fillStyle = '#9a9184';
+  c.beginPath();
+  c.ellipse(-6, -10, 14, 9, -0.4, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = '#5a5248';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(4, 2);
+  c.lineTo(16, 14);
+  c.moveTo(-14, 8);
+  c.lineTo(-4, 18);
+  c.stroke();
   c.restore();
 }
 

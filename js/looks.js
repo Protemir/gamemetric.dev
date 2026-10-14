@@ -195,7 +195,8 @@ function moustache(c, r, color, big = 1) {
 }
 
 function shield(c, el, hand, pal, f) {
-  const up = f.state === 'block' || f.state === 'blockstun';
+  // raised to block, and held out in front during the shield charge
+  const up = f.state === 'block' || f.state === 'blockstun' || (f.state === 'attack' && f.move && f.move.id === 'special2');
   const pos = along(el, hand, up ? 0.75 : 0.55);
   const r = up ? 27 : 24;
   c.save();

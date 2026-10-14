@@ -114,7 +114,20 @@ export class AI {
       hit(R() < 0.6 ? 'punch' : 'kick', { down: R() < 0.6 });
       return;
     }
-    if (op.state === 'stun' || op.state === 'dizzy') {
+    // the second special: up close for the body ones, from afar for the thrown ones
+    const s2 = me.def.spec2;
+    if (s2 && me.cool <= 0) {
+      const close = s2.kind === 'move' || s2.kind === 'horn' || s2.kind === 'gust';
+      if (close && dist < (s2.kind === 'gust' ? 300 : 170) && R() < lv.special * 0.8) {
+        hit('special', { down: true });
+        return;
+      }
+      if (!close && dist > 200 && R() < lv.special * 0.5) {
+        hit('special', { down: true });
+        return;
+      }
+    }
+    if (op.state === 'stun' || op.state === 'dizzy' || op.state === 'wrapped' || op.state === 'blush') {
       if (dist > 90) go(1, 8);
       else hit('punch', { down: R() < 0.5 });
       return;

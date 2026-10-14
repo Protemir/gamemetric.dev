@@ -266,6 +266,7 @@ function onEvent(type, d) {
     case 'shake': sfx.shake(); break;
     case 'nope': sfx.nope(); break;
     case 'eagle': sfx.whoosh(true); break;
+    case 'gust': sfx.whirl(); break;
     case 'strum': sfx.strum(); break;
     case 'flick': sfx.flick(); break;
     case 'words': sfx.pop(); break;
@@ -397,7 +398,7 @@ function updateHud(dt) {
     setCached('lag' + i, (v) => { s.lag.style.transform = `scaleX(${v})`; }, Math.round((app.lag[i] / f.hpMax) * 200) / 200);
     setCached('low' + i, (v) => s.bar.classList.toggle('low', v), f.hp < f.hpMax * 0.3);
     setCached('wins' + i, (v) => s.wins.forEach((w, k) => w.classList.toggle('on', k < v)), m.wins[i]);
-    const ready = 1 - f.cool / f.def.spec.cd;
+    const ready = 1 - f.cool / (f.coolMax || f.def.spec.cd);
     setCached('sp' + i, (v) => { s.spi.style.transform = `scaleX(${v})`; }, Math.round(ready * 50) / 50);
     setCached('spr' + i, (v) => s.sp.classList.toggle('ready', v), f.cool <= 0);
   });
@@ -723,9 +724,11 @@ function screenSelect() {
   nameLine.append(el('b', '', L(f.name) + '. '), document.createTextNode(L(f.bio)));
   const sp = el('p');
   sp.append(el('b', '', t('special') + ': '), document.createTextNode(L(f.special)));
+  const sp2 = f.special2 ? el('p') : null;
+  if (sp2) sp2.append(el('b', '', t('special2') + ': '), document.createTextNode(L(f.special2)));
   const fin = el('p');
   fin.append(el('b', '', t('finisher') + ': '), document.createTextNode(`${L(f.finisherName)}, ${L(f.finisherText)}`));
-  bio.append(nameLine, sp, fin);
+  bio.append(nameLine, sp, sp2 || '', fin);
   const keys = el('p', 'keys', isTouch ? t('keysTouch') : kind === '2p' ? `${t('keysP1')} ${t('keysP2')}` : t('keys1'));
   let go;
   if (net && app.net.role !== 'host') go = el('p', 'note', t('hostStarts'));
@@ -910,7 +913,7 @@ function screenHowTo() {
   for (const [k, v] of t('moves')) moves.append(el('dt', '', k), el('dd', '', v));
   const fighters = el('dl', 'moves');
   for (const f of roster()) {
-    fighters.append(el('dt', '', L(f.name)), el('dd', '', `${L(f.special)}. ${t('finisher')}: ${L(f.finisherName)}, ${L(f.finisherText)}.`));
+    fighters.append(el('dt', '', L(f.name)), el('dd', '', `${L(f.special)}. ${f.special2 ? L(f.special2) + '. ' : ''}${t('finisher')}: ${L(f.finisherName)}, ${L(f.finisherText)}.`));
   }
   const arenas = el('dl', 'moves');
   for (const a of ARENAS) arenas.append(el('dt', '', L(a.name)), el('dd', '', L(a.note)));

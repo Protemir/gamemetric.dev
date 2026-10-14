@@ -400,6 +400,58 @@ export const VICTIM = {
   meter: ['Ақшам кетіп жатыр!'],
 };
 
+// Second specials: back, forward + punch (like in the arcade classics) or down + special.
+// kind 'move' is a special attack done with the body, everything else flies.
+const SECOND = {
+  batyr: {
+    spec2: { kind: 'move', cd: 250, move: { anim: 'charge', s: 9, a: 14, r: 20, dmg: 9, lvl: 'mid', box: [10, 40, 82, 170], launch: [300, 520], bs: 16, push: 300, sfx: 'heavy', word: 'ГҮРС!', dash: 560 } },
+    special2: { ru: 'Шабуыл: рывок со щитом, сбивает с ног', en: 'Shabuyl: a shield charge that knocks the rival down' },
+    say2: ['Шабуыл!'],
+  },
+  apa: {
+    spec2: { kind: 'blanket', s: 12, r: 16, cd: 240, vx: 520, vy: 170, g: 420, dmg: 4, stun: 55 },
+    special2: { ru: 'Көрпе: накрывает одеялом, соперник барахтается', en: 'Korpe: throws a quilt over the rival, who flounders underneath' },
+    say2: ['Көрпе!', 'Тоңып қаласың!'],
+  },
+  burkit: {
+    spec2: { kind: 'gust', s: 10, r: 14, cd: 180, vx: 680, range: 360, dmg: 7, push: 520 },
+    special2: { ru: 'Қанат: беркут машет крыльями, ветер сдувает соперника', en: 'Qanat: the eagle flaps and the wind blows the rival away' },
+    say2: ['Қанат!'],
+  },
+  dombra: {
+    spec2: { kind: 'move', cd: 190, move: { anim: 'flurry', s: 6, a: 24, r: 14, dmg: 3, lvl: 'mid', box: [16, 60, 112, 172], hs: 14, bs: 8, push: 50, sfx: 'dombra', multi: 6 } },
+    special2: { ru: 'Шертпе: шесть быстрых ударов по струнам', en: 'Shertpe: six quick strums in a row' },
+    say2: ['Шертпе!'],
+  },
+  taxi: {
+    spec2: { kind: 'horn', s: 10, r: 14, cd: 200, vx: 600, range: 320, dmg: 6, stun: 50 },
+    special2: { ru: 'Сигнал: гудок, соперник оглох на секунду', en: 'The horn: a honk so loud the rival is stunned' },
+    say2: ['Бип-бип!', 'Жол бер!'],
+  },
+  baluan: {
+    spec2: { kind: 'move', cd: 220, move: { anim: 'ram', s: 9, a: 14, r: 20, dmg: 11, lvl: 'mid', box: [10, 90, 78, 165], launch: [280, 560], bs: 16, push: 300, sfx: 'heavy', word: 'ДҮҢК!', dash: 600 } },
+    special2: { ru: 'Қошқар: таранит головой, как баран', en: 'Qoshqar: a headbutt charge like a ram' },
+    say2: ['Қошқар!'],
+  },
+  akyn: {
+    spec2: { kind: 'candy', s: 10, r: 14, cd: 200, vx: 500, dmg: 3 },
+    special2: { ru: 'Шашу: горсть конфет веером', en: 'Shashu: a handful of sweets thrown in a fan' },
+    say2: ['Шашу!', 'Тәтті болсын!'],
+  },
+  dau: {
+    spec2: { kind: 'boulder', s: 18, r: 22, cd: 300, vx: 600, vy: 300, g: 900, dmg: 10 },
+    special2: { ru: 'Тас: швыряет огромный камень', en: 'Tas: hurls a huge boulder' },
+    say2: ['Тас!', 'Ал, мә!'],
+  },
+};
+for (const f of FIGHTERS) {
+  const s2 = SECOND[f.id];
+  if (!s2) continue;
+  f.spec2 = s2.spec2;
+  f.special2 = s2.special2;
+  f.say.special2 = s2.say2;
+}
+
 export const fighterById = (id) => FIGHTERS.find((f) => f.id === id) || FIGHTERS[0];
 export const PLAYABLE = FIGHTERS.filter((f) => !f.boss);
 
