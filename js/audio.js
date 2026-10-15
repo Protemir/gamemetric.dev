@@ -4,11 +4,39 @@ import { store } from './util.js';
 
 export const sound = { on: store.get('jekpe.sound', true), ctx: null, out: null, noiseBuf: null };
 
+// iPhone: Safari mutes web audio when the ring/silent switch is on; the "playback" session
+// (Safari 17+) lets the game be heard like a video. Set right before the first sound.
+function playbackSession() {
+  try {
+    if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback';
+  } catch {
+    /* older browsers */
+  }
+}
+
+// iOS only really starts a context that has played something inside a tap
+function kick(c) {
+  try {
+    const s = c.createBufferSource();
+    s.buffer = c.createBuffer(1, 1, 22050);
+    s.connect(c.destination);
+    s.start(0);
+  } catch {
+    /* nothing to kick */
+  }
+}
+
 export function audioInit() {
   if (sound.ctx) {
-    if (sound.ctx.state === 'suspended') sound.ctx.resume();
+    // 'suspended' before the first tap, 'interrupted' on iOS after a call or Siri
+    if (sound.ctx.state !== 'running' && !document.hidden) {
+      playbackSession();
+      sound.ctx.resume().catch(() => {});
+      kick(sound.ctx);
+    }
     return;
   }
+  playbackSession();
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     const c = new AC();
@@ -22,6 +50,7 @@ export function audioInit() {
     const d = buf.getChannelData(0);
     for (let n = 0; n < d.length; n++) d[n] = Math.random() * 2 - 1;
     Object.assign(sound, { ctx: c, out, noiseBuf: buf });
+    kick(c);
   } catch {
     sound.ctx = null;
   }

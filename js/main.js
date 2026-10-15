@@ -1456,8 +1456,11 @@ function unlockAudio() {
   audioInit();
   playMusic(app.mode === 'fight' ? songFor() : 'menu');
 }
-window.addEventListener('pointerdown', unlockAudio, { once: true });
-window.addEventListener('keydown', unlockAudio, { once: true });
+// iOS counts only touchend and click as a tap that may start sound, not pointerdown
+for (const type of ['pointerdown', 'touchend', 'click', 'keydown']) {
+  window.addEventListener(type, unlockAudio, { once: true });
+  window.addEventListener(type, () => audioUnlocked && audioInit());
+}
 
 function toggleSound() {
   setSound(!sound.on);
