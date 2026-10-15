@@ -83,9 +83,9 @@ try {
       let next = 0;
       for (let k = 0; k < FPS * 17.5; k++, n++) {
         const sec = k / FPS;
-        // a tap every 0.7 s or so, like a person thinking a little
+        // a tap about twice a second, like a person who has got the hang of it
         const tap = sec >= next;
-        if (tap) next = sec + 0.7;
+        if (tap) next = sec + 0.45;
         await B.js(`(() => { const O = window.__oyu; if (${tap} && O.game.state === 'play') window.__bot.act(O.game, 'smart', Math.random); O.step(2, true); })()`);
         await B.shot(path.join(frames, `f${String(n).padStart(4, '0')}.png`));
       }
