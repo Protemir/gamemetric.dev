@@ -2,7 +2,8 @@ import { store } from './util.js';
 
 const TEXT = {
   ru: {
-    title: 'Жекпе-жек: файтинг с казахскими героями',
+    title: 'Жекпе-жек — файтинг с казахскими героями, играть онлайн бесплатно',
+    metaDesc: 'Бесплатный файтинг в браузере с казахскими героями: Батыр, Апа, Бүркітші, Таксист, Балуан, Ақын и великан Дәу. Аркада, игра вдвоём и по сети, добивания без крови. Без скачивания, на телефоне и ПК.',
     tag: 'Файтинг один на один. Батыр, Апа, Бүркітші, Домбырашы, Таксист, Балуан, Ақын и великан Дәу. Без крови, зато с бауырсаками.',
     arcade: 'Аркада',
     arcadeSub: 'Семь боёв подряд, в конце великан Дәу',
@@ -186,7 +187,8 @@ const TEXT = {
     pad: 'Геймпад подключён',
   },
   en: {
-    title: 'Jekpe-jek: a fighting game with Kazakh heroes',
+    title: 'Jekpe-jek — fighting game with Kazakh heroes, play free online',
+    metaDesc: 'Free 2D fighting game in your browser with Kazakh heroes: Batyr, Apa, the eagle hunter, the taxi driver, the wrestler, the akyn and the giant Dau. Arcade, 2 players and online, no blood. No download, phone and PC.',
     tag: 'One on one. Batyr, Apa, the eagle hunter, the dombra player, the taxi driver, the wrestler, the akyn and the giant Dau. No blood, plenty of baursaks.',
     arcade: 'Arcade',
     arcadeSub: 'Seven fights in a row, the giant Dau at the end',

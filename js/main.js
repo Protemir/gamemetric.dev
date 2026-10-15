@@ -1503,6 +1503,9 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 function applyLang() {
   document.documentElement.lang = getLang();
   document.title = t('title');
+  // search engines read the English page (?lang=en) after the script runs
+  const desc = document.querySelector('meta[name="description"]');
+  if (desc) desc.content = t('metaDesc');
   $('muteBtn').textContent = sound.on ? t('soundOn') : t('soundOff');
   $('muteBtn').setAttribute('aria-pressed', String(sound.on));
   $('musicBtn').setAttribute('aria-pressed', String(music.on));
