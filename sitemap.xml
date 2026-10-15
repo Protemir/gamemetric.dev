@@ -11,6 +11,11 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/oyu/?lang=en"/>
   </url>
   <url>
+    <loc>https://gamemetric.dev/survivors/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/survivors/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/survivors/?lang=en"/>
+  </url>
+  <url>
     <loc>https://gamemetric.dev/asem/</loc>
     <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/asem/?lang=ru"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/asem/?lang=en"/>
