@@ -6,7 +6,7 @@ import { posesFor, copyPose } from './pose.js';
 import { AI } from './ai.js';
 import { Arena, ARENAS } from './arena.js';
 import { drawFighter, drawLasso, drawProjectile, drawEagle, drawCar, drawFx, drawBubble, star } from './draw.js';
-import { sound, audioInit, setSound, sfx } from './audio.js';
+import { sound, media, audioInit, setSound, sfx } from './audio.js';
 import { music, playMusic, setMusic, pauseMusic, setTempo } from './music.js';
 import { pads, bindKeyboard, bindTouch, setInputMode, pollGamepads } from './input.js';
 import { voice, say, setVoice, hasVoice } from './voice.js';
@@ -1665,6 +1665,25 @@ function frame(now) {
   render(app.mode === 'paused' ? 0 : dt);
   updateHud(dt);
   requestAnimationFrame(frame);
+}
+
+// ?audiodebug: the audio state on screen, to check sound on a phone without devtools
+if (new URLSearchParams(location.search).has('audiodebug')) {
+  const box = document.createElement('pre');
+  box.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;margin:0;padding:6px 8px;font:11px/1.35 monospace;color:#0f0;background:rgba(0,0,0,.75);pointer-events:none;white-space:pre-wrap;max-width:96vw';
+  document.body.append(box);
+  setInterval(() => {
+    const c = sound.ctx;
+    box.textContent = [
+      'ctx: ' + (c ? c.state + ' ' + c.sampleRate + ' Hz' : 'none (tap the screen)'),
+      'sound.on: ' + sound.on + (sound.held !== undefined ? '  held: ' + sound.held : ''),
+      'audioSession: ' + (navigator.audioSession ? navigator.audioSession.type : 'no API'),
+      'silent track: ' + (media.el ? (media.el.paused ? 'paused' : 'playing') : 'none') + (media.error ? ' (' + media.error + ')' : ''),
+      'taps seen: ' + (window.__taps || 0),
+      navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 120),
+    ].join('\n');
+  }, 400);
+  for (const t of ['pointerdown', 'touchend', 'click']) window.addEventListener(t, () => (window.__taps = (window.__taps || 0) + 1));
 }
 
 resize();

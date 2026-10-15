@@ -14,6 +14,60 @@ function playbackSession() {
   }
 }
 
+// iPhone and iPad (any browser there is Safari inside): with the silent switch on, web audio
+// stays mute unless a plain <audio> element is playing. A looping silent track, started by the
+// first tap, switches the page to "playback" like a video does (the unmute.js trick).
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const media = { el: null, error: '' };
+
+function silentWav() {
+  const n = 4410; // 0.1 s of 8-bit mono silence
+  const buf = new ArrayBuffer(44 + n);
+  const v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+  w(0, 'RIFF');
+  v.setUint32(4, 36 + n, true);
+  w(8, 'WAVE');
+  w(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, 44100, true);
+  v.setUint32(28, 44100, true);
+  v.setUint16(32, 1, true);
+  v.setUint16(34, 8, true);
+  w(36, 'data');
+  v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+function mediaUnlock() {
+  if (!IOS || document.hidden) return;
+  try {
+    if (!media.el) {
+      const el = document.createElement('audio');
+      el.setAttribute('x-webkit-airplay', 'deny');
+      el.disableRemotePlayback = true;
+      el.controls = false;
+      el.loop = true;
+      el.preload = 'auto';
+      el.src = silentWav();
+      media.el = el;
+    }
+    if (media.el.paused) {
+      const p = media.el.play();
+      if (p) p.then(() => (media.error = ''), (e) => (media.error = e.name || String(e)));
+    }
+  } catch (e) {
+    media.error = e.name || String(e);
+  }
+}
+// no "now playing" on the lock screen while the game is in the background
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && media.el) media.el.pause();
+});
+
 // iOS only really starts a context that has played something inside a tap
 function kick(c) {
   try {
@@ -29,6 +83,7 @@ function kick(c) {
 export function audioInit() {
   if (sound.ctx) {
     // 'suspended' before the first tap, 'interrupted' on iOS after a call or Siri
+    mediaUnlock();
     if (sound.ctx.state !== 'running' && !document.hidden) {
       playbackSession();
       sound.ctx.resume().catch(() => {});
@@ -37,6 +92,7 @@ export function audioInit() {
     return;
   }
   playbackSession();
+  mediaUnlock();
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     const c = new AC();
