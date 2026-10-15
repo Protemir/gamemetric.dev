@@ -1,27 +1,14 @@
 # gamemetric.dev
 
-**Жекпе-жек**: a browser fighting game, one on one, with Kazakh characters and no blood. Knockouts end with stars over the head or a trip into the sky, the finishers are silly on purpose.
+Free browser games by TEMIRLAB, no download and no sign-up. The home page is a list of the games; each game is a folder of plain ES modules with no build step.
 
-Fighters: Batyr (shield and lasso), Apa (ladle, kazan and baursaks), the eagle hunter Burkitshi, the dombra player, the taxi driver with a white Camry, the kures wrestler Baluan, the aitys poet Akyn, and the giant Dau as the arcade boss (playable once the arcade is cleared). Arenas: an aul at sunset, the Medeu ice rink (slippery), Kok-Tobe at night, the Charyn canyon, the bazaar and a boulevard in Astana, with a sheep, tumbleweeds, watermelons or a gust of steppe wind now and then.
+- [`/oyu/`](https://gamemetric.dev/oyu/): **Ою**, a pixel puzzle. Colored shooters ride a belt around a picture and knock out pixels of their own color; finished pictures become patches of a carpet. Levels are generated from a known solution (the picture is peeled lap by lap, each lap becomes a shooter, shooters are dealt into queues keeping their order), so every level can be won. `oyu/tools/bot.js` plays them for tuning. `node oyu/tools/test.mjs` checks the whole game in headless Chrome; `node oyu/tools/build-portal.mjs` makes the CrazyGames build in `dist/`, `node oyu/tools/covers.mjs --ffmpeg <path>` renders its covers and videos.
+- [`/asem/`](https://gamemetric.dev/asem/): **Әсем Жол**, a racing game through Almaty and around Kazakhstan, see [asem/README.md](asem/README.md). It used to live at asemface.com, which now forwards here and brings the player's saves along.
+- [`/jekpe/`](https://gamemetric.dev/jekpe/): **Жекпе-жек**, a fighting game with Kazakh characters and no blood, see [jekpe/README.md](jekpe/README.md). It used to be the home page; old online room links (`/#room=...`) are forwarded.
+- [`/test/`](https://gamemetric.dev/test/): a gamer brain test (reaction, aim, clicks, memory).
 
-Modes: arcade (six fights and Dau, a story and an ending for every fighter, scores and local records), versus the computer on three levels, two players on one keyboard or with gamepads, online with a friend over WebRTC (no server: a link with an offer and an answer code back, a public Google STUN server only helps the browsers find each other; rollback with a two-frame delay, so ping is barely felt), training with a dummy and hitboxes, a replay of the last round. Fights are calm by default; "Full chaos" on the select screen turns on arena hazards, flights into the sky and a yelling crowd. Stars unlock big heads, gold costumes, turbo, the Dostyq finisher and Dau.
+The list itself is `index.html`, `hub.css` and `hub.js`; card pictures and the short clips that play on hover are in `img/`.
 
-Plain ES modules in `js/`, no build step, no images. Everything is drawn on canvas, sound and music are made with WebAudio, the announcer uses the browser's speech synthesis.
+Play counter: every game sends anonymous events (open, start, win/fail) to `stats/worker.js`, a Cloudflare Worker with one SQLite Durable Object that keeps daily totals. No cookies, no names, no IP addresses; a random id in localStorage tells new players from returning ones. Open a game once with `?nopulse` to stop counting your device. `node stats/deploy.mjs <token file> <key file>` updates the worker, `node stats/report.mjs <key file> [days]` prints the numbers.
 
-- `js/fight.js`: the fight (fighters, moves, specials, finishers, hazards, rounds), no DOM, deterministic
-- `js/fighters.js`: fighter data, frame data, phrases, stories
-- `js/pose.js`, `js/looks.js`, `js/paint.js`, `js/draw.js`: skeleton, poses, what everyone looks like, effects
-- `js/arena.js`: the six arenas and the crowd
-- `js/ai.js`: the computer opponent
-- `js/arcade.js`, `js/online.js`, `js/server.js`, `js/voice.js`, `js/input.js`, `js/audio.js`, `js/music.js`
-- `js/main.js`: menus, HUD, camera, loop
-
-Run it with any static server (modules don't load from `file://`). `?debug` exposes `window.__fight` to step frames, press buttons and freeze the loop, `?boxes` shows hitboxes, `?og` renders the frame used for `og.png`.
-
-The server is optional. `worker/worker.js` is a Cloudflare Worker with one KV namespace: shared arcade records and six-letter room codes, so friends don't have to pass the long WebRTC codes around. It runs at jekpe-api.protemir.workers.dev; `node worker/deploy.mjs <file with a Cloudflare API token>` updates it. If it can't be reached, records stay on the device and online play falls back to the long link. `node tools/mock-api.mjs 8788` runs the same worker locally with an in-memory KV, then open the game with `?api=http://localhost:8788`. `?lag=120` delays every online message to try the rollback.
-
-Play counter: `js/pulse.js` sends anonymous events (open, fight started, fight over) to `stats/worker.js`, a Cloudflare Worker with one SQLite Durable Object that keeps daily totals for this site and asemface.com. No cookies, no names, no IP addresses; a random id in localStorage tells new players from returning ones. Open the game once with `?nopulse` to stop counting your device. `node stats/deploy.mjs <token file> <key file>` updates the worker, `node stats/report.mjs <key file> [days]` prints the numbers.
-
-Ою, a pixel puzzle, lives in [`/oyu/`](https://gamemetric.dev/oyu/): colored shooters ride a belt around a picture and knock out pixels of their own color; finished pictures become patches of a carpet. Levels are generated from a known solution (the picture is peeled lap by lap, each lap becomes a shooter, shooters are dealt into queues keeping their order), so every level can be won. `oyu/tools/bot.js` plays them for tuning. `node oyu/tools/test.mjs` checks the whole game in headless Chrome (levels, bots, screens, 8 screen sizes, speed, the portal build); `node oyu/tools/build-portal.mjs` makes the CrazyGames build in `dist/`, `node oyu/tools/covers.mjs --ffmpeg <path>` renders its covers and videos.
-
-The reaction test that used to be the home page lives in [`/test/`](https://gamemetric.dev/test/).
+Code under the MIT license.

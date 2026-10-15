@@ -12,7 +12,7 @@ const SITES = {
   jekpe: ['open', 'start', 'end', 'arcade'],
   oyu: ['open', 'start', 'win', 'fail'],
 };
-const HOME = { asem: ['asemface.com'], jekpe: ['gamemetric.dev'], oyu: ['gamemetric.dev'] };
+const HOME = { asem: ['asemface.com', 'gamemetric.dev'], jekpe: ['gamemetric.dev'], oyu: ['gamemetric.dev'] };
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|embedly/i;
 
 // Almaty time, so a "day" matches the owner's day

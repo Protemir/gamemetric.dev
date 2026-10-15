@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Жекпе-жек — файтинг с казахскими героями, играть онлайн бесплатно</title>
+<meta name="description" content="Бесплатный файтинг в браузере с казахскими героями: Батыр, Апа, Бүркітші, Таксист, Балуан, Ақын и великан Дәу. Аркада, игра вдвоём и по сети, добивания без крови. Без скачивания, на телефоне и ПК.">
+<link rel="canonical" href="https://gamemetric.dev/jekpe/">
+<link rel="alternate" hreflang="ru" href="https://gamemetric.dev/jekpe/?lang=ru">
+<link rel="alternate" hreflang="en" href="https://gamemetric.dev/jekpe/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://gamemetric.dev/jekpe/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#170f22">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://gamemetric.dev/jekpe/">
+<meta property="og:title" content="Жекпе-жек — файтинг с казахскими героями">
+<meta property="og:description" content="Семь бойцов и великан Дәу, шесть арен от Алматы до Астаны, аркада с историями. Аркан, шөміш, бауырсаки, такси и смешные добивания вместо крови.">
+<meta property="og:image" content="https://gamemetric.dev/jekpe/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "VideoGame",
+ "name": "Жекпе-жек",
+ "alternateName": "Jekpe-jek",
+ "url": "https://gamemetric.dev/jekpe/",
+ "image": "https://gamemetric.dev/jekpe/og.png",
+ "description": "Бесплатный файтинг в браузере с казахскими героями: Батыр, Апа, Бүркітші, Таксист, Балуан, Ақын и великан Дәу. Аркада, игра вдвоём и по сети, добивания без крови. Без скачивания, на телефоне и ПК.",
+ "genre": [
+  "Fighting",
+  "Arcade"
+ ],
+ "playMode": [
+  "SinglePlayer",
+  "MultiPlayer"
+ ],
+ "gamePlatform": [
+  "Web browser",
+  "Android",
+  "iOS",
+  "Windows",
+  "macOS"
+ ],
+ "applicationCategory": "Game",
+ "operatingSystem": "Any",
+ "inLanguage": [
+  "ru",
+  "en"
+ ],
+ "isAccessibleForFree": true,
+ "offers": {
+  "@type": "Offer",
+  "price": "0",
+  "priceCurrency": "USD"
+ },
+ "author": {
+  "@type": "Organization",
+  "name": "TEMIRLAB",
+  "url": "https://temirlab.com/"
+ }
+}
+</script>
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="game" aria-label="Жекпе-жек"></canvas>
+
+<div class="hud" id="hud" hidden>
+  <div class="side" id="side0">
+    <div class="who"><b class="nm"></b><span class="wins"><i></i><i></i></span></div>
+    <div class="bar"><i class="lag"></i><i class="hp"></i></div>
+    <div class="sp"><i></i></div>
+  </div>
+  <div class="mid">
+    <p class="timer" id="timer">60</p>
+    <div class="hud-btns">
+      <button type="button" class="icon-btn" id="pauseBtn" aria-label="Пауза">II</button>
+      <button type="button" class="icon-btn" id="musicBtn" aria-label="Музыка">♪</button>
+      <button type="button" class="icon-btn" id="muteBtn">Звук</button>
+    </div>
+  </div>
+  <div class="side right" id="side1">
+    <div class="who"><span class="wins"><i></i><i></i></span><b class="nm"></b></div>
+    <div class="bar"><i class="lag"></i><i class="hp"></i></div>
+    <div class="sp"><i></i></div>
+  </div>
+</div>
+<div class="combo" id="combo0"></div>
+<div class="combo right" id="combo1"></div>
+<div class="banner" id="banner" aria-live="polite"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="badge" id="badge" hidden></div>
+
+<div class="touch" id="touch" hidden>
+  <div class="stick"><i class="base"><i class="knob"></i></i></div>
+  <div class="btns">
+    <button type="button" class="tbtn punch" data-btn="punch">Рука</button>
+    <button type="button" class="tbtn kick" data-btn="kick">Нога</button>
+    <button type="button" class="tbtn block" data-btn="block">Блок</button>
+    <button type="button" class="tbtn special" data-btn="special">Супер</button>
+  </div>
+</div>
+
+<div id="ui"></div>
+
+<noscript><p class="noscript">Для игры нужен JavaScript.</p></noscript>
+</body>
+</html>

@@ -6,13 +6,23 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/?lang=en"/>
   </url>
   <url>
-    <loc>https://gamemetric.dev/test/</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/test/"/>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/test/?lang=ru"/>
-  </url>
-  <url>
     <loc>https://gamemetric.dev/oyu/</loc>
     <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/oyu/?lang=ru"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/oyu/?lang=en"/>
+  </url>
+  <url>
+    <loc>https://gamemetric.dev/asem/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/asem/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/asem/?lang=en"/>
+  </url>
+  <url>
+    <loc>https://gamemetric.dev/jekpe/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/jekpe/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/jekpe/?lang=en"/>
+  </url>
+  <url>
+    <loc>https://gamemetric.dev/test/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/test/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/test/?lang=ru"/>
   </url>
 </urlset>

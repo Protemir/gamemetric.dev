@@ -581,7 +581,7 @@ function screenMain() {
   made.append(link('temirlab.com', 'https://temirlab.com/'));
   about.append(el('p', '', t('aboutFun')), made);
   const links = el('div', 'links');
-  links.append(link(t('testLink'), 'test/'), link(t('raceLink'), 'https://asemface.com/'));
+  links.append(link(t('allGames'), '../'), link(t('raceLink'), '../asem/'), link(t('testLink'), '../test/'));
   panel('main', top, h1, el('p', 'tag', t('tag')), menu, el('p', 'keys', isTouch ? t('keysTouch') : t('keys1')), links, about);
 }
 
@@ -1057,7 +1057,7 @@ function showResult() {
 }
 
 async function share(w, note) {
-  const url = 'https://gamemetric.dev/';
+  const url = 'https://gamemetric.dev/jekpe/';
   const text = t('shareText', { name: L(w.def.name) });
   try {
     if (navigator.share) {

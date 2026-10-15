@@ -25,6 +25,7 @@ const TEXT = {
     lostTip: 'Отправляй кружок, когда его цвет виден снаружи картинки. Можно пускать несколько сразу.',
     sound: 'Звук',
     made: 'Сделано в TEMIRLAB',
+    more: 'Ещё игры: гонка и файтинг',
     hint1: 'Нажми на кружок — он выбьет пиксели своего цвета',
     hint2: 'Не хватило пикселей? Кружок ждёт на стоянке',
     hint3: 'Пускай несколько кружков сразу',
@@ -51,6 +52,7 @@ const TEXT = {
     lostTip: 'Send a shooter when its color shows on the outside of the picture. You can send several at once.',
     sound: 'Sound',
     made: 'Made by TEMIRLAB',
+    more: 'More games: a race and a fighting game',
     hint1: 'Tap a shooter — it knocks out pixels of its color',
     hint2: 'Out of targets? The shooter waits in the dock',
     hint3: 'Send several shooters at once',
@@ -208,6 +210,12 @@ function screenMenu() {
   }
   const n = unlocked();
   const made = el('p', 'foot', t('made'));
+  // the other games, on our own site only: portals do not allow links out
+  if (!PORTAL) {
+    const more = el('a', '', t('more'));
+    more.href = '../';
+    made.append(' · ', more);
+  }
   panel(
     '',
     el('h1', 'logo', PORTAL ? 'Oyu' : 'Ою'),

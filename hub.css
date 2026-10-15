@@ -1,0 +1,216 @@
+:root {
+  color-scheme: dark;
+  --bg: #0e0a19;
+  --card: #18122a;
+  --card-hi: #211838;
+  --line: rgba(255, 255, 255, 0.08);
+  --text: #f5f0fa;
+  --muted: #b2a8c2;
+  --gold: #f4b93a;
+  --radius: 22px;
+  --font: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.45;
+  overflow-x: hidden;
+}
+a { color: inherit; }
+
+/* soft colored light behind the page, and a faint ornament grid */
+.glow {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60vw 50vh at 12% -10%, rgba(244, 185, 58, 0.16), transparent 70%),
+    radial-gradient(50vw 50vh at 95% 5%, rgba(138, 92, 246, 0.2), transparent 70%),
+    radial-gradient(70vw 60vh at 50% 110%, rgba(224, 57, 62, 0.12), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M24 14l6 10-6 10-6-10z' fill='none' stroke='%23ffffff' stroke-opacity='.035' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+
+.top {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: max(18px, env(safe-area-inset-top)) 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.brand b { color: var(--gold); font-weight: 900; }
+.mark { width: 30px; height: 30px; }
+.langs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); }
+.langs button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.langs button[aria-pressed="true"] { background: var(--gold); color: #1d1405; }
+
+main { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+.intro { text-align: center; padding: 48px 0 30px; }
+.intro h1 {
+  margin: 0 auto 12px;
+  max-width: 760px;
+  font-size: clamp(30px, 5.4vw, 54px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  font-weight: 900;
+  text-wrap: balance;
+}
+.intro p { margin: 0 auto; max-width: 560px; color: var(--muted); font-size: clamp(16px, 2vw, 19px); text-wrap: balance; }
+.ornament { display: block; width: 160px; margin: 22px auto 0; }
+
+.games {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  padding-bottom: 40px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  background: linear-gradient(180deg, var(--card-hi), var(--card));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.8);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s, border-color 0.25s;
+  animation: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.card:nth-child(2) { animation-delay: 0.06s; }
+.card:nth-child(3) { animation-delay: 0.12s; }
+.card:nth-child(4) { animation-delay: 0.18s; }
+@keyframes rise { from { opacity: 0; transform: translateY(18px); } }
+.card:hover, .card:focus-visible {
+  transform: translateY(-6px);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 26px 50px -24px color-mix(in srgb, var(--accent) 45%, #000);
+}
+.card:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+.media { position: relative; aspect-ratio: 1200 / 630; overflow: hidden; background: #000; }
+.media img, .media video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
+}
+.media video { opacity: 0; }
+.card.playing .media video { opacity: 1; }
+.card:hover .media img, .card:hover .media video { transform: scale(1.04); }
+.media::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 40%;
+  background: linear-gradient(transparent, rgba(14, 10, 25, 0.55));
+  pointer-events: none;
+}
+.badge {
+  position: absolute;
+  z-index: 1;
+  top: 14px;
+  right: 14px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #1d1405;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.body { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px 20px; flex: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips span {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--muted);
+}
+.chips span:first-child { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.body h2 { margin: 2px 0 0; font-size: 26px; line-height: 1.1; letter-spacing: -0.02em; font-weight: 900; }
+.body p { margin: 0; color: var(--muted); font-size: 15px; }
+.play {
+  margin-top: auto;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #1d1405;
+  font-weight: 900;
+  font-size: 15px;
+  transition: transform 0.2s;
+}
+.play i { font-style: normal; font-size: 11px; }
+.card:hover .play { transform: translateX(4px); }
+.body p + .play { margin-top: 8px; }
+
+/* the newest game gets a wide card with the text beside the picture */
+.card.hero { grid-column: 1 / -1; flex-direction: row; }
+.card.hero .media { flex: 1.45; aspect-ratio: auto; min-height: 340px; }
+.card.hero .body { flex: 1; justify-content: center; padding: 34px 36px; gap: 12px; }
+.card.hero h2 { font-size: clamp(38px, 4.4vw, 56px); }
+.card.hero p { font-size: 17px; }
+.card.hero .play { padding: 14px 30px; font-size: 18px; margin-top: 10px; }
+
+.foot { text-align: center; color: var(--muted); font-size: 14px; padding: 10px 20px max(32px, env(safe-area-inset-bottom)); }
+.foot a { color: var(--text); text-decoration-color: rgba(255, 255, 255, 0.3); text-underline-offset: 3px; }
+
+@media (max-width: 980px) {
+  .games { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 760px) {
+  .card.hero { flex-direction: column; }
+  .card.hero .media { flex: none; aspect-ratio: 16 / 9; min-height: 0; }
+  .card.hero .body { padding: 18px 20px 22px; gap: 8px; }
+  .card.hero p { font-size: 15px; }
+  .card.hero .play { padding: 12px 24px; font-size: 16px; }
+}
+@media (max-width: 620px) {
+  .games { grid-template-columns: 1fr; gap: 16px; }
+  .intro { padding: 30px 0 22px; }
+  .top, main { padding-left: 16px; padding-right: 16px; }
+  .body h2 { font-size: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, .media img, .media video, .play { transition: none; animation: none; }
+}

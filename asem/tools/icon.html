@@ -1,0 +1,10 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;overflow:hidden;background:#070b1a}img{display:block}</style></head>
+<body><img src="../favicon.svg" alt="">
+<script>
+  // icon.html#192 renders a 192 px icon (headless Chrome screenshots the top left corner)
+  const s = Number(location.hash.slice(1)) || 180;
+  const img = document.querySelector('img');
+  img.width = img.height = s;
+  document.body.style.width = document.body.style.height = s + 'px';
+</script></body></html>
