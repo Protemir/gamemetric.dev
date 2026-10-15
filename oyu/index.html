@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Ою — пазл: выбей пиксели и собери ковёр узоров</title>
+<meta name="description" content="Бесплатная головоломка в браузере: цветные стрелки едут по ленте и выбивают пиксели картинки. Тюльпан, юрта, домбра, беркут, Бәйтерек и казахские орнаменты собираются в ковёр. Без скачивания, на телефоне и ПК.">
+<meta name="theme-color" content="#1a1233">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="game" aria-label="Ою"></canvas>
+<header class="hud" id="hud" hidden>
+  <button type="button" class="icon" id="menuBtn" aria-label="Меню"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg></button>
+  <div class="hud-mid">
+    <p class="hud-level" id="hudLevel"></p>
+    <div class="bar"><i id="hudBar"></i></div>
+  </div>
+  <button type="button" class="icon" id="restartBtn" aria-label="Заново"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.1-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M4 4v4.5h4.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
+  <button type="button" class="icon" id="soundBtn" aria-label="Звук"></button>
+</header>
+<p class="hint-line" id="hint" aria-live="polite"></p>
+<div id="ui"></div>
+</body>
+</html>

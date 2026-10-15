@@ -10,8 +10,9 @@ import { DurableObject } from 'cloudflare:workers';
 const SITES = {
   asem: ['open', 'start', 'finish', 'timeout', 'fail'],
   jekpe: ['open', 'start', 'end', 'arcade'],
+  oyu: ['open', 'start', 'win', 'fail'],
 };
-const HOME = { asem: ['asemface.com'], jekpe: ['gamemetric.dev'] };
+const HOME = { asem: ['asemface.com'], jekpe: ['gamemetric.dev'], oyu: ['gamemetric.dev'] };
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|embedly/i;
 
 // Almaty time, so a "day" matches the owner's day
@@ -110,6 +111,7 @@ export default {
         return new Response(null, { status: 400, headers: cors });
       }
       const site = clean(b.s, 8);
+      if (!SITES[site]) return new Response(null, { status: 400, headers: cors });
       const ev = clean(b.e, 12);
       const pid = clean(b.p, 16);
       if (!SITES[site] || !SITES[site].includes(ev) || pid.length < 6) return new Response(null, { status: 400, headers: cors });

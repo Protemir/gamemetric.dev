@@ -12,16 +12,16 @@ const key = fs.readFileSync(keyFile, 'utf8').trim();
 const base = process.env.PULSE || 'https://gm-pulse.protemir.workers.dev';
 const r = await (await fetch(`${base}/report?days=${days}&key=${encodeURIComponent(key)}`)).json();
 
-const NAMES = { asem: 'Әсем Жол (asemface.com)', jekpe: 'Жекпе-жек (gamemetric.dev)' };
+const NAMES = { asem: 'Әсем Жол (asemface.com)', jekpe: 'Жекпе-жек (gamemetric.dev)', oyu: 'Ою (gamemetric.dev/oyu)' };
 const pct = (a, b) => (b ? Math.round((100 * a) / b) + '%' : '—');
 const pad = (s, n) => String(s).padEnd(n);
 
 console.log(`Период ${r.from} … ${r.today} (время Алматы)\n`);
-for (const site of ['asem', 'jekpe']) {
+for (const site of ['asem', 'jekpe', 'oyu']) {
   console.log('== ' + NAMES[site]);
   const ev = (day, e) => r.events.filter((x) => x.site === site && x.day === day && x.ev === e).reduce((s, x) => s + x.n, 0);
   // "played to the end": the race reached the finish or ran out of time; the fight was over
-  const ends = site === 'asem' ? ['finish', 'timeout', 'fail'] : ['end'];
+  const ends = site === 'asem' ? ['finish', 'timeout', 'fail'] : site === 'oyu' ? ['win'] : ['end'];
   console.log(pad('день', 12) + pad('игроков', 9) + pad('новых', 7) + pad('с тел.', 8) + pad('CG', 5) + pad('заходов', 9) + pad('стартов', 9) + pad('доиграли', 9));
   let tot = { players: 0, phone: 0, start: 0, end: 0 };
   for (const d of r.daily.filter((x) => x.site === site)) {
