@@ -14,6 +14,7 @@ import { makeLadder, scoreFor, UNLOCKS } from './arcade.js';
 import { Net, netSupported, encode, decode, fingerprint } from './online.js';
 import { goldPalette } from './fighters.js';
 import { hasServer, getBoard, sendScore, makeRoom, getRoom, answerRoom, cleanCode } from './server.js';
+import { pulse } from './pulse.js';
 
 const $ = (id) => document.getElementById(id);
 const isTouch = window.matchMedia('(pointer: coarse)').matches;
@@ -124,6 +125,7 @@ function startMatch(o) {
   app.mode = 'fight';
   app.match = new Match({ ...opts, onEvent });
   app.isDemo = false;
+  pulse('start', app.kind);
   app.rec = { opts, inputs: [], rounds: [] };
   app.overTimer = 0;
   app.lag = [app.match.f[0].hpMax, app.match.f[1].hpMax];
@@ -816,6 +818,7 @@ function arcadeAfter(m) {
 }
 
 function arcadeEnding() {
+  pulse('arcade', app.arcade.player);
   const A = app.arcade;
   const f = fighterById(A.player);
   const bonus = { easy: 3, normal: 5, hard: 8 }[A.diff] || 3;
@@ -1008,6 +1011,7 @@ function resume() {
 
 function matchOver() {
   const m = app.match;
+  pulse('end', app.kind);
   if (app.kind === 'arcade') return arcadeAfter(m);
   showResult();
 }
@@ -1661,6 +1665,7 @@ resize();
 applyLang();
 checkUnlocks();
 toMenu();
+pulse('open');
 requestAnimationFrame(frame);
 if (location.hash.startsWith('#join=')) screenOnline(location.hash.slice(6));
 else if (location.hash.startsWith('#room=')) screenOnline(null, cleanCode(location.hash.slice(6)));

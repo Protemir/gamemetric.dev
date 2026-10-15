@@ -20,4 +20,6 @@ Run it with any static server (modules don't load from `file://`). `?debug` expo
 
 The server is optional. `worker/worker.js` is a Cloudflare Worker with one KV namespace: shared arcade records and six-letter room codes, so friends don't have to pass the long WebRTC codes around. It runs at jekpe-api.protemir.workers.dev; `node worker/deploy.mjs <file with a Cloudflare API token>` updates it. If it can't be reached, records stay on the device and online play falls back to the long link. `node tools/mock-api.mjs 8788` runs the same worker locally with an in-memory KV, then open the game with `?api=http://localhost:8788`. `?lag=120` delays every online message to try the rollback.
 
+Play counter: `js/pulse.js` sends anonymous events (open, fight started, fight over) to `stats/worker.js`, a Cloudflare Worker with one SQLite Durable Object that keeps daily totals for this site and asemface.com. No cookies, no names, no IP addresses; a random id in localStorage tells new players from returning ones. Open the game once with `?nopulse` to stop counting your device. `node stats/deploy.mjs <token file> <key file>` updates the worker, `node stats/report.mjs <key file> [days]` prints the numbers.
+
 The reaction test that used to be the home page lives in [`/test/`](https://gamemetric.dev/test/).
