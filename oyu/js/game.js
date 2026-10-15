@@ -77,6 +77,8 @@ export class Game {
     this.state = 'play';
     this.time = 0;
     this.launched = 0;
+    // how many times a shooter came back to the dock: zero means a clean solve
+    this.docked = 0;
   }
 
   emit(e) {
@@ -161,12 +163,14 @@ export class Game {
         } else {
           sh.where = 'dock';
           this.dock[slot] = sh;
+          this.docked++;
           this.emit({ type: 'dock', shooter: sh, slot });
         }
       }
     }
     this.belt = this.belt.filter((sh) => sh.where === 'belt');
-    if (this.state === 'play' && this.left === 0) {
+    // a cleared picture wins even if the dock overflowed in the same frame
+    if (this.left === 0 && this.state !== 'won') {
       this.state = 'won';
       this.emit({ type: 'win' });
     }

@@ -134,38 +134,33 @@ function hiss(dur, vol, f0, f1, at = 0, q = 1) {
   s.stop(t + dur + 0.02);
 }
 
-// dombra-like pluck: a short noise burst through a tuned delay line
+// dombra-like pluck: decaying harmonics through a closing filter, plus a tiny noise "pick".
+// (Not a delay-line string: browsers keep a delay inside a feedback loop at 128 samples or more,
+// so high notes all collapse into one ringing tone that sounds like a whistle.)
 function pluck(freq, at = 0, vol = 0.35, dur = 0.9) {
   const c = sound.ctx;
   const t = c.currentTime + at;
-  const s = c.createBufferSource();
-  s.buffer = sound.noise;
-  const burst = c.createGain();
-  burst.gain.setValueAtTime(vol, t);
-  burst.gain.exponentialRampToValueAtTime(0.0001, t + 0.02);
-  const delay = c.createDelay(0.05);
-  delay.delayTime.value = 1 / freq;
-  const fb = c.createGain();
-  fb.gain.value = 0.94;
   const lp = c.createBiquadFilter();
   lp.type = 'lowpass';
-  lp.frequency.value = 3200;
-  const out = c.createGain();
-  out.gain.setValueAtTime(1, t);
-  out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  s.connect(burst).connect(delay);
-  delay.connect(lp).connect(fb).connect(delay);
-  lp.connect(out).connect(sound.out);
-  s.start(t);
-  s.stop(t + 0.03);
-  setTimeout(() => {
-    try {
-      out.disconnect();
-      fb.disconnect();
-    } catch {
-      /* already gone */
-    }
-  }, (at + dur + 0.2) * 1000);
+  lp.Q.value = 0.7;
+  lp.frequency.setValueAtTime(Math.min(9000, freq * 9), t);
+  lp.frequency.exponentialRampToValueAtTime(Math.max(300, freq * 1.5), t + dur * 0.6);
+  lp.connect(sound.out);
+  [[1, 'triangle', 1], [2, 'sine', 0.45], [3, 'sine', 0.22], [4, 'sine', 0.1]].forEach(([h, type, k]) => {
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq * h * 1.01, t);
+    o.frequency.exponentialRampToValueAtTime(freq * h, t + 0.04);
+    const len = dur / (1 + (h - 1) * 0.6);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol * k, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g).connect(lp);
+    o.start(t);
+    o.stop(t + len + 0.02);
+  });
+  hiss(0.02, vol * 0.25, freq * 6, freq * 3, at, 2);
 }
 
 const PENTA = [0, 2, 4, 7, 9];

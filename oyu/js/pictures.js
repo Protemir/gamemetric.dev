@@ -609,6 +609,505 @@ export const PICTURES = [
       c.fillRect(0.0, 0.92, 1, 0.08);
     },
   },
+  {
+    id: 'watermelon',
+    name: { ru: 'Қарбыз', en: 'Watermelon' },
+    draw(c) {
+      c.beginPath();
+      c.arc(0.5, 0.36, 0.44, 0, Math.PI);
+      fill(c, 'green');
+      c.beginPath();
+      c.arc(0.5, 0.36, 0.38, 0, Math.PI);
+      fill(c, 'white');
+      c.beginPath();
+      c.arc(0.5, 0.36, 0.34, 0, Math.PI);
+      fill(c, 'red');
+      for (const [x, y] of [[0.34, 0.46], [0.5, 0.52], [0.66, 0.46], [0.42, 0.6], [0.58, 0.6], [0.5, 0.42]]) {
+        c.beginPath();
+        c.ellipse(x, y, 0.02, 0.035, 0, 0, Math.PI * 2);
+        fill(c, 'dark');
+      }
+    },
+  },
+  {
+    id: 'melon',
+    name: { ru: 'Қауын', en: 'Melon' },
+    draw(c) {
+      c.beginPath();
+      c.ellipse(0.5, 0.56, 0.42, 0.3, 0, 0, Math.PI * 2);
+      fill(c, 'gold');
+      c.strokeStyle = COLORS.orange;
+      c.lineWidth = 0.035;
+      for (const dx of [-0.24, -0.08, 0.08, 0.24]) {
+        c.beginPath();
+        c.ellipse(0.5 + dx, 0.56, 0.06, 0.28, 0, 0, Math.PI * 2);
+        c.stroke();
+      }
+      c.fillStyle = COLORS.green;
+      c.fillRect(0.48, 0.18, 0.05, 0.1);
+      c.beginPath();
+      c.ellipse(0.62, 0.2, 0.1, 0.05, -0.3, 0, Math.PI * 2);
+      fill(c, 'leaf');
+    },
+  },
+  {
+    id: 'grapes',
+    name: { ru: 'Жүзім', en: 'Grapes' },
+    draw(c) {
+      c.fillStyle = COLORS.brown;
+      c.fillRect(0.48, 0.06, 0.05, 0.14);
+      c.beginPath();
+      c.ellipse(0.66, 0.14, 0.14, 0.07, 0.3, 0, Math.PI * 2);
+      fill(c, 'green');
+      const rows = [[0.28, 0.4, 0.52, 0.64, 0.76], [0.34, 0.46, 0.58, 0.7], [0.4, 0.52, 0.64], [0.46, 0.58], [0.52]];
+      rows.forEach((xs, k) =>
+        xs.forEach((x) => {
+          circle(c, x - 0.02, 0.28 + k * 0.13, 0.075);
+          fill(c, 'purple');
+          circle(c, x - 0.045, 0.255 + k * 0.13, 0.022);
+          fill(c, 'pink');
+        }),
+      );
+    },
+  },
+  {
+    id: 'chamomile',
+    name: { ru: 'Түймедақ', en: 'Chamomile' },
+    draw(c) {
+      c.fillStyle = COLORS.green;
+      c.fillRect(0.48, 0.5, 0.05, 0.46);
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        c.beginPath();
+        c.ellipse(0.5 + Math.cos(a) * 0.2, 0.4 + Math.sin(a) * 0.2, 0.15, 0.06, a, 0, Math.PI * 2);
+        fill(c, 'white');
+      }
+      circle(c, 0.5, 0.4, 0.12);
+      fill(c, 'gold');
+      circle(c, 0.47, 0.37, 0.04);
+      fill(c, 'orange');
+      c.beginPath();
+      c.ellipse(0.38, 0.8, 0.12, 0.05, -0.5, 0, Math.PI * 2);
+      fill(c, 'leaf');
+    },
+  },
+  {
+    id: 'butterfly',
+    name: { ru: 'Көбелек', en: 'Butterfly' },
+    draw(c) {
+      for (const s of [-1, 1]) {
+        c.beginPath();
+        c.ellipse(0.5 + s * 0.2, 0.34, 0.2, 0.18, s * -0.5, 0, Math.PI * 2);
+        fill(c, 'sky');
+        c.beginPath();
+        c.ellipse(0.5 + s * 0.16, 0.64, 0.14, 0.13, s * 0.5, 0, Math.PI * 2);
+        fill(c, 'blue');
+        circle(c, 0.5 + s * 0.22, 0.32, 0.06);
+        fill(c, 'gold');
+        circle(c, 0.5 + s * 0.16, 0.66, 0.04);
+        fill(c, 'white');
+      }
+      c.beginPath();
+      c.ellipse(0.5, 0.5, 0.04, 0.26, 0, 0, Math.PI * 2);
+      fill(c, 'dark');
+      c.strokeStyle = COLORS.dark;
+      c.lineWidth = 0.025;
+      c.beginPath();
+      c.moveTo(0.49, 0.26);
+      c.lineTo(0.42, 0.1);
+      c.moveTo(0.51, 0.26);
+      c.lineTo(0.58, 0.1);
+      c.stroke();
+    },
+  },
+  {
+    id: 'snowflake',
+    name: { ru: 'Қар ұшқыны', en: 'Snowflake' },
+    draw(c) {
+      c.fillStyle = COLORS.blue;
+      c.fillRect(0, 0, 1, 1);
+      c.strokeStyle = COLORS.white;
+      c.lineCap = 'round';
+      for (let k = 0; k < 6; k++) {
+        c.save();
+        c.translate(0.5, 0.5);
+        c.rotate((k * Math.PI) / 3);
+        c.lineWidth = 0.06;
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.lineTo(0, -0.4);
+        c.stroke();
+        c.lineWidth = 0.045;
+        c.beginPath();
+        c.moveTo(0, -0.24);
+        c.lineTo(-0.1, -0.33);
+        c.moveTo(0, -0.24);
+        c.lineTo(0.1, -0.33);
+        c.stroke();
+        c.restore();
+      }
+      circle(c, 0.5, 0.5, 0.07);
+      fill(c, 'sky');
+    },
+  },
+  {
+    id: 'spruce',
+    name: { ru: 'Шырша', en: 'Tian Shan spruce' },
+    draw(c) {
+      c.fillStyle = COLORS.sky;
+      c.fillRect(0, 0, 1, 1);
+      c.fillStyle = COLORS.brown;
+      c.fillRect(0.45, 0.78, 0.1, 0.14);
+      for (let k = 0; k < 4; k++) {
+        const y = 0.12 + k * 0.17;
+        const w = 0.14 + k * 0.08;
+        P(c, [0.5, y], [0.5 + w, y + 0.26], [0.5 - w, y + 0.26]);
+        fill(c, 'green');
+        P(c, [0.5 - w * 0.5, y + 0.2], [0.5 - w * 0.2, y + 0.26], [0.5 - w * 0.8, y + 0.26]);
+        fill(c, 'white');
+      }
+      c.fillStyle = COLORS.white;
+      c.fillRect(0, 0.9, 1, 0.1);
+    },
+  },
+  {
+    id: 'fish',
+    name: { ru: 'Балық', en: 'Fish' },
+    draw(c) {
+      c.fillStyle = COLORS.teal;
+      c.fillRect(0, 0, 1, 1);
+      c.beginPath();
+      c.ellipse(0.44, 0.5, 0.3, 0.18, 0, 0, Math.PI * 2);
+      fill(c, 'orange');
+      P(c, [0.7, 0.5], [0.92, 0.32], [0.92, 0.68]);
+      fill(c, 'orange');
+      P(c, [0.36, 0.34], [0.5, 0.2], [0.56, 0.34]);
+      fill(c, 'gold');
+      circle(c, 0.26, 0.46, 0.04);
+      fill(c, 'white');
+      circle(c, 0.25, 0.46, 0.02);
+      fill(c, 'dark');
+      c.strokeStyle = COLORS.gold;
+      c.lineWidth = 0.025;
+      for (const x of [0.4, 0.5, 0.6]) {
+        c.beginPath();
+        c.arc(x, 0.5, 0.08, -1, 1);
+        c.stroke();
+      }
+      for (const [x, y] of [[0.16, 0.2], [0.24, 0.12], [0.8, 0.82]]) {
+        circle(c, x, y, 0.03);
+        fill(c, 'white');
+      }
+    },
+  },
+  {
+    id: 'koktobe',
+    name: { ru: 'Көктөбе', en: 'Kok-Tobe tower' },
+    draw(c) {
+      c.fillStyle = COLORS.dark;
+      c.fillRect(0, 0, 1, 1);
+      P(c, [0, 1], [0, 0.78], [0.3, 0.62], [0.6, 0.74], [1, 0.66], [1, 1]);
+      fill(c, 'green');
+      c.fillStyle = COLORS.white;
+      c.fillRect(0.47, 0.1, 0.06, 0.6);
+      P(c, [0.4, 0.7], [0.5, 0.36], [0.6, 0.7]);
+      fill(c, 'white');
+      c.fillStyle = COLORS.red;
+      for (let k = 0; k < 4; k++) c.fillRect(0.46, 0.14 + k * 0.12, 0.08, 0.04);
+      circle(c, 0.5, 0.08, 0.03);
+      fill(c, 'red');
+      for (const [x, y] of [[0.15, 0.2], [0.8, 0.15], [0.86, 0.4], [0.2, 0.45], [0.66, 0.3]]) {
+        circle(c, x, y, 0.02);
+        fill(c, 'gold');
+      }
+    },
+  },
+  {
+    id: 'khanshatyr',
+    name: { ru: 'Хан Шатыр', en: 'Khan Shatyr' },
+    draw(c) {
+      c.fillStyle = COLORS.sky;
+      c.fillRect(0, 0, 1, 1);
+      c.beginPath();
+      c.moveTo(0.08, 0.86);
+      c.quadraticCurveTo(0.3, 0.6, 0.54, 0.08);
+      c.quadraticCurveTo(0.7, 0.6, 0.92, 0.86);
+      fill(c, 'gold');
+      c.strokeStyle = COLORS.orange;
+      c.lineWidth = 0.025;
+      for (let k = 1; k < 5; k++) {
+        c.beginPath();
+        c.moveTo(0.54, 0.08);
+        c.quadraticCurveTo(0.3 + k * 0.08, 0.6, 0.08 + k * 0.17, 0.86);
+        c.stroke();
+      }
+      c.fillStyle = COLORS.grey;
+      c.fillRect(0, 0.86, 1, 0.14);
+    },
+  },
+  {
+    id: 'car',
+    name: { ru: 'Көлік', en: 'Sedan' },
+    draw(c) {
+      c.beginPath();
+      c.moveTo(0.06, 0.66);
+      c.lineTo(0.08, 0.5);
+      c.lineTo(0.3, 0.46);
+      c.lineTo(0.4, 0.3);
+      c.lineTo(0.68, 0.3);
+      c.lineTo(0.8, 0.46);
+      c.lineTo(0.94, 0.5);
+      c.lineTo(0.94, 0.66);
+      fill(c, 'white');
+      P(c, [0.42, 0.34], [0.53, 0.34], [0.53, 0.46], [0.34, 0.46]);
+      fill(c, 'sky');
+      P(c, [0.56, 0.34], [0.66, 0.34], [0.75, 0.46], [0.56, 0.46]);
+      fill(c, 'sky');
+      c.fillStyle = COLORS.red;
+      c.fillRect(0.88, 0.52, 0.06, 0.05);
+      c.fillStyle = COLORS.gold;
+      c.fillRect(0.06, 0.52, 0.05, 0.05);
+      for (const x of [0.26, 0.74]) {
+        circle(c, x, 0.68, 0.1);
+        fill(c, 'dark');
+        circle(c, x, 0.68, 0.045);
+        fill(c, 'grey');
+      }
+      c.fillStyle = COLORS.grey;
+      c.fillRect(0, 0.78, 1, 0.06);
+    },
+  },
+  {
+    id: 'house',
+    name: { ru: 'Үй', en: 'House' },
+    draw(c) {
+      c.fillStyle = COLORS.dark;
+      c.fillRect(0, 0, 1, 1);
+      circle(c, 0.82, 0.18, 0.08);
+      fill(c, 'cream');
+      P(c, [0.1, 0.48], [0.5, 0.14], [0.9, 0.48]);
+      fill(c, 'red');
+      c.fillStyle = COLORS.cream;
+      c.fillRect(0.16, 0.48, 0.68, 0.42);
+      c.fillStyle = COLORS.gold;
+      c.fillRect(0.24, 0.56, 0.16, 0.14);
+      c.fillRect(0.6, 0.56, 0.16, 0.14);
+      c.fillStyle = COLORS.brown;
+      c.fillRect(0.44, 0.64, 0.14, 0.26);
+      c.fillStyle = COLORS.green;
+      c.fillRect(0, 0.9, 1, 0.1);
+    },
+  },
+  {
+    id: 'cat',
+    name: { ru: 'Мысық', en: 'Cat' },
+    draw(c) {
+      P(c, [0.16, 0.12], [0.36, 0.3], [0.16, 0.4]);
+      fill(c, 'orange');
+      P(c, [0.84, 0.12], [0.64, 0.3], [0.84, 0.4]);
+      fill(c, 'orange');
+      c.beginPath();
+      c.ellipse(0.5, 0.5, 0.36, 0.3, 0, 0, Math.PI * 2);
+      fill(c, 'orange');
+      c.beginPath();
+      c.ellipse(0.5, 0.62, 0.18, 0.13, 0, 0, Math.PI * 2);
+      fill(c, 'white');
+      for (const x of [0.36, 0.64]) {
+        c.beginPath();
+        c.ellipse(x, 0.44, 0.06, 0.07, 0, 0, Math.PI * 2);
+        fill(c, 'leaf');
+        c.beginPath();
+        c.ellipse(x, 0.44, 0.02, 0.06, 0, 0, Math.PI * 2);
+        fill(c, 'dark');
+      }
+      P(c, [0.46, 0.55], [0.54, 0.55], [0.5, 0.6]);
+      fill(c, 'pink');
+    },
+  },
+  {
+    id: 'owl',
+    name: { ru: 'Үкі', en: 'Owl' },
+    draw(c) {
+      c.fillStyle = COLORS.brown;
+      c.fillRect(0, 0.84, 1, 0.08);
+      c.beginPath();
+      c.ellipse(0.5, 0.52, 0.3, 0.36, 0, 0, Math.PI * 2);
+      fill(c, 'brown');
+      c.beginPath();
+      c.ellipse(0.5, 0.62, 0.18, 0.22, 0, 0, Math.PI * 2);
+      fill(c, 'cream');
+      P(c, [0.22, 0.16], [0.32, 0.3], [0.2, 0.3]);
+      fill(c, 'brown');
+      P(c, [0.78, 0.16], [0.68, 0.3], [0.8, 0.3]);
+      fill(c, 'brown');
+      for (const x of [0.38, 0.62]) {
+        circle(c, x, 0.36, 0.1);
+        fill(c, 'white');
+        circle(c, x, 0.36, 0.05);
+        fill(c, 'gold');
+        circle(c, x, 0.36, 0.025);
+        fill(c, 'dark');
+      }
+      P(c, [0.46, 0.44], [0.54, 0.44], [0.5, 0.52]);
+      fill(c, 'orange');
+    },
+  },
+  {
+    id: 'mushroom',
+    name: { ru: 'Саңырауқұлақ', en: 'Mushroom' },
+    draw(c) {
+      c.fillStyle = COLORS.green;
+      c.fillRect(0, 0.84, 1, 0.16);
+      c.beginPath();
+      c.moveTo(0.38, 0.86);
+      c.lineTo(0.42, 0.48);
+      c.lineTo(0.58, 0.48);
+      c.lineTo(0.62, 0.86);
+      fill(c, 'cream');
+      c.beginPath();
+      c.arc(0.5, 0.52, 0.36, Math.PI, 0);
+      fill(c, 'red');
+      for (const [x, y, r] of [[0.36, 0.36, 0.06], [0.58, 0.28, 0.07], [0.7, 0.44, 0.05], [0.26, 0.48, 0.04]]) {
+        circle(c, x, y, r);
+        fill(c, 'white');
+      }
+    },
+  },
+  {
+    id: 'balloon',
+    name: { ru: 'Әуе шары', en: 'Hot-air balloon' },
+    draw(c) {
+      c.fillStyle = COLORS.sky;
+      c.fillRect(0, 0, 1, 1);
+      c.beginPath();
+      c.ellipse(0.18, 0.78, 0.16, 0.06, 0, 0, Math.PI * 2);
+      fill(c, 'white');
+      c.beginPath();
+      c.moveTo(0.5, 0.66);
+      c.bezierCurveTo(0.16, 0.5, 0.18, 0.08, 0.5, 0.08);
+      c.bezierCurveTo(0.82, 0.08, 0.84, 0.5, 0.5, 0.66);
+      fill(c, 'red');
+      c.save();
+      c.clip();
+      c.fillStyle = COLORS.gold;
+      c.fillRect(0.4, 0, 0.2, 1);
+      c.fillStyle = COLORS.white;
+      c.fillRect(0, 0.3, 1, 0.06);
+      c.restore();
+      c.strokeStyle = COLORS.brown;
+      c.lineWidth = 0.02;
+      c.beginPath();
+      c.moveTo(0.42, 0.62);
+      c.lineTo(0.44, 0.76);
+      c.moveTo(0.58, 0.62);
+      c.lineTo(0.56, 0.76);
+      c.stroke();
+      c.fillStyle = COLORS.brown;
+      c.fillRect(0.42, 0.76, 0.16, 0.1);
+    },
+  },
+  {
+    id: 'kite',
+    name: { ru: 'Батпырауық', en: 'Kite' },
+    draw(c) {
+      c.fillStyle = COLORS.sky;
+      c.fillRect(0, 0, 1, 1);
+      P(c, [0.56, 0.06], [0.84, 0.32], [0.56, 0.66], [0.28, 0.32]);
+      fill(c, 'purple');
+      P(c, [0.56, 0.06], [0.84, 0.32], [0.56, 0.32]);
+      fill(c, 'pink');
+      P(c, [0.56, 0.32], [0.28, 0.32], [0.56, 0.66]);
+      fill(c, 'gold');
+      c.strokeStyle = COLORS.dark;
+      c.lineWidth = 0.02;
+      c.beginPath();
+      c.moveTo(0.56, 0.66);
+      c.bezierCurveTo(0.5, 0.78, 0.36, 0.72, 0.3, 0.9);
+      c.stroke();
+      for (const [x, y] of [[0.52, 0.76], [0.4, 0.78], [0.32, 0.88]]) {
+        P(c, [x - 0.04, y - 0.03], [x + 0.04, y - 0.03], [x, y + 0.04]);
+        fill(c, 'red');
+      }
+    },
+  },
+  {
+    id: 'cherries',
+    name: { ru: 'Шие', en: 'Cherries' },
+    draw(c) {
+      c.strokeStyle = COLORS.green;
+      c.lineWidth = 0.035;
+      c.beginPath();
+      c.moveTo(0.3, 0.66);
+      c.quadraticCurveTo(0.4, 0.3, 0.6, 0.12);
+      c.moveTo(0.7, 0.62);
+      c.quadraticCurveTo(0.66, 0.3, 0.6, 0.12);
+      c.stroke();
+      c.beginPath();
+      c.ellipse(0.72, 0.16, 0.14, 0.06, 0.4, 0, Math.PI * 2);
+      fill(c, 'leaf');
+      for (const [x, y] of [[0.3, 0.72], [0.7, 0.68]]) {
+        circle(c, x, y, 0.17);
+        fill(c, 'wine');
+        circle(c, x, y, 0.13);
+        fill(c, 'red');
+        circle(c, x - 0.06, y - 0.06, 0.04);
+        fill(c, 'white');
+      }
+    },
+  },
+  {
+    id: 'ladybird',
+    name: { ru: 'Қызыл қоңыз', en: 'Ladybird' },
+    draw(c) {
+      c.fillStyle = COLORS.leaf;
+      c.fillRect(0, 0, 1, 1);
+      circle(c, 0.5, 0.26, 0.14);
+      fill(c, 'dark');
+      c.beginPath();
+      c.ellipse(0.5, 0.56, 0.32, 0.34, 0, 0, Math.PI * 2);
+      fill(c, 'red');
+      c.fillStyle = COLORS.dark;
+      c.fillRect(0.485, 0.24, 0.03, 0.66);
+      for (const [x, y, r] of [[0.34, 0.46, 0.06], [0.66, 0.46, 0.06], [0.36, 0.68, 0.05], [0.64, 0.68, 0.05], [0.5, 0.82, 0.04]]) {
+        circle(c, x, y, r);
+        fill(c, 'dark');
+      }
+      for (const x of [0.44, 0.56]) {
+        circle(c, x, 0.22, 0.025);
+        fill(c, 'white');
+      }
+    },
+  },
+  {
+    id: 'saiga',
+    name: { ru: 'Ақбөкен', en: 'Saiga' },
+    draw(c) {
+      c.fillStyle = COLORS.gold;
+      c.fillRect(0, 0.8, 1, 0.2);
+      c.beginPath();
+      c.ellipse(0.46, 0.56, 0.26, 0.14, 0, 0, Math.PI * 2);
+      fill(c, 'cream');
+      c.fillStyle = COLORS.cream;
+      for (const x of [0.28, 0.38, 0.54, 0.64]) c.fillRect(x, 0.62, 0.05, 0.2);
+      c.beginPath();
+      c.ellipse(0.74, 0.4, 0.1, 0.12, 0.3, 0, Math.PI * 2);
+      fill(c, 'cream');
+      c.beginPath();
+      c.ellipse(0.8, 0.48, 0.07, 0.06, 0, 0, Math.PI * 2);
+      fill(c, 'brown');
+      c.strokeStyle = COLORS.white;
+      c.lineWidth = 0.035;
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(0.72, 0.3);
+      c.lineTo(0.7, 0.1);
+      c.moveTo(0.77, 0.3);
+      c.lineTo(0.8, 0.1);
+      c.stroke();
+      circle(c, 0.75, 0.38, 0.02);
+      fill(c, 'dark');
+    },
+  },
 ];
 
 // mirror-symmetric ornament: one quarter drawn and mirrored four ways

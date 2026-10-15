@@ -24,7 +24,7 @@ function score(g, c, grid) {
   return { hits, full: hits >= c.sh.ammo };
 }
 
-function act(g, policy, rnd) {
+export function act(g, policy, rnd) {
   if (!g.canLaunch()) return;
   const list = candidates(g);
   if (!list.length) return;
@@ -47,6 +47,18 @@ function act(g, policy, rnd) {
   if (!pick) return;
   if (pick.type === 'queue') g.launchFromQueue(pick.i);
   else g.launchFromDock(pick.i);
+}
+
+// plays the level that is open now until it is won or lost; returns seconds of game time
+export function play(O, policy = 'smart', rnd = Math.random, limit = 900) {
+  const g = O.game;
+  let time = 0;
+  while (g.state === 'play' && time < limit) {
+    act(g, policy, rnd);
+    O.step(6, false);
+    time += 0.1;
+  }
+  return time;
 }
 
 export async function run({ from = 0, to = 59, policy = 'smart', seed = 1, log = true } = {}) {

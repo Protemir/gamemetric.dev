@@ -5,6 +5,7 @@ import { Renderer } from './render.js';
 import * as sfx from './audio.js';
 import { store, el, clamp } from './util.js';
 import { pulse } from './pulse.js';
+import { PORTAL, portalInit, portalLang, gameplay, happytime, onPortalMute } from './portal.js';
 
 // ---------- texts ----------
 
@@ -27,6 +28,11 @@ const TEXT = {
     hint1: 'Нажми на кружок — он выбьет пиксели своего цвета',
     hint2: 'Не хватило пикселей? Кружок ждёт на стоянке',
     hint3: 'Пускай несколько кружков сразу',
+    hintSlots4: 'Теперь на стоянке 4 места',
+    hintHidden: 'Дальние кружки скрыты — запоминай цвета',
+    hintHidden1: 'Виден только первый кружок, на стоянке 3 места',
+    almost: 'Выбито {p}% — почти!',
+    clean: '★ Чисто: без стоянки',
     back: 'Назад',
     locked: 'Пройди предыдущие уровни',
   },
@@ -48,6 +54,11 @@ const TEXT = {
     hint1: 'Tap a shooter — it knocks out pixels of its color',
     hint2: 'Out of targets? The shooter waits in the dock',
     hint3: 'Send several shooters at once',
+    hintSlots4: 'The dock has 4 places now',
+    hintHidden: 'Shooters further back are hidden — remember the colors',
+    hintHidden1: 'Only the front shooter shows now, and the dock has 3 places',
+    almost: '{p}% cleared — so close!',
+    clean: '★ Clean: never used the dock',
     back: 'Back',
     locked: 'Finish the earlier levels first',
   },
@@ -107,7 +118,9 @@ function startLevel(i) {
   $('hudLevel').textContent = `${t('level', { n: i + 1 })} · ${L(level.name)}`;
   updateBar();
   hintStage = 0;
-  showHint(i === 0 ? 'hint1' : i === 1 ? 'hint2' : i === 2 ? 'hint3' : null);
+  // a line when a new rule comes in
+  const hints = { 0: 'hint1', 1: 'hint2', 2: 'hint3', 5: 'hintSlots4', 6: 'hintHidden', 15: 'hintHidden1' };
+  showHint(hints[i] || null);
   R.hint = null;
 }
 
@@ -197,7 +210,7 @@ function screenMenu() {
   const made = el('p', 'foot', t('made'));
   panel(
     '',
-    el('h1', 'logo', 'Ою'),
+    el('h1', 'logo', PORTAL ? 'Oyu' : 'Ою'),
     ornamentLine(),
     el('p', 'tag', t('tag')),
     button(`${t('play')} · ${t('level', { n: n + 1 })}`, 'primary', () => startLevel(n)),
@@ -255,7 +268,10 @@ function screenWin() {
   mode = 'won';
   const i = level.index;
   pulse('win', i + 1);
-  if (!progress.done.includes(i)) progress.done.push(i);
+  if (!progress.done.includes(i)) {
+    progress.done.push(i);
+    if (progress.done.length % 10 === 0) happytime();
+  }
   progress.level = Math.min(LEVEL_COUNT - 1, i + 1);
   save();
   const src = thumb(i);
@@ -275,13 +291,15 @@ function screenWin() {
   track.append(fill);
   bar.append(barP, track);
   const last = i + 1 >= LEVEL_COUNT;
-  panel('', el('h2', '', t('done')), el('p', 'sub', L(level.name)), prev, bar, last ? null : button(t('next'), 'primary', () => startLevel(i + 1)), button(t('menu'), '', screenMenu));
+  const clean = game && game.docked === 0 ? el('p', 'clean', t('clean')) : null;
+  panel('', el('h2', '', t('done')), el('p', 'sub', L(level.name)), prev, clean, bar, last ? null : button(t('next'), 'primary', () => startLevel(i + 1)), button(t('menu'), '', screenMenu));
 }
 
 function screenLost() {
   mode = 'lost';
   pulse('fail', level.index + 1);
-  panel('', el('h2', '', t('lost')), el('p', 'sub', t('lostTip')), button(t('retry'), 'primary', () => startLevel(level.index)), button(t('menu'), '', screenMenu));
+  const p = Math.floor(((game.total - game.left) / Math.max(1, game.total)) * 100);
+  panel('', el('h2', '', t('lost')), el('p', 'almost', t('almost', { p })), el('p', 'sub', t('lostTip')), button(t('retry'), 'primary', () => startLevel(level.index)), button(t('menu'), '', screenMenu));
 }
 
 // ---------- input ----------
@@ -387,6 +405,7 @@ function tick(dt, draw = true) {
   }
   R.update(dt);
   if (draw) R.draw();
+  gameplay(mode === 'play' && !!game && game.state === 'play');
 }
 
 function resize() {
@@ -397,6 +416,12 @@ document.addEventListener('visibilitychange', () => {
   last = performance.now();
 });
 
+if (PORTAL) {
+  await portalInit();
+  const pl = portalLang();
+  if (pl && !store.get('oyu.lang', null) && !params.get('lang')) lang = pl;
+  onPortalMute((muted) => sfx.holdAudio(muted));
+}
 labelSound();
 applyLang();
 resize();

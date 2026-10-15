@@ -141,6 +141,9 @@ h2 { margin: 4px 0 6px; font-size: 30px; font-weight: 900; }
 .chip { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: none; font-weight: 700; font-size: 13px; color: var(--muted); }
 .chip[aria-pressed="true"] { background: rgba(255, 255, 255, 0.12); color: var(--text); }
 
+.clean { margin: -4px 0 10px; color: var(--gold); font-weight: 800; font-size: 15px; }
+.almost { margin: 0 0 6px; color: var(--gold); font-weight: 900; font-size: 20px; }
+
 .carpet-progress { margin: 6px auto 4px; width: 100%; }
 .carpet-progress p { margin: 0 0 6px; font-size: 14px; color: var(--muted); }
 

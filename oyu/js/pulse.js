@@ -19,7 +19,8 @@ function local(key, value) {
 const q = new URLSearchParams(location.search);
 if (q.has('nopulse')) local('pulse.off', '1');
 if (q.has('pulse')) local('pulse.off', null);
-const off = local('pulse.off') === '1' || navigator.webdriver || location.protocol === 'file:';
+// portal builds have their own numbers and their own privacy rules
+const off = !!window.OYU_PORTAL || local('pulse.off') === '1' || navigator.webdriver || location.protocol === 'file:';
 
 let id = local('pulse.id');
 if (!id) {

@@ -71,19 +71,21 @@ export class Renderer {
     let area;
     if (portrait) {
       const bottom = clamp(h * 0.3, 180, 290);
-      area = { x: 8, y: hud, w: w - 16, h: h - hud - bottom };
+      area = { x: 6, y: hud, w: w - 12, h: h - hud - bottom };
       this.panel = { x: 0, y: h - bottom, w, h: bottom, portrait: true };
     } else {
       const pw = clamp(w * 0.34, 230, 400);
-      area = { x: 12, y: hud - 6, w: w - pw - 24, h: h - hud };
+      area = { x: 10, y: hud, w: w - pw - 20, h: h - hud - 4 };
       this.panel = { x: w - pw - 8, y: hud, w: pw, h: h - hud - 12, portrait: false };
     }
     let cell = 10;
     let tokenR = 14;
     let mv = 1.6;
-    for (let k = 0; k < 3; k++) {
-      cell = Math.min(area.w / (g.W + 2 * mv + 1.1), area.h / (g.H + 2 * mv + 1.1));
-      tokenR = clamp(cell * 0.95, 13, 21);
+    // the belt sits mv cells outside the picture and its tokens stick out by their radius:
+    // all of it has to fit, on a phone on its side too
+    for (let k = 0; k < 5; k++) {
+      cell = Math.min((area.w - 2 * tokenR - 4) / (g.W + 2 * mv), (area.h - 2 * tokenR - 4) / (g.H + 2 * mv));
+      tokenR = clamp(cell * 0.95, 12, 21);
       mv = Math.max(1.25, (tokenR * 1.3) / cell);
     }
     cell = Math.floor(cell * 4) / 4;
@@ -530,9 +532,10 @@ export class Renderer {
     c.drawImage(bb.cv, this.bx - bb.pad, this.by - bb.pad, bb.cv.width / dpr, bb.cv.height / dpr);
     if (!this.win) c.drawImage(this.blocks, this.bx, this.by, g.W * cell, g.H * cell);
     this.drawTrack();
-    this.drawPanel();
+    // cover mode (tools/covers.mjs): only the picture and the belt, no dock or queues
+    if (!this.cover) this.drawPanel();
     // tokens: the ones on the belt above everything on the board
-    const list = [...this.tokens.values()].sort((a, b) => (a.kind === 'belt') - (b.kind === 'belt'));
+    const list = [...this.tokens.values()].filter((t) => !this.cover || t.kind === 'belt').sort((a, b) => (a.kind === 'belt') - (b.kind === 'belt'));
     for (const t of list) this.drawToken(t);
     // shots
     c.save();
@@ -582,6 +585,7 @@ export class Renderer {
     c.setLineDash([]);
     c.restore();
     // how many shooters are on the belt: a row of lights above the dock
+    if (this.cover) return;
     const pipR = 4.5;
     const shake = Math.sin(this.time * 60) * this.pipShake * 4;
     const py = this.dockPos[0].y - this.dr - 12;
