@@ -289,6 +289,7 @@ button { font: inherit; color: inherit; }
 .panel-top { width: 100%; display: flex; align-items: center; justify-content: space-between; }
 .mark { width: 34px; height: 6px; border-radius: 3px; background: var(--accent); }
 .panel h1 { margin: 0; font-size: clamp(2.6rem, 11vw, 3.6rem); font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+.subname { display: block; margin-top: 6px; font-size: 0.32em; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 .panel h2 { margin: 0; font-size: 1.7rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
 .panel p { margin: 0; }
 .tag { color: var(--muted); font-size: 1.0625rem; line-height: 1.45; }

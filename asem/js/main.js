@@ -13,6 +13,8 @@ import { PORTAL, portalInit, portalLang, gameplay, happytime, onPortalMute } fro
 const STEP = 1 / 60;
 const $ = (id) => document.getElementById(id);
 const isTouch = window.matchMedia('(pointer: coarse)').matches;
+// the name on game portals (CrazyGames already lists the first submission as plain "Asem Road")
+const PORTAL_NAME = 'Asem Road: Almaty Racing';
 
 // ---------- progress ----------
 
@@ -1466,7 +1468,9 @@ const screenMain = screen(() => {
   menu.append(...items.filter(Boolean));
   // phones: the whole screen for the road; iPhone Safari cannot do it for pages, the home screen icon can
   if (!PORTAL && isTouch && !installed && canFull) menu.append(isFull() ? item(t('fullExit'), t('fullExitSub'), false, toggleFull) : item(t('full'), t('fullSub'), false, toggleFull));
-  panel('main', top, el('h1', '', PORTAL ? 'Asem Road' : 'Әсем Жол'), el('p', 'tag', t('tag')), menu, !PORTAL && isTouch && !installed && !canFull ? el('p', 'keys', t('fullIosSub')) : null, el('p', 'keys', isTouch ? t('keysTouch') : t('keys')), PORTAL ? null : (() => {
+  const h1 = el('h1', '', PORTAL ? 'Asem Road' : 'Әсем Жол');
+  if (PORTAL) h1.append(el('span', 'subname', 'Almaty Racing'));
+  panel('main', top, h1, el('p', 'tag', t('tag')), menu, !PORTAL && isTouch && !installed && !canFull ? el('p', 'keys', t('fullIosSub')) : null, el('p', 'keys', isTouch ? t('keysTouch') : t('keys')), PORTAL ? null : (() => {
     const a = el('a', 'more', t('more'));
     a.href = '../';
     return a;
@@ -2142,7 +2146,8 @@ $('muteBtn').addEventListener('click', toggleSound);
 
 function applyLang() {
   document.documentElement.lang = getLang();
-  document.title = t('title');
+  // on a portal the page carries the name the game is listed under
+  document.title = PORTAL ? PORTAL_NAME : t('title');
   // search engines read the English page (?lang=en) after the script runs
   const desc = document.querySelector('meta[name="description"]');
   if (desc) desc.content = t('metaDesc');

@@ -157,8 +157,9 @@ try {
       await open(`/?debug&lang=en`, w, h);
       await js(`(() => {
         const A = window.__asem;
-        A.start({ kind: 'free', mapId: ${JSON.stringify(MAP)} });
+        // set before the start, so the first-race controls hint stays off the clip
         A.g.autoDrive = true;
+        A.start({ kind: 'free', mapId: ${JSON.stringify(MAP)} });
         // no oncoming cars in the clip: on a two-lane road they keep the autopilot stuck behind trucks
         const T = A.g.track;
         for (const c of T.cars.filter((c) => c.dir < 0)) {

@@ -34,10 +34,10 @@ html = html
   .join('\n')
   // portals review and list the game in English; the game itself still picks the player's language
   .replace(/<html lang="ru">/, '<html lang="en">')
-  .replace(/<title>[^<]*<\/title>/, '<title>Asem Road</title>')
+  .replace(/<title>[^<]*<\/title>/, '<title>Asem Road: Almaty Racing</title>')
   .replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="Race across Kazakhstan: Almaty by night, Medeu, Shymbulak, Kapchagay, Charyn, Kolsai and Astana on New Year\'s Eve.">')
   .replace(/<canvas id="game" aria-label="[^"]*">/, '<canvas id="game" aria-label="Asem Road">')
-  .replace('<b>Әсем Жол</b>', '<b>Asem Road</b>')
+  .replace('<b>Әсем Жол</b>', '<b>Asem Road<span class="subname">Almaty Racing</span></b>')
   .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\n?/, '')
   .replace(/<script>\s*\/\/ players coming from the old address[\s\S]*?<\/script>\n?/, '');
 const head = `<script src="${SDK[portal]}"></script>\n<script>window.ASEM_PORTAL = '${portal}';</script>\n`;
