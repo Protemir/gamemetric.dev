@@ -95,21 +95,50 @@ export function audioInit() {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     const c = new AC();
+    // the engine: firing pulses rich in harmonics, a sub an octave down, exhaust noise that
+    // throbs at the firing rate, a little saturation; wind and road noise grow with speed
     const o1 = c.createOscillator();
+    const wave = pulseWave(c);
+    o1.setPeriodicWave(wave);
     const o2 = c.createOscillator();
-    o1.type = 'sawtooth';
-    o2.type = 'square';
+    o2.type = 'sine';
+    const sub = c.createGain();
+    sub.gain.value = 0.7;
+    const noiseSrc = c.createBufferSource();
+    noiseSrc.buffer = noiseBuffer(c, 2);
+    noiseSrc.loop = true;
+    const exhaust = c.createBiquadFilter();
+    exhaust.type = 'bandpass';
+    exhaust.frequency.value = 260;
+    exhaust.Q.value = 1.2;
+    const throb = c.createGain();
+    throb.gain.value = 0.5;
+    const throbLfo = c.createGain();
+    throbLfo.gain.value = 0.5;
+    const shaper = c.createWaveShaper();
+    shaper.curve = softClip();
     const filter = c.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 520;
+    filter.frequency.value = 700;
+    filter.Q.value = 2;
     const gain = c.createGain();
     gain.gain.value = 0;
-    o1.connect(filter);
-    o2.connect(filter);
-    filter.connect(gain).connect(c.destination);
+    o1.connect(shaper);
+    o2.connect(sub).connect(shaper);
+    noiseSrc.connect(exhaust).connect(throb).connect(shaper);
+    o2.connect(throbLfo).connect(throb.gain);
+    shaper.connect(filter).connect(gain).connect(c.destination);
+    const windF = c.createBiquadFilter();
+    windF.type = 'bandpass';
+    windF.frequency.value = 900;
+    windF.Q.value = 0.5;
+    const wind = c.createGain();
+    wind.gain.value = 0;
+    noiseSrc.connect(windF).connect(wind).connect(c.destination);
     o1.start();
     o2.start();
-    Object.assign(sound, { ctx: c, gain, o1, o2, filter });
+    noiseSrc.start();
+    Object.assign(sound, { ctx: c, gain, o1, o2, filter, exhaust, wind, windF, wave, elec: false, rpm: 0 });
     kick(c);
     if (sound.held) c.suspend().catch(() => {});
   } catch {
@@ -130,30 +159,105 @@ export function setSound(on) {
   if (on) audioInit();
 }
 
+// one cycle of a four-cylinder: strong low harmonics, the even ones a bit louder, random phases
+function pulseWave(c) {
+  const n = 40;
+  const real = new Float32Array(n);
+  const imag = new Float32Array(n);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let k = 1; k < n; k++) {
+    const amp = (k % 2 ? 0.8 : 1) / Math.pow(k, 0.9);
+    const ph = rnd() * Math.PI * 2;
+    real[k] = amp * Math.cos(ph);
+    imag[k] = amp * Math.sin(ph);
+  }
+  return c.createPeriodicWave(real, imag);
+}
+
+function noiseBuffer(c, sec) {
+  const len = Math.floor(c.sampleRate * sec);
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  return buf;
+}
+
+function softClip() {
+  const curve = new Float32Array(1024);
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1;
+    curve[i] = Math.tanh(x * 2.2) / Math.tanh(2.2);
+  }
+  return curve;
+}
+
 // pct: 0..1 of top speed, boost: nitro on
+const GEARS = [0, 0.16, 0.34, 0.54, 0.76, 1.01];
 export function engine(pct, audible, boost, electric) {
   if (!sound.ctx) return;
   const now = sound.ctx.currentTime;
-  const type = electric ? 'sine' : 'sawtooth';
-  if (sound.o1.type !== type) {
-    sound.o1.type = type;
-    sound.o2.type = electric ? 'sine' : 'square';
+  const on = sound.on && audible;
+  if (sound.elec !== !!electric) {
+    sound.elec = !!electric;
+    if (electric) sound.o1.type = 'sine';
+    else sound.o1.setPeriodicWave(sound.wave);
   }
+  sound.wind.gain.setTargetAtTime(on ? pct * pct * 0.05 : 0, now, 0.2);
+  sound.windF.frequency.setTargetAtTime(500 + pct * 1400, now, 0.2);
   if (electric) {
     // an electric motor whines instead of roaring
     const f = 160 + pct * 620 + (boost ? 120 : 0);
     sound.o1.frequency.setTargetAtTime(f, now, 0.05);
     sound.o2.frequency.setTargetAtTime(f * 1.5, now, 0.05);
-    sound.filter.frequency.setTargetAtTime(2400, now, 0.1);
-    sound.gain.gain.setTargetAtTime(sound.on && audible ? 0.012 + pct * 0.018 : 0, now, 0.1);
+    sound.exhaust.frequency.setTargetAtTime(f * 3, now, 0.1);
+    sound.filter.frequency.setTargetAtTime(1800, now, 0.1);
+    sound.gain.gain.setTargetAtTime(on ? 0.006 + pct * 0.01 : 0, now, 0.1);
     return;
   }
-  const gear = (pct * 4) % 1;
-  const f = 42 + pct * 70 + gear * 38 + (boost ? 25 : 0);
-  sound.o1.frequency.setTargetAtTime(f, now, 0.05);
-  sound.o2.frequency.setTargetAtTime(f / 2, now, 0.05);
-  sound.filter.frequency.setTargetAtTime(boost ? 900 : 520, now, 0.1);
-  sound.gain.gain.setTargetAtTime(sound.on && audible ? 0.03 + pct * 0.035 : 0, now, 0.1);
+  // rpm climbs through each gear and drops on the shift, like a real gearbox
+  let gear = 1;
+  while (gear < GEARS.length - 1 && pct > GEARS[gear]) gear++;
+  const inGear = Math.min(1, (pct - GEARS[gear - 1]) / (GEARS[gear] - GEARS[gear - 1]));
+  const rpm = (gear === 1 ? 0.25 + inGear * 0.7 : 0.45 + inGear * 0.5) + (boost ? 0.08 : 0);
+  const f = 34 + rpm * 120;
+  const k = rpm < sound.rpm - 0.1 ? 0.09 : 0.04;
+  sound.rpm = rpm;
+  sound.o1.frequency.setTargetAtTime(f, now, k);
+  sound.o2.frequency.setTargetAtTime(f / 2, now, k);
+  sound.exhaust.frequency.setTargetAtTime(160 + rpm * 520, now, 0.08);
+  sound.filter.frequency.setTargetAtTime(380 + rpm * 900 + (boost ? 600 : 0), now, 0.08);
+  sound.gain.gain.setTargetAtTime(on ? 0.035 + rpm * 0.04 : 0, now, 0.1);
+}
+
+// a crash: a low thump, a crunch and a short metal clank
+export function crashSound() {
+  if (!sound.on || !sound.ctx) return;
+  const c = sound.ctx;
+  const t = c.currentTime;
+  const o = c.createOscillator();
+  const g = c.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(130, t);
+  o.frequency.exponentialRampToValueAtTime(38, t + 0.25);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.5, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+  o.connect(g).connect(c.destination);
+  o.start(t);
+  o.stop(t + 0.32);
+  noise(0.3, 0.3, 1400);
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(c, 0.18);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 2800;
+  bp.Q.value = 6;
+  const mg = c.createGain();
+  mg.gain.setValueAtTime(0.35, t + 0.02);
+  mg.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+  src.connect(bp).connect(mg).connect(c.destination);
+  src.start(t + 0.02);
 }
 
 export function beep(freq, dur, type = 'triangle', vol = 0.12) {

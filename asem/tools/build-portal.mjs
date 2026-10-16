@@ -30,8 +30,14 @@ let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 // the site's own head: address, install-as-app and link previews mean nothing inside a portal frame
 html = html
   .split(/\r?\n/)
-  .filter((l) => !/rel="(canonical|manifest|apple-touch-icon)"|name="(apple-mobile|mobile-web-app|theme-color|twitter:)|property="og:/.test(l))
+  .filter((l) => !/rel="(canonical|manifest|apple-touch-icon|alternate)"|name="(apple-mobile|mobile-web-app|theme-color|twitter:)|property="og:/.test(l))
   .join('\n')
+  // portals review and list the game in English; the game itself still picks the player's language
+  .replace(/<html lang="ru">/, '<html lang="en">')
+  .replace(/<title>[^<]*<\/title>/, '<title>Asem Road</title>')
+  .replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="Race across Kazakhstan: Almaty by night, Medeu, Shymbulak, Kapchagay, Charyn, Kolsai and Astana on New Year\'s Eve.">')
+  .replace(/<canvas id="game" aria-label="[^"]*">/, '<canvas id="game" aria-label="Asem Road">')
+  .replace('<b>Әсем Жол</b>', '<b>Asem Road</b>')
   .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\n?/, '')
   .replace(/<script>\s*\/\/ players coming from the old address[\s\S]*?<\/script>\n?/, '');
 const head = `<script src="${SDK[portal]}"></script>\n<script>window.ASEM_PORTAL = '${portal}';</script>\n`;

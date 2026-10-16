@@ -90,6 +90,7 @@
   </div>
   <div class="hud-block hud-center">
     <p class="time" id="hudTime">0</p>
+    <p class="pace" id="hudPace" aria-hidden="true"></p>
     <p class="zone" id="hudZone"></p>
     <p class="place" id="hudPlace"></p>
     <p class="style-total" id="hudStyle"></p>
@@ -105,12 +106,13 @@
   </div>
 </div>
 
+<div class="coach" id="coach" hidden></div>
 <div class="banner" id="banner" aria-live="polite"></div>
 <div class="ach-toast" id="achToast" aria-live="polite"></div>
 <button type="button" class="nitro-btn" id="nitroBtn" hidden aria-label="Нитро">N</button>
 <button type="button" class="horn-btn" id="hornBtn" hidden>Бип</button>
 
-<div id="ui"></div>
+<div id="ui"><div class="boot" aria-hidden="true"><b>Әсем Жол</b><i></i></div></div>
 
 <noscript><p class="noscript">Для игры нужен JavaScript.</p></noscript>
 </body>

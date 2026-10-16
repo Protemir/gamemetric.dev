@@ -89,6 +89,9 @@ button { font: inherit; color: inherit; }
   letter-spacing: -0.04em;
 }
 .time.low { color: #ff6b5b; }
+.pace { margin-top: 2px; font-size: 0.875rem; line-height: 1; letter-spacing: 0.1em; }
+.pace i { font-style: normal; color: rgba(255, 255, 255, 0.22); }
+.pace i.on { color: #ffc94a; text-shadow: 0 0 6px rgba(255, 201, 74, 0.6); }
 .zone { margin-top: 4px; font-size: 0.8125rem; color: var(--text); opacity: 0.85; font-weight: 600; }
 .place { margin-top: 2px; font-family: var(--mono); font-size: 0.8125rem; color: var(--accent); font-weight: 700; }
 .hud-right { display: flex; justify-content: flex-end; gap: 8px; pointer-events: auto; }
@@ -199,6 +202,62 @@ button { font: inherit; color: inherit; }
   touch-action: none;
 }
 .nitro-btn.on { background: #5fb4ff; color: #04121f; }
+
+/* the name on screen while the scripts load */
+.boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+.boot b { font-size: clamp(2rem, 7vw, 3.4rem); font-weight: 800; letter-spacing: -0.03em; }
+.boot i { width: 120px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent) 0 0 / 50% 100% no-repeat, rgba(255, 255, 255, 0.1); animation: boot 1s linear infinite; }
+@keyframes boot { from { background-position: -60px 0, 0 0; } to { background-position: 120px 0, 0 0; } }
+
+/* first races: how to drive, drawn on the road itself */
+.coach { position: fixed; inset: 0; pointer-events: none; z-index: 2; transition: opacity 0.5s; animation: coach-in 0.4s ease-out; }
+.coach.out { opacity: 0; }
+@keyframes coach-in { from { opacity: 0; } }
+.coach.keys { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; align-items: flex-start; gap: 12px clamp(14px, 3vw, 28px); padding-bottom: 8vh; }
+.coach-key { text-align: center; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); }
+.coach-key b {
+  display: inline-block;
+  min-width: 2.4em;
+  padding: 0.35em 0.6em;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-bottom-width: 4px;
+  border-radius: 10px;
+  background: rgba(9, 13, 28, 0.55);
+  font-family: var(--mono);
+  font-size: clamp(1.1rem, 2.6vw, 1.6rem);
+  font-weight: 700;
+  color: #fff;
+}
+.coach-key span { display: block; margin-top: 6px; font-size: 0.875rem; font-weight: 700; color: var(--text); }
+.coach-gas {
+  position: absolute;
+  left: 50%;
+  bottom: 38%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+.coach.keys .coach-gas { position: static; transform: none; flex-basis: 100%; text-align: center; }
+.coach-half {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+.coach-half.left { left: 0; background: linear-gradient(90deg, rgba(255, 255, 255, 0.16), transparent 70%); border-right: 1px dashed rgba(255, 255, 255, 0.25); }
+.coach-half.right { right: 0; background: linear-gradient(270deg, rgba(255, 255, 255, 0.16), transparent 70%); }
+.coach-half b { font-size: 3rem; line-height: 1.2; color: rgba(255, 255, 255, 0.9); animation: coach-tap 1.1s ease-in-out infinite; }
+.coach-half span { font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+@keyframes coach-tap { 50% { transform: scale(0.85); opacity: 0.6; } }
 
 /* panels */
 
@@ -357,6 +416,11 @@ button { font: inherit; color: inherit; }
 .stars i { font-style: normal; color: rgba(255, 255, 255, 0.22); }
 .stars i.on { color: var(--accent); }
 .panel > .stars { font-size: 2rem; gap: 6px; }
+.stars.pop i.on { animation: star-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) backwards; text-shadow: 0 0 12px rgba(255, 181, 71, 0.7); }
+.stars.pop i:nth-child(1) { animation-delay: 0.25s; }
+.stars.pop i:nth-child(2) { animation-delay: 0.53s; }
+.stars.pop i:nth-child(3) { animation-delay: 0.81s; }
+@keyframes star-pop { from { transform: scale(2.4) rotate(-30deg); opacity: 0; } }
 
 .hero-img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); }
 .story-title { font-size: 1.9rem; }

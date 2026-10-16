@@ -4,7 +4,7 @@ import { MAPS, CHAPTERS, CARS, PAINTS, FRIENDS, mapById } from './maps.js';
 import { Track, SEG, PLAYER_Z, setCameraBack, PLAYER_W, BASE_MAX, KMH_AT_MAX, ROAD_W, GATE_AT, M_PER_SEG, CAR_W } from './track.js';
 import { Renderer } from './render.js';
 import { drawVehicle, VEHICLES } from './sprites.js';
-import { sound, media, audioInit, setSound, holdAudio, engine, beep, noise, fanfare, scream, bonk, horn, whistle, bleat, weddingHorn, cucaracha, splash, squeak, pops, crunch, neigh } from './audio.js';
+import { sound, media, audioInit, setSound, holdAudio, engine, crashSound, beep, noise, fanfare, scream, bonk, horn, whistle, bleat, weddingHorn, cucaracha, splash, squeak, pops, crunch, neigh } from './audio.js';
 import { music, playMusic, setMusic, pauseMusic } from './music.js';
 import { online, getBoard, submit, flushPending, newGroupCode, boardId } from './scores.js';
 import { pulse } from './pulse.js';
@@ -335,9 +335,14 @@ function friendsAI(T, dt) {
     } else if (T.lanes === 2 && f.target < 0 && !find(T.laneX[1], -3, 8, () => true)) {
       f.target = T.laneX[1];
     }
+    // rubber band: a friend far ahead eases off, one far behind catches up, so the race stays close
+    const lead = (f.travel - g.travel) / SEG;
+    const easy = g.kind === 'story' && g.chapter < 2 && lead > 30 ? 0.85 : 1;
+    const want = f.base * easy * (g.mode !== 'play' ? 1 : lead > 90 ? 0.7 : lead > 30 ? 0.85 : lead < -60 ? 1.12 : 1);
     const front = find(f.offset, 0, 3, slow);
     if (front) f.speed = Math.max(front.speed, f.speed - BASE_MAX * 0.6 * dt);
-    else f.speed = Math.min(f.base, f.speed + BASE_MAX * 0.2 * dt);
+    else if (f.speed > want) f.speed = Math.max(want, f.speed - BASE_MAX * 0.2 * dt);
+    else f.speed = Math.min(want, f.speed + BASE_MAX * 0.2 * dt);
     const d = f.target - f.offset;
     f.offset += Math.sign(d) * Math.min(Math.abs(d), dt * 1.4);
     f.travel += f.speed * dt;
@@ -424,7 +429,9 @@ function update(dt) {
   // black ice: the wheel barely answers and the bends push the car out
   const ice = opts.ice && pSeg.ice && (g.mode === 'play' || g.mode === 'ending') && Math.abs(g.playerX - pSeg.ice.center) < pSeg.ice.half + 0.1;
   g.playerX += dx * g.steer * (ice ? 0.3 : 1);
-  g.playerX -= dx * speedPct * pSeg.curve * (0.3 / st.grip) * (ice ? 1.8 : 1);
+  // the first two chapters teach the bends: they pull the car out half as hard
+  const easy = g.kind === 'story' && g.chapter < 2 ? 0.5 : 1;
+  g.playerX -= dx * speedPct * pSeg.curve * (0.3 / st.grip) * (ice ? 1.8 : easy);
   if (ice) {
     g.playerX += Math.sin(g.time * 6) * dt * 0.25 * speedPct;
     if (g.time > g.iceSound) {
@@ -457,8 +464,17 @@ function update(dt) {
         g.scrapeCool = 0.25;
       }
     }
+    // the kerb past the shoulder: the car never ends up inside the houses
+    if (Math.abs(g.playerX) > 1.7) {
+      g.playerX = Math.sign(g.playerX) * 1.7;
+      g.shake = Math.max(g.shake, 0.25);
+      if (g.scrapeCool <= 0) {
+        noise(0.15, 0.1, 2600);
+        g.scrapeCool = 0.25;
+      }
+    }
     if (g.playerX < -1 || g.playerX > 1) {
-      const limit = (BASE_MAX / 4) * st.offroad;
+      const limit = (BASE_MAX / 3) * st.offroad;
       if (g.speed > limit) g.speed -= (BASE_MAX / 2 / st.offroad) * dt;
       for (const s of pSeg.sprites) {
         if (s.off || s.def.walker || s.def.breakable || s.def.cop || s.def.sheep) continue;
@@ -491,6 +507,9 @@ function update(dt) {
           if (c.wedding) popBalloons(c);
           g.speed = c.speed * (c.speed / g.speed);
           g.position = wrap(c.z - SEG * 0.4 - PLAYER_Z, T.length);
+          // glance off to the freer side, so a player who does not steer is not stuck behind it
+          const side = g.playerX === c.offset ? (c.offset > 0 ? -1 : 1) : Math.sign(g.playerX - c.offset);
+          g.playerX = clamp(g.playerX + side * 0.3, -1, 1);
           c.rel = null;
           break hit;
         }
@@ -588,11 +607,12 @@ function update(dt) {
     g.travel += moved;
   }
   if (g.mode === 'play') {
-    g.timeLeft -= dt;
+    // a story chapter never ends on the clock, the time only decides the stars
+    if (g.kind !== 'story') g.timeLeft -= dt;
     g.elapsed += dt;
     const seg = T.segAt(g.position + PLAYER_Z);
     if (seg.zone === g.nextZone && (g.nextZone !== 0 || seg.i >= GATE_AT)) enterZone(seg.zone);
-    if (g.mode === 'play' && g.timeLeft <= 0) {
+    if (g.mode === 'play' && g.kind !== 'story' && g.timeLeft <= 0) {
       g.timeLeft = 0;
       g.mode = 'ending';
       pulse(g.kind === 'story' ? 'fail' : 'timeout', g.pulseArg);
@@ -789,7 +809,8 @@ function copsAndSheep(T, pSeg, dt) {
             s.say = t('copStop');
             s.sayUntil = g.time + 2;
           }
-          if (g.mode === 'play') g.timeLeft = Math.max(0, g.timeLeft - 3);
+          if (g.mode === 'play' && g.kind === 'story') g.elapsed += 3;
+          else if (g.mode === 'play') g.timeLeft = Math.max(0, g.timeLeft - 3);
           // the timer itself shows the fine for a moment
           g.penUntil = g.time + 1.3;
           whistle();
@@ -1092,10 +1113,10 @@ function enterZone(z) {
   if (z === 0) g.lap++;
   const factor = g.kind === 'free' ? Math.pow(0.9, g.lap - 1) : 1;
   const bonus = Math.max(7, Math.round((T.zoneSeconds[z] + 3) * factor));
-  g.timeLeft += bonus;
+  if (g.kind !== 'story') g.timeLeft += bonus;
   if (g.clean) award(500);
   g.clean = true;
-  banner(L(g.map.zones[z].name), (z === 0 ? t('lap', { n: g.lap }) + '  ' : '') + t('checkpoint', { s: bonus }));
+  banner(L(g.map.zones[z].name), g.kind === 'story' ? '' : (z === 0 ? t('lap', { n: g.lap }) + '  ' : '') + t('checkpoint', { s: bonus }));
   beep(660, 0.1);
   setTimeout(() => beep(990, 0.14), 110);
   g.nextZone = (z + 1) % T.zoneStart.length;
@@ -1108,18 +1129,22 @@ function crash() {
   g.crashCool = 0.6;
   g.shake = 1;
   g.flash = 0.6;
-  noise(0.35);
+  crashSound();
   if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) {
     try { navigator.vibrate(60); } catch { /* not allowed */ }
   }
+}
+
+function starsFor(time) {
+  const ideal = g.track.segments.length / 58;
+  return time <= ideal * 1.15 ? 3 : time <= ideal * 1.35 ? 2 : 1;
 }
 
 function finish() {
   g.mode = 'finish';
   pulse('finish', g.pulseArg);
   g.endTimer = 1.5;
-  const ideal = g.track.segments.length / 58;
-  const stars = g.elapsed <= ideal * 1.15 ? 3 : g.elapsed <= ideal * 1.35 ? 2 : 1;
+  const stars = starsFor(g.elapsed);
   const prevTime = progress.times[g.chapter];
   g.result = { place: friendsAhead() + 1, stars, time: g.elapsed, best: prevTime == null || g.elapsed < prevTime, prevStars: progress.stars[g.chapter] || 0 };
   progress.stars[g.chapter] = Math.max(progress.stars[g.chapter] || 0, stars);
@@ -1130,6 +1155,7 @@ function finish() {
   if (stars === 3) unlock('three_stars');
   banner(t('finishTitle'));
   fanfare();
+  if (stars >= 2 || g.result.place === 1) renderer.burstConfetti();
 }
 
 // ---------- start, pause, menus ----------
@@ -1193,6 +1219,7 @@ function startRace(opts) {
   clearInputs();
   ui.replaceChildren();
   showHud(true);
+  if (!g.autoDrive) showCoach();
   banner('3');
   beep(440, 0.12);
 }
@@ -1250,21 +1277,52 @@ window.addEventListener('keydown', unlockAudio, { once: true });
 
 // ---------- HUD ----------
 
-const hud = { gain: $('hudGain'), style: $('hudStyle'), place: $('hudPlace'), root: $('hud'), speed: $('hudSpeed'), kmh: $('hudKmh'), dist: $('hudDist'), time: $('hudTime'), zone: $('hudZone'), nitro: $('hudNitro') };
+const hud = { gain: $('hudGain'), style: $('hudStyle'), place: $('hudPlace'), root: $('hud'), speed: $('hudSpeed'), kmh: $('hudKmh'), dist: $('hudDist'), time: $('hudTime'), pace: $('hudPace'), zone: $('hudZone'), nitro: $('hudNitro') };
 const cache = {};
 function setText(key, node, value) {
   if (cache[key] === value) return;
   cache[key] = value;
   node.textContent = value;
 }
+// the first races show how to drive right on the road: keys on a computer, the two halves on a phone
+const coachEl = $('coach');
+let coachSteered = false;
+function showCoach() {
+  if ((progress.stats.coach || 0) >= 3) return;
+  progress.stats.coach = (progress.stats.coach || 0) + 1;
+  saveProgress();
+  coachSteered = false;
+  const key = (cap, label) => {
+    const k = el('div', 'coach-key');
+    k.append(el('b', '', cap), el('span', '', label));
+    return k;
+  };
+  const half = (side) => {
+    const h = el('div', 'coach-half ' + side);
+    h.append(el('b', '', side === 'left' ? '◀︎' : '▶︎'), el('span', '', t('coachHold')));
+    return h;
+  };
+  coachEl.className = 'coach ' + (isTouch ? 'touch' : 'keys');
+  coachEl.replaceChildren(...(isTouch ? [half('left'), half('right')] : [key('← →', t('coachSteer')), key('↑', t('coachNitro')), key('↓', t('coachBrake'))]), el('p', 'coach-gas', t('coachGas')));
+  coachEl.hidden = false;
+}
+function updateCoach() {
+  if (coachEl.hidden) return;
+  if (input.left || input.right) coachSteered = true;
+  if (g.mode === 'play' && (g.elapsed > 7 || (coachSteered && g.elapsed > 3))) coachEl.classList.add('out');
+  if (g.mode === 'play' && g.elapsed > 8) coachEl.hidden = true;
+}
+
 function showHud(on) {
   hud.root.hidden = !on;
+  if (!on) coachEl.hidden = true;
   $('nitroBtn').hidden = !(on && isTouch);
   $('hornBtn').hidden = !(on && isTouch);
   for (const k of Object.keys(cache)) delete cache[k];
 }
 function updateHud() {
   if (hud.root.hidden) return;
+  updateCoach();
   const T = g.track;
   setText('speed', hud.speed, String(Math.round((g.speed / BASE_MAX) * KMH_AT_MAX)));
   setText('kmh', hud.kmh, t('kmh'));
@@ -1277,9 +1335,17 @@ function updateHud() {
     setText('dist', hud.dist, `${km(g.distance)} ${t('km')}`);
   }
   const pen = g.time < g.penUntil && g.mode === 'play';
-  setText('time', hud.time, pen ? t('pen') : g.timeLeft < 10 ? g.timeLeft.toFixed(1) : String(Math.ceil(g.timeLeft)));
+  const story = g.kind === 'story';
+  if (story) setText('time', hud.time, pen ? t('pen') : clock(g.result ? g.result.time : g.elapsed).replace(/\.\d$/, ''));
+  else setText('time', hud.time, pen ? t('pen') : g.timeLeft < 10 ? g.timeLeft.toFixed(1) : String(Math.ceil(g.timeLeft)));
   hud.time.classList.toggle('pen', pen);
-  hud.time.classList.toggle('low', g.timeLeft < 6 && g.mode === 'play');
+  hud.time.classList.toggle('low', !story && g.timeLeft < 6 && g.mode === 'play');
+  // story: the stars still in reach, a star goes dark once the clock passes its time
+  const pace = story ? starsFor(g.result ? g.result.time : g.elapsed) : 0;
+  if (cache.pace !== pace) {
+    cache.pace = pace;
+    hud.pace.replaceChildren(...(story ? [0, 1, 2].map((k) => el('i', k < pace ? 'on' : '', '★')) : []));
+  }
   setText('zone', hud.zone, L(g.map.zones[Math.max(0, T.segAt(g.position + PLAYER_Z).zone)].name));
   // after the line the place is fixed, friends still coasting should not change it
   setText('place', hud.place, t('place', { n: g.result ? g.result.place : friendsAhead() + 1, m: FRIENDS.length + 1 }));
@@ -1816,7 +1882,11 @@ function showFinish() {
   currentScreen = null;
   const sendBox = r.best ? scoreBox(boardId('story', i), Math.round(r.time * 100) / 100) : null;
   const styleLine = styleResult(boardId('story', i));
-  panel('', el('h2', '', L(ch.title)), starsRow(r.stars), el('p', 'over-dist', clock(r.time)), el('p', r.place === 1 ? 'record' : 'best', r.place === 1 ? t('firstPlace') : t('finishPlace', { n: r.place, m: FRIENDS.length + 1 })), r.best && progress.times[i] === r.time && r.prevStars ? el('p', 'record', t('record')) : null, styleLine, el('p', 'tag', L(ch.outro)), i + 1 === CHAPTERS.length ? el('p', 'note', t('storyEnd')) : null, sendBox, row, note);
+  // the stars land one by one, each with a higher chime
+  const stars = starsRow(r.stars);
+  stars.classList.add('pop');
+  for (let k = 0; k < r.stars; k++) setTimeout(() => beep(784 * Math.pow(1.26, k), 0.3, 'triangle', 0.1), 250 + k * 280);
+  panel('', el('h2', '', L(ch.title)), stars, el('p', 'over-dist', clock(r.time)), el('p', r.place === 1 ? 'record' : 'best', r.place === 1 ? t('firstPlace') : t('finishPlace', { n: r.place, m: FRIENDS.length + 1 })), r.best && progress.times[i] === r.time && r.prevStars ? el('p', 'record', t('record')) : null, styleLine, el('p', 'tag', L(ch.outro)), i + 1 === CHAPTERS.length ? el('p', 'note', t('storyEnd')) : null, sendBox, row, note);
 }
 
 function styleResult(board) {
