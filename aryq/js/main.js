@@ -35,7 +35,7 @@ function start() {
   S.advance(g, 0.01); // the first garden appears
   pickGhost(performance.now(), true);
   updateHud();
-  if (DEBUG) window.__aryq = { g, S, view, step: (d) => S.advance(g, d) };
+  if (DEBUG) window.__aryq = { g, S, view, state, step: (d) => S.advance(g, d) };
 }
 
 function say(text, ms = 2200) {
@@ -48,19 +48,19 @@ function say(text, ms = 2200) {
 const TEXT = {
   ru: {
     title: 'Арык',
-    tag: 'Сады и юрты хотят пить. Пальцем копай арык от реки к ним. Вода течёт вниз, а вверх арык поднимается не больше чем на один слой.',
+    tag: 'Сады и юрты хотят пить. Пальцем копай арык от реки к ним. Вода течёт вниз, а вверх арык поднимается не выше одной линии высоты.',
     play: 'Играть',
     again: 'Ещё раз',
     over: 'Сад засох',
     when: 'Год {y}, {s}',
     result: 'Урожай {h} · садов {n}',
     best: 'Лучший урожай {b}',
-    hud: '{s} · год {y}',
+    hud: '{s} · {y}-й год',
     spring: 'весна',
     summer: 'лето',
     autumn: 'осень',
     winter: 'зима',
-    high: 'Там слишком высоко: арык поднимается не больше чем на один слой. Светлым подсвечено, куда можно.',
+    high: 'Там слишком высоко: арык поднимается не выше одной линии высоты. Светлым подсвечено, куда можно.',
     up: 'Туда вода не стечёт: там выше.',
     ice: 'По леднику не копают.',
     object: 'Тут занято.',
@@ -83,19 +83,19 @@ const TEXT = {
   },
   en: {
     title: 'Aryk',
-    tag: 'Orchards and yurts are thirsty. Drag from the river to dig a canal to them. Water runs downhill, and a canal can climb no more than one layer.',
+    tag: 'Orchards and yurts are thirsty. Drag from the river to dig a canal to them. Water runs downhill, and a canal can climb at most one contour line.',
     play: 'Play',
     again: 'Try again',
     over: 'An orchard dried up',
     when: 'Year {y}, {s}',
     result: 'Harvest {h} · orchards {n}',
     best: 'Best harvest {b}',
-    hud: '{s} · year {y}',
+    hud: '{s} · Y{y}',
     spring: 'spring',
     summer: 'summer',
     autumn: 'autumn',
     winter: 'winter',
-    high: 'Too high: a canal climbs no more than one layer. The light cells show where you can dig.',
+    high: 'Too high: a canal climbs at most one contour line. The light cells show where you can dig.',
     up: 'Water will not run there: it is higher.',
     ice: 'You cannot dig into the glacier.',
     object: 'Something is already here.',
