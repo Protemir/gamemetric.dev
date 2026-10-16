@@ -26,6 +26,7 @@ const MAP = arg('map', 'astana');
 const TITLE = arg('title', 'Asem Road');
 const FFMPEG = arg('ffmpeg', 'ffmpeg');
 const TRY = process.argv.includes('--try');
+const ONLY = arg('only', null);
 const out = path.join(root, 'dist', 'covers');
 fs.mkdirSync(out, { recursive: true });
 
@@ -122,7 +123,7 @@ async function shot(file, format = 'png') {
 const COVER_CSS = {
   landscape: '.og-title { left: auto; right: 96px; top: 84px; } .og-title b { font-size: 176px; }',
   portrait: '.og-title { left: 0; right: 0; top: 270px; justify-items: center; } .og-title b { font-size: 112px; text-align: center; }',
-  square: '.og-title { left: 0; right: 0; top: 180px; justify-items: center; } .og-title b { font-size: 112px; }',
+  square: '.og-title { left: 0; right: 0; top: 270px; justify-items: center; } .og-title b { font-size: 104px; }',
 };
 async function cover(map, kind, width, height, file) {
   await open(`/?debug&og&lang=en&map=${map}`, width, height);
@@ -144,6 +145,9 @@ const SIZES = { landscape: [1920, 1080], portrait: [800, 1200], square: [800, 80
 try {
   if (TRY) {
     for (const map of ['city', 'medeu', 'shymbulak', 'kapchagay', 'charyn', 'kolsai', 'astana']) await cover(map, 'landscape', 1920, 1080, path.join(out, `try-${map}.png`));
+  } else if (ONLY) {
+    // --only square: redraw one cover, no videos
+    await cover(MAP, ONLY, ...SIZES[ONLY], path.join(out, `cover-${ONLY}.png`));
   } else {
     for (const [kind, [w, h]] of Object.entries(SIZES)) await cover(MAP, kind, w, h, path.join(out, `cover-${kind}.png`));
 
