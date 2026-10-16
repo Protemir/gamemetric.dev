@@ -1166,6 +1166,8 @@ function drawQuarter(c, r, cols, extra) {
 }
 
 // draw a picture into a grid: one palette color index per cell, -1 where it is empty
+const clampPx = (v, S) => (v < 0 ? 0 : v >= S ? S - 1 : v);
+
 export function sample(picture, N) {
   const S = 256;
   const cv = document.createElement('canvas');
@@ -1182,11 +1184,36 @@ export function sample(picture, N) {
     const v = parseInt(COLORS[n].slice(1), 16);
     return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
   });
-  const grid = new Int8Array(N * N).fill(-1);
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      const px = Math.floor(((x + 0.5) / N) * S);
-      const py = Math.floor(((y + 0.5) / N) * S);
+  // the picture fills the board: crop to what is drawn, keep its proportions,
+  // the longer side gets N cells (no wide empty margins around a small drawing)
+  let minX = S;
+  let minY = S;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++)
+      if (data[(y * S + x) * 4 + 3] >= 128) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+  if (maxX < 0) {
+    minX = minY = 0;
+    maxX = maxY = S - 1;
+  }
+  const bw = maxX - minX + 1;
+  const bh = maxY - minY + 1;
+  const W = bw >= bh ? N : Math.max(4, Math.round((N * bw) / bh));
+  const H = bh >= bw ? N : Math.max(4, Math.round((N * bh) / bw));
+  const cs = Math.max(bw / W, bh / H);
+  const ox = minX + (bw - W * cs) / 2;
+  const oy = minY + (bh - H * cs) / 2;
+  const grid = new Int8Array(W * H).fill(-1);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const px = clampPx(Math.floor(ox + (x + 0.5) * cs), S);
+      const py = clampPx(Math.floor(oy + (y + 0.5) * cs), S);
       const o = (py * S + px) * 4;
       if (data[o + 3] < 128) continue;
       let best = 0;
@@ -1203,8 +1230,23 @@ export function sample(picture, N) {
         index.set(name, palette.length);
         palette.push(name);
       }
-      grid[y * N + x] = index.get(name);
+      grid[y * W + x] = index.get(name);
     }
   }
-  return { grid, palette: palette.map((n) => COLORS[n]), W: N, H: N };
+  // thin tips that vanish at this size leave empty rows or columns: drop them
+  let x0 = 0;
+  let x1 = W - 1;
+  let y0 = 0;
+  let y1 = H - 1;
+  const rowEmpty = (y) => { for (let x = x0; x <= x1; x++) if (grid[y * W + x] >= 0) return false; return true; };
+  const colEmpty = (x) => { for (let y = y0; y <= y1; y++) if (grid[y * W + x] >= 0) return false; return true; };
+  while (y0 < y1 && rowEmpty(y0)) y0++;
+  while (y1 > y0 && rowEmpty(y1)) y1--;
+  while (x0 < x1 && colEmpty(x0)) x0++;
+  while (x1 > x0 && colEmpty(x1)) x1--;
+  const W2 = x1 - x0 + 1;
+  const H2 = y1 - y0 + 1;
+  const out = new Int8Array(W2 * H2);
+  for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) out[y * W2 + x] = grid[(y + y0) * W + x + x0];
+  return { grid: out, palette: palette.map((n) => COLORS[n]), W: W2, H: H2 };
 }

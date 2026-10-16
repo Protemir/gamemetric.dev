@@ -33,7 +33,9 @@ const TEXT = {
     hintHidden: 'Дальние кружки скрыты — запоминай цвета',
     hintHidden1: 'Виден только первый кружок, на стоянке 3 места',
     almost: 'Выбито {p}% — почти!',
-    clean: '★ Чисто: без стоянки',
+    clean: 'Без стоянки — три звезды!',
+    starsTip1: 'Пройди без стоянки, и будет три звезды',
+    starsTotal: '★ {n} из {m}',
     back: 'Назад',
     locked: 'Пройди предыдущие уровни',
   },
@@ -60,7 +62,9 @@ const TEXT = {
     hintHidden: 'Shooters further back are hidden — remember the colors',
     hintHidden1: 'Only the front shooter shows now, and the dock has 3 places',
     almost: '{p}% cleared — so close!',
-    clean: '★ Clean: never used the dock',
+    clean: 'Never used the dock — three stars!',
+    starsTip1: 'Clear it without the dock for three stars',
+    starsTotal: '★ {n} of {m}',
     back: 'Back',
     locked: 'Finish the earlier levels first',
   },
@@ -78,7 +82,23 @@ const L = (o) => (o && (o[lang] || o.en)) || '';
 
 // ---------- state ----------
 
-const progress = Object.assign({ done: [], level: 0 }, store.get('oyu.progress', {}));
+const progress = Object.assign({ done: [], level: 0, stars: {} }, store.get('oyu.progress', {}));
+if (!progress.stars || typeof progress.stars !== 'object') progress.stars = {};
+// older saves: a finished level counts as one star
+for (const i of progress.done) if (!progress.stars[i]) progress.stars[i] = 1;
+const totalStars = () => Object.values(progress.stars).reduce((s, n) => s + n, 0);
+// three for a clean solve, two if the dock helped once or twice, one otherwise
+const starsFor = (g) => (g.docked === 0 ? 3 : g.docked <= 2 ? 2 : 1);
+
+function starRow(n, small) {
+  const row = el('div', 'stars' + (small ? ' small' : ''));
+  for (let k = 0; k < 3; k++) {
+    const s = el('span', k < n ? 'on' : '', '★');
+    if (!small) s.style.animationDelay = (0.25 + k * 0.28) + 's';
+    row.append(s);
+  }
+  return row;
+}
 const save = () => store.set('oyu.progress', progress);
 const unlocked = () => Math.min(LEVEL_COUNT - 1, Math.max(progress.done.length ? Math.max(...progress.done) + 1 : 0, progress.level));
 
@@ -222,6 +242,7 @@ function screenMenu() {
     ornamentLine(),
     el('p', 'tag', t('tag')),
     button(`${t('play')} · ${t('level', { n: n + 1 })}`, 'primary', () => startLevel(n)),
+    el('p', 'stars-total', t('starsTotal', { n: totalStars(), m: LEVEL_COUNT * 3 })),
     button(`${t('carpet')} · ${t('carpetSub', { n: progress.done.length, m: LEVEL_COUNT })}`, '', screenCarpet),
     langChips(screenMenu),
     made,
@@ -265,6 +286,7 @@ function screenCarpet() {
     } else b.textContent = i === next ? '▶' : '?';
     const num = el('span', 'num', String(i + 1));
     b.append(num);
+    if (done) b.append(starRow(progress.stars[i] || 1, true));
     if (done || i === next) b.addEventListener('click', () => startLevel(i));
     else b.title = t('locked');
     grid.append(b);
@@ -274,6 +296,7 @@ function screenCarpet() {
 
 function screenWin() {
   mode = 'won';
+  showHint(null);
   const i = level.index;
   pulse('win', i + 1);
   if (!progress.done.includes(i)) {
@@ -299,8 +322,12 @@ function screenWin() {
   track.append(fill);
   bar.append(barP, track);
   const last = i + 1 >= LEVEL_COUNT;
-  const clean = game && game.docked === 0 ? el('p', 'clean', t('clean')) : null;
-  panel('', el('h2', '', t('done')), el('p', 'sub', L(level.name)), prev, clean, bar, last ? null : button(t('next'), 'primary', () => startLevel(i + 1)), button(t('menu'), '', screenMenu));
+  const got = game ? starsFor(game) : 1;
+  progress.stars[i] = Math.max(progress.stars[i] || 0, got);
+  save();
+  for (let k = 0; k < got; k++) setTimeout(() => sfx.star(k), 250 + k * 280);
+  const clean = el('p', 'clean', got === 3 ? t('clean') : t('starsTip1'));
+  panel('', el('h2', '', t('done')), starRow(got), el('p', 'sub', L(level.name)), prev, clean, bar, last ? null : button(t('next'), 'primary', () => startLevel(i + 1)), button(t('menu'), '', screenMenu));
 }
 
 function screenLost() {

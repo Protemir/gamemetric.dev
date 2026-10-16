@@ -40,7 +40,7 @@ async function scene(level, w, h, kind, title = true) {
   await B.open(`${S.url}/oyu/?debug&nopulse&lang=en&level=${level}`, w, h);
   await B.js(`(async () => {
     const s = document.createElement('style');
-    s.textContent = '#hud, #hint { display: none !important; } .cover-title { position: fixed; z-index: 50; margin: 0; font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; font-weight: 900; letter-spacing: -0.03em; line-height: 1; background: linear-gradient(180deg, #ffe08a, #f4b93a 55%, #e0802e); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 8px 24px rgba(0,0,0,0.6)); ${TITLE_CSS[kind]} }';
+    s.textContent = '#hud, #hint { display: none !important; } .cover-title { position: fixed; z-index: 50; margin: 0; font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; font-weight: 900; letter-spacing: -0.03em; line-height: 1; color: #ffcf45; -webkit-text-stroke: 0.06em #8e1f2c; paint-order: stroke fill; text-shadow: 0 0.06em 0 #8e1f2c, 0 0.1em 0.25em rgba(80,20,60,0.45); ${TITLE_CSS[kind]} }';
     document.head.append(s);
     ${title ? `const t = document.createElement('p'); t.className = 'cover-title'; t.textContent = ${JSON.stringify(TITLE)}; document.body.append(t);` : ''}
     const O = window.__oyu;

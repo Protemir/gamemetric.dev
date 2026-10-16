@@ -19,8 +19,9 @@ function specFor(i) {
     const k = i - (i >= 3 ? Math.floor(i / 3) : 0);
     picture = PICTURES[k % PICTURES.length];
   }
-  const sizes = [8, 10, 10, 10, 12, 12, 12, 14, 14, 14, 16, 16, 16, 16, 18, 18, 18, 18, 20, 20];
-  const N = i < sizes.length ? sizes[i] : 20 + (i % 3);
+  // the longer side of the picture; pictures now fill the board, so fewer cells give the same work
+  const sizes = [8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17];
+  const N = i < sizes.length ? sizes[i] : 17 + (i % 3);
   const queues = i === 0 ? 1 : i < 4 ? 2 : i < 12 ? 3 : i % 4 === 0 ? 4 : 3;
   const cap = Math.min(48, 16 + i * 2);
   // mistakes get more expensive: fewer places in the dock and on the belt

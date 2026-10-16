@@ -230,6 +230,15 @@ export function win() {
   pluck(base * 3, 0.75, 0.22, 1.6);
 }
 
+// one bright chime per earned star, a step higher each time
+export function star(k) {
+  if (!ready()) return;
+  const f = 784 * Math.pow(2, [0, 4, 7][Math.min(2, k)] / 12);
+  tone('triangle', f, f, 0.22, 0.16);
+  tone('sine', f * 2, f * 2, 0.3, 0.07, 0.02);
+  hiss(0.05, 0.05, 7000, 4000, 0, 3);
+}
+
 export function stitch() {
   if (!ready()) return;
   hiss(0.03, 0.04, 6000, 4000, 0, 4);

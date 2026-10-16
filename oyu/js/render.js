@@ -8,6 +8,27 @@ const isDark = (hex) => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b < 70;
 };
 
+// light colors get a soft dark edge, or they melt into the cream carpet
+const isLight = (hex) => {
+  const [r, g, b] = hexToRgb(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 205;
+};
+
+// the look: a red-and-gold felt carpet on a light sky
+const THEME = {
+  sky: ['#9fdcff', '#b9c6ff', '#e4c6ff'],
+  carpet: '#fff3dc',
+  carpetDot: 'rgba(150, 80, 40, 0.09)',
+  border: '#c62f3d',
+  borderDark: '#8e1f2c',
+  gold: '#f5be3c',
+  rail: '#7d1f33',
+  railTop: '#a63048',
+  socket: 'rgba(255, 255, 255, 0.55)',
+  socketEdge: 'rgba(125, 31, 51, 0.28)',
+  lane: 'rgba(255, 255, 255, 0.38)',
+};
+
 const TAU = Math.PI * 2;
 const SIDE_ANGLE = [-Math.PI / 2, Math.PI, Math.PI / 2, 0];
 
@@ -34,6 +55,7 @@ export class Renderer {
     this.win = null;
     this.dockFlash = 0;
     this.pipShake = 0;
+    this.bump = 0;
     this.onArrive = null;
   }
 
@@ -115,6 +137,13 @@ export class Renderer {
     const room = p.y + p.h - qTop - qr * 0.9;
     this.behind = clamp(Math.floor(room / (qr * 0.95)), 0, 3);
     this.queueStep = qr * 0.95;
+    // side panel on wide screens: the dock and the queues sit in the middle of the height
+    if (!p.portrait) {
+      const bottom = qTop + qr * 1.2 + this.behind * this.queueStep + qr * 1.3;
+      const shift = Math.max(0, (p.y + p.h - bottom) * 0.5);
+      for (const d of this.dockPos) d.y += shift;
+      for (const q of this.queuePos) q.y += shift;
+    }
     // deeper in the queue the colors are hidden (later levels): only the front ones are known
     const idx = g.level.index;
     this.hideFrom = idx >= 15 ? 1 : idx >= 6 ? 2 : 99;
@@ -136,15 +165,15 @@ export class Renderer {
     const cv = offscreen(this.w * dpr, this.h * dpr);
     const c = cv.getContext('2d');
     c.scale(dpr, dpr);
-    const g = c.createLinearGradient(0, 0, 0, this.h);
-    g.addColorStop(0, '#2a1640');
-    g.addColorStop(0.55, '#1a1233');
-    g.addColorStop(1, '#0e1a2c');
+    const g = c.createLinearGradient(0, 0, this.w * 0.3, this.h);
+    g.addColorStop(0, THEME.sky[0]);
+    g.addColorStop(0.55, THEME.sky[1]);
+    g.addColorStop(1, THEME.sky[2]);
     c.fillStyle = g;
     c.fillRect(0, 0, this.w, this.h);
     // faint mirrored ornament tiles
-    c.globalAlpha = 0.06;
-    c.strokeStyle = '#f4b93a';
+    c.globalAlpha = 0.22;
+    c.strokeStyle = '#ffffff';
     c.lineWidth = 2;
     const t = 64;
     for (let y = -t; y < this.h + t; y += t) {
@@ -165,8 +194,8 @@ export class Renderer {
     }
     c.globalAlpha = 1;
     const v = c.createRadialGradient(this.w / 2, this.h * 0.42, Math.min(this.w, this.h) * 0.2, this.w / 2, this.h / 2, Math.max(this.w, this.h) * 0.75);
-    v.addColorStop(0, 'rgba(0,0,0,0)');
-    v.addColorStop(1, 'rgba(0,0,0,0.55)');
+    v.addColorStop(0, 'rgba(255,255,255,0.25)');
+    v.addColorStop(1, 'rgba(60,40,120,0.18)');
     c.fillStyle = v;
     c.fillRect(0, 0, this.w, this.h);
     return cv;
@@ -200,10 +229,10 @@ export class Renderer {
     c.beginPath();
     c.ellipse(x + w * 0.3, x + w * 0.28, w * 0.14, w * 0.08, -0.5, 0, TAU);
     c.fill();
-    if (isDark(col)) {
+    if (isLight(col)) {
       roundRect(c, x + 0.5, x + 0.5, w - 1, w - 1, r);
       c.lineWidth = Math.max(1, s * 0.05);
-      c.strokeStyle = 'rgba(200,190,240,0.45)';
+      c.strokeStyle = 'rgba(110,70,40,0.35)';
       c.stroke();
     }
     return cv;
@@ -220,7 +249,7 @@ export class Renderer {
     const cy = r + pad;
     // soft shadow
     const sh = c.createRadialGradient(cx, cy + r * 0.35, r * 0.4, cx, cy + r * 0.35, r * 1.25);
-    sh.addColorStop(0, 'rgba(0,0,0,0.45)');
+    sh.addColorStop(0, 'rgba(40,20,60,0.3)');
     sh.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = sh;
     c.fillRect(0, 0, size, size);
@@ -254,13 +283,27 @@ export class Renderer {
     const cv = offscreen((g.W * cell + pad * 2) * dpr, (g.H * cell + pad * 2) * dpr);
     const c = cv.getContext('2d');
     c.scale(dpr, dpr);
-    roundRect(c, 0, 0, g.W * cell + pad * 2, g.H * cell + pad * 2, cell * 0.6);
-    c.fillStyle = 'rgba(8,6,18,0.55)';
+    const W = g.W * cell + pad * 2;
+    const H = g.H * cell + pad * 2;
+    // a felt carpet: red border, a gold thread, cream field
+    roundRect(c, 0, 0, W, H, cell * 0.6);
+    c.fillStyle = THEME.border;
     c.fill();
-    c.lineWidth = 1.5;
-    c.strokeStyle = 'rgba(255,255,255,0.08)';
+    const inset = pad * 0.55;
+    roundRect(c, inset, inset, W - inset * 2, H - inset * 2, cell * 0.4);
+    c.fillStyle = THEME.carpet;
+    c.fill();
+    c.lineWidth = Math.max(1.5, cell * 0.06);
+    c.strokeStyle = THEME.gold;
     c.stroke();
-    c.fillStyle = 'rgba(255,255,255,0.045)';
+    // soft felt shading toward the edges
+    const sh = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.7);
+    sh.addColorStop(0, 'rgba(255,255,255,0.0)');
+    sh.addColorStop(1, 'rgba(160,90,40,0.12)');
+    roundRect(c, inset, inset, W - inset * 2, H - inset * 2, cell * 0.4);
+    c.fillStyle = sh;
+    c.fill();
+    c.fillStyle = THEME.carpetDot;
     for (let y = 0; y < g.H; y++) {
       for (let x = 0; x < g.W; x++) {
         roundRect(c, pad + x * cell + cell * 0.2, pad + y * cell + cell * 0.2, cell * 0.6, cell * 0.6, cell * 0.15);
@@ -489,6 +532,7 @@ export class Renderer {
         const c = this.cellCenter(p.cell);
         this.burst(c.x, c.y, p.color, 7, this.cell * 0.55, 0.9);
         this.ring(c.x, c.y, p.color, this.cell * 0.7);
+        this.bump = Math.min(1, this.bump + 0.22);
         if (this.onArrive) this.onArrive(p);
       }
     }
@@ -507,6 +551,12 @@ export class Renderer {
     this.particles = this.particles.filter((q) => q.life < q.max);
     this.dockFlash = Math.max(0, this.dockFlash - dt * 1.5);
     this.pipShake = Math.max(0, this.pipShake - dt * 3);
+    this.bump = Math.max(0, this.bump - dt * 3.5);
+    // sparkles behind shooters running along the rail
+    for (const t of this.tokens.values()) {
+      if (t.kind !== 'belt' || !t.sh || t.sh.where !== 'belt' || Math.random() > dt * 22 || this.particles.length > 700) continue;
+      this.particles.push({ kind: 'spark', x: t.x + (Math.random() - 0.5) * this.tokenR, y: t.y + (Math.random() - 0.5) * this.tokenR, vx: 0, vy: -20, life: 0, max: 0.45, size: 2 + Math.random() * 2.5, color: g.level.palette[t.color] });
+    }
     if (this.win) {
       this.win.t += dt;
       if (!this.win.done && this.win.t > this.win.end + 0.35) {
@@ -527,10 +577,18 @@ export class Renderer {
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (!g) return;
     const { cell } = this;
-    // board
+    // board (pulses a little on quick combos)
+    const bump = this.bump * this.bump * 0.014;
+    const bcx = this.bx + (g.W * cell) / 2;
+    const bcy = this.by + (g.H * cell) / 2;
+    c.save();
+    c.translate(bcx, bcy);
+    c.scale(1 + bump, 1 + bump);
+    c.translate(-bcx, -bcy);
     const bb = this.boardBg;
     c.drawImage(bb.cv, this.bx - bb.pad, this.by - bb.pad, bb.cv.width / dpr, bb.cv.height / dpr);
     if (!this.win) c.drawImage(this.blocks, this.bx, this.by, g.W * cell, g.H * cell);
+    c.restore();
     this.drawTrack();
     // cover mode (tools/covers.mjs): only the picture and the belt, no dock or queues
     if (!this.cover) this.drawPanel();
@@ -539,7 +597,6 @@ export class Renderer {
     for (const t of list) this.drawToken(t);
     // shots
     c.save();
-    c.globalCompositeOperation = 'lighter';
     for (const p of this.projectiles) {
       const u = easeOut(clamp(p.t / p.dur, 0, 1));
       const x = lerp(p.x0, p.x1, u);
@@ -570,17 +627,22 @@ export class Renderer {
     const g = this.game;
     c.save();
     roundRect(c, t.x0, t.y0, t.x1 - t.x0, t.y1 - t.y0, t.r);
-    c.lineWidth = tokenR * 1.7;
-    c.strokeStyle = 'rgba(5,3,12,0.55)';
+    // a lacquered rail around the carpet
+    c.lineWidth = tokenR * 1.75;
+    c.strokeStyle = 'rgba(60,20,40,0.22)';
+    c.translate(0, 3);
     c.stroke();
-    c.lineWidth = tokenR * 1.7 - 4;
-    c.strokeStyle = 'rgba(60,44,92,0.55)';
+    c.translate(0, -3);
+    c.strokeStyle = THEME.rail;
+    c.stroke();
+    c.lineWidth = tokenR * 1.75 - 6;
+    c.strokeStyle = THEME.railTop;
     c.stroke();
     // moving dashes show which way the belt runs
     c.setLineDash([tokenR * 0.5, tokenR * 0.9]);
     c.lineDashOffset = -this.time * (g.speed * this.cell * 0.55);
-    c.lineWidth = 2.5;
-    c.strokeStyle = 'rgba(255,214,140,0.28)';
+    c.lineWidth = 3;
+    c.strokeStyle = 'rgba(255,214,120,0.75)';
     c.stroke();
     c.setLineDash([]);
     c.restore();
@@ -593,7 +655,7 @@ export class Renderer {
     for (let k = 0; k < g.cap; k++) {
       c.beginPath();
       c.arc(px + k * pipR * 3 + shake, py, pipR, 0, TAU);
-      c.fillStyle = k < g.onBelt ? '#ffd27a' : 'rgba(255,255,255,0.14)';
+      c.fillStyle = k < g.onBelt ? THEME.border : 'rgba(125,31,51,0.18)';
       c.fill();
     }
   }
@@ -607,10 +669,10 @@ export class Renderer {
       c.beginPath();
       c.arc(d.x, d.y, dr * 1.08, 0, TAU);
       const flash = this.dockFlash;
-      c.fillStyle = flash > 0 ? `rgba(${Math.round(120 + 135 * flash)},30,50,0.6)` : 'rgba(0,0,0,0.35)';
+      c.fillStyle = flash > 0 ? `rgba(${Math.round(200 + 55 * flash)},60,70,${0.4 + flash * 0.4})` : THEME.socket;
       c.fill();
-      c.lineWidth = 1.5;
-      c.strokeStyle = g.dock[j] ? 'rgba(255,255,255,0.0)' : 'rgba(255,255,255,0.12)';
+      c.lineWidth = 2;
+      c.strokeStyle = THEME.socketEdge;
       c.stroke();
     }
     // queue lanes
@@ -618,8 +680,11 @@ export class Renderer {
       const qp = this.queuePos[q];
       const h = this.qr * 1.2 + this.behind * this.queueStep;
       roundRect(c, qp.x - this.qr * 1.25, qp.y - this.qr * 1.25, this.qr * 2.5, h + this.qr * 1.25, this.qr * 0.6);
-      c.fillStyle = 'rgba(0,0,0,0.22)';
+      c.fillStyle = THEME.lane;
       c.fill();
+      c.lineWidth = 1.5;
+      c.strokeStyle = 'rgba(255,255,255,0.6)';
+      c.stroke();
     }
   }
 
@@ -679,6 +744,18 @@ export class Renderer {
         const s = q.size * (q.flutter ? 1 : 1 - u * 0.5);
         c.fillRect(-s / 2, -s / 2, s, q.flutter ? s * 0.55 : s);
         c.restore();
+      } else if (q.kind === 'spark') {
+        q.y += q.vy * (1 / 60);
+        c.globalAlpha = (1 - u) * 0.9;
+        c.fillStyle = '#ffffff';
+        c.beginPath();
+        c.arc(q.x, q.y, q.size * (1 - u * 0.6), 0, TAU);
+        c.fill();
+        c.globalAlpha = (1 - u) * 0.6;
+        c.fillStyle = q.color;
+        c.beginPath();
+        c.arc(q.x, q.y, q.size * 1.8 * (1 - u * 0.4), 0, TAU);
+        c.fill();
       } else if (q.kind === 'ring') {
         c.globalAlpha = (1 - u) * 0.8;
         c.lineWidth = 2.5 * (1 - u) + 0.5;
@@ -735,7 +812,7 @@ export class Renderer {
     c.save();
     c.globalAlpha = 1 - k;
     c.lineWidth = 3;
-    c.strokeStyle = '#ffe2a0';
+    c.strokeStyle = THEME.border;
     c.beginPath();
     c.arc(h.x, h.y, h.r * (1 + k * 0.9), 0, TAU);
     c.stroke();
