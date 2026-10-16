@@ -246,3 +246,31 @@ export function lose() {
   if (!ready()) return;
   [7, 4, 2, 0].forEach((s, k) => pluck(165 * Math.pow(2, s / 12), k * 0.16, 0.26, 1.1));
 }
+
+// one soft blip per letter while a line of dialogue is typed out
+export function blip(pitch = 1) {
+  if (!ready()) return;
+  tone('triangle', 520 * pitch + Math.random() * 60, 480 * pitch, 0.035, 0.035);
+}
+
+// swallows: two quick high chirps
+export function chirp() {
+  if (!ready()) return;
+  const f = 3200 + Math.random() * 900;
+  tone('sine', f, f * 1.3, 0.05, 0.025);
+  tone('sine', f * 1.1, f * 1.4, 0.05, 0.02, 0.08);
+}
+
+// evening crickets: short bursts of a narrow high trill, now and then, quietly
+let crickets = 0;
+export function ambience(on) {
+  clearInterval(crickets);
+  crickets = 0;
+  if (!on) return;
+  crickets = setInterval(() => {
+    if (!ready() || Math.random() < 0.35) return;
+    const f = 4200 + Math.random() * 600;
+    const n = 3 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) tone('sine', f, f * 0.98, 0.025, 0.012 + Math.random() * 0.008, i * 0.045);
+  }, 700);
+}

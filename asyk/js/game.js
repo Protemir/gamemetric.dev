@@ -2,7 +2,7 @@
 // as in real asyq atu, and the next one goes from where the saka stopped with a bigger multiplier.
 // Score of a throw = chips (knocked bones, each next one in the same throw worth more) × mult
 // (the side the saka fell on + the chain).
-import { body, world, saka, KON, FIELD, LINE_Y, MAX_SPEED, rollSide } from './physics.js';
+import { body, world, saka, step, moving, KON, FIELD, LINE_Y, MAX_SPEED, rollSide } from './physics.js';
 import { rng } from './util.js';
 
 export const THROWS = 5;
@@ -14,15 +14,18 @@ export const RULES = { refundAt: 2 };
 // First person: the saka leaves the hand above the line, flies over the first stretch
 // and lands, then slides on into the kon. Nothing is hit while it is in the air.
 export const AIR = { min: 26, k: 40, keep: 0.62 };
-export const landing = (power, ux, uy) => {
+// the player throws from the line in front of the camera, the aga from the line beyond the kon
+export const HOME = { x: KON.x, y: LINE_Y };
+export const AWAY = { x: KON.x, y: KON.y - (LINE_Y - KON.y) };
+export const landing = (power, ux, uy, from = HOME) => {
   const a = AIR.min + AIR.k * power;
-  return { x: KON.x + ux * a, y: LINE_Y + uy * a };
+  return { x: from.x + ux * a, y: from.y + uy * a };
 };
 export const groundSpeed = (power) => MAX_SPEED * AIR.keep * power;
 
-export function throwFromHand(g, ux, uy, power) {
+export function throwFromHand(g, ux, uy, power, from = HOME) {
   const s = saka(g.w);
-  const p = landing(power, ux, uy);
+  const p = landing(power, ux, uy, from);
   s.x = p.x;
   s.y = p.y;
   const v = groundSpeed(power);
@@ -81,13 +84,16 @@ export function layout(k, seed) {
   );
 }
 
-export function newKon(k, seed = (Math.random() * 1e9) | 0) {
+// opts: target (story kons set their own), wind, duel { aga, throws }
+export function newKon(k, seed = (Math.random() * 1e9) | 0, opts = {}) {
   const w = world(seed);
+  w.wind = opts.wind || 0;
   const g = {
     k,
     seed,
     w,
-    target: target(k),
+    target: opts.target || target(k),
+    duel: opts.duel ? { aga: opts.duel.aga, throws: opts.duel.throws, score: 0, chain: 0 } : null,
     throws: THROWS,
     score: 0,
     chain: 0,
@@ -116,9 +122,11 @@ export function placeOnLine(g, x) {
   s.y = LINE_Y;
 }
 
-export function startThrow(g) {
-  g.throws--;
-  g.turn = { chips: 0, knocked: 0, mult: 1 + g.chain, side: null, score: 0, outs: [] };
+export function startThrow(g, who = 'me') {
+  const aga = who === 'aga';
+  if (aga) g.duel.throws--;
+  else g.throws--;
+  g.turn = { owner: who, chips: 0, knocked: 0, mult: 1 + (aga ? g.duel.chain : g.chain), side: null, score: 0, outs: [] };
 }
 
 // called for every bone that leaves the circle while the throw runs; returns what it paid
@@ -135,17 +143,19 @@ export function knock(g, b) {
 // everything lies still: the saka's side is read and the throw is counted
 export function settle(g, rand = g.w.rand) {
   const t = g.turn;
+  // the aga plays by the same rules with his own throws and chain
+  const who = t.owner === 'aga' ? g.duel : g;
   const side = rollSide(rand);
   t.side = side;
-  t.mult = side.mult + g.chain;
+  t.mult = side.mult + who.chain;
   t.score = t.knocked ? t.chips * t.mult : 0;
-  if (side.throws) g.throws += side.throws;
+  if (side.throws) who.throws += side.throws;
   t.refund = t.knocked >= RULES.refundAt;
-  if (t.refund) g.throws++;
+  if (t.refund) who.throws++;
   if (t.knocked) {
-    g.chain++;
+    who.chain++;
   } else {
-    g.chain = 0;
+    who.chain = 0;
   }
   return t;
 }
@@ -153,7 +163,8 @@ export function settle(g, rand = g.w.rand) {
 // after the score is shown: bones that left the circle are picked up, the kon may be cleared
 export function finish(g) {
   const t = g.turn;
-  g.score += t.score;
+  if (t.owner === 'aga') g.duel.score += t.score;
+  else g.score += t.score;
   g.w.bodies = g.w.bodies.filter((b) => !b.out);
   let cleared = false;
   if (!asyksLeft(g)) {
@@ -176,7 +187,59 @@ export function finish(g) {
     }
   }
   g.turn = null;
-  if (g.score >= g.target) g.result = 'win';
+  if (g.duel) {
+    // a duel ends when both are out of throws; a draw gives each one more
+    if (g.throws <= 0 && g.duel.throws <= 0) {
+      if (g.score > g.duel.score) g.result = 'win';
+      else if (g.score < g.duel.score) g.result = 'lose';
+      else {
+        g.throws = 1;
+        g.duel.throws = 1;
+        g.draw = true;
+      }
+    }
+  } else if (g.score >= g.target) g.result = 'win';
   else if (g.throws <= 0) g.result = 'lose';
   return { cleared };
+}
+
+// whose throw is next in a duel: the player first, then turns alternate while both have throws
+export function nextThrower(g, last) {
+  if (!g.duel) return 'me';
+  if (last === 'me' && g.duel.throws > 0) return 'aga';
+  if (last === 'aga' && g.throws > 0) return 'me';
+  return g.throws > 0 ? 'me' : 'aga';
+}
+
+// The aga thinks: tries some throws on a copy of the yard and keeps the best,
+// then his hand wobbles by skill (0 sloppy .. 1 sharp).
+export function agaPlan(g, rand, skill = 0.7) {
+  const tries = 4 + Math.round(skill * 8);
+  const live = g.w.bodies.filter((b) => b.kind === 'asyk' && !b.out);
+  let best = null;
+  for (let i = 0; i < tries && live.length; i++) {
+    const aim = live[Math.floor(rand() * live.length)];
+    const dx = aim.x - AWAY.x + (rand() - 0.5) * 8;
+    const dy = aim.y - AWAY.y;
+    const l = Math.hypot(dx, dy);
+    const ux = dx / l;
+    const uy = dy / l;
+    const power = 0.45 + rand() * 0.5;
+    const copy = { ...g, w: { ...g.w, bodies: g.w.bodies.map((b) => ({ ...b })), events: [], rand: rng((rand() * 1e9) | 0) }, turn: null, duel: { ...g.duel } };
+    startThrow(copy, 'aga');
+    throwFromHand(copy, ux, uy, power, AWAY);
+    let t = 0;
+    let chips = 0;
+    do {
+      step(copy.w, 1 / 30);
+      for (const e of copy.w.events) if (e.type === 'out') chips += e.body.value;
+      copy.w.events.length = 0;
+      t += 1 / 30;
+    } while (moving(copy.w) && t < 10);
+    if (!best || chips > best.chips) best = { chips, ux, uy, power };
+  }
+  if (!best) return { ux: 0, uy: 1, power: 0.7 };
+  const wob = (1 - skill) * 0.12;
+  const a = Math.atan2(best.uy, best.ux) + (rand() - 0.5) * wob;
+  return { ux: Math.cos(a), uy: Math.sin(a), power: Math.min(1, best.power * (1 + (rand() - 0.5) * wob)) };
 }

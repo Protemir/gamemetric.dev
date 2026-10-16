@@ -5,8 +5,17 @@
 import { KON, LINE_Y } from './physics.js';
 import { rng } from './util.js';
 
-const AR = 1920 / 1072; // the yard photo
+const AR = 1920 / 1072; // the yard photos
 export const CAM = { x: 50, y: 230, h: 30, horizon: 0.41, focal: 2.0 };
+// each yard photo has its horizon at its own height
+const YARDS = { yard: { horizon: 0.41 }, school: { horizon: 0.55 } };
+let yardName = 'yard';
+export const hasYard = (name) => !!img[name];
+export function setYard(name, canvas) {
+  yardName = img[name] ? name : 'yard';
+  CAM.horizon = YARDS[yardName].horizon;
+  if (canvas) resize(canvas);
+}
 // world units per sprite pixel for the kids (all cut from frames of the same size)
 const KID_UNITS = 36 / 518;
 // where the knucklebone sits in the hand photo, as a share of its 16:9 frame
@@ -23,31 +32,55 @@ let grain = null;
 const KID_POSES = ['watch', 'cheer', 'sad'];
 const SIDES = ['alshy', 'taike', 'buk', 'shik'];
 
+export const AGA_POSES = ['watch', 'throw', 'cheer', 'sad'];
+const ANIMALS = ['hen-walk', 'hen-peck', 'rooster', 'dog-trot', 'dog-sit'];
+
+function loadImage(n) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => {
+      img[n.replace(/\.(png|jpg)$/, '')] = im;
+      res();
+    };
+    im.onerror = rej;
+    im.src = 'img/' + n;
+  });
+}
+
 export async function loadArt(onProgress) {
   meta = await fetch('img/sprites.json').then((r) => r.json());
   const names = ['yard.jpg', 'hand-hold.png', 'hand-open.png'];
   for (let i = 0; i < 5; i++) for (const p of KID_POSES) names.push(`kid${i}-${p}.png`);
   for (const c of ['white', 'red']) for (const s of SIDES) names.push(`asyk-${c}-${s}.png`);
+  // the rest may be missing on an older build: the game goes on without it
+  const extra = ['school.jpg'];
+  for (const a of ['erlan', 'dauren']) for (const p of AGA_POSES) extra.push(`aga-${a}-${p}.png`);
+  for (const a of ANIMALS) extra.push(`${a}.png`);
   let done = 0;
-  await Promise.all(
-    names.map(
-      (n) =>
-        new Promise((res, rej) => {
-          const im = new Image();
-          im.onload = () => {
-            img[n.replace(/\.(png|jpg)$/, '')] = im;
-            onProgress && onProgress(++done / names.length);
-            res();
-          };
-          im.onerror = rej;
-          im.src = 'img/' + n;
-        }),
-    ),
-  );
+  const total = names.length + extra.length;
+  const tick = () => onProgress && onProgress(++done / total);
+  await Promise.all([...names.map((n) => loadImage(n).then(tick)), ...extra.map((n) => loadImage(n).then(tick, tick))]);
   // the photos caught some green from the backdrop: no channel may beat red on a bone
   for (const c of ['white', 'red']) for (const s of SIDES) img[`asyk-${c}-${s}`] = degreen(img[`asyk-${c}-${s}`]);
   // dyed bones (worth more) are the red ones turned pink, so they never look like the saka
   for (const s of SIDES) img[`asyk-pink-${s}`] = tint(img[`asyk-red-${s}`]);
+  // the aga's saka has lead poured into it: dull grey
+  for (const s of SIDES) img[`asyk-lead-${s}`] = lead(img[`asyk-red-${s}`]);
+}
+
+function lead(im) {
+  const c = canvas2(im.width, im.height);
+  const x = c.getContext('2d');
+  x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const v = (d.data[i] * 0.5 + d.data[i + 1] * 0.3 + d.data[i + 2] * 0.2) * 0.75;
+    d.data[i] = v * 0.95;
+    d.data[i + 1] = v;
+    d.data[i + 2] = v * 1.08;
+  }
+  x.putImageData(d, 0, 0);
+  return c;
 }
 
 function canvas2(w, h) {
@@ -63,8 +96,11 @@ function degreen(im) {
   x.drawImage(im, 0, 0);
   const d = x.getImageData(0, 0, c.width, c.height);
   for (let i = 0; i < d.data.length; i += 4) {
+    // warm the bone back up: green and blue may not beat a share of red
     const r = d.data[i];
-    if (d.data[i + 1] > r - 6) d.data[i + 1] = Math.max(0, r - 6);
+    const g = Math.min(d.data[i + 1], r * 0.93);
+    d.data[i + 1] = g;
+    d.data[i + 2] = Math.min(d.data[i + 2], g * 0.88);
   }
   x.putImageData(d, 0, 0);
   return c;
@@ -146,7 +182,7 @@ function bakeBackdrop() {
   const b = canvas2(w * dpr, h * dpr);
   const c = b.getContext('2d');
   c.scale(dpr, dpr);
-  const yard = img.yard;
+  const yard = img[yardName];
   c.drawImage(yard, imgX, imgY, imgW, imgH);
   // tall screens: mirror the sky upwards and the dirt downwards, so there is no empty band
   if (imgY > 0) {
@@ -232,7 +268,7 @@ export function drawOverlay(c, t) {
 // ---------- things on the ground ----------
 // which photo of a bone: its colour and the side it shows
 function boneImage(b) {
-  const col = b.kind === 'saka' ? 'red' : b.painted ? 'pink' : 'white';
+  const col = b.kind === 'saka' ? (b.owner === 'aga' ? 'lead' : 'red') : b.painted ? 'pink' : 'white';
   let side = b.face || 'buk';
   // a tumbling bone flips through its sides
   if (b.tumble) side = SIDES[Math.floor(Math.abs(b.ang) / 1.2) % 4];
@@ -279,6 +315,25 @@ export function drawBone(c, b, z = 0, alpha = 1, glow = 0) {
 }
 
 // ---------- kids ----------
+export function kidSpots(duel) {
+  // feet positions around the kon; in a duel the girl steps aside so the aga can throw
+  return duel
+    ? [
+        [4, 64],
+        [20, 22],
+        [33, 2],
+        [77, 16],
+        [96, 60],
+      ]
+    : [
+        [4, 64],
+        [22, 20],
+        [50, 6],
+        [77, 16],
+        [96, 60],
+      ];
+}
+
 export function makeKids() {
   // feet positions around the kon; the tall boy stands on the right, the small one in the cap behind
   const spots = [
@@ -315,16 +370,265 @@ export function drawKid(c, k, now) {
   const scale = KID_UNITS * p.k;
   const width = im.width * scale;
   const height = im.height * scale;
-  // breathing, and a hop when cheering
+  // breathing, a hop when cheering, a nod while talking, and now and then a shift of weight
   const breathe = 1 + Math.sin(now * 2.2 + k.bob) * 0.008;
   const hop = k.jump ? Math.max(0, Math.sin(Math.min(1, (now - k.jump) / 0.45) * Math.PI)) * height * 0.06 : 0;
-  shadow(c, k.x + 2.5, k.y, 7, p.D, 0.32);
+  const talk = k.talking ? Math.abs(Math.sin(now * 9)) * height * 0.012 : 0;
+  const shift = Math.sin(now * 0.37 + k.bob * 3) > 0.92 ? Math.sin(now * 3) * width * 0.03 : 0;
+  shadow(c, k.x + 2.5, k.y, 7, p.D, 0.2);
   c.save();
-  c.translate(p.x, p.y + 2 * scale - hop);
+  c.translate(p.x + shift, p.y + 2 * scale - hop - talk);
   c.scale(1, breathe);
   c.drawImage(im, -width / 2, -height, width, height);
   c.restore();
+  k.head = { x: p.x + shift, y: p.y - height - hop, s: height };
 }
+
+// ---------- the aga: a teenager who throws from the far side of the kon ----------
+export const agaArt = (id) => !!img[`aga-${id}-watch`];
+
+export function drawAga(c, a, now) {
+  const p = project(a.x, a.y);
+  if (!p || !agaArt(a.id)) return;
+  const im = img[`aga-${a.id}-${a.pose}`] || img[`aga-${a.id}-watch`];
+  // all four poses are cut from one frame: the standing one is 1.65 m tall
+  const scale = (41 / img[`aga-${a.id}-watch`].height) * p.k;
+  const width = im.width * scale;
+  const height = im.height * scale;
+  const breathe = 1 + Math.sin(now * 2 + 1) * 0.007;
+  const talk = a.talking ? Math.abs(Math.sin(now * 8)) * height * 0.01 : 0;
+  shadow(c, a.x + 3, a.y, 9, p.D, 0.34);
+  c.save();
+  c.translate(p.x, p.y + 2 * scale - talk);
+  c.scale(1, breathe);
+  c.drawImage(im, -width / 2, -height, width, height);
+  c.restore();
+  a.head = { x: p.x, y: p.y - height, s: height };
+}
+
+// ---------- speech bubbles over heads ----------
+export function drawBubbles(c, bubbles) {
+  const u = Math.max(12, Math.min(view.w, view.h) * 0.026);
+  c.save();
+  c.font = `700 ${Math.round(u)}px "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  for (const b of bubbles) {
+    const h = b.who && b.who.head;
+    if (!h) continue;
+    const k = 1 - b.life / b.max;
+    const pop = k < 0.12 ? 0.6 + (k / 0.12) * 0.4 : 1;
+    c.globalAlpha = k > 0.8 ? 1 - (k - 0.8) / 0.2 : 1;
+    const tw = c.measureText(b.text).width;
+    const bw = tw + u * 1.3;
+    const bh = u * 1.9;
+    const x = Math.max(bw / 2 + 4, Math.min(view.w - bw / 2 - 4, h.x));
+    const y = Math.max(bh + 4, h.y - u * 0.8);
+    const tail = Math.max(-bw / 2 + bh / 2, Math.min(bw / 2 - bh / 2, h.x - x));
+    c.save();
+    c.translate(x, y - bh / 2);
+    c.scale(pop, pop);
+    c.fillStyle = 'rgba(255, 250, 238, 0.96)';
+    c.strokeStyle = 'rgba(70, 35, 15, 0.55)';
+    c.lineWidth = 1.5;
+    const r = bh / 2;
+    c.beginPath();
+    c.moveTo(-bw / 2 + r, -bh / 2);
+    c.arcTo(bw / 2, -bh / 2, bw / 2, bh / 2, r);
+    c.arcTo(bw / 2, bh / 2, -bw / 2, bh / 2, r);
+    c.lineTo(tail + u * 0.35, bh / 2);
+    c.lineTo(tail, bh / 2 + u * 0.6);
+    c.lineTo(tail - u * 0.2, bh / 2);
+    c.arcTo(-bw / 2, bh / 2, -bw / 2, -bh / 2, r);
+    c.arcTo(-bw / 2, -bh / 2, bw / 2, -bh / 2, r);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.fillStyle = '#3b2416';
+    c.fillText(b.text, 0, 1);
+    c.restore();
+  }
+  c.restore();
+}
+
+// ---------- life in the yard ----------
+// hens peck about behind the kon and scatter from a flying bone; a dog trots by now and then
+const ANIMAL_UNITS = { hen: 7.5, rooster: 10, dog: 12 };
+export function makeLife(seed = 3) {
+  const r = rng(seed);
+  const hens = [];
+  for (let i = 0; i < 3; i++) hens.push({ kind: i === 2 ? 'rooster' : 'hen', x: 10 + r() * 80, y: -45 - r() * 30, tx: 0, ty: 0, wait: r() * 3, peck: 0, dir: -1, run: 0 });
+  return {
+    hens,
+    dog: { x: -60, y: -70, on: false, sit: 0, dir: 1, next: 8 + r() * 10, sitAt: null },
+    birds: [],
+    nextBird: 2,
+    motes: Array.from({ length: 26 }, () => ({ x: r(), y: r(), s: 0.4 + r(), p: r() * 6 })),
+    rand: r,
+  };
+}
+
+// danger: bodies flying fast; returns how many swallows just appeared (for their chirp)
+export function updateLife(L, dt, danger) {
+  const r = L.rand;
+  for (const h of L.hens) {
+    const d = danger.find((b) => Math.hypot(b.x - h.x, b.y - h.y) < 16);
+    if (d) {
+      // run away from it, flapping
+      const a = Math.atan2(h.y - d.y, h.x - d.x);
+      h.tx = h.x + Math.cos(a) * 25;
+      h.ty = Math.min(-30, h.y + Math.sin(a) * 25);
+      h.run = 0.8;
+      h.wait = 0;
+    }
+    h.run = Math.max(0, h.run - dt);
+    if (h.wait > 0) {
+      h.wait -= dt;
+      h.peck = Math.max(0, h.peck - dt);
+      if (h.peck <= 0 && r() < dt * 0.8) h.peck = 0.6;
+      if (h.wait <= 0) {
+        h.tx = Math.max(-20, Math.min(120, h.x + (r() - 0.5) * 40));
+        h.ty = Math.max(-75, Math.min(-35, h.y + (r() - 0.5) * 20));
+      }
+      continue;
+    }
+    const dx = h.tx - h.x;
+    const dy = h.ty - h.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.5) {
+      h.wait = 1 + r() * 4;
+      continue;
+    }
+    const sp = h.run > 0 ? 40 : 7;
+    h.dir = dx < 0 ? -1 : 1;
+    h.x += (dx / dist) * Math.min(dist, sp * dt);
+    h.y += (dy / dist) * Math.min(dist, sp * dt);
+  }
+  const g = L.dog;
+  if (!g.on) {
+    g.next -= dt;
+    if (g.next <= 0) {
+      g.on = true;
+      g.x = r() < 0.5 ? -50 : 150;
+      g.y = -60 - r() * 20;
+      g.dir = g.x < 0 ? 1 : -1;
+      g.sit = 0;
+      g.sitAt = 30 + r() * 40;
+    }
+  } else if (g.sit > 0) {
+    g.sit -= dt;
+  } else {
+    g.x += g.dir * 22 * dt;
+    if (g.sitAt != null && Math.abs(g.x - g.sitAt) < 1) {
+      g.sit = 3 + r() * 4;
+      g.sitAt = null;
+    }
+    if (g.x < -60 || g.x > 160) {
+      g.on = false;
+      g.next = 15 + r() * 20;
+    }
+  }
+  for (const b of L.birds) {
+    b.x += b.dir * b.sp * dt;
+    b.ph += dt * 14;
+    b.y += Math.sin(b.ph * 0.15 + b.wob) * dt * 0.02;
+  }
+  L.birds = L.birds.filter((b) => b.x > -0.2 && b.x < 1.2);
+  // swallows cut across the sky in ones, twos and threes
+  L.nextBird -= dt;
+  if (L.nextBird > 0) return 0;
+  const n = 1 + Math.floor(r() * 3);
+  const dir = r() < 0.5 ? 1 : -1;
+  const y = 0.05 + r() * 0.25;
+  for (let i = 0; i < n; i++) L.birds.push({ x: dir > 0 ? -0.05 - i * 0.04 : 1.05 + i * 0.04, y: y + (r() - 0.5) * 0.06, dir, sp: 0.18 + r() * 0.12, ph: r() * 6, wob: r() * 6 });
+  L.nextBird = 4 + r() * 8;
+  return n;
+}
+
+export function lifeItems(L) {
+  const out = [];
+  for (const h of L.hens) {
+    const name = h.kind === 'rooster' ? 'rooster' : h.peck > 0 && h.wait > 0 ? 'hen-peck' : 'hen-walk';
+    out.push({ D: CAM.y - h.y, draw: (c) => drawAnimal(c, name, h.x, h.y, h.kind === 'rooster' ? 'rooster' : 'hen', h.dir, h.wait <= 0) });
+  }
+  const g = L.dog;
+  if (g.on) out.push({ D: CAM.y - g.y, draw: (c) => drawAnimal(c, g.sit > 0 ? 'dog-sit' : 'dog-trot', g.x, g.y, 'dog', g.dir, g.sit <= 0) });
+  return out;
+}
+
+function drawAnimal(c, name, x, y, kind, dir, moving) {
+  const im = img[name];
+  const base = img[kind === 'rooster' ? 'rooster' : kind === 'dog' ? 'dog-trot' : 'hen-walk'];
+  const p = project(x, y);
+  if (!im || !base || !p) return;
+  const scale = (ANIMAL_UNITS[kind] / base.height) * p.k;
+  const w = im.width * scale;
+  const h = im.height * scale;
+  const bob = moving ? Math.abs(Math.sin(performance.now() / 90)) * h * 0.04 : 0;
+  shadow(c, x + 1.5, y, kind === 'dog' ? 8 : 4, p.D, 0.28);
+  c.save();
+  c.translate(p.x, p.y + 1 - bob);
+  // which way each photo faces: hens and the rooster look right, the trotting dog left
+  const facing = name.startsWith('dog') ? -1 : 1;
+  if (dir !== facing && name !== 'dog-sit') c.scale(-1, 1);
+  c.drawImage(im, -w / 2, -h, w, h);
+  c.restore();
+}
+
+// swallows and specks of dust gold in the low sun: screen space, over the yard
+export function drawAir(c, L, t) {
+  c.save();
+  c.strokeStyle = 'rgba(30, 22, 30, 0.85)';
+  c.lineCap = 'round';
+  const s = Math.max(5, view.h * 0.012);
+  for (const b of L.birds) {
+    const x = b.x * view.w;
+    const y = view.imgY + b.y * view.imgH;
+    const f = Math.sin(b.ph) * 0.7;
+    c.lineWidth = Math.max(1.5, s * 0.28);
+    c.beginPath();
+    c.moveTo(x - s, y - s * f);
+    c.quadraticCurveTo(x - s * 0.4, y - s * 0.2, x, y);
+    c.quadraticCurveTo(x + s * 0.4, y - s * 0.2, x + s, y - s * f);
+    c.stroke();
+  }
+  c.fillStyle = '#ffe7b0';
+  for (const m of L.motes) {
+    const x = ((m.x + t * 0.004 * m.s) % 1) * view.w * 0.55;
+    const y = view.h * (0.15 + ((m.y + Math.sin(t * 0.3 + m.p) * 0.02 + 1) % 1) * 0.6);
+    c.globalAlpha = 0.25 + 0.25 * Math.sin(t * 1.3 + m.p);
+    c.beginPath();
+    c.arc(x, y, 0.8 + m.s * 0.9, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.restore();
+}
+
+// a round portrait cut from a person's sprite, for the dialogue box
+export function portrait(who, size = 72) {
+  const key = who.kid != null ? `kid${who.kid}-watch` : who.aga ? `aga-${who.aga}-watch` : null;
+  const im = key && img[key];
+  const cv = canvas2(size * 2, size * 2);
+  const c = cv.getContext('2d');
+  c.beginPath();
+  c.arc(size, size, size, 0, Math.PI * 2);
+  c.clip();
+  c.fillStyle = '#c9a273';
+  c.fillRect(0, 0, size * 2, size * 2);
+  if (im) {
+    // the head is the top of the sprite
+    const hw = im.width * 0.62;
+    c.drawImage(im, im.width * 0.19, 0, hw, hw, 0, size * 0.08, size * 2, size * 2);
+  } else {
+    c.fillStyle = '#8f2f2a';
+    c.font = `700 ${size}px Georgia, serif`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(who.name ? who.name[0] : '?', size, size * 1.05);
+  }
+  return cv;
+}
+
 
 // ---------- the hand ----------
 // frame: the hand photo's 16:9 frame on screen, anchored to the bottom right

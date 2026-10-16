@@ -1,16 +1,26 @@
 import { step, moving, saka, predict, kidFeet } from './physics.js';
-import { newKon, startThrow, knock, settle, finish, THROWS, landing, groundSpeed, throwFromHand } from './game.js';
+import { newKon, startThrow, knock, settle, finish, THROWS, landing, groundSpeed, throwFromHand, nextThrower, agaPlan, HOME, AWAY } from './game.js';
+import { PEOPLE, AGAS, CHAPTERS, BARKS } from './story.js';
 import * as S from './scene.js';
 import * as A from './audio.js';
-import { store, el, clamp } from './util.js';
+import { store, el, clamp, rng } from './util.js';
 
 const cv = document.getElementById('game');
 const c = cv.getContext('2d');
 const $ = (id) => document.getElementById(id);
 const ui = $('ui');
 
+// ---------- language: Russian for the region, English for everyone else ----------
+const q = new URLSearchParams(location.search);
+let lang = q.get('lang') === 'en' ? 1 : q.get('lang') === 'ru' ? 0 : store.get('asyk.lang', /^(ru|kk|ky|be|uz|tg|uk)\b/i.test(navigator.language || '') ? 0 : 1);
+const T = (ru, en) => (lang ? en : ru);
+// ?shot: a clean frame for covers and film start frames — no hand, no shouts, no hints
+const SHOT = q.has('shot');
+const pick = (pair) => (Array.isArray(pair) ? pair[lang] || pair[0] : pair);
+
 let g = null;
-let state = 'load'; // load | menu | aim | flight | roll | reveal | tally | overWait | over
+let mode = null; // { story: true, ch, ki } or { free: true }
+let state = 'load'; // load | menu | talk | aim | flight | roll | reveal | tally | agaAim | overWait | over
 let phase = 0; // seconds in the current state
 let clock = 0;
 let drag = null;
@@ -22,13 +32,20 @@ let slow = 0; // slow motion when bones fly out one after another
 let shake = 0;
 let firstTouch = false;
 let shown = 0; // score shown in the bar, catches up with the real one
+let thrower = 'me';
+let aga = null; // the rival in a duel: { id, x, y, pose, talking }
+let agaShot = null;
 const dust = [];
 const pops = [];
+const bubbles = [];
 const kids = S.makeKids();
+const life = S.makeLife();
+const rand = rng((Math.random() * 1e9) | 0);
 // the throwing hand: offsets in px, cocked rotation, and how far it has sunk out of view
 const hand = { dx: 0, dy: 0, rot: 0, scale: 1, open: false, hidden: 1 };
 let best = store.get('asyk.best', 0);
 let taught = store.get('asyk.taught', 0);
+let story = store.get('asyk.story', { done: {} });
 
 const FACES = ['alshy', 'buk', 'taike'];
 
@@ -63,10 +80,17 @@ function hudThrows() {
   }
 }
 
+const agaName = () => (aga ? pick(PEOPLE[aga.id].name) : '');
 function hudScore() {
-  $('hudKon').textContent = `Кон ${g.k}`;
-  $('hudScore').textContent = `${Math.round(shown)} / ${g.target}`;
-  $('hudBar').style.width = `${clamp(shown / g.target, 0, 1) * 100}%`;
+  if (g.duel) {
+    $('hudKon').textContent = `${T('Ты', 'You')} ${Math.round(shown)} : ${g.duel.score} ${agaName()}`;
+    $('hudScore').textContent = `· ${T('у него бросков', 'his throws')}: ${g.duel.throws}`;
+    $('hudBar').style.width = `${clamp(shown / Math.max(1, shown + g.duel.score), 0, 1) * 100}%`;
+  } else {
+    $('hudKon').textContent = mode && mode.story ? pick(CHAPTERS[mode.ch].title) : `${T('Кон', 'Kon')} ${g.k}`;
+    $('hudScore').textContent = `${Math.round(shown)} / ${g.target}`;
+    $('hudBar').style.width = `${clamp(shown / g.target, 0, 1) * 100}%`;
+  }
 }
 
 function turnPanel(note) {
@@ -94,9 +118,9 @@ function hint(text, ms = 3200) {
 const hideHint = () => $('hint').classList.remove('show');
 
 // ---------- screens ----------
-function panel(children) {
+function panel(children, cls = '') {
   ui.innerHTML = '';
-  const p = el('div', 'panel');
+  const p = el('div', 'panel ' + cls);
   p.append(...children);
   ui.append(p);
   return p;
@@ -111,73 +135,236 @@ function button(text, fn, cls = 'btn') {
   return b;
 }
 
-function freshKon(k, seed) {
-  g = newKon(k, seed);
+function setKids(duel) {
+  S.kidSpots(duel).forEach(([x, y], i) => Object.assign(kids[i], { x, y, pose: 'watch', next: null, talking: false }));
+}
+
+// cfg: { k, target, wind, duel, yard }
+function freshKon(cfg) {
+  S.setYard(cfg.yard || 'yard', cv);
+  setKids(!!cfg.duel);
+  g = newKon(cfg.k || 1, cfg.seed, { target: cfg.target, wind: cfg.wind, duel: cfg.duel });
   for (const kid of kids) {
     const feet = kidFeet(kid.x, kid.y);
     feet.ki = kid.i;
     g.w.bodies.push(feet);
   }
+  aga = null;
+  if (cfg.duel) {
+    aga = { id: cfg.duel.aga, x: AWAY.x + 2, y: AWAY.y - 9, pose: 'watch', talking: false };
+    const feet = kidFeet(aga.x, aga.y);
+    feet.ki = 'aga';
+    g.w.bodies.push(feet);
+  }
   faces();
+  thrower = 'me';
 }
 // bones laid out in the kon stand on their usual sides
 function faces() {
   for (const b of g.w.bodies) if (b.kind === 'asyk' && !b.face) b.face = FACES[b.id % 3];
 }
 
-function menu() {
-  state = 'menu';
-  $('hud').hidden = true;
-  $('turn').hidden = true;
-  freshKon(1, 1986);
-  hand.hidden = 0;
-  const rules = el('ul', 'rules');
-  [
-    'Потяни вниз и отпусти — сақа полетит из руки в кон.',
-    'Вбок — целишься левее или правее.',
-    'Асыки, выбитые за круг, дают очки.',
-    'Сақа ложится на сторону: алшы ×3, тәйке ×2, шік даёт бросок.',
-    'Выбил два за бросок — бросок вернётся.',
-  ].forEach((t) => rules.append(el('li', null, t)));
-  const kidsLine = el('p', 'sub', 'Лето 1987-го. Аул под горами, вечер, соседские ребята уже выложили кон.');
-  const kids2 = [el('h1', 'logo', 'Асық'), kidsLine, rules, button('Ойнау', () => start(1))];
-  if (best > 1) kids2.push(el('p', 'sub', `Лучший результат: кон ${best}`));
-  panel(kids2);
-}
-
-function start(k) {
+function begin() {
   ui.innerHTML = '';
-  freshKon(k);
   shown = 0;
   pops.length = 0;
   dust.length = 0;
-  state = 'aim';
-  phase = 0;
+  bubbles.length = 0;
   $('hud').hidden = false;
   $('turn').hidden = false;
   hudThrows();
   hudScore();
   turnPanel('');
-  if (!taught) hint('Потяни вниз и отпусти', 0);
-  else if (k === 1) hint(`Набери ${g.target} очков`);
 }
 
+function aimNow() {
+  state = 'aim';
+  phase = 0;
+  if (!taught) hint(T('Потяни вниз и отпусти', 'Pull down and let go'), 0);
+  else if (g.w.wind) hint(g.w.wind > 0 ? T('Ветер тянет вправо →', 'The wind pulls right →') : T('← Ветер тянет влево', '← The wind pulls left'));
+}
+
+function menu() {
+  state = 'menu';
+  mode = null;
+  A.ambience(true);
+  $('hud').hidden = true;
+  $('turn').hidden = true;
+  freshKon({ k: 1, seed: 1986 });
+  hand.hidden = 0;
+  const kids2 = [
+    el('h1', 'logo', 'Асық'),
+    el('p', 'sub', T('Лето 1987-го. Аул под горами, вечер, соседские ребята уже выложили кон.', 'Summer 1987. A village under the mountains, evening; the kids next door have set up the kon.')),
+    button(T('Сюжет', 'Story'), storyMenu),
+    button(T('Свободная игра', 'Free play'), () => startFree(1), 'btn second'),
+  ];
+  if (best > 1) kids2.push(el('p', 'sub', T(`Лучший результат: кон ${best}`, `Best: kon ${best}`)));
+  const langBtn = button(lang ? 'Русский' : 'English', () => {
+    lang = 1 - lang;
+    store.set('asyk.lang', lang);
+    menu();
+  }, 'btn ghost');
+  kids2.push(langBtn);
+  panel(kids2);
+}
+
+// ---------- story ----------
+const doneList = (ch) => story.done[CHAPTERS[ch].id] || [];
+const chapterDone = (ch) => CHAPTERS[ch].kons.length > 0 && CHAPTERS[ch].kons.every((_, i) => doneList(ch)[i]);
+const unlocked = (ch) => ch === 0 || chapterDone(ch - 1);
+
+function storyMenu() {
+  const list = el('div', 'chapters');
+  CHAPTERS.forEach((ch, i) => {
+    const open = unlocked(i) && !ch.soon;
+    const card = el('button', 'chapter' + (open ? '' : ' locked'));
+    card.type = 'button';
+    card.append(el('b', null, `${i + 1}. ${pick(ch.title)}`), el('span', null, pick(ch.sub)));
+    if (ch.kons.length) {
+      const dots = el('i', 'dots');
+      ch.kons.forEach((k, j) => dots.append(el('em', doneList(i)[j] ? 'on' : '', k.duel ? '★' : '●')));
+      card.append(dots);
+    }
+    if (open)
+      card.addEventListener('click', () => {
+        A.audioInit();
+        const next = ch.kons.findIndex((_, j) => !doneList(i)[j]);
+        playStory(i, next < 0 ? 0 : next);
+      });
+    list.append(card);
+  });
+  panel([el('h2', null, T('Лето 1987-го', 'Summer of 1987')), list, button(T('Назад', 'Back'), menu, 'btn ghost')], 'wide');
+}
+
+async function playStory(ci, ki) {
+  const ch = CHAPTERS[ci];
+  const kon = ch.kons[ki];
+  mode = { story: true, ch: ci, ki };
+  ui.innerHTML = '';
+  if (ki === 0 && ch.video && !story.seen?.[ch.id]) {
+    await playVideo(ch.video);
+    story.seen = { ...(story.seen || {}), [ch.id]: true };
+    store.set('asyk.story', story);
+  }
+  freshKon({ k: ki + 1, target: kon.target, wind: kon.wind, duel: kon.duel, yard: ch.yard });
+  begin();
+  state = 'talk';
+  if (ki === 0 || kon.duel) $('hint').classList.remove('show');
+  await talk(kon.intro || []);
+  aimNow();
+}
+
+function startFree(k) {
+  mode = { free: true };
+  freshKon({ k });
+  begin();
+  aimNow();
+  if (taught && k === 1) hint(T(`Набери ${g.target} очков`, `Score ${g.target} points`));
+}
+
+// ---------- dialogue ----------
+let talkDone = null;
+function talk(lines) {
+  return new Promise((resolve) => {
+    if (!lines.length) return resolve();
+    const box = $('talk');
+    const pic = $('talkPic');
+    let i = -1;
+    let typing = 0;
+    let full = '';
+    let shownChars = 0;
+    const who = (id) => (PEOPLE[id].kid != null ? kids[PEOPLE[id].kid] : PEOPLE[id].aga && aga && aga.id === PEOPLE[id].aga ? aga : null);
+    const next = () => {
+      if (typing) {
+        // a tap while typing shows the whole line
+        shownChars = full.length;
+        $('talkText').textContent = full;
+        clearInterval(typing);
+        typing = 0;
+        return;
+      }
+      if (i >= 0) {
+        const w = who(lines[i][0]);
+        if (w) w.talking = false;
+      }
+      i++;
+      if (i >= lines.length) {
+        box.hidden = true;
+        talkDone = null;
+        resolve();
+        return;
+      }
+      const [id, ru, en] = lines[i];
+      const p = PEOPLE[id];
+      const w = who(id);
+      if (w) w.talking = true;
+      pic.innerHTML = '';
+      pic.append(S.portrait({ ...p, name: pick(p.name) }, 40));
+      $('talkName').textContent = pick(p.name);
+      full = lang ? en : ru;
+      shownChars = 0;
+      $('talkText').textContent = '';
+      box.hidden = false;
+      typing = setInterval(() => {
+        shownChars++;
+        $('talkText').textContent = full.slice(0, shownChars);
+        if (shownChars % 2 === 0 && full[shownChars] !== ' ') A.blip(p.aga ? 0.8 : p.kid === 2 ? 1.35 : 1.1);
+        if (shownChars >= full.length) {
+          clearInterval(typing);
+          typing = 0;
+        }
+      }, 24);
+    };
+    talkDone = next;
+    next();
+  });
+}
+$('talk').addEventListener('click', () => talkDone && talkDone());
+
+// ---------- the chapter film ----------
+function playVideo(src) {
+  return new Promise((resolve) => {
+    const v = $('film');
+    let done = false;
+    const end = () => {
+      if (done) return;
+      done = true;
+      v.pause();
+      $('filmBox').hidden = true;
+      resolve();
+    };
+    fetch(src, { method: 'HEAD' })
+      .then((r) => {
+        if (!r.ok) return end();
+        v.src = src;
+        $('filmBox').hidden = false;
+        v.onended = end;
+        v.onerror = end;
+        $('filmSkip').onclick = end;
+        v.play().catch(end);
+      })
+      .catch(end);
+  });
+}
+
+// ---------- end of a kon ----------
 function over() {
   state = 'over';
   $('turn').hidden = true;
+  if (mode && mode.story) return storyOver();
   if (g.result === 'win') {
     best = Math.max(best, g.k + 1);
     store.set('asyk.best', best);
     A.win();
     kids.forEach((k, i) => S.setPose(k, 'cheer', clock, 4, i * 0.08));
     panel([
-      el('h2', null, 'Кон алынды!'),
+      el('h2', null, T('Кон алынды!', 'Kon won!')),
       stats([
-        ['Очки', `${g.score} из ${g.target}`],
-        ['Осталось бросков', g.throws],
+        [T('Очки', 'Score'), `${g.score} / ${g.target}`],
+        [T('Осталось бросков', 'Throws left'), g.throws],
       ]),
-      button(`Кон ${g.k + 1}`, () => start(g.k + 1)),
-      button('В меню', menu, 'btn ghost'),
+      button(`${T('Кон', 'Kon')} ${g.k + 1}`, () => startFree(g.k + 1)),
+      button(T('В меню', 'Menu'), menu, 'btn ghost'),
     ]);
   } else {
     A.lose();
@@ -185,17 +372,51 @@ function over() {
     store.set('asyk.best', best);
     kids.forEach((k, i) => S.setPose(k, 'sad', clock, 4, i * 0.06));
     panel([
-      el('h2', null, 'Броски кончились'),
+      el('h2', null, T('Броски кончились', 'Out of throws')),
       stats([
-        ['Очки', `${g.score} из ${g.target}`],
-        ['Не хватило', g.target - g.score],
-        ['Дошёл до', `кона ${g.k}`],
+        [T('Очки', 'Score'), `${g.score} / ${g.target}`],
+        [T('Не хватило', 'Short by'), g.target - g.score],
+        [T('Дошёл до', 'Reached'), `${T('кона', 'kon')} ${g.k}`],
       ]),
-      button('Заново с первого кона', () => start(1)),
-      button('В меню', menu, 'btn ghost'),
+      button(T('Заново с первого кона', 'Start over'), () => startFree(1)),
+      button(T('В меню', 'Menu'), menu, 'btn ghost'),
     ]);
   }
 }
+
+async function storyOver() {
+  const { ch, ki } = mode;
+  const kon = CHAPTERS[ch].kons[ki];
+  const won = g.result === 'win';
+  if (won) {
+    A.win();
+    kids.forEach((k, i) => S.setPose(k, 'cheer', clock, 3, i * 0.08));
+    if (aga) aga.pose = 'sad';
+    const d = [...doneList(ch)];
+    d[ki] = true;
+    story.done = { ...story.done, [CHAPTERS[ch].id]: d };
+    store.set('asyk.story', story);
+  } else {
+    A.lose();
+    kids.forEach((k, i) => S.setPose(k, 'sad', clock, 3, i * 0.06));
+    if (aga) aga.pose = 'cheer';
+  }
+  state = 'talk';
+  await talk((won ? kon.win : kon.lose) || []);
+  state = 'over';
+  const score = g.duel ? `${g.score} : ${g.duel.score}` : `${g.score} / ${g.target}`;
+  const nextKon = CHAPTERS[ch].kons[ki + 1];
+  const nextCh = CHAPTERS[ch + 1];
+  const kidsTitle = won ? (g.duel ? T(`${agaName()} побеждён!`, `${agaName()} is beaten!`) : T('Кон алынды!', 'Kon won!')) : T('Не вышло', 'Not this time');
+  const btns = [];
+  if (won && nextKon) btns.push(button(T('Дальше', 'Next'), () => playStory(ch, ki + 1)));
+  else if (won && nextCh && !nextCh.soon) btns.push(button(T(`Глава ${ch + 2}: ${pick(nextCh.title)}`, `Chapter ${ch + 2}: ${pick(nextCh.title)}`), () => playStory(ch + 1, 0)));
+  else if (won) btns.push(button(T('Продолжение — зимой', 'To be continued in winter'), storyMenu));
+  else btns.push(button(T('Ещё раз', 'Try again'), () => playStory(ch, ki)));
+  btns.push(button(T('Главы', 'Chapters'), storyMenu, 'btn ghost'));
+  panel([el('h2', null, kidsTitle), stats([[T('Счёт', 'Score'), score]]), ...btns]);
+}
+
 function stats(rows) {
   const box = el('div', 'stats');
   for (const [k, v] of rows) {
@@ -219,6 +440,7 @@ function aimFrom(dx, dy) {
 
 cv.addEventListener('pointerdown', (e) => {
   A.audioInit();
+  if (state === 'talk' && talkDone) return talkDone();
   if (state !== 'aim' || drag || hand.hidden > 0.3) return;
   drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY };
   try {
@@ -246,28 +468,44 @@ function handStart() {
   return S.unproject(p.x, p.y, 40);
 }
 
-function throwSaka() {
-  startThrow(g);
-  const from = handStart();
-  flight = { from, land: landing(aim.power, aim.ux, aim.uy), t: 0, T: 0.3 + 0.08 * (1 - aim.power), power: aim.power, ux: aim.ux, uy: aim.uy };
+function launchFlight(from, origin, ux, uy, power, who) {
   const s = saka(g.w);
+  flight = { from, origin, land: landing(power, ux, uy, origin), t: 0, T: 0.3 + 0.08 * (1 - power), power, ux, uy };
   s.tumble = true;
   s.face = null;
+  s.owner = who;
   s.x = from.x;
   s.y = from.y;
-  hand.open = true;
-  A.whoosh(aim.power);
+  s.z = from.z;
+  A.whoosh(power);
   state = 'flight';
   phase = 0;
   still = 0;
   firstTouch = false;
+}
+
+function throwSaka() {
+  startThrow(g, 'me');
+  hand.open = true;
+  launchFlight(handStart(), HOME, aim.ux, aim.uy, aim.power, 'me');
   hudThrows();
-  turnPanel(g.chain ? `Цепочка: +${g.chain} к множителю` : '');
+  turnPanel(g.chain ? T(`Цепочка: +${g.chain} к множителю`, `Chain: +${g.chain} to mult`) : '');
   if (!taught) {
     taught = 1;
     store.set('asyk.taught', 1);
     hideHint();
   }
+}
+
+// the aga steps up, winds up and throws from beyond the kon
+function agaTurn() {
+  state = 'agaAim';
+  phase = 0;
+  agaShot = null;
+  bark('agaThrows');
+  turnPanel(T(`Бросает ${agaName()}`, `${agaName()} throws`));
+  $('turnChips').textContent = 0;
+  $('turnMult').textContent = 1 + g.duel.chain;
 }
 
 // ---------- effects ----------
@@ -278,8 +516,18 @@ function puff(x, y, n, k = 1) {
     dust.push({ x, y, z: Math.random() * 1.5, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 0.8 + Math.random() * 1.2, grow: 3 + Math.random() * 3, life: 0.6 + Math.random() * 0.5, max: 1.1, a: 0.35, col: '#e6c99c' });
   }
 }
-function pop(x, y, text, col = '#fff4dc', size = 5, life = 1.1, screen = null) {
-  pops.push({ x, y, text, col, size, life, max: life, screen });
+function pop(x, y, text, col = '#fff4dc', size = 5, life2 = 1.1, screen = null) {
+  pops.push({ x, y, text, col, size, life: life2, max: life2, screen });
+}
+// a kid shouts something; the same kid does not talk over himself
+function bark(kind, who = null) {
+  const list = BARKS[kind];
+  if (!list) return;
+  const free = kids.filter((k) => !bubbles.some((b) => b.who === k));
+  const w = who || free[Math.floor(rand() * free.length)];
+  if (!w || bubbles.length > 2) return;
+  const text = pick(list[Math.floor(rand() * list.length)]);
+  bubbles.push({ who: w, text, life: 1.7, max: 1.7 });
 }
 
 const SIDE_COL = { alshy: '#ffd36b', taike: '#ffb070', buk: '#fff4dc', shik: '#bfeaa0' };
@@ -287,15 +535,35 @@ const kidOf = (body) => kids.find((k) => k.i === body.ki);
 
 function react(t) {
   const now = clock;
+  const mine = t.owner !== 'aga';
+  if (!mine) {
+    // the kids are on your side by now: they groan at his good throws and cheer his misses
+    if (t.knocked) {
+      aga.pose = 'cheer';
+      bark('agaGood');
+    } else {
+      aga.pose = 'sad';
+      kids.forEach((k) => rand() < 0.5 && S.setPose(k, 'cheer', now, 1.4, rand() * 0.2));
+      bark('agaMiss');
+    }
+    return;
+  }
+  if (aga) aga.pose = t.knocked >= 2 ? 'sad' : 'watch';
+  if (t.knocked >= 3) bark('many');
+  else if (t.knocked && t.side.id === 'alshy') bark('alshy');
+  else if (t.knocked && t.side.id === 'shik') bark('shik');
+  else if (t.knocked && t.side.id === 'taike') bark('taike');
+  else if (!t.knocked) bark('miss', rand() < 0.6 ? kids[1] : null);
+  if (t.outs.some((b) => b.painted)) bark('dyed', kids[3]);
   if (t.knocked >= 2 || (t.knocked && t.side.id === 'alshy')) {
-    kids.forEach((k) => S.setPose(k, 'cheer', now, 1.8, Math.random() * 0.2));
+    kids.forEach((k) => S.setPose(k, 'cheer', now, 1.8, rand() * 0.2));
   } else if (t.knocked === 1) {
-    const order = [...kids].sort(() => Math.random() - 0.5);
-    order.slice(0, 2).forEach((k) => S.setPose(k, 'cheer', now, 1.5, Math.random() * 0.15));
+    const order = [...kids].sort(() => rand() - 0.5);
+    order.slice(0, 2).forEach((k) => S.setPose(k, 'cheer', now, 1.5, rand() * 0.15));
   } else {
     // a miss: groans, and the chubby one points and laughs
     kids.forEach((k) => {
-      if (k.i === 1 || Math.random() < 0.6) S.setPose(k, 'sad', now, 1.6, Math.random() * 0.2);
+      if (k.i === 1 || rand() < 0.6) S.setPose(k, 'sad', now, 1.6, rand() * 0.2);
     });
   }
 }
@@ -306,7 +574,7 @@ function update(dt) {
   phase += dt;
   for (let i = dust.length - 1; i >= 0; i--) {
     const p = dust[i];
-    p.x += p.vx * dt;
+    p.x += (p.vx + (g ? g.w.wind * 0.6 : 0)) * dt;
     p.y += p.vy * dt;
     p.z = (p.z || 0) + dt * 2;
     p.vx *= 0.92;
@@ -315,17 +583,31 @@ function update(dt) {
     if ((p.life -= dt) <= 0) dust.splice(i, 1);
   }
   for (let i = pops.length - 1; i >= 0; i--) if ((pops[i].life -= dt) <= 0) pops.splice(i, 1);
+  for (let i = bubbles.length - 1; i >= 0; i--) if ((bubbles[i].life -= dt) <= 0) bubbles.splice(i, 1);
   shake *= Math.pow(0.0015, dt);
   S.updateKids(kids, clock);
+  if (aga && aga.pose !== 'watch' && state !== 'over' && state !== 'agaAim' && phase > 2.2) aga.pose = 'watch';
+  // anything flying makes the hens run
+  const danger = g ? g.w.bodies.filter((b) => !b.fixed && Math.hypot(b.vx, b.vy) > 20) : [];
+  if (S.updateLife(life, dt, danger)) A.chirp();
+  // the wind lifts dust off the yard now and then
+  if (g && g.w.wind && Math.random() < dt * 3) dust.push({ x: (g.w.wind > 0 ? -10 : 110) + Math.random() * 20, y: 10 + Math.random() * 120, z: 0.5, vx: g.w.wind * 3, vy: 0, r: 1.5, grow: 4, life: 1.6, max: 1.6, a: 0.18, col: '#e9d2a6' });
   updateHand(dt);
   if (g && state !== 'menu' && state !== 'load') {
-    shown += (g.score + (state === 'tally' && g.turn ? g.turn.score * Math.min(1, phase / 0.5) : 0) - shown) * Math.min(1, dt * 8);
+    shown += (g.score + (state === 'tally' && g.turn && g.turn.owner !== 'aga' ? g.turn.score * Math.min(1, phase / 0.5) : 0) - shown) * Math.min(1, dt * 8);
     hudScore();
   }
 
   if (state === 'flight') fly(dt);
   else if (state === 'roll') roll(dt);
-  else if (state === 'reveal') {
+  else if (state === 'agaAim') {
+    if (phase > 0.35 && aga) aga.pose = 'throw';
+    if (phase > 0.6 && !agaShot) {
+      agaShot = agaPlan(g, rand, AGAS[aga.id].skill);
+      startThrow(g, 'aga');
+      launchFlight({ x: aga.x + 3, y: aga.y + 4, z: 22 }, AWAY, agaShot.ux, agaShot.uy, agaShot.power, 'aga');
+    }
+  } else if (state === 'reveal') {
     const s = saka(g.w);
     if (phase < 0.45) s.ang += dt * 16;
     else if (s.tumble) {
@@ -337,7 +619,8 @@ function update(dt) {
       phase = 0;
       if (g.turn.score) {
         A.tally(g.turn.score >= 100);
-        pop(0, 0, `+${g.turn.score}`, '#ffd36b', 9, 1.3, { x: S.view.w / 2, y: S.view.h * 0.3 });
+        const mine = g.turn.owner !== 'aga';
+        pop(0, 0, `${mine ? '' : agaName() + ' '}+${g.turn.score}`, mine ? '#ffd36b' : '#c9d4e0', mine ? 9 : 7, 1.3, { x: S.view.w / 2, y: S.view.h * 0.3 });
       }
     }
   } else if (state === 'tally') {
@@ -347,14 +630,25 @@ function update(dt) {
       faces();
       if (res.cleared) {
         A.cleared();
-        pop(0, 0, 'Кон тазаланды! +50', '#ffd36b', 6, 1.6, { x: S.view.w / 2, y: S.view.h * 0.4 });
-        kids.forEach((k) => S.setPose(k, 'cheer', clock, 1.6, Math.random() * 0.2));
+        pop(0, 0, T('Кон тазаланды! +50', 'Kon cleared! +50'), '#ffd36b', 6, 1.6, { x: S.view.w / 2, y: S.view.h * 0.4 });
+        kids.forEach((k) => S.setPose(k, 'cheer', clock, 1.6, rand() * 0.2));
+        bark('cleared');
       }
-      if (t.refund) pop(0, 0, 'Два за бросок — бросок вернулся', '#bfeaa0', 4, 1.6, { x: S.view.w / 2, y: S.view.h * 0.5 });
+      if (g.draw) {
+        g.draw = false;
+        pop(0, 0, T('Ничья — ещё по броску!', 'A draw — one more each!'), '#ffd36b', 5, 1.8, { x: S.view.w / 2, y: S.view.h * 0.45 });
+      }
+      if (t.refund) pop(0, 0, T('Два за бросок — бросок вернулся', 'Two in one throw — throw back'), '#bfeaa0', 4, 1.6, { x: S.view.w / 2, y: S.view.h * 0.5 });
       hudThrows();
-      turnPanel(g.chain ? `Цепочка: +${g.chain} к множителю` : '');
-      state = g.result ? 'overWait' : 'aim';
-      phase = 0;
+      turnPanel(g.chain ? T(`Цепочка: +${g.chain} к множителю`, `Chain: +${g.chain} to mult`) : '');
+      if (g.result) {
+        state = 'overWait';
+        phase = 0;
+      } else {
+        thrower = nextThrower(g, t.owner);
+        if (thrower === 'aga') agaTurn();
+        else aimNow();
+      }
     }
   } else if (state === 'overWait' && phase > 0.7) over();
 }
@@ -366,7 +660,7 @@ function updateHand(dt) {
   let tr = 0;
   let ts = 1;
   let hide = 0;
-  if (state === 'aim' || state === 'menu') {
+  if (state === 'aim' || state === 'menu' || state === 'talk') {
     hand.open = false;
     if (aim && drag) {
       // the hand follows the finger a little and cocks back with the pull
@@ -376,13 +670,17 @@ function updateHand(dt) {
     } else {
       ty = Math.sin(clock * 1.6) * 3;
     }
-  } else if (state === 'flight') {
+  } else if (state === 'flight' && g.turn && g.turn.owner === 'me') {
     // follow-through: forward and up, then down out of sight
     const p = Math.min(1, phase / 0.12);
     ty = -S.view.h * 0.06 * p;
     tr = 0.12 * p;
     ts = 1 - 0.08 * p;
     hide = phase > 0.15 ? 1 : 0;
+  } else if (state === 'agaAim' || (g && g.turn && g.turn.owner === 'aga')) {
+    // waiting for the aga: the hand rests low
+    hand.open = false;
+    hide = 0.45;
   } else {
     hide = 1;
   }
@@ -399,13 +697,16 @@ function fly(dt) {
   f.t += dt;
   const s = saka(g.w);
   const u = Math.min(1, f.t / f.T);
-  s.x = f.from.x + (f.land.x - f.from.x) * u;
+  // the wind carries it a little in the air too
+  const drift = g.w.wind * 0.5 * f.t * f.t;
+  s.x = f.from.x + (f.land.x - f.from.x) * u + drift;
   s.y = f.from.y + (f.land.y - f.from.y) * u;
   s.z = f.from.z * (1 - u) + S.arcHeight(f.power) * 4 * u * (1 - u);
   s.ang += dt * 22;
   if (u >= 1) {
     s.z = 0;
-    throwFromHand(g, f.ux, f.uy, f.power);
+    throwFromHand(g, f.ux, f.uy, f.power, f.origin);
+    s.x += drift;
     A.thud(40 + f.power * 50);
     puff(s.x, s.y, 7, 0.7);
     state = 'roll';
@@ -424,13 +725,14 @@ function roll(dt) {
   const s = saka(g.w);
   for (const e of g.w.events) {
     if (e.type === 'hit') {
-      const kidBody = e.a.kind === 'kid' ? e.a : e.b.kind === 'kid' ? e.b : null;
-      if (kidBody) {
-        // a bone hit a kid's foot
-        const kid = kidOf(kidBody);
+      const feet = e.a.kind === 'kid' ? e.a : e.b.kind === 'kid' ? e.b : null;
+      if (feet) {
+        // a bone hit someone's foot
+        const kid = feet.ki === 'aga' ? aga : kidOf(feet);
         if (kid && e.power > 8) {
-          S.setPose(kid, 'sad', clock, 1.1);
-          pop(kid.x, kid.y - 2, 'Ой!', '#fff4dc', 4, 0.9);
+          if (kid !== aga) S.setPose(kid, 'sad', clock, 1.1);
+          else aga.pose = 'sad';
+          bark('ouch', kid);
           A.thud(e.power);
         }
         continue;
@@ -447,7 +749,7 @@ function roll(dt) {
     } else if (e.type === 'out') {
       const pay = knock(g, e.body);
       A.knocked(g.turn.knocked - 1);
-      pop(e.body.x, e.body.y, `+${pay}`, e.body.painted ? '#ff9fd0' : '#fff4dc', 4 + Math.min(3, g.turn.knocked * 0.4));
+      pop(e.body.x, e.body.y, `+${pay}`, e.body.painted ? '#ff9fd0' : g.turn.owner === 'aga' ? '#c9d4e0' : '#fff4dc', 4 + Math.min(3, g.turn.knocked * 0.4));
       turnPanel();
       bump('turnChips');
       if (g.turn.knocked >= 3) slow = 0.45;
@@ -461,9 +763,9 @@ function roll(dt) {
     if (sp > 30) b.tumble = true;
     else if (b.tumble && sp < 8 && b.kind === 'asyk') {
       b.tumble = false;
-      b.face = ['alshy', 'buk', 'buk', 'taike', 'shik'][Math.floor(Math.random() * 5)];
+      b.face = ['alshy', 'buk', 'buk', 'taike', 'shik'][Math.floor(rand() * 5)];
     }
-    if (sp > 45 && Math.random() < dt * 30) puff(b.x - (b.vx / sp) * b.r, b.y - (b.vy / sp) * b.r, 1, 0.3);
+    if (sp > 45 && rand() < dt * 30) puff(b.x - (b.vx / sp) * b.r, b.y - (b.vy / sp) * b.r, 1, 0.3);
   }
   if (!moving(g.w)) still += dt;
   else still = 0;
@@ -473,10 +775,11 @@ function roll(dt) {
     phase = 0;
     A.side(t.side.id);
     react(t);
-    const label = t.side.throws ? `${t.side.name}: +1 бросок` : `${t.side.name} ×${t.side.mult}`;
-    pop(s.x, s.y, label, SIDE_COL[t.side.id], 5, 1.3);
-    const sideText = t.side.throws ? `${t.side.name}: +1 бросок` : `${t.side.name} ×${t.side.mult}`;
-    turnPanel(t.knocked ? (g.chain > 1 ? `${sideText}, цепочка +${g.chain - 1}` : sideText) : `Мимо. ${t.side.throws ? sideText : ''}`.trim());
+    const sideName = t.side.name;
+    const sideText = t.side.throws ? `${sideName}: ${T('+1 бросок', '+1 throw')}` : `${sideName} ×${t.side.mult}`;
+    pop(s.x, s.y, sideText, SIDE_COL[t.side.id], 5, 1.3);
+    if (t.owner === 'aga') turnPanel(`${agaName()}: ${t.knocked ? sideText : T('мимо', 'missed')}`);
+    else turnPanel(t.knocked ? (g.chain > 1 ? `${sideText}, ${T('цепочка', 'chain')} +${g.chain - 1}` : sideText) : `${T('Мимо', 'Missed')}. ${t.side.throws ? sideText : ''}`.trim());
     bump('turnMult');
     hudThrows();
   }
@@ -490,7 +793,7 @@ function draw() {
   S.drawBackdrop(c);
   if (g) {
     const s = saka(g.w);
-    const items = [];
+    const items = S.lifeItems(life);
     const showSaka = state === 'flight' || state === 'roll' || state === 'reveal' || state === 'tally';
     for (const b of g.w.bodies) {
       if (b.kind === 'kid') continue;
@@ -498,9 +801,12 @@ function draw() {
       items.push({ D: S.CAM.y - b.y, b });
     }
     for (const k of kids) items.push({ D: S.CAM.y - k.y + 0.5, kid: k });
+    if (aga) items.push({ D: S.CAM.y - aga.y + 0.5, aga });
     items.sort((a, b) => b.D - a.D);
     for (const it of items) {
-      if (it.kid) S.drawKid(c, it.kid, clock);
+      if (it.draw) it.draw(c);
+      else if (it.kid) S.drawKid(c, it.kid, clock);
+      else if (it.aga) S.drawAga(c, it.aga, clock);
       else if (it.b === s) {
         let z = s.z || 0;
         if (state === 'reveal' && phase < 0.45) z = Math.sin((phase / 0.45) * Math.PI) * 4;
@@ -520,8 +826,11 @@ function draw() {
     }
     S.drawPopups(c, pops);
   }
+  S.drawAir(c, life, clock);
   c.restore();
   S.drawOverlay(c, clock);
+  if (SHOT) return;
+  S.drawBubbles(c, bubbles);
   // the hand is closest to the eye: over the light and grain of the yard
   S.drawHand(c, hand);
   if (state === 'aim' && !taught && !drag) S.drawPullHint(c, clock);
@@ -543,11 +852,11 @@ async function boot() {
   bar.style.cssText = 'margin: 18px auto 0; width: 70%; background: rgba(90, 40, 20, 0.15)';
   const fill = el('i');
   bar.append(fill);
-  panel([el('h1', 'logo', 'Асық'), el('p', 'sub', 'Аул просыпается…'), bar]);
+  panel([el('h1', 'logo', 'Асық'), el('p', 'sub', T('Аул просыпается…', 'The village wakes up…')), bar]);
   try {
     await S.loadArt((k) => (fill.style.width = `${Math.round(k * 100)}%`));
   } catch {
-    panel([el('h2', null, 'Не загрузилось'), el('p', 'sub', 'Проверь интернет и обнови страницу.')]);
+    panel([el('h2', null, T('Не загрузилось', 'Failed to load')), el('p', 'sub', T('Проверь интернет и обнови страницу.', 'Check your connection and reload.'))]);
     return;
   }
   layout();
@@ -556,4 +865,4 @@ async function boot() {
 boot();
 requestAnimationFrame(frame);
 // for the test page: window.__asyk shows the live state
-window.__asyk = { get g() { return g; }, get state() { return state; }, kids };
+window.__asyk = { get g() { return g; }, get state() { return state; }, kids, hand, get aga() { return aga; }, playStory, talkNext: () => talkDone && talkDone() };

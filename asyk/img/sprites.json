@@ -1,43 +1,60 @@
 ﻿{
-    "kid0-cheer":  {
-                       "w":  225,
-                       "feet":  4,
-                       "h":  518
-                   },
-    "kid2-watch":  {
-                       "w":  178,
-                       "feet":  4,
-                       "h":  451
-                   },
-    "kid4-watch":  {
-                       "w":  195,
-                       "feet":  4,
-                       "h":  506
-                   },
-    "asyk-red-alshy":  {
-                           "h":  159,
-                           "w":  222
-                       },
-    "kid4-sad":  {
-                     "w":  227,
-                     "feet":  4,
-                     "h":  518
+    "kid3-sad":  {
+                     "h":  390,
+                     "w":  136
                  },
-    "kid1-sad":  {
-                     "w":  168,
-                     "feet":  4,
-                     "h":  452
-                 },
-    "kid2-cheer":  {
-                       "w":  178,
-                       "feet":  4,
-                       "h":  488
+    "kid1-watch":  {
+                       "h":  438,
+                       "w":  186
                    },
+    "kid3-cheer":  {
+                       "h":  455,
+                       "w":  147
+                   },
+    "asyk-red-shik":  {
+                          "h":  222,
+                          "w":  165
+                      },
+    "kid4-cheer":  {
+                       "h":  501,
+                       "w":  224
+                   },
+    "asyk-white-alshy":  {
+                             "h":  158,
+                             "w":  222
+                         },
     "kid2-sad":  {
-                     "w":  185,
-                     "feet":  4,
-                     "h":  471
+                     "h":  471,
+                     "w":  185
                  },
+    "kid0-sad":  {
+                     "h":  510,
+                     "w":  213
+                 },
+    "aga-erlan-sad":  {
+                          "h":  544,
+                          "w":  195
+                      },
+    "kid2-watch":  {
+                       "h":  451,
+                       "w":  178
+                   },
+    "kid1-sad":  {
+                     "h":  452,
+                     "w":  168
+                 },
+    "dog-trot":  {
+                     "h":  126,
+                     "w":  204
+                 },
+    "aga-erlan-watch":  {
+                            "h":  554,
+                            "w":  199
+                        },
+    "kid0-cheer":  {
+                       "h":  518,
+                       "w":  225
+                   },
     "hand-open":  {
                       "h":  474,
                       "y":  217,
@@ -46,73 +63,29 @@
                       "w":  818,
                       "fw":  1238
                   },
-    "asyk-white-alshy":  {
-                             "h":  158,
-                             "w":  222
-                         },
-    "asyk-white-buk":  {
-                           "h":  154,
-                           "w":  222
-                       },
-    "asyk-red-shik":  {
-                          "h":  222,
-                          "w":  165
-                      },
-    "asyk-white-shik":  {
-                            "h":  222,
-                            "w":  164
-                        },
-    "kid1-watch":  {
-                       "w":  186,
-                       "feet":  4,
-                       "h":  438
-                   },
-    "kid0-sad":  {
-                     "w":  213,
-                     "feet":  4,
-                     "h":  510
-                 },
-    "asyk-red-taike":  {
-                           "h":  162,
-                           "w":  222
-                       },
-    "kid1-cheer":  {
-                       "w":  202,
-                       "feet":  4,
-                       "h":  525
-                   },
     "kid0-watch":  {
-                       "w":  212,
-                       "feet":  4,
-                       "h":  484
-                   },
-    "asyk-red-buk":  {
-                         "h":  154,
-                         "w":  222
-                     },
-    "kid4-cheer":  {
-                       "w":  224,
-                       "feet":  4,
-                       "h":  501
-                   },
-    "asyk-white-taike":  {
-                             "h":  162,
-                             "w":  222
-                         },
-    "kid3-sad":  {
-                     "w":  136,
-                     "feet":  4,
-                     "h":  390
-                 },
-    "kid3-cheer":  {
-                       "w":  147,
-                       "feet":  4,
-                       "h":  455
+                       "h":  484,
+                       "w":  212
                    },
     "kid3-watch":  {
-                       "w":  148,
-                       "feet":  4,
-                       "h":  397
+                       "h":  397,
+                       "w":  148
+                   },
+    "hen-peck":  {
+                     "h":  146,
+                     "w":  142
+                 },
+    "dog-sit":  {
+                    "h":  144,
+                    "w":  110
+                },
+    "kid4-watch":  {
+                       "h":  506,
+                       "w":  195
+                   },
+    "kid2-cheer":  {
+                       "h":  488,
+                       "w":  178
                    },
     "hand-hold":  {
                       "h":  511,
@@ -121,5 +94,69 @@
                       "x":  492,
                       "w":  746,
                       "fw":  1238
-                  }
+                  },
+    "aga-erlan-throw":  {
+                            "h":  446,
+                            "w":  330
+                        },
+    "rooster":  {
+                    "h":  174,
+                    "w":  130
+                },
+    "kid4-sad":  {
+                     "h":  518,
+                     "w":  227
+                 },
+    "asyk-red-buk":  {
+                         "h":  154,
+                         "w":  222
+                     },
+    "aga-dauren-watch":  {
+                             "h":  525,
+                             "w":  200
+                         },
+    "aga-dauren-throw":  {
+                             "h":  434,
+                             "w":  258
+                         },
+    "aga-dauren-sad":  {
+                           "h":  506,
+                           "w":  244
+                       },
+    "asyk-red-taike":  {
+                           "h":  162,
+                           "w":  222
+                       },
+    "hen-walk":  {
+                     "h":  140,
+                     "w":  134
+                 },
+    "asyk-red-alshy":  {
+                           "h":  159,
+                           "w":  222
+                       },
+    "asyk-white-shik":  {
+                            "h":  222,
+                            "w":  164
+                        },
+    "aga-erlan-cheer":  {
+                            "h":  554,
+                            "w":  202
+                        },
+    "asyk-white-buk":  {
+                           "h":  154,
+                           "w":  222
+                       },
+    "kid1-cheer":  {
+                       "h":  525,
+                       "w":  202
+                   },
+    "asyk-white-taike":  {
+                             "h":  162,
+                             "w":  222
+                         },
+    "aga-dauren-cheer":  {
+                             "h":  567,
+                             "w":  258
+                         }
 }

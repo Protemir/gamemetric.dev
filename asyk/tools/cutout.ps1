@@ -118,18 +118,21 @@ $Out = (Resolve-Path $Out).Path
 function Load($name) { [System.Drawing.Bitmap]::FromFile((Join-Path $Src $name)) }
 $meta = @{}
 
-# the yard: plain JPEG, 1920 wide
-$y = Load "yard.jpg"
-$small = New-Object System.Drawing.Bitmap 1920, ([int](1920 * $y.Height / $y.Width))
-$g = [System.Drawing.Graphics]::FromImage($small)
-$g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-$g.DrawImage($y, 0, 0, $small.Width, $small.Height)
+# yards: plain JPEG, 1920 wide
 $enc = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
 $ep = New-Object System.Drawing.Imaging.EncoderParameters 1
 $ep.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 84L
-$small.Save((Join-Path $Out "yard.jpg"), $enc, $ep)
-$g.Dispose(); $small.Dispose(); $y.Dispose()
-"yard.jpg"
+foreach ($yn in "yard", "school") {
+  if (-not (Test-Path (Join-Path $Src "$yn.jpg"))) { continue }
+  $y = Load "$yn.jpg"
+  $small = New-Object System.Drawing.Bitmap 1920, ([int](1920 * $y.Height / $y.Width))
+  $g = [System.Drawing.Graphics]::FromImage($small)
+  $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  $g.DrawImage($y, 0, 0, $small.Width, $small.Height)
+  $small.Save((Join-Path $Out "$yn.jpg"), $enc, $ep)
+  $g.Dispose(); $small.Dispose(); $y.Dispose()
+  "$yn.jpg"
+}
 
 # hands: cropped to the hand, the crop's place in the 16:9 frame goes to sprites.json so both poses line up
 foreach ($h in "hand-hold", "hand-open") {
@@ -144,14 +147,16 @@ foreach ($h in "hand-hold", "hand-open") {
   $c.Dispose(); $k.Dispose(); $b.Dispose()
 }
 
-# kids: five in a row, cut by empty columns; the same kid keeps the same number in every pose
-foreach ($pose in "watch", "cheer", "sad") {
-  $b = Load "kids-$pose.jpg"
+# a row of figures on green (kids, an aga's poses, animals), cut by empty columns;
+# figures that touch come out as one wide run: the widest is cut at its thinnest column
+function SplitRow($file, $names, $scale) {
+  if (-not (Test-Path (Join-Path $Src $file))) { "skip $file"; return }
+  $count = $names.Count
+  $b = Load $file
   $k = [Cut]::Key($b, 40, 100)
   $all = New-Object System.Drawing.Rectangle 0, 0, $k.Width, $k.Height
   $runs = [System.Collections.ArrayList]@([Cut]::Runs($k, 0, $all, 6, 120))
-  # kids that touch come out as one wide run: cut the widest at its thinnest column
-  while ($runs.Count / 2 -lt 5) {
+  while ($runs.Count / 2 -lt $count) {
     $wi = 0
     for ($i = 1; $i -lt $runs.Count / 2; $i++) { if (($runs[2 * $i + 1] - $runs[2 * $i]) -gt ($runs[2 * $wi + 1] - $runs[2 * $wi])) { $wi = $i } }
     $a = $runs[2 * $wi]; $z = $runs[2 * $wi + 1]
@@ -161,18 +166,23 @@ foreach ($pose in "watch", "cheer", "sad") {
     $runs.Insert(2 * $wi + 1, $a + $best)
     $runs.Insert(2 * $wi + 2, $a + $best)
   }
-  $n = $runs.Count / 2
-  "kids-$pose : $n runs"
-  for ($i = 0; $i -lt $n; $i++) {
+  "$file : $($runs.Count / 2) runs"
+  for ($i = 0; $i -lt [Math]::Min($count, $runs.Count / 2); $i++) {
     $col = New-Object System.Drawing.Rectangle $runs[2 * $i], 0, ($runs[2 * $i + 1] - $runs[2 * $i]), $k.Height
     $r = [Cut]::Bounds($k, $col)
-    $c = [Cut]::Crop($k, $r, 4, 0.4)
-    $c.Save((Join-Path $Out "kid$i-$pose.png"), [System.Drawing.Imaging.ImageFormat]::Png)
-    $meta["kid$i-$pose"] = @{ w = $c.Width; h = $c.Height; feet = 4 }
+    $c = [Cut]::Crop($k, $r, 4, $scale)
+    $c.Save((Join-Path $Out "$($names[$i]).png"), [System.Drawing.Imaging.ImageFormat]::Png)
+    $script:meta[$names[$i]] = @{ w = $c.Width; h = $c.Height }
     $c.Dispose()
   }
   $k.Dispose(); $b.Dispose()
 }
+
+# kids: the same kid keeps the same number in every pose
+foreach ($pose in "watch", "cheer", "sad") { SplitRow "kids-$pose.jpg" @(0..4 | ForEach-Object { "kid$_-$pose" }) 0.4 }
+# the agas: four poses of one teenager
+foreach ($a in "erlan", "dauren") { SplitRow "aga-$a.jpg" @("watch", "throw", "cheer", "sad" | ForEach-Object { "aga-$a-$_" }) 0.4 }
+SplitRow "animals.jpg" @("hen-walk", "hen-peck", "rooster", "dog-trot", "dog-sit") 0.3
 
 # knucklebones: two rows (pale, red) of four sides (alshy, taike, buk, shik)
 $b = Load "asyks.jpg"

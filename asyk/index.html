@@ -31,6 +31,18 @@
   <p class="turn-note" id="turnNote"></p>
 </footer>
 <p class="hint-line" id="hint" aria-live="polite"></p>
+<div class="talk" id="talk" hidden>
+  <div class="talk-pic" id="talkPic"></div>
+  <div class="talk-body">
+    <b class="talk-name" id="talkName"></b>
+    <p class="talk-text" id="talkText" aria-live="polite"></p>
+  </div>
+  <span class="talk-next" aria-hidden="true">▸</span>
+</div>
+<div class="film" id="filmBox" hidden>
+  <video id="film" playsinline preload="auto"></video>
+  <button type="button" class="film-skip" id="filmSkip">▸▸</button>
+</div>
 <div id="ui"></div>
 </body>
 </html>

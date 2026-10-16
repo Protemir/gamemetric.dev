@@ -1,6 +1,6 @@
 // node asyk/tools/test.mjs — physics checks plus a bot that plays kons to see if the targets are fair.
 import { step, moving, saka, launch, predict, KON, FIELD } from '../js/physics.js';
-import { newKon, startThrow, knock, settle, finish, layout, target, throwFromHand } from '../js/game.js';
+import { newKon, startThrow, knock, settle, finish, layout, target, throwFromHand, agaPlan, nextThrower, AWAY } from '../js/game.js';
 import { rng } from '../js/util.js';
 
 let fails = 0;
@@ -125,6 +125,36 @@ for (const [label, tries] of [['ordinary', 0], ['careful', 12]]) {
     line.push(`кон ${k} (цель ${target(k)}): побед ${Math.round((wins / N) * 100)}%, ср. ${Math.round(sum / N)}`);
   }
   console.log(label + ':\n  ' + line.join('\n  '));
+}
+
+// 5. a duel with the aga: turns alternate, both use their throws, someone wins
+{
+  let wins = 0;
+  const N = 12;
+  for (let i = 0; i < N; i++) {
+    const g = newKon(1, 500 + i, { duel: { aga: 'erlan', throws: 5 }, wind: i % 2 ? 8 : 0 });
+    const rand = rng(77 + i);
+    let who = 'me';
+    let guard = 0;
+    while (!g.result && guard++ < 60) {
+      startThrow(g, who);
+      if (who === 'aga') {
+        const p = agaPlan(g, rand, 0.7);
+        throwFromHand(g, p.ux, p.uy, p.power, AWAY);
+      } else {
+        const a = botThrow(g, rand, 8);
+        const l = Math.hypot(a.dx, a.dy);
+        throwFromHand(g, a.dx / l, a.dy / l, a.pw);
+      }
+      run(g, (b) => knock(g, b));
+      settle(g);
+      finish(g);
+      who = nextThrower(g, who);
+    }
+    ok(g.result === 'win' || g.result === 'lose', 'duel ends with a result');
+    if (g.result === 'win') wins++;
+  }
+  console.log(`duel vs aga (skill 0.7): careful player wins ${wins} of ${N}`);
 }
 
 console.log(fails ? `${fails} failed` : 'all checks passed');

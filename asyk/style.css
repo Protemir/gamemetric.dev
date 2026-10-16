@@ -194,3 +194,58 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #5e1d1a; }
 .btn.ghost { margin-top: 10px; background: transparent; color: var(--muted); box-shadow: none; font-size: 15px; padding: 8px; }
+
+.panel.wide { width: min(560px, 100%); }
+.btn.second { margin-top: 10px; background: linear-gradient(180deg, #3b84ab, #2f6d8f); box-shadow: 0 4px 0 #1f4c66; }
+
+/* chapters */
+.chapters { margin-top: 16px; display: grid; gap: 10px; }
+.chapter {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(90, 40, 20, 0.18);
+  background: #fff8ea;
+  color: var(--ink);
+}
+.chapter b { font-family: var(--serif); font-size: 19px; color: #8f2f2a; }
+.chapter span { color: var(--muted); font-size: 14px; }
+.chapter .dots { font-style: normal; display: flex; gap: 6px; margin-top: 4px; }
+.chapter em { font-style: normal; color: rgba(90, 40, 20, 0.25); }
+.chapter em.on { color: #d0702c; }
+.chapter.locked { opacity: 0.5; cursor: default; }
+.chapter:not(.locked):active { transform: scale(0.98); }
+
+/* dialogue */
+.talk {
+  position: fixed;
+  left: 50%;
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + 76px);
+  transform: translateX(-50%);
+  width: min(620px, calc(100vw - 20px));
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 12px 12px;
+  border-radius: 20px;
+  background: rgba(251, 241, 220, 0.97);
+  box-shadow: 0 14px 40px rgba(40, 20, 10, 0.45), 0 0 0 3px #8f2f2a;
+  cursor: pointer;
+  animation: rise 0.25s ease;
+}
+.talk[hidden] { display: none; }
+.talk-pic canvas { width: 64px; height: 64px; border-radius: 50%; display: block; box-shadow: 0 0 0 3px #e7c48a; }
+.talk-body { flex: 1; min-width: 0; }
+.talk-name { font-family: var(--serif); color: #8f2f2a; font-size: 16px; }
+.talk-text { margin: 3px 0 0; font-size: 17px; line-height: 1.38; color: var(--ink); min-height: 2.6em; }
+.talk-next { color: #8f2f2a; font-size: 20px; animation: nudge 1s ease-in-out infinite; }
+@keyframes nudge { 50% { transform: translateX(4px); } }
+
+/* chapter film */
+.film { position: fixed; inset: 0; z-index: 20; background: #000; display: grid; place-items: center; }
+.film[hidden] { display: none; }
+.film video { width: 100%; height: 100%; object-fit: contain; }
+.film-skip { position: absolute; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); padding: 10px 16px; border-radius: 12px; border: 0; background: rgba(255, 255, 255, 0.18); color: #fff; font-size: 18px; }

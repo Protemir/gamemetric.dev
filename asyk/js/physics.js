@@ -38,7 +38,8 @@ export function body(kind, x, y, extra = {}) {
 }
 
 export function world(seed = 1) {
-  return { bodies: [], rand: rng(seed), events: [], time: 0 };
+  // wind: a push along x on everything that moves (the school yard), units/s²
+  return { bodies: [], rand: rng(seed), events: [], time: 0, wind: 0 };
 }
 
 export const saka = (w) => w.bodies.find((b) => b.kind === 'saka');
@@ -77,6 +78,7 @@ function sub(w, h) {
       b.spin *= 0.9;
       continue;
     }
+    b.vx += w.wind * h;
     b.x += b.vx * h;
     b.y += b.vy * h;
     const s = Math.hypot(b.vx, b.vy);
