@@ -14,6 +14,15 @@ export async function portalInit() {
   sdk = (await window.ASEM_SDK) || null;
 }
 
+// the first screen is up: the portal measures the load time up to here, not up to the first race
+export function portalLoaded() {
+  try {
+    if (sdk) sdk.game.loadingStop();
+  } catch {
+    /* the portal is not ready */
+  }
+}
+
 // 'ru' for players from the region, 'en' for everyone else, null if the portal does not say
 export function portalLang() {
   try {

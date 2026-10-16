@@ -8,7 +8,7 @@ import { sound, media, audioInit, setSound, holdAudio, engine, crashSound, beep,
 import { music, playMusic, setMusic, pauseMusic } from './music.js';
 import { online, getBoard, submit, flushPending, newGroupCode, boardId } from './scores.js';
 import { pulse } from './pulse.js';
-import { PORTAL, portalInit, portalLang, gameplay, happytime, onPortalMute } from './portal.js';
+import { PORTAL, portalInit, portalLang, portalLoaded, gameplay, happytime, onPortalMute } from './portal.js';
 
 const STEP = 1 / 60;
 const $ = (id) => document.getElementById(id);
@@ -2237,6 +2237,7 @@ if (PORTAL && fresh) toMenu(() => screenStory(0));
 else toMenu();
 pulse('open');
 requestAnimationFrame(frame);
+portalLoaded();
 
 // ?audiodebug: the audio state on screen, to check sound on a phone without devtools
 if (new URLSearchParams(location.search).has('audiodebug')) {

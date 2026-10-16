@@ -11,4 +11,10 @@ window.ASEM_SDK = sdk
   : Promise.resolve(null);
 const ready = await window.ASEM_SDK;
 if (ready && ready.data) window.ASEM_DATA = ready.data;
+// js/portal.js reports loadingStop once the first screen is drawn
+try {
+  if (ready) ready.game.loadingStart();
+} catch {
+  /* the portal is not ready */
+}
 await import('./main.js');
