@@ -261,19 +261,46 @@ export function chirp() {
   tone('sine', f * 1.1, f * 1.4, 0.05, 0.02, 0.08);
 }
 
-// evening crickets: short bursts of a narrow high trill, now and then, quietly
+// the evening around the yard: a recorded loop (sfx/crickets.mp3), quiet; synthesized trills if it is missing
 let crickets = 0;
+let bed = null;
+let wantBed = false;
+let startingBed = false;
+// before the first tap there is no audio yet: the bed starts on the first tap after it was asked for
+export function ensureAmbience() {
+  if (wantBed && !bed && !startingBed && sound.ctx) ambience(true);
+}
 export function ambience(on) {
+  wantBed = on;
   clearInterval(crickets);
   crickets = 0;
-  if (!on) return;
-  crickets = setInterval(() => {
-    if (!ready() || Math.random() < 0.35) return;
-    const f = 4200 + Math.random() * 600;
-    const n = 3 + Math.floor(Math.random() * 4);
-    for (let i = 0; i < n; i++) tone('sine', f, f * 0.98, 0.025, 0.012 + Math.random() * 0.008, i * 0.045);
-  }, 700);
+  if (bed) {
+    try {
+      bed.stop();
+    } catch {
+      /* over */
+    }
+    bed = null;
+  }
+  if (!on || !sound.ctx) return;
+  startingBed = true;
+  loop('sfx/crickets.mp3', 0.35).then((b) => {
+    startingBed = false;
+    if (b) {
+      bed = b;
+      return;
+    }
+    crickets = setInterval(() => {
+      if (!ready() || Math.random() < 0.35) return;
+      const f = 4200 + Math.random() * 600;
+      const n = 3 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < n; i++) tone('sine', f, f * 0.98, 0.025, 0.012 + Math.random() * 0.008, i * 0.045);
+    }, 700);
+  });
 }
+
+// a yard sound: hen, rooster, dog, wind
+export const sfx = (name, vol = 0.6) => voice(`sfx/${name}.mp3`, { stopOthers: false, vol });
 
 // recorded lines (voice/<lang>/...mp3): decoded once, played through the same volume and mute;
 // a missing file is remembered and stays quiet
@@ -316,4 +343,28 @@ export function stopVoice() {
     }
     speaking = null;
   }
+}
+
+async function loop(url, vol) {
+  if (!sound.ctx || missing.has(url)) return null;
+  let buf = voices.get(url);
+  if (!buf) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(String(r.status));
+      buf = await sound.ctx.decodeAudioData(await r.arrayBuffer());
+      voices.set(url, buf);
+    } catch {
+      missing.add(url);
+      return null;
+    }
+  }
+  const src = sound.ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  const g = sound.ctx.createGain();
+  g.gain.value = vol;
+  src.connect(g).connect(sound.out);
+  src.start();
+  return src;
 }

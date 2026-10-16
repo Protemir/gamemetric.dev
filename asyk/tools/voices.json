@@ -2,7 +2,7 @@
   "model": "eleven_v3",
   "people": {
     "apa": {
-      "voice": "",
+      "voice": "ZBZNw3ycw1VfjA2EgK0L",
       "describe": "An elderly Kazakh grandmother in her seventies calling from a village house window in the evening. Warm, loving, slightly raspy voice, unhurried, a soft Kazakh accent in Russian.",
       "sample": "Балам, далеко не уходи! Как стемнеет — домой, ужинать.",
       "previews": [
@@ -13,7 +13,7 @@
       "error": "/text-to-voice/design: 422 {\"detail\":[{\"type\":\"string_too_short\",\"loc\":[\"body\",\"text\"],\"msg\":\"String should have at least 100 characters\",\"input\":\"Балам, далеко не уходи! Как стемнеет — домой, ужинать.\",\"ctx\":{\"min_length\":100}}]}"
     },
     "timur": {
-      "voice": "",
+      "voice": "8M81RK3MD7u4DOJpu2G5",
       "describe": "Timur, an 11-year-old boy in a children's adventure game: lively, quick and enthusiastic, a bit hoarse from shouting outdoors, speaking Russian with a light Kazakh accent.",
       "sample": "Сақа ляжет алшы — очки втрое. Давай, покажи!",
       "candidates": [
@@ -27,10 +27,11 @@
           "voice": "pt0Iailp6NXMdRw1n3c5",
           "owner": "7398804d9eaf2f463899a907587c33a390591775784f87857b6d0e1e4e3e66f6"
         }
-      ]
+      ],
+      "from": "Viktoriia"
     },
     "bekzhan": {
-      "voice": "",
+      "voice": "4iqKdEXMW8NRF8USiS3Q",
       "describe": "Bekzhan, a chubby 10-year-old boy in a children's adventure game: the class clown, cheeky and teasing, always half laughing, speaking Russian with a light Kazakh accent.",
       "sample": "О, калалык приехал! В асык-то умеешь?",
       "candidates": [
@@ -44,10 +45,11 @@
           "voice": "JoMSKT9U9IuvcWwxNJUV",
           "owner": "55acb4f563fb45b34673390681bcd4437b9c09334d58570b4009e949d19b91b4"
         }
-      ]
+      ],
+      "from": "Bittu"
     },
     "asem": {
-      "voice": "",
+      "voice": "tj9wwIq7s2HekkDfg1KH",
       "describe": "Asem, a 10-year-old girl in a children's adventure game: bright and clear, kind and confident, a little bossy with the boys, speaking Russian with a light Kazakh accent.",
       "sample": "Бекжан, отстань от него. Смотри: тянешь руку назад и бросаешь.",
       "candidates": [
@@ -66,10 +68,11 @@
           "voice": "Jr72SE8p9OcJmr8hyX0D",
           "owner": "7398804d9eaf2f463899a907587c33a390591775784f87857b6d0e1e4e3e66f6"
         }
-      ]
+      ],
+      "from": "Jasmine"
     },
     "erke": {
-      "voice": "",
+      "voice": "M5t0724ORuAGCh3p3DUR",
       "describe": "Erke, a 7-year-old boy in a children's adventure game, the youngest of the gang: squeaky, excited, words tumbling out fast, speaking Russian with a light Kazakh accent.",
       "sample": "Я свой крашеный асык поставил! Только не выбивай его, а?",
       "candidates": [
@@ -83,10 +86,11 @@
           "voice": "LkSPBLr5WF7APTCqF4ZJ",
           "owner": "7398804d9eaf2f463899a907587c33a390591775784f87857b6d0e1e4e3e66f6"
         }
-      ]
+      ],
+      "from": "Miffy"
     },
     "askar": {
-      "voice": "",
+      "voice": "NHQ2h6zwVO33wcmZuxXz",
       "describe": "Askar, a 12-year-old boy in a children's adventure game: quiet and calm, low for his age, few words, dry and serious, speaking Russian with a light Kazakh accent.",
       "sample": "Нормально бросает.",
       "candidates": [
@@ -100,10 +104,11 @@
           "voice": "NHQ2h6zwVO33wcmZuxXz",
           "owner": "55bbee24e02d8d9adc35967646890c2bcead86f43959741020a9a209e354f75e"
         }
-      ]
+      ],
+      "from": "Babur"
     },
     "erlan": {
-      "voice": "",
+      "voice": "RvcToHi9ENVDatbeYNJe",
       "describe": "Erlan, a 15-year-old teenage boy whose voice has just broken, the street champion in a children's adventure game: confident, cocky, slow lazy drawl, speaking Russian with a Kazakh accent.",
       "sample": "Это кто тут из города? Давай один на один. Сақа у меня со свинцом.",
       "candidates": [
@@ -117,10 +122,11 @@
           "voice": "GC6lSBdDbTgPRulcGFDX",
           "owner": "aedaf5c438dede0de1cd378a864e5889a81110c3e02eaaa64da3728ad0e53c64"
         }
-      ]
+      ],
+      "from": "Mikhail"
     },
     "dauren": {
-      "voice": "",
+      "voice": "sy3iWjPWyIrDlSo8mBwS",
       "describe": "Dauren, a 16-year-old teenage boy from the next street in a children's adventure game: loud, theatrical show-off, slightly raspy, laughing at everyone, speaking Russian with a Kazakh accent.",
       "sample": "Тут ветер — мой друг. Бросай первым, калалык.",
       "candidates": [
@@ -134,7 +140,8 @@
           "voice": "sy3iWjPWyIrDlSo8mBwS",
           "owner": "a56650eb464ba591c6ab45ecbf71c0051b9e4c964d3514f17b26547c8fe45520"
         }
-      ]
+      ],
+      "from": "Alex"
     }
   }
 }

@@ -137,6 +137,7 @@ function button(text, fn, cls = 'btn') {
   b.type = 'button';
   b.addEventListener('click', () => {
     A.audioInit();
+    A.ensureAmbience();
     fn();
   });
   return b;
@@ -472,6 +473,7 @@ function aimFrom(dx, dy) {
 
 cv.addEventListener('pointerdown', (e) => {
   A.audioInit();
+  A.ensureAmbience();
   if (state === 'talk' && talkDone) return talkDone();
   if (state !== 'aim' || drag || hand.hidden > 0.3) return;
   drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY };
@@ -602,6 +604,13 @@ function react(t) {
   }
 }
 
+let lastCluck = 0;
+function cluck(vol) {
+  if (clock - lastCluck < 1.5) return;
+  lastCluck = clock;
+  A.sfx('hen', vol);
+}
+
 // ---------- loop ----------
 function update(dt) {
   clock += dt;
@@ -621,9 +630,15 @@ function update(dt) {
   shake *= Math.pow(0.0015, dt);
   S.updateKids(kids, clock);
   if (aga && aga.pose !== 'watch' && state !== 'over' && state !== 'agaAim' && phase > 2.2) aga.pose = 'watch';
-  // anything flying makes the hens run
+  // anything flying makes the hens run (and complain)
   const danger = g ? g.w.bodies.filter((b) => !b.fixed && Math.hypot(b.vx, b.vy) > 20) : [];
+  const dogWas = life.dog.on;
   if (S.updateLife(life, dt, danger)) A.chirp();
+  if (life.hens.some((h) => h.run > 0.75)) cluck(0.7);
+  else if (rand() < dt / 9) cluck(0.35);
+  if (!dogWas && life.dog.on) A.sfx('dog', 0.35);
+  if (rand() < dt / 45) A.sfx('rooster', 0.3);
+  if (g && g.w.wind && rand() < dt / 7) A.sfx('wind', 0.4);
   // the wind lifts dust off the yard now and then
   if (g && g.w.wind && Math.random() < dt * 3) dust.push({ x: (g.w.wind > 0 ? -10 : 110) + Math.random() * 20, y: 10 + Math.random() * 120, z: 0.5, vx: g.w.wind * 3, vy: 0, r: 1.5, grow: 4, life: 1.6, max: 1.6, a: 0.18, col: '#e9d2a6' });
   updateHand(dt);

@@ -178,15 +178,42 @@ if (cmd === 'design') {
   const force = process.argv.includes('--force');
   let made = 0;
   let chars = 0;
-  for (const l of allLines()) {
-    const file = path.join(root, voiceFile(l.lang, l.who, l.text));
-    if (!force && fs.existsSync(file)) continue;
-    await say(l.who, l.lang, l.text, file);
-    made++;
-    chars += l.text.length;
-    if (made % 20 === 0) console.log(made, 'files');
-  }
+  // three at a time: as many as the plan lets run at once
+  const todo = allLines().filter((l) => force || !fs.existsSync(path.join(root, voiceFile(l.lang, l.who, l.text))));
+  const work = async () => {
+    for (let l; (l = todo.shift()); ) {
+      const file = path.join(root, voiceFile(l.lang, l.who, l.text));
+      try {
+        await say(l.who, l.lang, l.text, file);
+      } catch (e) {
+        console.log('FAILED', l.who, l.lang, l.text, String(e.message).slice(0, 160));
+        continue;
+      }
+      made++;
+      chars += l.text.length;
+      if (made % 25 === 0) console.log(made, 'files');
+    }
+  };
+  await Promise.all([work(), work(), work()]);
   console.log(`done: ${made} new files, ${chars} characters`);
+} else if (cmd === 'sfx') {
+  // sounds of the yard from the Sound Effects model, into asyk/sfx/
+  const SFX = {
+    hen: ['a single village hen clucking softly nearby, outdoors, evening, no other sounds', 2.5],
+    rooster: ['a rooster crowing once in the distance in a quiet village, evening', 3],
+    dog: ['a village dog barking twice far away, outdoors, slight echo', 2],
+    crickets: ['calm summer evening ambience in a village: crickets chirping, very distant birds, light breeze, seamless loop', 10],
+    wind: ['a gust of dry mountain wind sweeping over a dusty school yard, leaves rustling', 4],
+  };
+  const dir = path.join(root, 'sfx');
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [name, [text, duration_seconds]] of Object.entries(SFX)) {
+    const file = path.join(dir, name + '.mp3');
+    if (fs.existsSync(file)) continue;
+    const r = await api('/sound-generation?output_format=mp3_44100_64', { method: 'POST', body: JSON.stringify({ text, duration_seconds, prompt_influence: 0.6 }) });
+    fs.writeFileSync(file, Buffer.from(await r.arrayBuffer()));
+    console.log('sfx', name);
+  }
 } else if (cmd === 'count') {
   const lines = allLines();
   console.log(lines.length, 'files,', lines.reduce((s, l) => s + l.text.length, 0), 'characters');
