@@ -13,7 +13,16 @@ const ui = $('ui');
 
 // ---------- language: Russian for the region, English for everyone else ----------
 const q = new URLSearchParams(location.search);
-let lang = q.get('lang') === 'en' ? 1 : q.get('lang') === 'ru' ? 0 : store.get('asyk.lang', /^(ru|kk|ky|be|uz|tg|uk)\b/i.test(navigator.language || '') ? 0 : 1);
+// a browser set to English in Almaty is still a Russian speaker: the time zone tells the region
+const REGION_TZ = /^(Asia\/(Almaty|Qostanay|Qyzylorda|Aqtobe|Aqtau|Atyrau|Oral|Bishkek|Tashkent|Samarkand|Dushanbe|Ashgabat|Yekaterinburg|Omsk|Novosibirsk|Barnaul|Tomsk|Novokuznetsk|Krasnoyarsk|Irkutsk|Chita|Yakutsk|Vladivostok|Magadan|Sakhalin|Kamchatka|Anadyr|Baku|Tbilisi|Yerevan)|Europe\/(Moscow|Kaliningrad|Samara|Volgograd|Saratov|Ulyanovsk|Astrakhan|Kirov|Minsk|Kiev|Kyiv|Chisinau|Simferopol))$/;
+const regionTz = (() => {
+  try {
+    return REGION_TZ.test(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+  } catch {
+    return false;
+  }
+})();
+let lang = q.get('lang') === 'en' ? 1 : q.get('lang') === 'ru' ? 0 : store.get('asyk.lang', /^(ru|kk|ky|be|uz|tg|uk)\b/i.test(navigator.language || '') || regionTz ? 0 : 1);
 const T = (ru, en) => (lang ? en : ru);
 // ?shot: a clean frame for covers and film start frames — no hand, no shouts, no hints
 const SHOT = q.has('shot');
@@ -563,7 +572,11 @@ function bark(kind, who = null) {
   const line = list[Math.floor(rand() * list.length)];
   const text = pick(line);
   bubbles.push({ who: w, text, life: 1.7, max: 1.7 });
-  if (w.i != null) A.voice(voiceFile(LANG_CODE(), KID_IDS[w.i], text), { stopOthers: false, vol: 0.8 });
+  // one shout at a time, never over a dialogue line
+  if (w.i != null && state !== 'talk' && clock - lastShout > 1.2) {
+    lastShout = clock;
+    A.voice(voiceFile(LANG_CODE(), KID_IDS[w.i], text), { stopOthers: false, vol: 0.8 });
+  }
 }
 
 const SIDE_COL = { alshy: '#ffd36b', taike: '#ffb070', buk: '#fff4dc', shik: '#bfeaa0' };
@@ -605,6 +618,7 @@ function react(t) {
 }
 
 let lastCluck = 0;
+let lastShout = -9;
 function cluck(vol) {
   if (clock - lastCluck < 1.5) return;
   lastCluck = clock;

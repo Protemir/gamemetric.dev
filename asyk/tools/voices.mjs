@@ -62,8 +62,9 @@ async function say(who, lang, text, file) {
   const body = {
     text: speech(lang, text),
     model_id: conf.model,
-    language_code: lang,
-    voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true, ...(p.settings || {}) },
+    // v3 takes a language code; multilingual v2 reads the language from the text
+    ...(conf.model === 'eleven_v3' ? { language_code: lang } : {}),
+    voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.3, use_speaker_boost: true, ...(p.settings || {}) },
   };
   const r = await api(`/text-to-speech/${p.voice}?output_format=mp3_44100_64`, { method: 'POST', body: JSON.stringify(body) });
   fs.mkdirSync(path.dirname(file), { recursive: true });
