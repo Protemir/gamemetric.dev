@@ -102,7 +102,14 @@ function walkTo(target) {
 function release() {
   if (!press || !g) return;
   if (!press.moved) {
-    if (S.toggleGate(g, press.cell)) say(g.gate[press.cell] ? 'Шлюз закрыт' : 'Шлюз открыт', 1200);
+    // a tap next to a closed gate (on the river or the canal it hangs off) opens it too
+    let c = press.cell;
+    if (g.kind[c] !== S.CANAL || !g.gate[c]) {
+      const shut = [1, -1, W, -W].map((d) => c + d).find((n) => n >= 0 && n < W * H && g.kind[n] === S.CANAL && g.gate[n] && g.from[n] === c);
+      if (shut != null) c = shut;
+    }
+    if (S.toggleGate(g, c)) say(g.gate[c] ? 'Шлюз закрыт: вода сюда не идёт. Нажми ещё раз — откроется.' : 'Шлюз открыт', 2200);
+    else if (g.kind[c] === S.RIVER) say('Шлюз ставят на арык: нажми на сам арык.', 1800);
   } else {
     S.endStroke(g);
     state.ghostAt = 0; // look again right away

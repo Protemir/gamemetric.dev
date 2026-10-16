@@ -157,11 +157,11 @@ export class View {
       cx.arc(lerp(x1, x2, f), lerp(y1, y2, f), Math.max(1.2, cs * 0.07), 0, Math.PI * 2);
       cx.fill();
     }
-    // closed gates: a red bar across the canal where it starts
+    // closed gates: a red bar across the canal, inside the gated cell so a tap on it hits that cell
     for (let i = 0; i < g.W * g.H; i++) {
       if (!g.gate[i]) continue;
       const [x1, y1] = this.center(g.from[i]), [x2, y2] = this.center(i);
-      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, nx = -(y2 - y1) / cs, ny = (x2 - x1) / cs;
+      const mx = lerp(x1, x2, 0.7), my = lerp(y1, y2, 0.7), nx = -(y2 - y1) / cs, ny = (x2 - x1) / cs;
       cx.strokeStyle = '#e0493e';
       cx.lineWidth = cs * 0.18;
       cx.beginPath();
