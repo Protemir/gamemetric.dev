@@ -29,7 +29,7 @@ export const CHAPTERS = [
       {
         target: 150,
         intro: [
-          ['bekzhan', 'О, қалалық приехал! В асық-то умеешь? Или в Алматы только в «Ну, погоди!» на «Электронике» режетесь?', 'Look, the қалалық is here — the city boy! Can you even play asyk? Or do you only play handheld games in Almaty?'],
+          ['bekzhan', 'О, қалалық приехал! В асық-то умеешь? Или в Алматы только в «Ну, погоди!» на «Электронике» режетесь?', 'Look, the kalalyk is here — the city boy! Can you even play asyk? Or do you only play handheld games in Almaty?'],
           ['asem', 'Бекжан, отстань от него. Смотри: тянешь руку назад и бросаешь. Выбил асык за круг — он твой.', 'Bekzhan, leave him alone. Look: pull your hand back and throw. Knock a bone out of the circle — it’s yours.'],
         ],
         win: [

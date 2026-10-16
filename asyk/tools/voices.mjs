@@ -196,7 +196,20 @@ if (cmd === 'design') {
     }
   };
   await Promise.all([work(), work(), work()]);
-  console.log(`done: ${made} new files, ${chars} characters`);
+  // lines that were rewritten leave their old recordings behind: remove them
+  const keep = new Set(allLines().map((l) => path.normalize(path.join(root, voiceFile(l.lang, l.who, l.text)))));
+  let pruned = 0;
+  for (const lang of ['ru', 'en']) {
+    const dir = path.join(root, 'voice', lang);
+    for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
+      const p = path.normalize(path.join(dir, f));
+      if (!keep.has(p)) {
+        fs.rmSync(p);
+        pruned++;
+      }
+    }
+  }
+  console.log(`done: ${made} new files, ${chars} characters, ${pruned} old removed`);
 } else if (cmd === 'sfx') {
   // sounds of the yard from the Sound Effects model, into asyk/sfx/
   const SFX = {
