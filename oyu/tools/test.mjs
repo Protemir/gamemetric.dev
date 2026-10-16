@@ -159,8 +159,8 @@ try {
     const P = await serve(dist);
     await B.init(FRESH);
     await B.open(`${P.url}/?debug&muteAudio=true`, 1280, 720);
-    r = await B.js(`(async () => { await new Promise((r) => setTimeout(r, 800)); const a = await import('./js/audio.js'); const env = window.CrazyGames && window.CrazyGames.SDK.environment; const bot = await import('./js/game.js'); void bot; ${O}.step(5); const beacons = performance.getEntriesByType('resource').filter((e) => e.initiatorType === 'beacon').length; document.getElementById('menuBtn').click(); ${O}.step(1); return { env, data: !!window.OYU_DATA, held: a.sound.held, beacons, logo: document.querySelector('.logo')?.textContent, links: document.querySelectorAll('#ui a').length }; })()`);
-    check('portal build: SDK, Data saves, portal mute, no counter, Latin logo, no links', r.env === 'local' && r.data && r.held && r.beacons === 0 && r.logo === 'Oyu' && r.links === 0, JSON.stringify(r));
+    r = await B.js(`(async () => { await new Promise((r) => setTimeout(r, 800)); const a = await import('./js/audio.js'); const env = window.CrazyGames && window.CrazyGames.SDK.environment; const bot = await import('./js/game.js'); void bot; ${O}.step(5); const beacons = performance.getEntriesByType('resource').filter((e) => e.initiatorType === 'beacon').length; document.getElementById('menuBtn').click(); ${O}.step(1); return { env, data: !!window.OYU_DATA, held: a.sound.held, beacons, logo: document.querySelector('.logo')?.textContent, sub: document.querySelector('.logo-sub')?.textContent, title: document.title, links: document.querySelectorAll('#ui a').length }; })()`);
+    check('portal build: SDK, Data saves, portal mute, no counter, Latin logo, no links', r.env === 'local' && r.data && r.held && r.beacons === 0 && r.logo === 'Oyu' && r.sub === 'Pixel Carpet' && r.title === 'Oyu: Pixel Carpet' && r.links === 0, JSON.stringify(r));
     P.close();
   } else check('portal build', false, 'dist/oyu-crazygames is missing: run node oyu/tools/build-portal.mjs');
 

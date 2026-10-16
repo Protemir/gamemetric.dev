@@ -239,6 +239,8 @@ function screenMenu() {
   panel(
     '',
     el('h1', 'logo', PORTAL ? 'Oyu' : 'Ою'),
+    // on portals the game is listed as "Oyu: Pixel Carpet"; the title on screen says the same
+    PORTAL ? el('p', 'logo-sub', 'Pixel Carpet') : null,
     ornamentLine(),
     el('p', 'tag', t('tag')),
     button(`${t('play')} · ${t('level', { n: n + 1 })}`, 'primary', () => startLevel(n)),
@@ -379,7 +381,7 @@ $('soundBtn').addEventListener('click', toggleSound);
 
 function applyLang() {
   document.documentElement.lang = lang;
-  document.title = t('title');
+  document.title = PORTAL ? 'Oyu: Pixel Carpet' : t('title');
   if (level && mode === 'play') $('hudLevel').textContent = `${t('level', { n: level.index + 1 })} · ${L(level.name)}`;
 }
 
