@@ -1,0 +1,45 @@
+{
+  "model": "eleven_v3",
+  "people": {
+    "apa": {
+      "voice": "",
+      "describe": "An elderly Kazakh grandmother in her seventies calling from a village house window in the evening. Warm, loving, slightly raspy voice, unhurried, a soft Kazakh accent in Russian.",
+      "sample": "Балам, далеко не уходи! Как стемнеет — домой, ужинать."
+    },
+    "timur": {
+      "voice": "",
+      "describe": "Timur, an 11-year-old boy in a children's adventure game: lively, quick and enthusiastic, a bit hoarse from shouting outdoors, speaking Russian with a light Kazakh accent.",
+      "sample": "Сақа ляжет алшы — очки втрое. Давай, покажи!"
+    },
+    "bekzhan": {
+      "voice": "",
+      "describe": "Bekzhan, a chubby 10-year-old boy in a children's adventure game: the class clown, cheeky and teasing, always half laughing, speaking Russian with a light Kazakh accent.",
+      "sample": "О, калалык приехал! В асык-то умеешь?"
+    },
+    "asem": {
+      "voice": "",
+      "describe": "Asem, a 10-year-old girl in a children's adventure game: bright and clear, kind and confident, a little bossy with the boys, speaking Russian with a light Kazakh accent.",
+      "sample": "Бекжан, отстань от него. Смотри: тянешь руку назад и бросаешь."
+    },
+    "erke": {
+      "voice": "",
+      "describe": "Erke, a 7-year-old boy in a children's adventure game, the youngest of the gang: squeaky, excited, words tumbling out fast, speaking Russian with a light Kazakh accent.",
+      "sample": "Я свой крашеный асык поставил! Только не выбивай его, а?"
+    },
+    "askar": {
+      "voice": "",
+      "describe": "Askar, a 12-year-old boy in a children's adventure game: quiet and calm, low for his age, few words, dry and serious, speaking Russian with a light Kazakh accent.",
+      "sample": "Нормально бросает."
+    },
+    "erlan": {
+      "voice": "",
+      "describe": "Erlan, a 15-year-old teenage boy whose voice has just broken, the street champion in a children's adventure game: confident, cocky, slow lazy drawl, speaking Russian with a Kazakh accent.",
+      "sample": "Это кто тут из города? Давай один на один. Сақа у меня со свинцом."
+    },
+    "dauren": {
+      "voice": "",
+      "describe": "Dauren, a 16-year-old teenage boy from the next street in a children's adventure game: loud, theatrical show-off, slightly raspy, laughing at everyone, speaking Russian with a Kazakh accent.",
+      "sample": "Тут ветер — мой друг. Бросай первым, калалык."
+    }
+  }
+}

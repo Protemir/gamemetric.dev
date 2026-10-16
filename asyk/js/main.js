@@ -4,6 +4,7 @@ import { PEOPLE, AGAS, CHAPTERS, BARKS } from './story.js';
 import * as S from './scene.js';
 import * as A from './audio.js';
 import { store, el, clamp, rng } from './util.js';
+import { voiceFile } from './voice.js';
 
 const cv = document.getElementById('game');
 const c = cv.getContext('2d');
@@ -48,6 +49,9 @@ let taught = store.get('asyk.taught', 0);
 let story = store.get('asyk.story', { done: {} });
 
 const FACES = ['alshy', 'buk', 'taike'];
+// the kids' ids in story.js by their place in the yard
+const KID_IDS = ['timur', 'bekzhan', 'asem', 'erke', 'askar'];
+const LANG_CODE = () => (lang ? 'en' : 'ru');
 
 function layout() {
   S.resize(cv);
@@ -287,8 +291,10 @@ function talk(lines) {
         const w = who(lines[i][0]);
         if (w) w.talking = false;
       }
+      A.stopVoice();
       i++;
       if (i >= lines.length) {
+        A.stopVoice();
         box.hidden = true;
         talkDone = null;
         resolve();
@@ -305,15 +311,28 @@ function talk(lines) {
       shownChars = 0;
       $('talkText').textContent = '';
       box.hidden = false;
-      typing = setInterval(() => {
-        shownChars++;
-        $('talkText').textContent = full.slice(0, shownChars);
-        if (shownChars % 2 === 0 && full[shownChars] !== ' ') A.blip(p.aga ? 0.8 : p.kid === 2 ? 1.35 : 1.1);
-        if (shownChars >= full.length) {
-          clearInterval(typing);
-          typing = 0;
-        }
-      }, 24);
+      const lineNo = i;
+      let voiced = false;
+      const type = (ms) => {
+        clearInterval(typing);
+        typing = setInterval(() => {
+          shownChars++;
+          $('talkText').textContent = full.slice(0, shownChars);
+          // no recording: a soft blip per syllable instead of a voice
+          if (!voiced && shownChars % 2 === 0 && full[shownChars] !== ' ') A.blip(p.aga ? 0.8 : p.kid === 2 ? 1.35 : 1.1);
+          if (shownChars >= full.length) {
+            clearInterval(typing);
+            typing = 0;
+          }
+        }, ms);
+      };
+      type(24);
+      A.voice(voiceFile(LANG_CODE(), id, full)).then((v) => {
+        if (!v || i !== lineNo) return;
+        voiced = true;
+        // type along with the voice
+        if (typing) type(Math.max(18, ((v.duration * 1000) / Math.max(1, full.length - shownChars)) * 0.85));
+      });
     };
     talkDone = next;
     next();
@@ -526,8 +545,10 @@ function bark(kind, who = null) {
   const free = kids.filter((k) => !bubbles.some((b) => b.who === k));
   const w = who || free[Math.floor(rand() * free.length)];
   if (!w || bubbles.length > 2) return;
-  const text = pick(list[Math.floor(rand() * list.length)]);
+  const line = list[Math.floor(rand() * list.length)];
+  const text = pick(line);
   bubbles.push({ who: w, text, life: 1.7, max: 1.7 });
+  if (w.i != null) A.voice(voiceFile(LANG_CODE(), KID_IDS[w.i], text), { stopOthers: false, vol: 0.8 });
 }
 
 const SIDE_COL = { alshy: '#ffd36b', taike: '#ffb070', buk: '#fff4dc', shik: '#bfeaa0' };

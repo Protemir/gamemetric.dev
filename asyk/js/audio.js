@@ -274,3 +274,46 @@ export function ambience(on) {
     for (let i = 0; i < n; i++) tone('sine', f, f * 0.98, 0.025, 0.012 + Math.random() * 0.008, i * 0.045);
   }, 700);
 }
+
+// recorded lines (voice/<lang>/...mp3): decoded once, played through the same volume and mute;
+// a missing file is remembered and stays quiet
+const voices = new Map();
+const missing = new Set();
+let speaking = null;
+
+export async function voice(url, { stopOthers = true, vol = 1 } = {}) {
+  if (!sound.on || !sound.ctx || missing.has(url)) return null;
+  let buf = voices.get(url);
+  if (!buf) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(String(r.status));
+      buf = await sound.ctx.decodeAudioData(await r.arrayBuffer());
+      voices.set(url, buf);
+    } catch {
+      missing.add(url);
+      return null;
+    }
+  }
+  if (!ready()) return null;
+  if (stopOthers) stopVoice();
+  const src = sound.ctx.createBufferSource();
+  src.buffer = buf;
+  const g = sound.ctx.createGain();
+  g.gain.value = vol;
+  src.connect(g).connect(sound.out);
+  src.start();
+  if (stopOthers) speaking = src;
+  return { duration: buf.duration, stop: () => src.stop() };
+}
+
+export function stopVoice() {
+  if (speaking) {
+    try {
+      speaking.stop();
+    } catch {
+      /* already over */
+    }
+    speaking = null;
+  }
+}
