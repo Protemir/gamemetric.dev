@@ -2,7 +2,7 @@
 // as in real asyq atu, and the next one goes from where the saka stopped with a bigger multiplier.
 // Score of a throw = chips (knocked bones, each next one in the same throw worth more) × mult
 // (the side the saka fell on + the chain).
-import { body, world, saka, KON, FIELD, LINE_Y, rollSide } from './physics.js';
+import { body, world, saka, KON, FIELD, LINE_Y, MAX_SPEED, rollSide } from './physics.js';
 import { rng } from './util.js';
 
 export const THROWS = 5;
@@ -11,7 +11,28 @@ export const DOMINO = 5; // each next bone in the same throw gives this much mor
 // knock out this many bones in one throw and the throw is given back
 export const RULES = { refundAt: 2 };
 
-export const target = (k) => Math.round((300 * Math.pow(1.45, k - 1)) / 5) * 5;
+// First person: the saka leaves the hand above the line, flies over the first stretch
+// and lands, then slides on into the kon. Nothing is hit while it is in the air.
+export const AIR = { min: 26, k: 40, keep: 0.62 };
+export const landing = (power, ux, uy) => {
+  const a = AIR.min + AIR.k * power;
+  return { x: KON.x + ux * a, y: LINE_Y + uy * a };
+};
+export const groundSpeed = (power) => MAX_SPEED * AIR.keep * power;
+
+export function throwFromHand(g, ux, uy, power) {
+  const s = saka(g.w);
+  const p = landing(power, ux, uy);
+  s.x = p.x;
+  s.y = p.y;
+  const v = groundSpeed(power);
+  s.vx = ux * v;
+  s.vy = uy * v;
+  s.spin = (g.w.rand() - 0.5) * 14;
+  return p;
+}
+
+export const target = (k) => Math.round((220 * Math.pow(1.4, k - 1)) / 5) * 5;
 
 // bones lie in a row, as children set them; later kons get trickier shapes
 const SHAPES = ['row', 'double', 'cross', 'wedge', 'ring'];
@@ -81,7 +102,7 @@ export function newKon(k, seed = (Math.random() * 1e9) | 0) {
 }
 
 function rack(g) {
-  g.w.bodies = g.w.bodies.filter((b) => b.kind === 'saka');
+  g.w.bodies = g.w.bodies.filter((b) => b.kind !== 'asyk');
   g.w.bodies.unshift(...layout(g.k, g.seed + g.racks * 7919));
   g.racks++;
 }
@@ -141,8 +162,9 @@ export function finish(g) {
     rack(g);
   }
   const s = saka(g.w);
-  g.fromLine = !t.knocked || cleared;
-  if (g.fromLine) placeOnLine(g, s.y > KON.y + KON.r && s.y > LINE_Y - 30 ? s.x : FIELD.w / 2);
+  // every throw starts from the hand again
+  g.fromLine = true;
+  placeOnLine(g, FIELD.w / 2);
   // a saka left lying on a bone would start the next throw stuck in it
   for (const b of g.w.bodies) {
     if (b === s) continue;

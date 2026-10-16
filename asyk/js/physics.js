@@ -3,7 +3,8 @@
 // Pure module (no DOM), so tools/test.mjs can run whole throws in node.
 import { rng } from './util.js';
 
-export const FIELD = { w: 100, h: 150 };
+// w/h: the old top-down yard; min/max: where bones can roll in the first-person yard
+export const FIELD = { w: 100, h: 150, minX: -40, maxX: 140, minY: -80, maxY: 150 };
 export const KON = { x: 50, y: 54, r: 24 };
 export const LINE_Y = 132;
 export const MAX_SPEED = 165;
@@ -26,6 +27,7 @@ export function body(kind, x, y, extra = {}) {
     r: saka ? 3.3 : 2.7,
     m: saka ? 1.7 : 1,
     mu: saka ? 52 : 66, // ground friction, units/s²
+    fixed: false, // kids' feet: things bounce off them, they never move
     ang: extra.ang ?? -Math.PI / 2,
     spin: 0,
     out: false,
@@ -42,6 +44,9 @@ export function world(seed = 1) {
 export const saka = (w) => w.bodies.find((b) => b.kind === 'saka');
 export const moving = (w) => w.bodies.some((b) => b.vx !== 0 || b.vy !== 0);
 export const insideKon = (b) => Math.hypot(b.x - KON.x, b.y - KON.y) < KON.r + b.r * 0.5;
+
+// a kid's feet: bones bounce off them
+export const kidFeet = (x, y) => body('kid', x, y, { r: 4.5, m: 1e6, fixed: true });
 
 export function launch(w, dx, dy, power) {
   const s = saka(w);
@@ -67,6 +72,7 @@ export function step(w, dt) {
 function sub(w, h) {
   const B = w.bodies;
   for (const b of B) {
+    if (b.fixed) continue;
     if (b.vx === 0 && b.vy === 0) {
       b.spin *= 0.9;
       continue;
@@ -101,10 +107,11 @@ function sub(w, h) {
 
 function walls(w, b) {
   let hit = 0;
-  if (b.x < b.r) (b.x = b.r), (hit = Math.abs(b.vx)), (b.vx = -b.vx * WALL_E);
-  if (b.x > FIELD.w - b.r) (b.x = FIELD.w - b.r), (hit = Math.abs(b.vx)), (b.vx = -b.vx * WALL_E);
-  if (b.y < b.r) (b.y = b.r), (hit = Math.abs(b.vy)), (b.vy = -b.vy * WALL_E);
-  if (b.y > FIELD.h - b.r) (b.y = FIELD.h - b.r), (hit = Math.abs(b.vy)), (b.vy = -b.vy * WALL_E);
+  const { minX, maxX, minY, maxY } = FIELD;
+  if (b.x < minX + b.r) (b.x = minX + b.r), (hit = Math.abs(b.vx)), (b.vx = -b.vx * WALL_E);
+  if (b.x > maxX - b.r) (b.x = maxX - b.r), (hit = Math.abs(b.vx)), (b.vx = -b.vx * WALL_E);
+  if (b.y < minY + b.r) (b.y = minY + b.r), (hit = Math.abs(b.vy)), (b.vy = -b.vy * WALL_E);
+  if (b.y > maxY - b.r) (b.y = maxY - b.r), (hit = Math.abs(b.vy)), (b.vy = -b.vy * WALL_E);
   if (hit > 6) w.events.push({ type: 'wall', body: b, speed: hit });
 }
 
@@ -119,8 +126,9 @@ function collide(w, a, b) {
   const ny = dy / d;
   // push apart by mass
   const pen = rr - d;
-  const ia = 1 / a.m;
-  const ib = 1 / b.m;
+  if (a.fixed && b.fixed) return;
+  const ia = a.fixed ? 0 : 1 / a.m;
+  const ib = b.fixed ? 0 : 1 / b.m;
   const sum = ia + ib;
   a.x -= nx * pen * (ia / sum);
   a.y -= ny * pen * (ia / sum);
@@ -145,16 +153,17 @@ function collide(w, a, b) {
 }
 
 // Aim guide: where the saka meets the first bone (or stops), and where that bone is sent.
-export function predict(w, dx, dy, power) {
-  const s = saka(w);
+export function predict(w, dx, dy, power, from = null, speed = MAX_SPEED) {
+  const s0 = saka(w);
+  const s = from ? { ...s0, x: from.x, y: from.y } : s0;
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
-  const v = MAX_SPEED * Math.max(0, Math.min(1, power));
+  const v = speed * Math.max(0, Math.min(1, power));
   let reach = slide(v, s.mu);
   let hit = null;
   for (const b of w.bodies) {
-    if (b === s) continue;
+    if (b === s0) continue;
     // ray against a circle of both radii
     const ox = s.x - b.x;
     const oy = s.y - b.y;
@@ -170,8 +179,8 @@ export function predict(w, dx, dy, power) {
     }
   }
   // the wall stops the guide too
-  const tx = ux > 0 ? (FIELD.w - s.r - s.x) / ux : ux < 0 ? (s.r - s.x) / ux : Infinity;
-  const ty = uy > 0 ? (FIELD.h - s.r - s.y) / uy : uy < 0 ? (s.r - s.y) / uy : Infinity;
+  const tx = ux > 0 ? (FIELD.maxX - s.r - s.x) / ux : ux < 0 ? (FIELD.minX + s.r - s.x) / ux : Infinity;
+  const ty = uy > 0 ? (FIELD.maxY - s.r - s.y) / uy : uy < 0 ? (FIELD.minY + s.r - s.y) / uy : Infinity;
   const tw = Math.min(tx, ty);
   if (tw < reach) {
     reach = tw;

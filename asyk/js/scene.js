@@ -1,0 +1,500 @@
+// First person: you stand behind the line in an aul yard at sunset and throw from your own hand.
+// The yard is a photo (img/yard.jpg); bones, kids, dust and the guide are drawn over it in the
+// same perspective. A pinhole camera stands behind the line at height CAM.h looking at the kon;
+// the photo's horizon is at 41% of its height and the camera is fitted to it.
+import { KON, LINE_Y } from './physics.js';
+import { rng } from './util.js';
+
+const AR = 1920 / 1072; // the yard photo
+export const CAM = { x: 50, y: 230, h: 30, horizon: 0.41, focal: 2.0 };
+// world units per sprite pixel for the kids (all cut from frames of the same size)
+const KID_UNITS = 36 / 518;
+// where the knucklebone sits in the hand photo, as a share of its 16:9 frame
+const HAND_BONE = { x: 0.465, y: 0.45 };
+
+export const view = { w: 0, h: 0, dpr: 1, f: 1, cx: 0, hy: 0, imgX: 0, imgY: 0, imgW: 0, imgH: 0 };
+const img = {};
+let meta = {};
+let backdrop = null;
+let overlay = null;
+let grain = null;
+
+// ---------- assets ----------
+const KID_POSES = ['watch', 'cheer', 'sad'];
+const SIDES = ['alshy', 'taike', 'buk', 'shik'];
+
+export async function loadArt(onProgress) {
+  meta = await fetch('img/sprites.json').then((r) => r.json());
+  const names = ['yard.jpg', 'hand-hold.png', 'hand-open.png'];
+  for (let i = 0; i < 5; i++) for (const p of KID_POSES) names.push(`kid${i}-${p}.png`);
+  for (const c of ['white', 'red']) for (const s of SIDES) names.push(`asyk-${c}-${s}.png`);
+  let done = 0;
+  await Promise.all(
+    names.map(
+      (n) =>
+        new Promise((res, rej) => {
+          const im = new Image();
+          im.onload = () => {
+            img[n.replace(/\.(png|jpg)$/, '')] = im;
+            onProgress && onProgress(++done / names.length);
+            res();
+          };
+          im.onerror = rej;
+          im.src = 'img/' + n;
+        }),
+    ),
+  );
+  // the photos caught some green from the backdrop: no channel may beat red on a bone
+  for (const c of ['white', 'red']) for (const s of SIDES) img[`asyk-${c}-${s}`] = degreen(img[`asyk-${c}-${s}`]);
+  // dyed bones (worth more) are the red ones turned pink, so they never look like the saka
+  for (const s of SIDES) img[`asyk-pink-${s}`] = tint(img[`asyk-red-${s}`]);
+}
+
+function canvas2(w, h) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w));
+  c.height = Math.max(1, Math.round(h));
+  return c;
+}
+
+function degreen(im) {
+  const c = canvas2(im.width, im.height);
+  const x = c.getContext('2d');
+  x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const r = d.data[i];
+    if (d.data[i + 1] > r - 6) d.data[i + 1] = Math.max(0, r - 6);
+  }
+  x.putImageData(d, 0, 0);
+  return c;
+}
+
+function tint(im) {
+  const c = canvas2(im.width, im.height);
+  const x = c.getContext('2d');
+  x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const r = d.data[i];
+    d.data[i] = Math.min(255, r * 1.08 + 20);
+    d.data[i + 1] = Math.min(255, d.data[i + 1] * 1.1 + 25);
+    d.data[i + 2] = Math.min(255, d.data[i + 2] + r * 0.62);
+  }
+  x.putImageData(d, 0, 0);
+  return c;
+}
+
+// ---------- camera ----------
+export function project(x, y, z = 0) {
+  const D = CAM.y - y;
+  if (D < 1) return null;
+  return { x: view.cx + (view.f * (x - CAM.x)) / D, y: view.hy + (view.f * (CAM.h - z)) / D, D, k: view.f / D };
+}
+// a screen point at a given depth back to the world (for the hand)
+export function unproject(sx, sy, D) {
+  return { x: CAM.x + ((sx - view.cx) * D) / view.f, y: CAM.y - D, z: CAM.h - ((sy - view.hy) * D) / view.f };
+}
+
+export function resize(canvas) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  let imgH;
+  let imgY;
+  if (w / h >= 1.2) {
+    // wide: the photo covers the screen, a little closer than the whole frame so the kon reads
+    imgH = Math.max(h * 1.2, w / AR);
+    imgY = Math.min(0, Math.max(h - imgH, h * 0.36 - imgH * CAM.horizon));
+  } else {
+    // tall: the kon must fit across, the rest above and below is the photo mirrored
+    imgH = Math.min(h, w * 1.75);
+    imgY = Math.min(h - imgH, h * 0.38 - imgH * CAM.horizon);
+  }
+  const imgW = imgH * AR;
+  Object.assign(view, { w, h, dpr, imgH, imgW, imgY, imgX: (w - imgW) / 2, f: CAM.focal * imgH, cx: w / 2, hy: imgY + imgH * CAM.horizon });
+  bakeBackdrop();
+  bakeOverlay();
+}
+
+// ---------- the yard ----------
+function scratch(c, pts, r, width, color) {
+  c.strokeStyle = color;
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  for (let pass = 0; pass < 3; pass++) {
+    c.lineWidth = width * (pass ? 0.5 : 1);
+    c.globalAlpha = pass ? 0.45 : 0.75;
+    c.beginPath();
+    pts.forEach(([x, y], i) => {
+      const jx = x + (r() - 0.5) * width * 0.8;
+      const jy = y + (r() - 0.5) * width * 0.5;
+      if (i) c.lineTo(jx, jy);
+      else c.moveTo(jx, jy);
+    });
+    c.stroke();
+  }
+  c.globalAlpha = 1;
+}
+
+function bakeBackdrop() {
+  const { w, h, dpr, imgX, imgY, imgW, imgH } = view;
+  const b = canvas2(w * dpr, h * dpr);
+  const c = b.getContext('2d');
+  c.scale(dpr, dpr);
+  const yard = img.yard;
+  c.drawImage(yard, imgX, imgY, imgW, imgH);
+  // tall screens: mirror the sky upwards and the dirt downwards, so there is no empty band
+  if (imgY > 0) {
+    c.save();
+    c.translate(0, imgY);
+    c.scale(1, -1);
+    c.drawImage(yard, imgX, 0, imgW, imgH);
+    c.restore();
+  }
+  if (imgY + imgH < h) {
+    c.save();
+    c.translate(0, imgY + imgH);
+    c.scale(1, -1);
+    c.drawImage(yard, imgX, -imgH, imgW, imgH);
+    c.restore();
+  }
+  const r = rng(1987);
+  // the kon, scratched with a stick into the dirt
+  const ring = [];
+  for (let i = 0; i <= 72; i++) {
+    const a = (i / 72) * Math.PI * 2;
+    const p = project(KON.x + Math.cos(a) * KON.r, KON.y + Math.sin(a) * KON.r);
+    ring.push([p.x, p.y]);
+  }
+  const lw = Math.max(1.5, view.f * 0.006);
+  scratch(c, ring, r, lw, 'rgba(70, 42, 24, 0.7)');
+  // light rim along the groove: the low sun catches its far edge
+  c.save();
+  c.globalAlpha = 0.25;
+  c.strokeStyle = '#ffe2b0';
+  c.lineWidth = lw * 0.6;
+  c.beginPath();
+  ring.forEach(([x, y], i) => (i ? c.lineTo(x, y - lw * 0.7) : c.moveTo(x, y - lw * 0.7)));
+  c.stroke();
+  c.restore();
+  const line = [];
+  for (let i = 0; i <= 30; i++) {
+    const p = project(10 + i * 2.7, LINE_Y - 6);
+    line.push([p.x, p.y]);
+  }
+  scratch(c, line, r, lw * 1.3, 'rgba(70, 42, 24, 0.6)');
+  backdrop = b;
+}
+
+function bakeOverlay() {
+  const { w, h, dpr } = view;
+  const o = canvas2(w * dpr, h * dpr);
+  const c = o.getContext('2d');
+  c.scale(dpr, dpr);
+  const v = c.createRadialGradient(w / 2, h * 0.55, Math.min(w, h) * 0.35, w / 2, h * 0.55, Math.hypot(w, h) * 0.62);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(40, 18, 10, 0.42)');
+  c.fillStyle = v;
+  c.fillRect(0, 0, w, h);
+  overlay = o;
+  const gt = canvas2(160, 160);
+  const gc = gt.getContext('2d');
+  const id = gc.createImageData(160, 160);
+  const r = rng(7);
+  for (let i = 0; i < id.data.length; i += 4) {
+    const k = r() * 255;
+    id.data[i] = id.data[i + 1] = id.data[i + 2] = k;
+    id.data[i + 3] = 18;
+  }
+  gc.putImageData(id, 0, 0);
+  grain = gt;
+}
+
+export function drawBackdrop(c) {
+  c.drawImage(backdrop, 0, 0, view.w, view.h);
+}
+
+export function drawOverlay(c, t) {
+  c.drawImage(overlay, 0, 0, view.w, view.h);
+  const pat = c.createPattern(grain, 'repeat');
+  c.save();
+  c.translate(((t * 997) % 160) | 0, ((t * 613) % 160) | 0);
+  c.fillStyle = pat;
+  c.fillRect(-160, -160, view.w + 320, view.h + 320);
+  c.restore();
+}
+
+// ---------- things on the ground ----------
+// which photo of a bone: its colour and the side it shows
+function boneImage(b) {
+  const col = b.kind === 'saka' ? 'red' : b.painted ? 'pink' : 'white';
+  let side = b.face || 'buk';
+  // a tumbling bone flips through its sides
+  if (b.tumble) side = SIDES[Math.floor(Math.abs(b.ang) / 1.2) % 4];
+  return img[`asyk-${col}-${side}`];
+}
+
+function shadow(c, x, y, rx, D, alpha) {
+  const p = project(x + rx * 0.35, y - rx * 0.1);
+  if (!p) return;
+  const sx = rx * p.k;
+  const sy = Math.max(1.2, sx * (CAM.h / D) * 1.4);
+  c.save();
+  c.globalAlpha = alpha;
+  c.fillStyle = '#2a160c';
+  c.beginPath();
+  c.ellipse(p.x, p.y, sx * 1.15, sy, 0, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+export function drawBone(c, b, z = 0, alpha = 1, glow = 0) {
+  const p = project(b.x, b.y, z);
+  if (!p) return;
+  const im = boneImage(b);
+  const upright = (b.face === 'shik' && !b.tumble) || im === img['asyk-white-shik'];
+  const width = b.r * (upright ? 1.9 : 2.5) * p.k;
+  const iw = im.width;
+  const ih = im.height;
+  const height = (width * ih) / iw;
+  // long evening shadow first; it shrinks and fades when the bone is in the air
+  shadow(c, b.x, b.y, b.r * 1.35, p.D, (0.38 - Math.min(0.25, z * 0.02)) * alpha);
+  c.save();
+  c.globalAlpha = alpha;
+  c.translate(p.x, p.y + height * 0.12);
+  // turning on the ground shows as the photo narrowing and flipping
+  const turn = Math.cos(b.ang);
+  c.scale((turn < 0 ? -1 : 1) * (0.72 + 0.28 * Math.abs(turn)), 1);
+  if (glow) {
+    c.shadowColor = `rgba(255, 220, 140, ${glow})`;
+    c.shadowBlur = 14;
+  }
+  c.drawImage(im, -width / 2, -height, width, height);
+  c.restore();
+}
+
+// ---------- kids ----------
+export function makeKids() {
+  // feet positions around the kon; the tall boy stands on the right, the small one in the cap behind
+  const spots = [
+    [4, 64],
+    [22, 20],
+    [50, 6],
+    [77, 16],
+    [96, 60],
+  ];
+  return spots.map(([x, y], i) => ({ i, x, y, pose: 'watch', until: 0, delay: 0, next: null, bob: i * 1.7 }));
+}
+
+export function setPose(kid, pose, now, hold = 1.8, delay = 0) {
+  kid.next = pose;
+  kid.delay = now + delay;
+  kid.until = now + delay + hold;
+}
+
+export function updateKids(kids, now) {
+  for (const k of kids) {
+    if (k.next && now >= k.delay) {
+      k.pose = k.next;
+      k.next = null;
+      k.jump = k.pose === 'cheer' ? now : 0;
+    }
+    if (k.pose !== 'watch' && !k.next && now > k.until) k.pose = 'watch';
+  }
+}
+
+export function drawKid(c, k, now) {
+  const p = project(k.x, k.y);
+  if (!p) return;
+  const im = img[`kid${k.i}-${k.pose}`];
+  const scale = KID_UNITS * p.k;
+  const width = im.width * scale;
+  const height = im.height * scale;
+  // breathing, and a hop when cheering
+  const breathe = 1 + Math.sin(now * 2.2 + k.bob) * 0.008;
+  const hop = k.jump ? Math.max(0, Math.sin(Math.min(1, (now - k.jump) / 0.45) * Math.PI)) * height * 0.06 : 0;
+  shadow(c, k.x + 2.5, k.y, 7, p.D, 0.32);
+  c.save();
+  c.translate(p.x, p.y + 2 * scale - hop);
+  c.scale(1, breathe);
+  c.drawImage(im, -width / 2, -height, width, height);
+  c.restore();
+}
+
+// ---------- the hand ----------
+// frame: the hand photo's 16:9 frame on screen, anchored to the bottom right
+// the bone in the hand sits right of the kon and low, the arm runs off the bottom-right corner
+function handFrame() {
+  const { w, h } = view;
+  const m = meta['hand-hold'];
+  const wide = w / h >= 1.2;
+  const fw = wide ? Math.min(w * 0.62, h * 1.1) : w * 0.95;
+  const fh = (fw * m.fh) / m.fw;
+  const bx = w * (wide ? 0.7 : 0.72);
+  const by = h * (wide ? 0.8 : 0.85);
+  return { x: bx - fw * HAND_BONE.x, y: by - fh * HAND_BONE.y, w: fw, h: fh };
+}
+
+// where the knucklebone in the hand is on screen right now (for the throw to start from)
+export function handBone(hand) {
+  const F = handFrame();
+  return { x: F.x + F.w * HAND_BONE.x + hand.dx, y: F.y + F.h * HAND_BONE.y + hand.dy };
+}
+
+export function drawHand(c, hand) {
+  if (hand.hidden >= 1) return;
+  const F = handFrame();
+  const name = hand.open ? 'hand-open' : 'hand-hold';
+  const m = meta[name];
+  const k = F.w / m.fw;
+  c.save();
+  c.translate(hand.dx, hand.dy + hand.hidden * F.h * 0.8);
+  // the wrist is the pivot: the hand cocks back when pulled
+  const px = F.x + F.w * 0.85;
+  const py = F.y + F.h * 0.95;
+  c.translate(px, py);
+  c.rotate(hand.rot);
+  c.scale(hand.scale, hand.scale);
+  c.translate(-px, -py);
+  c.drawImage(img[name], F.x + m.x * k, F.y + m.y * k, m.w * k, m.h * k);
+  c.restore();
+}
+
+// ---------- guide ----------
+// arc from the hand to where the saka lands, then a dotted path on the ground to the first touch
+export function drawGuide(c, from, land, hit, t, power) {
+  const col = power < 0.5 ? '#fff3cf' : power < 0.85 ? '#ffc35a' : '#ff7a45';
+  c.save();
+  // arc in the air
+  c.fillStyle = col;
+  const steps = 18;
+  for (let i = 2; i <= steps; i++) {
+    const s = i / steps;
+    const x = from.x + (land.x - from.x) * s;
+    const y = from.y + (land.y - from.y) * s;
+    const z = from.z * (1 - s) + arcHeight(power) * 4 * s * (1 - s);
+    const p = project(x, y, z);
+    if (!p) continue;
+    c.globalAlpha = 0.35 + s * 0.5;
+    c.beginPath();
+    c.arc(p.x, p.y, Math.min(4.5, Math.max(1.5, p.k * 0.45)), 0, Math.PI * 2);
+    c.fill();
+  }
+  // landing mark
+  const L = project(land.x, land.y);
+  c.globalAlpha = 0.9;
+  c.strokeStyle = col;
+  c.lineWidth = 2;
+  c.beginPath();
+  c.ellipse(L.x, L.y, 3.2 * L.k, Math.max(2, 3.2 * L.k * (CAM.h / L.D)), 0, 0, Math.PI * 2);
+  c.stroke();
+  // on the ground
+  const len = Math.hypot(hit.x - land.x, hit.y - land.y);
+  const n = Math.floor(len / 2.6);
+  for (let i = 1; i <= n; i++) {
+    const s = (i + ((t * 2) % 1)) / (n + 1);
+    const p = project(land.x + (hit.x - land.x) * s, land.y + (hit.y - land.y) * s);
+    if (!p) continue;
+    c.globalAlpha = 0.9 - s * 0.4;
+    c.fillStyle = 'rgba(50, 20, 8, 0.5)';
+    c.beginPath();
+    c.ellipse(p.x + 1, p.y + 1, Math.max(1.6, p.k * 0.6), Math.max(1, p.k * 0.6 * (CAM.h / p.D) * 1.6), 0, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = col;
+    c.beginPath();
+    c.ellipse(p.x, p.y, Math.max(1.6, p.k * 0.6), Math.max(1, p.k * 0.6 * (CAM.h / p.D) * 1.6), 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  // ghost of the saka at the first touch and where the bone it hits will go
+  const g = project(hit.x, hit.y);
+  if (g) {
+    c.globalAlpha = 0.9;
+    c.strokeStyle = col;
+    c.setLineDash([5, 4]);
+    c.beginPath();
+    c.ellipse(g.x, g.y, 3.4 * g.k, Math.max(2, 3.4 * g.k * (CAM.h / g.D) * 1.5), 0, 0, Math.PI * 2);
+    c.stroke();
+    c.setLineDash([]);
+  }
+  if (hit.target) {
+    const a = project(hit.target.x, hit.target.y);
+    const b = project(hit.target.x + hit.nx * 12, hit.target.y + hit.ny * 12);
+    if (a && b) {
+      c.globalAlpha = 0.85;
+      c.lineWidth = 2.5;
+      c.beginPath();
+      c.moveTo(a.x, a.y);
+      c.lineTo(b.x, b.y);
+      c.stroke();
+    }
+  }
+  c.restore();
+}
+
+export const arcHeight = (power) => 4 + power * 5;
+
+// ---------- dust and numbers ----------
+export function drawDust(c, parts) {
+  for (const d of parts) {
+    const p = project(d.x, d.y, d.z || 0);
+    if (!p) continue;
+    c.globalAlpha = Math.max(0, d.life / d.max) * d.a;
+    c.fillStyle = d.col;
+    c.beginPath();
+    c.ellipse(p.x, p.y, d.r * p.k, d.r * p.k * 0.6, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+}
+
+export function drawPopups(c, pops) {
+  c.save();
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  const u = Math.max(12, Math.min(view.w, view.h) * 0.032);
+  for (const p of pops) {
+    const k = 1 - p.life / p.max;
+    const at = p.screen || project(p.x, p.y, 8);
+    if (!at) continue;
+    const y = at.y - k * u * 2.4;
+    const sc = k < 0.15 ? 0.6 + (k / 0.15) * 0.6 : 1.2 - Math.min(0.2, (k - 0.15) * 0.5);
+    c.globalAlpha = k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1;
+    c.font = `900 ${Math.round(u * (p.size / 5) * sc)}px "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`;
+    c.lineWidth = Math.max(3, u * 0.22);
+    c.strokeStyle = 'rgba(50, 20, 8, 0.85)';
+    c.strokeText(p.text, at.x, y);
+    c.fillStyle = p.col;
+    c.fillText(p.text, at.x, y);
+  }
+  c.restore();
+}
+
+// first-time hint: a finger pulling down from the middle of the screen
+export function drawPullHint(c, t) {
+  const k = (t % 2.2) / 2.2;
+  const pull = k < 0.6 ? k / 0.6 : 1;
+  const fade = k < 0.75 ? 1 : 1 - (k - 0.75) / 0.25;
+  const x = view.w * 0.5;
+  const y0 = view.h * 0.62;
+  const y = y0 + pull * view.h * 0.16;
+  c.save();
+  c.globalAlpha = 0.5 * fade * pull;
+  c.strokeStyle = '#fff3cf';
+  c.lineWidth = 3;
+  c.setLineDash([6, 7]);
+  c.beginPath();
+  c.moveTo(x, y0);
+  c.lineTo(x, y);
+  c.stroke();
+  c.setLineDash([]);
+  c.globalAlpha = 0.95 * fade;
+  c.font = `${Math.round(Math.min(view.w, view.h) * 0.08)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+  c.textAlign = 'center';
+  c.fillText('👆', x, y + view.h * 0.05);
+  c.restore();
+}

@@ -1,6 +1,6 @@
 // node asyk/tools/test.mjs — physics checks plus a bot that plays kons to see if the targets are fair.
 import { step, moving, saka, launch, predict, KON, FIELD } from '../js/physics.js';
-import { newKon, startThrow, knock, settle, finish, layout, target } from '../js/game.js';
+import { newKon, startThrow, knock, settle, finish, layout, target, throwFromHand } from '../js/game.js';
 import { rng } from '../js/util.js';
 
 let fails = 0;
@@ -45,7 +45,7 @@ for (let k = 1; k <= 12; k++) {
   });
   ok(t < 12, `everything stops (${t.toFixed(1)}s)`);
   ok(outs > 0, 'full throw at the row knocks bones out');
-  for (const b of g.w.bodies) ok(b.x >= 0 && b.x <= FIELD.w && b.y >= 0 && b.y <= FIELD.h, 'bone stays in the yard');
+  for (const b of g.w.bodies) ok(b.x >= FIELD.minX && b.x <= FIELD.maxX && b.y >= FIELD.minY && b.y <= FIELD.maxY, 'bone stays in the yard');
   const turn = settle(g);
   ok(turn.score === turn.chips * turn.mult, 'score = chips × mult');
   finish(g);
@@ -72,7 +72,7 @@ function botThrow(g, rand, tries) {
     // an ordinary player: picks a bone and throws at it hard, without thinking ahead
     const live = g.w.bodies.filter((b) => b.kind === 'asyk' && !b.out);
     const aim = live[Math.floor(rand() * live.length)];
-    return { dx: aim.x - s.x + (rand() - 0.5) * 10, dy: aim.y - s.y, pw: 0.65 + rand() * 0.35 };
+    return { dx: aim.x - s.x + (rand() - 0.5) * 10, dy: aim.y - s.y, pw: 0.45 + rand() * 0.4 };
   }
   let best = null;
   for (let i = 0; i < tries; i++) {
@@ -80,13 +80,14 @@ function botThrow(g, rand, tries) {
     const aim = live[Math.floor(rand() * live.length)];
     const dx = aim.x - s.x + (rand() - 0.5) * 6;
     const dy = aim.y - s.y + (rand() - 0.5) * 6;
-    const pw = 0.55 + rand() * 0.45;
+    const pw = 0.35 + rand() * 0.6;
     const copy = newKon(g.k, g.seed);
     copy.w.bodies = g.w.bodies.map((b) => ({ ...b }));
     copy.w.rand = rng((rand() * 1e9) | 0);
     copy.chain = g.chain;
     startThrow(copy);
-    launch(copy.w, dx, dy, pw);
+    const l = Math.hypot(dx, dy);
+    throwFromHand(copy, dx / l, dy / l, pw);
     run(copy, (b) => knock(copy, b));
     const v = copy.turn.chips + (copy.turn.knocked ? 1000 : 0);
     if (!best || v > best.v) best = { v, dx, dy, pw };
@@ -101,7 +102,8 @@ function playKon(k, seed, tries) {
   while (!g.result) {
     const a = botThrow(g, rand, tries);
     startThrow(g);
-    launch(g.w, a.dx, a.dy, a.pw);
+    const l = Math.hypot(a.dx, a.dy);
+    throwFromHand(g, a.dx / l, a.dy / l, a.pw);
     run(g, (b) => knock(g, b));
     settle(g);
     finish(g);

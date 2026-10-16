@@ -1,0 +1,125 @@
+﻿{
+    "kid0-cheer":  {
+                       "w":  225,
+                       "feet":  4,
+                       "h":  518
+                   },
+    "kid2-watch":  {
+                       "w":  178,
+                       "feet":  4,
+                       "h":  451
+                   },
+    "kid4-watch":  {
+                       "w":  195,
+                       "feet":  4,
+                       "h":  506
+                   },
+    "asyk-red-alshy":  {
+                           "h":  159,
+                           "w":  222
+                       },
+    "kid4-sad":  {
+                     "w":  227,
+                     "feet":  4,
+                     "h":  518
+                 },
+    "kid1-sad":  {
+                     "w":  168,
+                     "feet":  4,
+                     "h":  452
+                 },
+    "kid2-cheer":  {
+                       "w":  178,
+                       "feet":  4,
+                       "h":  488
+                   },
+    "kid2-sad":  {
+                     "w":  185,
+                     "feet":  4,
+                     "h":  471
+                 },
+    "hand-open":  {
+                      "h":  474,
+                      "y":  217,
+                      "fh":  691,
+                      "x":  420,
+                      "w":  818,
+                      "fw":  1238
+                  },
+    "asyk-white-alshy":  {
+                             "h":  158,
+                             "w":  222
+                         },
+    "asyk-white-buk":  {
+                           "h":  154,
+                           "w":  222
+                       },
+    "asyk-red-shik":  {
+                          "h":  222,
+                          "w":  165
+                      },
+    "asyk-white-shik":  {
+                            "h":  222,
+                            "w":  164
+                        },
+    "kid1-watch":  {
+                       "w":  186,
+                       "feet":  4,
+                       "h":  438
+                   },
+    "kid0-sad":  {
+                     "w":  213,
+                     "feet":  4,
+                     "h":  510
+                 },
+    "asyk-red-taike":  {
+                           "h":  162,
+                           "w":  222
+                       },
+    "kid1-cheer":  {
+                       "w":  202,
+                       "feet":  4,
+                       "h":  525
+                   },
+    "kid0-watch":  {
+                       "w":  212,
+                       "feet":  4,
+                       "h":  484
+                   },
+    "asyk-red-buk":  {
+                         "h":  154,
+                         "w":  222
+                     },
+    "kid4-cheer":  {
+                       "w":  224,
+                       "feet":  4,
+                       "h":  501
+                   },
+    "asyk-white-taike":  {
+                             "h":  162,
+                             "w":  222
+                         },
+    "kid3-sad":  {
+                     "w":  136,
+                     "feet":  4,
+                     "h":  390
+                 },
+    "kid3-cheer":  {
+                       "w":  147,
+                       "feet":  4,
+                       "h":  455
+                   },
+    "kid3-watch":  {
+                       "w":  148,
+                       "feet":  4,
+                       "h":  397
+                   },
+    "hand-hold":  {
+                      "h":  511,
+                      "y":  180,
+                      "fh":  691,
+                      "x":  492,
+                      "w":  746,
+                      "fw":  1238
+                  }
+}
