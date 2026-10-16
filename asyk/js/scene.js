@@ -66,7 +66,9 @@ export async function loadArt(onProgress) {
   for (let i = 0; i < 5; i++) for (const p of KID_POSES) extra.push(`kidw${i}-${p}`);
   extrasReady = Promise.all(extra.map((n) => loadImage(n).catch(() => null)));
   // the photos caught some green from the backdrop: no channel may beat red on a bone
-  for (const c of ['white', 'red']) for (const s of SIDES) img[`asyk-${c}-${s}`] = degreen(img[`asyk-${c}-${s}`]);
+  for (const s of SIDES) img[`asyk-red-${s}`] = degreen(img[`asyk-red-${s}`]);
+  // the pale bones: only their light and shade are kept, the colour is ivory again
+  for (const s of SIDES) img[`asyk-white-${s}`] = ivory(img[`asyk-white-${s}`]);
   // dyed bones (worth more) are the red ones turned pink, so they never look like the saka
   for (const s of SIDES) img[`asyk-pink-${s}`] = tint(img[`asyk-red-${s}`]);
   // the aga's saka has lead poured into it: dull grey
@@ -119,6 +121,21 @@ function canvas2(w, h) {
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(w));
   c.height = Math.max(1, Math.round(h));
+  return c;
+}
+
+function ivory(im) {
+  const c = canvas2(im.width, im.height);
+  const x = c.getContext('2d');
+  x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const v = d.data[i] * 0.4 + d.data[i + 1] * 0.4 + d.data[i + 2] * 0.2;
+    d.data[i] = Math.min(255, v * 1.04 + 10);
+    d.data[i + 1] = Math.min(255, v * 0.96 + 4);
+    d.data[i + 2] = Math.min(255, v * 0.84);
+  }
+  x.putImageData(d, 0, 0);
   return c;
 }
 
