@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Арық — прототип</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#2b2e33">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="game" aria-label="Арық"></canvas>
+<header class="hud" id="hud" hidden>
+  <div class="hud-season">
+    <p id="season"></p>
+    <div class="bar"><i id="dayBar"></i></div>
+  </div>
+  <p class="stat" title="Кетмень: сколько клеток можно выкопать">⛏ <b id="dig"></b></p>
+  <p class="stat" title="Урожай">🍏 <b id="harvest"></b></p>
+  <button type="button" class="icon" id="undoBtn" aria-label="Отменить арык">↶</button>
+  <button type="button" class="icon" id="speedBtn" aria-label="Скорость">×1</button>
+  <button type="button" class="icon" id="pauseBtn" aria-label="Пауза">❚❚</button>
+</header>
+<p class="hint-line" id="hint" aria-live="polite"></p>
+<div id="ui"></div>
+</body>
+</html>
