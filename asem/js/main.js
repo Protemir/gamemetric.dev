@@ -1231,6 +1231,7 @@ function pause() {
   if (g.mode !== 'play' && g.mode !== 'countdown') return;
   pausedFrom = g.mode;
   g.mode = 'paused';
+  coachEl.hidden = true;
   pauseMusic(true);
   clearInputs();
   // a frozen frame should not keep shaking, flashing or streaking
