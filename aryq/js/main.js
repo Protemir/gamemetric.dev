@@ -64,7 +64,8 @@ cv.addEventListener('pointerdown', (e) => {
   const c = toCell(e);
   if (c < 0) return;
   cv.setPointerCapture(e.pointerId);
-  press = { cell: c, moved: false };
+  const r = cv.getBoundingClientRect();
+  press = { cell: c, moved: false, x: e.clientX - r.left, y: e.clientY - r.top };
   if (!S.isWater(g, c)) say('Начинай от реки или от арыка и тяни.', 1800);
 });
 
@@ -102,11 +103,23 @@ function walkTo(target) {
 function release() {
   if (!press || !g) return;
   if (!press.moved) {
-    // a tap next to a closed gate (on the river or the canal it hangs off) opens it too
+    // a tap near a closed gate opens that gate: a finger easily lands on the cell next to the bar,
+    // and that must not put up a second gate
     let c = press.cell;
-    if (g.kind[c] !== S.CANAL || !g.gate[c]) {
-      const shut = [1, -1, W, -W].map((d) => c + d).find((n) => n >= 0 && n < W * H && g.kind[n] === S.CANAL && g.gate[n] && g.from[n] === c);
-      if (shut != null) c = shut;
+    let best = view.cs * 0.9;
+    for (let n = 0; n < W * H; n++) {
+      if (!g.gate[n]) continue;
+      const [x1, y1] = view.center(g.from[n]), [x2, y2] = view.center(n);
+      const d = Math.hypot(x1 + (x2 - x1) * 0.7 - press.x, y1 + (y2 - y1) * 0.7 - press.y);
+      if (d < best) {
+        best = d;
+        c = n;
+      }
+    }
+    // two gates side by side are no use: a tap right before or after a closed one opens it
+    if (c === press.cell && g.kind[c] === S.CANAL && !g.gate[c]) {
+      const next = [g.from[c], ...g.out[c]].find((n) => n >= 0 && g.gate[n]);
+      if (next != null) c = next;
     }
     if (S.toggleGate(g, c)) say(g.gate[c] ? 'Шлюз закрыт: вода сюда не идёт. Нажми ещё раз — откроется.' : 'Шлюз открыт', 2200);
     else if (g.kind[c] === S.RIVER) say('Шлюз ставят на арык: нажми на сам арык.', 1800);
