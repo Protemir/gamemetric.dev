@@ -67,6 +67,33 @@ export async function loadArt(onProgress) {
   for (const s of SIDES) img[`asyk-pink-${s}`] = tint(img[`asyk-red-${s}`]);
   // the aga's saka has lead poured into it: dull grey
   for (const s of SIDES) img[`asyk-lead-${s}`] = lead(img[`asyk-red-${s}`]);
+  for (const s of SIDES) img[`asyk-gold-${s}`] = gold(img[`asyk-white-${s}`]);
+}
+
+// the lucky saka: a bone rubbed with gold paint
+function gold(im) {
+  const c = canvas2(im.width, im.height);
+  const x = c.getContext('2d');
+  x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const v = (d.data[i] + d.data[i + 1] + d.data[i + 2]) / 3;
+    d.data[i] = Math.min(255, v * 1.15 + 30);
+    d.data[i + 1] = Math.min(255, v * 0.88 + 10);
+    d.data[i + 2] = v * 0.3;
+  }
+  x.putImageData(d, 0, 0);
+  return c;
+}
+
+// a small picture of a bone for the bazaar cards
+export function boneIcon(look, size = 64) {
+  const im = img[`asyk-${look}-alshy`] || img['asyk-red-alshy'];
+  const c = canvas2(size * 2, size * 2);
+  const x = c.getContext('2d');
+  const k = Math.min((size * 2) / im.width, (size * 2) / im.height) * 0.9;
+  x.drawImage(im, (size * 2 - im.width * k) / 2, (size * 2 - im.height * k) / 2, im.width * k, im.height * k);
+  return c;
 }
 
 function lead(im) {
@@ -269,7 +296,7 @@ export function drawOverlay(c, t) {
 // ---------- things on the ground ----------
 // which photo of a bone: its colour and the side it shows
 function boneImage(b) {
-  const col = b.kind === 'saka' ? (b.owner === 'aga' ? 'lead' : 'red') : b.painted ? 'pink' : 'white';
+  const col = b.kind === 'saka' ? (b.owner === 'aga' ? 'lead' : b.look || 'red') : b.painted ? 'pink' : 'white';
   let side = b.face || 'buk';
   // a tumbling bone flips through its sides
   if (b.tumble) side = SIDES[Math.floor(Math.abs(b.ang) / 1.2) % 4];
@@ -686,6 +713,19 @@ export function drawHand(c, hand) {
   c.scale(hand.scale, hand.scale);
   c.translate(-px, -py);
   c.drawImage(img[name], F.x + m.x * k, F.y + m.y * k, m.w * k, m.h * k);
+  // another saka from the bazaar: its picture over the red one in the photo
+  if (!hand.open && hand.look && hand.look !== 'red') {
+    const bone = img[`asyk-${hand.look}-alshy`];
+    if (bone) {
+      const bw = F.w * 0.155;
+      const bh = (bw * bone.height) / bone.width;
+      c.save();
+      c.translate(F.x + F.w * HAND_BONE.x, F.y + F.h * HAND_BONE.y);
+      c.rotate(-0.25);
+      c.drawImage(bone, -bw / 2, -bh / 2, bw, bh);
+      c.restore();
+    }
+  }
   c.restore();
 }
 

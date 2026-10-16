@@ -209,11 +209,13 @@ export const SIDES = [
   { id: 'shik', name: 'Шік', mult: 1, w: 30, throws: 1 },
 ];
 
-export function rollSide(rand) {
-  const total = SIDES.reduce((s, x) => s + x.w, 0);
+// weights: a lucky saka may change how often each side comes up, e.g. { alshy: 34 }
+export function rollSide(rand, weights = null) {
+  const w = (s) => (weights && weights[s.id] != null ? weights[s.id] : s.w);
+  const total = SIDES.reduce((s, x) => s + w(x), 0);
   let t = rand() * total;
   for (const s of SIDES) {
-    if ((t -= s.w) < 0) return s;
+    if ((t -= w(s)) < 0) return s;
   }
   return SIDES[2];
 }

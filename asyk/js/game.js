@@ -23,8 +23,14 @@ export const landing = (power, ux, uy, from = HOME) => {
 };
 export const groundSpeed = (power) => MAX_SPEED * AIR.keep * power;
 
+const LEAD = { m: 2.6, mu: 62 };
 export function throwFromHand(g, ux, uy, power, from = HOME) {
   const s = saka(g.w);
+  const kind = from === AWAY ? LEAD : (g.mods && g.mods.saka) || null;
+  if (kind) {
+    s.m = kind.m;
+    s.mu = kind.mu;
+  }
   const p = landing(power, ux, uy, from);
   s.x = p.x;
   s.y = p.y;
@@ -94,7 +100,10 @@ export function newKon(k, seed = (Math.random() * 1e9) | 0, opts = {}) {
     w,
     target: opts.target || target(k),
     duel: opts.duel ? { aga: opts.duel.aga, throws: opts.duel.throws, score: 0, chain: 0 } : null,
-    throws: THROWS,
+    // what the bazaar changed (bazar.js mods); empty for the aga and the tests
+    mods: opts.mods || {},
+    firstOut: false,
+    throws: THROWS + ((opts.mods && opts.mods.extraThrows) || 0),
     score: 0,
     chain: 0,
     racks: 0,
@@ -133,7 +142,11 @@ export function startThrow(g, who = 'me') {
 export function knock(g, b) {
   const t = g.turn;
   if (!t) return 0;
-  const pay = b.value + DOMINO * t.knocked;
+  const mine = t.owner !== 'aga';
+  const m = mine ? g.mods : {};
+  let pay = b.value + (DOMINO + (m.domino || 0)) * t.knocked;
+  if (mine && m.firstBonus && !g.firstOut) pay += m.firstBonus;
+  if (mine) g.firstOut = true;
   t.knocked++;
   t.chips += pay;
   t.outs.push(b);
@@ -145,15 +158,16 @@ export function settle(g, rand = g.w.rand) {
   const t = g.turn;
   // the aga plays by the same rules with his own throws and chain
   const who = t.owner === 'aga' ? g.duel : g;
-  const side = rollSide(rand);
+  const m = t.owner === 'aga' ? {} : g.mods;
+  const side = rollSide(rand, m.saka && m.saka.sides);
   t.side = side;
-  t.mult = side.mult + who.chain;
+  t.mult = (side.id === 'taike' && m.taikeMult ? m.taikeMult : side.mult) + who.chain;
   t.score = t.knocked ? t.chips * t.mult : 0;
-  if (side.throws) who.throws += side.throws;
+  if (side.throws) who.throws += side.id === 'shik' && m.shikThrows ? m.shikThrows : side.throws;
   t.refund = t.knocked >= RULES.refundAt;
   if (t.refund) who.throws++;
   if (t.knocked) {
-    who.chain++;
+    who.chain += m.chainStep || 1;
   } else {
     who.chain = 0;
   }

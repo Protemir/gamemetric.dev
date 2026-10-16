@@ -5,6 +5,7 @@ import * as S from './scene.js';
 import * as A from './audio.js';
 import { store, el, clamp, rng } from './util.js';
 import { voiceFile } from './voice.js';
+import { SAKAS, TUMARS, SLOTS, loadBag, saveBag, mods, reward } from './bazar.js';
 import { PORTAL, portalInit, portalLang, gameplay, happytime, onPortalMute, loading } from './portal.js';
 
 const cv = document.getElementById('game');
@@ -57,6 +58,7 @@ const hand = { dx: 0, dy: 0, rot: 0, scale: 1, open: false, hidden: 1 };
 let best = store.get('asyk.best', 0);
 let taught = store.get('asyk.taught', 0);
 let story = store.get('asyk.story', { done: {} });
+let bag = loadBag(store);
 
 const FACES = ['alshy', 'buk', 'taike'];
 // the kids' ids in story.js by their place in the yard
@@ -203,7 +205,9 @@ function placeKids(duel, reset = true) {
 function freshKon(cfg) {
   S.setYard(cfg.yard || 'yard', cv);
   setKids(!!cfg.duel);
-  g = newKon(cfg.k || 1, cfg.seed, { target: cfg.target, wind: cfg.wind, duel: cfg.duel });
+  g = newKon(cfg.k || 1, cfg.seed, { target: cfg.target, wind: cfg.wind, duel: cfg.duel, mods: mods(bag) });
+  saka(g.w).look = (SAKAS[bag.saka] || SAKAS.red).look;
+  hand.look = saka(g.w).look;
   for (const kid of kids) {
     const feet = kidFeet(kid.x, kid.y);
     feet.ki = kid.i;
@@ -257,6 +261,7 @@ function menu() {
     el('p', 'sub', T('Лето 1987-го. Аул под горами, вечер, соседские ребята уже выложили кон.', 'Summer 1987. A village under the mountains, evening; the kids next door have set up the kon.')),
     button(T('Сюжет', 'Story'), storyMenu),
     button(T('Свободная игра', 'Free play'), () => startFree(1), 'btn second'),
+    button(`${T('Базар', 'Bazaar')} · ${bag.coins} ₸`, () => bazar(menu), 'btn second'),
   ];
   if (best > 1) kids2.push(el('p', 'sub', T(`Лучший результат: кон ${best}`, `Best: kon ${best}`)));
   const langBtn = button(lang ? 'Русский' : 'English', () => {
@@ -429,6 +434,7 @@ function over() {
   state = 'over';
   $('turn').hidden = true;
   if (mode && mode.story) return storyOver();
+  const earned = pay();
   if (g.result === 'win') {
     happytime();
     best = Math.max(best, g.k + 1);
@@ -440,8 +446,10 @@ function over() {
       stats([
         [T('Очки', 'Score'), `${g.score} / ${g.target}`],
         [T('Осталось бросков', 'Throws left'), g.throws],
+        [T('Заработал', 'Earned'), `+${earned} ₸`],
       ]),
-      button(`${T('Кон', 'Kon')} ${g.k + 1}`, () => startFree(g.k + 1)),
+      button(`${T('Кон', 'Kon')} ${g.k + 1}`, ((k) => () => startFree(k))(g.k + 1)),
+      bazarButton(((k) => () => startFree(k))(g.k + 1)),
       button(T('В меню', 'Menu'), menu, 'btn ghost'),
     ]);
   } else {
@@ -455,8 +463,10 @@ function over() {
         [T('Очки', 'Score'), `${g.score} / ${g.target}`],
         [T('Не хватило', 'Short by'), g.target - g.score],
         [T('Дошёл до', 'Reached'), `${T('кона', 'kon')} ${g.k}`],
+        [T('Заработал', 'Earned'), `+${earned} ₸`],
       ]),
       button(T('Заново с первого кона', 'Start over'), () => startFree(1)),
+      bazarButton(() => startFree(1)),
       button(T('В меню', 'Menu'), menu, 'btn ghost'),
     ]);
   }
@@ -480,6 +490,7 @@ async function storyOver() {
     kids.forEach((k, i) => S.setPose(k, 'sad', clock, 3, i * 0.06));
     if (aga) aga.pose = 'cheer';
   }
+  const earned = pay();
   state = 'talk';
   await talk((won ? kon.win : kon.lose) || []);
   state = 'over';
@@ -492,8 +503,73 @@ async function storyOver() {
   else if (won && nextCh && !nextCh.soon) btns.push(button(T(`Глава ${ch + 2}: ${pick(nextCh.title)}`, `Chapter ${ch + 2}: ${pick(nextCh.title)}`), () => playStory(ch + 1, 0)));
   else if (won) btns.push(button(T('Продолжение — зимой', 'To be continued in winter'), storyMenu));
   else btns.push(button(T('Ещё раз', 'Try again'), () => playStory(ch, ki)));
+  // the bazaar comes back here: the same next step
+  const again = () => storyOver.after();
+  storyOver.after = () => panel([el('h2', null, kidsTitle), stats([[T('Счёт', 'Score'), score], [T('Заработал', 'Earned'), `+${earned} ₸`]]), ...btns, bazarButton(again)]);
   btns.push(button(T('Главы', 'Chapters'), storyMenu, 'btn ghost'));
-  panel([el('h2', null, kidsTitle), stats([[T('Счёт', 'Score'), score]]), ...btns]);
+  storyOver.after();
+}
+
+// ---------- the bazaar ----------
+function pay() {
+  const n = reward(g);
+  bag.coins += n;
+  saveBag(store, bag);
+  return n;
+}
+function bazarButton(back) {
+  return button(`${T('Базар', 'Bazaar')} · ${bag.coins} ₸`, () => bazar(back), 'btn second');
+}
+
+function bazar(back) {
+  const wrap = el('div', 'bazar');
+  const head = el('p', 'purse', `${bag.coins} ₸`);
+  const card = (icon, name, desc, right) => {
+    const c = el('div', 'ware');
+    if (icon) c.append(icon);
+    const txt = el('div', 'ware-text');
+    txt.append(el('b', null, name), el('span', null, desc));
+    c.append(txt, right);
+    return c;
+  };
+  const redraw = () => bazar(back);
+  const buy = (price, fn) => {
+    if (bag.coins < price) return;
+    bag.coins -= price;
+    fn();
+    saveBag(store, bag);
+    A.cleared();
+    redraw();
+  };
+  wrap.append(el('h3', null, T('Сақа — бросаешь ею', 'Saka — the bone you throw')));
+  for (const [id, s] of Object.entries(SAKAS)) {
+    const owned = bag.owned.includes(id);
+    const right = bag.saka === id ? el('em', 'tag on', T('В руке', 'In hand')) : owned ? button(T('Взять', 'Use'), () => ((bag.saka = id), saveBag(store, bag), redraw()), 'buy') : button(`${s.price} ₸`, () => buy(s.price, () => (bag.owned.push(id), (bag.saka = id))), 'buy' + (bag.coins < s.price ? ' poor' : ''));
+    const icon = S.boneIcon(s.look, 26);
+    icon.className = 'ware-icon';
+    wrap.append(card(icon, pick(s.name), pick(s.desc), right));
+  }
+  wrap.append(el('h3', null, T(`Тұмары — надето ${bag.on.length} из ${SLOTS}`, `Tumars — ${bag.on.length} of ${SLOTS} worn`)));
+  for (const [id, m] of Object.entries(TUMARS)) {
+    const owned = bag.tumars.includes(id);
+    const worn = bag.on.includes(id);
+    let right;
+    if (worn) right = button(T('Снять', 'Take off'), () => ((bag.on = bag.on.filter((x) => x !== id)), saveBag(store, bag), redraw()), 'buy on');
+    else if (owned) right = button(T('Надеть', 'Wear'), () => {
+      if (bag.on.length >= SLOTS) bag.on.shift();
+      bag.on.push(id);
+      saveBag(store, bag);
+      redraw();
+    }, 'buy');
+    else
+      right = button(`${m.price} ₸`, () => buy(m.price, () => {
+        bag.tumars.push(id);
+        if (bag.on.length < SLOTS) bag.on.push(id);
+      }), 'buy' + (bag.coins < m.price ? ' poor' : ''));
+    const icon = el('i', 'ware-mark', '◆');
+    wrap.append(card(icon, pick(m.name), pick(m.desc), right));
+  }
+  panel([el('h2', null, T('Базар', 'Bazaar')), head, wrap, button(T('Дальше', 'Done'), back)], 'wide');
 }
 
 function stats(rows) {
