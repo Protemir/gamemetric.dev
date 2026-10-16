@@ -21,8 +21,7 @@ function check(g) {
   for (const o of g.objects) used += o.got;
   let spilt = 0;
   for (let i = 0; i < W * H; i++) spilt += g.spill[i];
-  const gone = g.flow[g.exit] - (g.near[g.exit] || []).reduce((s, o) => s + o.got, 0);
-  const diff = into - used - spilt - Math.max(0, gone);
+  const diff = into - used - spilt - g.gone;
   if (Math.abs(diff) > 1e-3) throw new Error(`water does not add up: ${diff.toFixed(4)}`);
 }
 

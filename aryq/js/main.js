@@ -32,8 +32,7 @@ function start() {
   ui.replaceChildren();
   hud.hidden = false;
   S.advance(g, 0.01); // the first garden appears
-  const first = g.objects.find((o) => o.type === 'garden');
-  if (first && !store.get('aryq.dug', false)) state.ghost = { obj: first, ...S.planFor(g, first) };
+  pickGhost(performance.now(), true);
   updateHud();
   if (DEBUG) window.__aryq = { g, S, view, step: (d) => S.advance(g, d) };
 }
@@ -105,12 +104,8 @@ function release() {
   if (!press.moved) {
     if (S.toggleGate(g, press.cell)) say(g.gate[press.cell] ? 'Шлюз закрыт' : 'Шлюз открыт', 1200);
   } else {
-    const dug = g.cur && g.cur.cells.length;
     S.endStroke(g);
-    if (dug && state.ghost) {
-      state.ghost = null;
-      store.set('aryq.dug', true);
-    }
+    state.ghostAt = 0; // look again right away
   }
   press = null;
   updateHud();
@@ -180,6 +175,29 @@ function showStart() {
   ui.replaceChildren(box);
 }
 
+// ---------- the dashed path ----------
+
+// Until the very first garden has drunk, the way to it is drawn. After that the path comes back
+// only for a garden that is getting really thirsty, and goes as soon as it has water.
+function pickGhost(now, force) {
+  if (!force && now - (state.ghostAt || 0) < 500) return;
+  state.ghostAt = now;
+  if (g.over || g.cur) return;
+  const learned = store.get('aryq.dug', false);
+  const watered = (o) => o.s >= 0.6 && o.got > 0;
+  if (!learned && g.objects.some((o) => o.type === 'garden' && watered(o))) store.set('aryq.dug', true);
+  let target = null;
+  if (!store.get('aryq.dug', false)) target = g.objects.find((o) => o.type === 'garden');
+  else {
+    for (const o of g.objects) {
+      if (o.type !== 'garden' || o.thirst < 0.45 || watered(o) || g.day >= S.WINTER) continue;
+      if (!target || o.thirst > target.thirst) target = o;
+    }
+  }
+  const plan = target && S.planFor(g, target);
+  state.ghost = plan && plan.cells.length && !watered(target) ? { obj: target, ...plan } : null;
+}
+
 // ---------- loop ----------
 
 function frame(now) {
@@ -195,7 +213,7 @@ function frame(now) {
       if (ev.type === 'left') say('Из дома ушли: ему нужна вода.', 3000);
       if (ev.type === 'year') say(`Год ${ev.year}. Ледник стал меньше.`, 3000);
     }
-    if (state.ghost && g.objects.indexOf(state.ghost.obj) < 0) state.ghost = null;
+    pickGhost(now);
     updateHud();
     view.draw(g, now, state);
   }

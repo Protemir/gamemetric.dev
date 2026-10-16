@@ -235,6 +235,7 @@ export function flowStep(g) {
     want[i] = Math.min(w, CANAL_CAP);
   }
   flow[g.source] = sourceFlow(g.day, g.year);
+  g.gone = 0;
   for (const i of g.order) {
     let q = flow[i];
     if (q <= 1e-6) continue;
@@ -247,7 +248,6 @@ export function flowStep(g) {
         }
       }
     }
-    if (i === g.exit) continue; // leaves the valley
     let open = g.out[i].filter((t) => !g.gate[t]);
     const room = (t) => (g.kind[t] === RIVER ? Infinity : want[t] - flow[t]);
     open = open.filter((t) => room(t) > 1e-6);
@@ -263,7 +263,9 @@ export function flowStep(g) {
       if (next.length === open.length) break; // nobody was full, all of q is given out
       open = next;
     }
-    if (q > 1e-6) spill[i] = q;
+    // what the last river cell does not give to canals leaves the valley
+    if (i === g.exit) g.gone = q;
+    else if (q > 1e-6) spill[i] = q;
   }
 }
 
