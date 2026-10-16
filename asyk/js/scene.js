@@ -320,7 +320,7 @@ function boneImage(b) {
   const col = b.kind === 'saka' ? (b.owner === 'aga' ? 'lead' : b.look || 'red') : b.painted ? 'pink' : 'white';
   let side = b.face || 'buk';
   // a tumbling bone flips through its sides
-  if (b.tumble) side = SIDES[Math.floor(Math.abs(b.ang) / 1.2) % 4];
+  if (b.tumble) side = ['alshy', 'taike', 'buk'][Math.floor(Math.abs(b.ang) / 1.2) % 3];
   return img[`asyk-${col}-${side}`];
 }
 
@@ -367,50 +367,46 @@ export function drawBone(c, b, z = 0, alpha = 1, glow = 0) {
 export const tall = () => view.w / view.h < 1.2;
 
 export function kidSpots(duel) {
-  // feet positions around the kon; in a duel the girl steps aside so the aga can throw.
-  // A phone held upright shows a narrow slice of the yard: all five gather in a tight arc behind the kon.
+  // feet positions around the kon. Nobody stands right behind its middle: from the throwing line
+  // a saka that stops among the bones would look as if it had landed on that kid's feet.
+  // In a duel the aga takes the middle. A phone held upright shows a narrow slice of the yard:
+  // the five gather in an arc behind the kon, a step back from the circle.
   if (tall())
     return duel
       ? [
-          [27, 28],
-          [36, 8],
-          [65, 6],
-          [74, 27],
-          [60, -14],
+          [25, 10],
+          [36, -6],
+          [66, -6],
+          [75, 10],
+          [70, -30],
         ]
       : [
-          [28, 26],
-          [39, 10],
-          [51, 2],
-          [63, 8],
-          [74, 24],
+          [25, 10],
+          [37, -8],
+          [63, -8],
+          [75, 10],
+          [56, -42],
         ];
   return duel
     ? [
-        [4, 64],
-        [20, 22],
-        [33, 2],
-        [77, 16],
-        [96, 60],
+        [4, 62],
+        [20, 14],
+        [33, -12],
+        [72, -10],
+        [96, 58],
       ]
     : [
-        [4, 64],
-        [22, 20],
-        [50, 6],
-        [77, 16],
-        [96, 60],
+        [4, 62],
+        [20, 14],
+        [33, -12],
+        [68, -10],
+        [96, 58],
       ];
 }
 
 export function makeKids() {
-  // feet positions around the kon; the tall boy stands on the right, the small one in the cap behind
-  const spots = [
-    [4, 64],
-    [22, 20],
-    [50, 6],
-    [77, 16],
-    [96, 60],
-  ];
+  // the same places as kidSpots; freshKon moves them for the screen and the duel
+  const spots = kidSpots(false);
   return spots.map(([x, y], i) => ({ i, x, y, pose: 'watch', until: 0, delay: 0, next: null, bob: i * 1.7 }));
 }
 

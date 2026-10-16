@@ -931,7 +931,9 @@ function roll(dt) {
       if (feet) {
         // a bone hit someone's foot
         const kid = feet.ki === 'aga' ? aga : kidOf(feet);
-        if (kid && e.power > 8) {
+        // only a real knock hurts, and only once a throw
+        if (kid && e.power > 20 && g.turn && !g.turn.ouch) {
+          g.turn.ouch = true;
           if (kid !== aga) S.setPose(kid, 'sad', clock, 1.1);
           else aga.pose = 'sad';
           bark('ouch', kid);

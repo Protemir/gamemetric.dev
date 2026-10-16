@@ -48,7 +48,7 @@ export const moving = (w) => w.bodies.some((b) => b.vx !== 0 || b.vy !== 0);
 export const insideKon = (b) => Math.hypot(b.x - KON.x, b.y - KON.y) < KON.r + b.r * 0.5;
 
 // a kid's feet: bones bounce off them
-export const kidFeet = (x, y) => body('kid', x, y, { r: 4.5, m: 1e6, fixed: true });
+export const kidFeet = (x, y) => body('kid', x, y, { r: 3.5, m: 1e6, fixed: true });
 
 export function launch(w, dx, dy, power) {
   const s = saka(w);
