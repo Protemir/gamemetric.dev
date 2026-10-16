@@ -54,7 +54,10 @@ const KID_IDS = ['timur', 'bekzhan', 'asem', 'erke', 'askar'];
 const LANG_CODE = () => (lang ? 'en' : 'ru');
 
 function layout() {
+  const wasTall = S.view.w ? S.tall() : null;
   S.resize(cv);
+  // turning the phone moves the kids (and their feet) to where they can be seen
+  if (g && wasTall !== null && wasTall !== S.tall()) placeKids(!!g.duel, false);
 }
 window.addEventListener('resize', () => {
   if (state !== 'load') layout();
@@ -141,6 +144,16 @@ function button(text, fn, cls = 'btn') {
 
 function setKids(duel) {
   S.kidSpots(duel).forEach(([x, y], i) => Object.assign(kids[i], { x, y, pose: 'watch', next: null, talking: false }));
+}
+
+// move the kids and the feet bones bounce off
+function placeKids(duel, reset = true) {
+  S.kidSpots(duel).forEach(([x, y], i) => {
+    Object.assign(kids[i], { x, y });
+    if (reset) Object.assign(kids[i], { pose: 'watch', next: null, talking: false });
+    const feet = g.w.bodies.find((b) => b.kind === 'kid' && b.ki === kids[i].i);
+    if (feet) Object.assign(feet, { x, y });
+  });
 }
 
 // cfg: { k, target, wind, duel, yard }

@@ -315,8 +315,27 @@ export function drawBone(c, b, z = 0, alpha = 1, glow = 0) {
 }
 
 // ---------- kids ----------
+export const tall = () => view.w / view.h < 1.2;
+
 export function kidSpots(duel) {
-  // feet positions around the kon; in a duel the girl steps aside so the aga can throw
+  // feet positions around the kon; in a duel the girl steps aside so the aga can throw.
+  // A phone held upright shows a narrow slice of the yard: all five gather in a tight arc behind the kon.
+  if (tall())
+    return duel
+      ? [
+          [27, 28],
+          [36, 8],
+          [65, 6],
+          [74, 27],
+          [60, -14],
+        ]
+      : [
+          [28, 26],
+          [39, 10],
+          [51, 2],
+          [63, 8],
+          [74, 24],
+        ];
   return duel
     ? [
         [4, 64],

@@ -4,42 +4,137 @@
     "apa": {
       "voice": "",
       "describe": "An elderly Kazakh grandmother in her seventies calling from a village house window in the evening. Warm, loving, slightly raspy voice, unhurried, a soft Kazakh accent in Russian.",
-      "sample": "Балам, далеко не уходи! Как стемнеет — домой, ужинать."
+      "sample": "Балам, далеко не уходи! Как стемнеет — домой, ужинать.",
+      "previews": [
+        "ZBZNw3ycw1VfjA2EgK0L",
+        "wAzb8lF4AvazMG9MCbnc",
+        "Hi0g5RWXE26bGDqCKaM8"
+      ],
+      "error": "/text-to-voice/design: 422 {\"detail\":[{\"type\":\"string_too_short\",\"loc\":[\"body\",\"text\"],\"msg\":\"String should have at least 100 characters\",\"input\":\"Балам, далеко не уходи! Как стемнеет — домой, ужинать.\",\"ctx\":{\"min_length\":100}}]}"
     },
     "timur": {
       "voice": "",
       "describe": "Timur, an 11-year-old boy in a children's adventure game: lively, quick and enthusiastic, a bit hoarse from shouting outdoors, speaking Russian with a light Kazakh accent.",
-      "sample": "Сақа ляжет алшы — очки втрое. Давай, покажи!"
+      "sample": "Сақа ляжет алшы — очки втрое. Давай, покажи!",
+      "candidates": [
+        {
+          "name": "Viktoriia",
+          "voice": "8M81RK3MD7u4DOJpu2G5",
+          "owner": "9b4019bd3f1ab53940b6c0df9c2138c2b9472f2ab688284299c30ff70ee5a7f7"
+        },
+        {
+          "name": "Adik M",
+          "voice": "pt0Iailp6NXMdRw1n3c5",
+          "owner": "7398804d9eaf2f463899a907587c33a390591775784f87857b6d0e1e4e3e66f6"
+        }
+      ]
     },
     "bekzhan": {
       "voice": "",
       "describe": "Bekzhan, a chubby 10-year-old boy in a children's adventure game: the class clown, cheeky and teasing, always half laughing, speaking Russian with a light Kazakh accent.",
-      "sample": "О, калалык приехал! В асык-то умеешь?"
+      "sample": "О, калалык приехал! В асык-то умеешь?",
+      "candidates": [
+        {
+          "name": "Bittu",
+          "voice": "4iqKdEXMW8NRF8USiS3Q",
+          "owner": "7398804d9eaf2f463899a907587c33a390591775784f87857b6d0e1e4e3e66f6"
+        },
+        {
+          "name": "Vovis",
+          "voice": "JoMSKT9U9IuvcWwxNJUV",
+          "owner": "55acb4f563fb45b34673390681bcd4437b9c09334d58570b4009e949d19b91b4"
+        }
+      ]
     },
     "asem": {
       "voice": "",
       "describe": "Asem, a 10-year-old girl in a children's adventure game: bright and clear, kind and confident, a little bossy with the boys, speaking Russian with a light Kazakh accent.",
-      "sample": "Бекжан, отстань от него. Смотри: тянешь руку назад и бросаешь."
+      "sample": "Бекжан, отстань от него. Смотри: тянешь руку назад и бросаешь.",
+      "candidates": [
+        {
+          "name": "Jasmine",
+          "voice": "tj9wwIq7s2HekkDfg1KH",
+          "owner": "62e0c3a45d776ee60f8d8d924a5638fd533e3271bddbb7738b62cf666512e36e"
+        },
+        {
+          "name": "Taya",
+          "voice": "8pYiWLBihr54ecI85RXM",
+          "owner": "c7acde2425acb8b3e478e367cc5b6ef84dbaf50bc78a10de8ca3e4a1074986c6"
+        },
+        {
+          "name": "Chutki",
+          "voice": "Jr72SE8p9OcJmr8hyX0D",
+          "owner": "7398804d9eaf2f463899a907587c33a390591775784f87857b6d0e1e4e3e66f6"
+        }
+      ]
     },
     "erke": {
       "voice": "",
       "describe": "Erke, a 7-year-old boy in a children's adventure game, the youngest of the gang: squeaky, excited, words tumbling out fast, speaking Russian with a light Kazakh accent.",
-      "sample": "Я свой крашеный асык поставил! Только не выбивай его, а?"
+      "sample": "Я свой крашеный асык поставил! Только не выбивай его, а?",
+      "candidates": [
+        {
+          "name": "Miffy",
+          "voice": "M5t0724ORuAGCh3p3DUR",
+          "owner": "4d49e1f6a4608f4702abcb9914a565b56353fa58abba4b23a34b647e549c3cd6"
+        },
+        {
+          "name": "Hafiz",
+          "voice": "LkSPBLr5WF7APTCqF4ZJ",
+          "owner": "7398804d9eaf2f463899a907587c33a390591775784f87857b6d0e1e4e3e66f6"
+        }
+      ]
     },
     "askar": {
       "voice": "",
       "describe": "Askar, a 12-year-old boy in a children's adventure game: quiet and calm, low for his age, few words, dry and serious, speaking Russian with a light Kazakh accent.",
-      "sample": "Нормально бросает."
+      "sample": "Нормально бросает.",
+      "candidates": [
+        {
+          "name": "Pacified",
+          "voice": "Kgsr5VP3shW1VbmXvvr0",
+          "owner": "8c418ddef454b09354372a1463a68f8b697e03fe4e3959e7329f67d197f4f5e7"
+        },
+        {
+          "name": "Babur",
+          "voice": "NHQ2h6zwVO33wcmZuxXz",
+          "owner": "55bbee24e02d8d9adc35967646890c2bcead86f43959741020a9a209e354f75e"
+        }
+      ]
     },
     "erlan": {
       "voice": "",
       "describe": "Erlan, a 15-year-old teenage boy whose voice has just broken, the street champion in a children's adventure game: confident, cocky, slow lazy drawl, speaking Russian with a Kazakh accent.",
-      "sample": "Это кто тут из города? Давай один на один. Сақа у меня со свинцом."
+      "sample": "Это кто тут из города? Давай один на один. Сақа у меня со свинцом.",
+      "candidates": [
+        {
+          "name": "Mikhail",
+          "voice": "RvcToHi9ENVDatbeYNJe",
+          "owner": "21203b0bee30f1c98ec8010e47bf437d8e6b34d8506ffc08760f8b6fb30d1916"
+        },
+        {
+          "name": "Daniel",
+          "voice": "GC6lSBdDbTgPRulcGFDX",
+          "owner": "aedaf5c438dede0de1cd378a864e5889a81110c3e02eaaa64da3728ad0e53c64"
+        }
+      ]
     },
     "dauren": {
       "voice": "",
       "describe": "Dauren, a 16-year-old teenage boy from the next street in a children's adventure game: loud, theatrical show-off, slightly raspy, laughing at everyone, speaking Russian with a Kazakh accent.",
-      "sample": "Тут ветер — мой друг. Бросай первым, калалык."
+      "sample": "Тут ветер — мой друг. Бросай первым, калалык.",
+      "candidates": [
+        {
+          "name": "Justus",
+          "voice": "BOXom31b0dZ8zv6QJFfQ",
+          "owner": "84170eba2e50e0df575fca41c02e69d51200016cc292e0f433bb2b37cea28126"
+        },
+        {
+          "name": "Alex",
+          "voice": "sy3iWjPWyIrDlSo8mBwS",
+          "owner": "a56650eb464ba591c6ab45ecbf71c0051b9e4c964d3514f17b26547c8fe45520"
+        }
+      ]
     }
   }
 }
