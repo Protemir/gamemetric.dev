@@ -135,13 +135,13 @@ export class View {
       cx.lineWidth = cs * (river ? 0.78 : 0.56);
       this.seg(a, b);
     }
-    // water on top, wider when more flows; a full canal gets a light rim
+    // water on top, wider when more flows
     for (const [a, b] of edges) {
       const q = g.flow[b] || 0;
       const river = g.kind[b] === S.RIVER;
       const k = river ? clamp(q / 8, 0, 1) : clamp(q / S.CANAL_CAP, 0, 1);
       if (q < 0.01 || g.gate[b]) continue;
-      cx.strokeStyle = !river && k > 0.97 ? '#bfe3ff' : '#4aa3e8';
+      cx.strokeStyle = '#4aa3e8';
       cx.lineWidth = cs * (river ? 0.28 + 0.4 * k : 0.14 + 0.32 * k);
       this.seg(a, b);
     }
@@ -253,8 +253,8 @@ export class View {
         cx.fill();
         cx.stroke();
       }
-      // no water at all yet: a drop bobs above it
-      if (o.got < 0.01 && g.day < S.WINTER) this.drop(px, py - r * 1.9 + Math.sin(now / 220) * cs * 0.08, cs * 0.36);
+      // not enough water: a drop bobs above it
+      if (o.s < 0.6 && g.day < S.WINTER) this.drop(px, py - r * 1.9 + Math.sin(now / 220) * cs * 0.08, cs * 0.36);
       // thirst ring red, flood ring blue
       this.ring(px, py, r + 3, o.thirst, '#e0493e');
       if (o.type === 'house') this.ring(px, py, r + 7, o.flood, '#3d8fe0');

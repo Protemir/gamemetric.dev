@@ -161,7 +161,7 @@ function togglePause() {
 function updateHud() {
   if (!g) return;
   const s = S.seasonOf(g.day);
-  $('season').textContent = `${s.name} · год ${g.year}`;
+  $('season').textContent = `${s.name} · год ${g.year}${state.calm && !paused ? ' ⏩' : ''}`;
   $('dayBar').style.width = `${(g.day / S.YEAR_DAYS) * 100}%`;
   $('dig').textContent = g.dig;
   $('harvest').textContent = Math.floor(g.harvest);
@@ -233,10 +233,17 @@ function coach(now) {
       return;
     }
   }
-  const allDrink = g.objects.length > 1 && g.objects.every((o) => o.got > 0.01);
+  for (const o of g.objects) {
+    if (o.type === 'garden' && o.got > 0.01 && o.s < 0.6 && o.thirst > 0.3 && !o.lowWarned && g.day < S.WINTER) {
+      o.lowWarned = true;
+      say('Саду мало воды: один арык поит 6 садов, а река к осени мелеет. Проведи к нему ещё один арык от реки.', 5000);
+      return;
+    }
+  }
+  const allDrink =g.objects.length > 1 && g.objects.every((o) => o.got > 0.01);
   if (allDrink && !state.calmShown && g.day < S.WINTER) {
     state.calmShown = true;
-    say('Все пьют. Новые сады и дома появятся сами — не дай засохнуть ни одному. Можно ускорить ×3.', 5000);
+    say('Все пьют — время идёт быстрее. Новые сады и дома появятся сами, не дай засохнуть ни одному.', 5000);
   }
 }
 
@@ -247,7 +254,9 @@ function frame(now) {
   last = now;
   if (g) {
     if (!paused && !g.over && !press?.moved) {
-      S.advance(g, (dt * speed) / S.DAY_SEC);
+      // while everybody drinks there is nothing to do, so the days run faster on their own
+      state.calm = g.objects.length > 0 && g.objects.every((o) => o.s >= 0.6);
+      S.advance(g, (dt * speed * (state.calm ? 2.5 : 1)) / S.DAY_SEC);
     }
     if (g.over && !ui.firstChild) showOver();
     for (const ev of g.events.splice(0)) {

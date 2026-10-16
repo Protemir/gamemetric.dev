@@ -317,7 +317,8 @@ function tick(g, dt) {
   if (g.day < WINTER) {
     if (g.day >= g.nextGarden) {
       spawn(g, 'garden');
-      g.nextGarden = g.day + Math.max(4, 9 - g.year);
+      // the first few come quickly so there is something to do right away, then the usual pace
+      g.nextGarden = g.day + (g.year === 1 && g.gardensEver < 4 ? 2.5 : Math.max(5, 11 - g.year));
     }
     if (g.day >= g.nextHouse) {
       spawn(g, 'house');
