@@ -175,7 +175,12 @@ export function endStroke(g) {
 
 // takes back the last canal; later canals may hang off earlier ones, so only the last one goes
 export function undo(g) {
-  if (g.cur) endStroke(g);
+  if (g.cur) {
+    // undo in the middle of a stroke takes back that stroke, never an older one
+    const started = g.cur.cells.length || g.cur.join;
+    endStroke(g);
+    if (!started) return false;
+  }
   const s = g.strokes.pop();
   if (!s) return false;
   if (s.join) {

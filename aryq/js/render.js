@@ -14,7 +14,7 @@ const R = 8; // height samples per cell for smooth light
 const C = {
   table: '#1f2420',
   soil: '#6b4a2e',
-  soilRim: 'rgba(196,168,120,0.85)',
+  soilRim: 'rgba(104,78,48,0.55)',
   bank: '#c9b48a',
   deep: '#1f6fa8',
   water: '#2f8ac4',
@@ -259,7 +259,7 @@ export class View {
     cx.strokeStyle = C.soilRim;
     for (const [a, b] of edges) {
       if (isRiver(a, b)) continue;
-      cx.lineWidth = bedW(a, b) + cs * 0.16;
+      cx.lineWidth = bedW(a, b) + cs * 0.2;
       this.seg(a, b);
     }
     for (const [a, b] of edges) {
