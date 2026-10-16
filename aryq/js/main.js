@@ -43,13 +43,96 @@ function say(text, ms = 2200) {
   hintUntil = performance.now() + ms;
 }
 
-const WHY = {
-  high: 'Слишком высоко: вода вверх не пойдёт. Бери воду выше по реке.',
-  up: 'Туда вода не стечёт: там выше.',
-  ice: 'По леднику не копают.',
-  object: 'Тут занято.',
-  tired: 'Кетмень устал: новые силы с новым садом и новым годом.',
+// ---------- texts ----------
+
+const TEXT = {
+  ru: {
+    title: 'Арык',
+    tag: 'Сады и юрты хотят пить. Пальцем копай арык от реки к ним. Вода течёт вниз, а вверх арык поднимается не больше чем на один слой.',
+    play: 'Играть',
+    again: 'Ещё раз',
+    over: 'Сад засох',
+    when: 'Год {y}, {s}',
+    result: 'Урожай {h} · садов {n}',
+    best: 'Лучший урожай {b}',
+    hud: '{s} · год {y}',
+    spring: 'весна',
+    summer: 'лето',
+    autumn: 'осень',
+    winter: 'зима',
+    high: 'Там слишком высоко: арык поднимается не больше чем на один слой. Светлым подсвечено, куда можно.',
+    up: 'Туда вода не стечёт: там выше.',
+    ice: 'По леднику не копают.',
+    object: 'Тут занято.',
+    tired: 'Нет сил копать: новые силы с новым садом и новым годом.',
+    start: 'Начинай от реки или от арыка и тяни.',
+    gateShut: 'Шлюз закрыт: вода сюда не идёт. Нажми ещё раз — откроется.',
+    gateOpen: 'Шлюз открыт',
+    gateRiver: 'Шлюз ставят на арык: нажми на сам арык.',
+    floodSoon: 'Юрту подтапливает: рядом кончается арык и вода льётся. Доведи арык до юрты или обратно в реку, или закрой шлюз.',
+    lowWater: 'Саду мало воды: один арык поит 6 садов, а река к осени мелеет. Проведи к нему ещё один арык от реки.',
+    calm: 'Все пьют — время идёт быстрее. Новые сады и юрты появятся сами, не дай засохнуть ни одному.',
+    flooded: 'Юрту затопило: не обрывай арык рядом с юртой.',
+    left: 'Из юрты ушли: ей нужна вода.',
+    year: 'Год {y} пережит! Урожай {h}. Ледник стал меньше — воды будет меньше.',
+    dig: 'Сколько клеток можно выкопать',
+    harvest: 'Урожай',
+    undo: 'Отменить арык',
+    speed: 'Скорость',
+    pause: 'Пауза',
+  },
+  en: {
+    title: 'Aryk',
+    tag: 'Orchards and yurts are thirsty. Drag from the river to dig a canal to them. Water runs downhill, and a canal can climb no more than one layer.',
+    play: 'Play',
+    again: 'Try again',
+    over: 'An orchard dried up',
+    when: 'Year {y}, {s}',
+    result: 'Harvest {h} · orchards {n}',
+    best: 'Best harvest {b}',
+    hud: '{s} · year {y}',
+    spring: 'spring',
+    summer: 'summer',
+    autumn: 'autumn',
+    winter: 'winter',
+    high: 'Too high: a canal climbs no more than one layer. The light cells show where you can dig.',
+    up: 'Water will not run there: it is higher.',
+    ice: 'You cannot dig into the glacier.',
+    object: 'Something is already here.',
+    tired: 'No strength left to dig: you get more with every new orchard and every new year.',
+    start: 'Start from the river or a canal and drag.',
+    gateShut: 'Gate closed: no water goes this way. Tap again to open it.',
+    gateOpen: 'Gate open',
+    gateRiver: 'Gates go on canals: tap the canal itself.',
+    floodSoon: 'A yurt is flooding: a canal ends next to it and spills. Run the canal to the yurt or back into the river, or close a gate.',
+    lowWater: 'This orchard is short of water: one canal feeds 6 orchards, and the river runs low by autumn. Dig it a second canal from the river.',
+    calm: 'Everyone has water, so time runs faster. New orchards and yurts appear by themselves: do not let any dry up.',
+    flooded: 'A yurt was flooded: do not end a canal next to a yurt.',
+    left: 'People left a yurt: it needs water.',
+    year: 'Year {y} survived! Harvest {h}. The glacier shrank: there will be less water.',
+    dig: 'How many cells you can dig',
+    harvest: 'Harvest',
+    undo: 'Undo canal',
+    speed: 'Speed',
+    pause: 'Pause',
+  },
 };
+const lang = (() => {
+  const want = q.get('lang');
+  if (want && TEXT[want]) return want;
+  const nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+  return /^(ru|kk|ky|be|uz|tg|uk)\b/i.test(nav) ? 'ru' : 'en';
+})();
+const t = (k, v) => (TEXT[lang][k] || TEXT.en[k] || k).replace(/\{(\w+)\}/g, (_, n) => (v && v[n] != null ? v[n] : ''));
+const WHY = { high: t('high'), up: t('up'), ice: t('ice'), object: t('object'), tired: t('tired') };
+document.documentElement.lang = lang;
+document.title = t('title');
+$('dig').parentElement.title = t('dig');
+$('harvest').parentElement.title = t('harvest');
+$('undoBtn').setAttribute('aria-label', t('undo'));
+$('speedBtn').setAttribute('aria-label', t('speed'));
+$('pauseBtn').setAttribute('aria-label', t('pause'));
+cv.setAttribute('aria-label', t('title'));
 
 // ---------- input ----------
 
@@ -66,8 +149,29 @@ cv.addEventListener('pointerdown', (e) => {
   if (c < 0) return;
   cv.setPointerCapture(e.pointerId);
   const r = cv.getBoundingClientRect();
-  press = { cell: c, moved: false, x: e.clientX - r.left, y: e.clientY - r.top };
-  if (!S.isWater(g, c)) say('Начинай от реки или от арыка и тяни.', 1800);
+  press = { cell: c, tapped: c, moved: false, x: e.clientX - r.left, y: e.clientY - r.top };
+  // a finger often lands just beside the end of a canal (the puddle is wider than the cell):
+  // start from the nearest water cell if there is one right there
+  if (!S.isWater(g, c)) {
+    let best = view.cs * 1.05;
+    for (const d of [1, -1, W, -W, W + 1, W - 1, -W + 1, -W - 1]) {
+      const n = c + d;
+      if (n < 0 || n >= W * H || Math.abs((n % W) - (c % W)) > 1 || !S.isWater(g, n)) continue;
+      const [nx, ny] = view.center(n);
+      const dist = Math.hypot(nx - press.x, ny - press.y);
+      if (dist < best) {
+        best = dist;
+        press.cell = n;
+      }
+    }
+  }
+  // pressing near the start of the dashed path starts right there
+  if (state.ghost) {
+    const [gx, gy] = view.center(state.ghost.from);
+    if (Math.hypot(gx - press.x, gy - press.y) < view.cs * 1.3) press.cell = state.ghost.from;
+  }
+  if (S.isWater(g, press.cell)) state.reach = S.reach(g, press.cell).best;
+  else say(t('start'), 1800);
 });
 
 cv.addEventListener('pointermove', (e) => {
@@ -82,14 +186,51 @@ cv.addEventListener('pointermove', (e) => {
 });
 
 function walkTo(target) {
+  // along the dashed path the canal sticks to it, so a shaky finger does not wander off into a rise
+  const gh = state.ghost;
+  if (gh && g.cur && g.cur.from === gh.from && g.cur.cells.every((c, k) => gh.cells[k] === c)) {
+    const tx = target % W, ty = (target / W) | 0;
+    let near = -1, dist = 1.6;
+    gh.cells.forEach((c, k) => {
+      const d = Math.hypot((c % W) - tx, ((c / W) | 0) - ty);
+      if (d < dist) {
+        dist = d;
+        near = k;
+      }
+    });
+    if (near >= 0) {
+      for (let k = g.cur.cells.length; k <= near; k++) {
+        const r = S.extend(g, gh.cells[k]);
+        if (!r.ok) {
+          state.blocked = { cell: gh.cells[k], at: performance.now() };
+          say(WHY[r.why] || '');
+          return;
+        }
+      }
+      while (g.cur.cells.length > near + 1) S.extend(g, g.cur.cells.length >= 2 ? g.cur.cells[g.cur.cells.length - 2] : g.cur.from);
+      state.reach = S.reach(g, g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from).best;
+      return;
+    }
+  }
   // step by step through 4-neighbours, so a fast swipe still digs every cell
   for (let guard = 0; guard < 60 && g.cur; guard++) {
     const a = g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from;
     if (a === target || g.cur.join) return;
     const ax = a % W, ay = (a / W) | 0, tx = target % W, ty = (target / W) | 0;
     const dx = tx - ax, dy = ty - ay;
-    const b = Math.abs(dx) > Math.abs(dy) ? a + Math.sign(dx) : a + Math.sign(dy) * W;
-    const r = S.extend(g, b);
+    // the longer way first; if that one is blocked and the finger goes slantwise, try the other
+    const along = Math.abs(dx) > Math.abs(dy);
+    let b = along ? a + Math.sign(dx) : a + Math.sign(dy) * W;
+    let r = S.extend(g, b);
+    if (!r.ok && dx && dy) {
+      const b2 = along ? a + Math.sign(dy) * W : a + Math.sign(dx);
+      const r2 = S.extend(g, b2);
+      if (r2.ok) {
+        b = b2;
+        r = r2;
+      }
+    }
+    if (r.ok) state.reach = S.reach(g, g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from).best;
     if (!r.ok) {
       if (r.why !== 'done' && (!state.blocked || state.blocked.cell !== b)) {
         state.blocked = { cell: b, at: performance.now() };
@@ -103,10 +244,11 @@ function walkTo(target) {
 
 function release() {
   if (!press || !g) return;
+  state.reach = null;
   if (!press.moved) {
     // a tap near a closed gate opens that gate: a finger easily lands on the cell next to the bar,
     // and that must not put up a second gate
-    let c = press.cell;
+    let c = press.tapped;
     let best = view.cs * 0.9;
     for (let n = 0; n < W * H; n++) {
       if (!g.gate[n]) continue;
@@ -118,12 +260,12 @@ function release() {
       }
     }
     // two gates side by side are no use: a tap right before or after a closed one opens it
-    if (c === press.cell && g.kind[c] === S.CANAL && !g.gate[c]) {
+    if (c === press.tapped && g.kind[c] === S.CANAL && !g.gate[c]) {
       const next = [g.from[c], ...g.out[c]].find((n) => n >= 0 && g.gate[n]);
       if (next != null) c = next;
     }
-    if (S.toggleGate(g, c)) say(g.gate[c] ? 'Шлюз закрыт: вода сюда не идёт. Нажми ещё раз — откроется.' : 'Шлюз открыт', 2200);
-    else if (g.kind[c] === S.RIVER) say('Шлюз ставят на арык: нажми на сам арык.', 1800);
+    if (S.toggleGate(g, c)) say(g.gate[c] ? t('gateShut') : t('gateOpen'), 2200);
+    else if (g.kind[c] === S.RIVER) say(t('gateRiver'), 1800);
   } else {
     S.endStroke(g);
     state.ghostAt = 0; // look again right away
@@ -161,7 +303,8 @@ function togglePause() {
 function updateHud() {
   if (!g) return;
   const s = S.seasonOf(g.day);
-  $('season').textContent = `${s.name} · год ${g.year}${state.calm && !paused ? ' ⏩' : ''}`;
+  const sn = t(s.key);
+  $('season').textContent = t('hud', { s: sn[0].toUpperCase() + sn.slice(1), y: g.year }) + (state.calm && !paused ? ' ⏩' : '');
   $('dayBar').style.width = `${(g.day / S.YEAR_DAYS) * 100}%`;
   $('dig').textContent = g.dig;
   $('harvest').textContent = Math.floor(g.harvest);
@@ -173,14 +316,14 @@ function showOver() {
   hud.hidden = true;
   const box = el('div', 'panel');
   box.append(
-    el('h2', null, 'Сад засох'),
-    el('p', null, `Год ${g.year}, ${S.seasonOf(g.day).name.toLowerCase()}`),
-    el('p', 'big', `Урожай ${Math.floor(g.harvest)} · садов ${S.gardens(g)}`),
+    el('h2', null, t('over')),
+    el('p', null, t('when', { y: g.year, s: t(S.seasonOf(g.day).key) })),
+    el('p', 'big', t('result', { h: Math.floor(g.harvest), n: S.gardens(g) })),
   );
   const best = Math.max(store.get('aryq.best', 0), Math.floor(g.harvest));
   store.set('aryq.best', best);
-  box.append(el('p', 'muted', `Лучший урожай ${best}`));
-  const again = el('button', 'btn', 'Ещё раз');
+  box.append(el('p', 'muted', t('best', { b: best })));
+  const again = el('button', 'btn', t('again'));
   again.addEventListener('click', start);
   box.append(again);
   ui.replaceChildren(box);
@@ -189,8 +332,8 @@ function showOver() {
 function showStart() {
   hud.hidden = true;
   const box = el('div', 'panel');
-  box.append(el('h1', null, 'Арық'), el('p', null, 'Сады и дома хотят пить. Пальцем копай арык от реки к ним. Вода течёт только вниз по склону.'));
-  const go = el('button', 'btn', 'Играть');
+  box.append(el('h1', null, t('title')), el('p', null, t('tag')));
+  const go = el('button', 'btn', t('play'));
   go.addEventListener('click', start);
   box.append(go);
   ui.replaceChildren(box);
@@ -229,21 +372,21 @@ function coach(now) {
   for (const o of g.objects) {
     if (o.type === 'house' && o.flood > 0.15 && !o.warned) {
       o.warned = true;
-      say('Дом подтапливает: рядом кончается арык и вода льётся. Доведи арык до дома или обратно в реку, или закрой шлюз.', 5000);
+      say(t('floodSoon'), 5000);
       return;
     }
   }
   for (const o of g.objects) {
     if (o.type === 'garden' && o.got > 0.01 && o.s < 0.6 && o.thirst > 0.3 && !o.lowWarned && g.day < S.WINTER) {
       o.lowWarned = true;
-      say('Саду мало воды: один арык поит 6 садов, а река к осени мелеет. Проведи к нему ещё один арык от реки.', 5000);
+      say(t('lowWater'), 5000);
       return;
     }
   }
   const allDrink =g.objects.length > 1 && g.objects.every((o) => o.got > 0.01);
   if (allDrink && !state.calmShown && g.day < S.WINTER) {
     state.calmShown = true;
-    say('Все пьют — время идёт быстрее. Новые сады и дома появятся сами, не дай засохнуть ни одному.', 5000);
+    say(t('calm'), 5000);
   }
 }
 
@@ -260,9 +403,9 @@ function frame(now) {
     }
     if (g.over && !ui.firstChild) showOver();
     for (const ev of g.events.splice(0)) {
-      if (ev.type === 'flooded') say('Дом затопило: не обрывай арык рядом с домом.', 3000);
-      if (ev.type === 'left') say('Из дома ушли: ему нужна вода.', 3000);
-      if (ev.type === 'year') say(`Год ${ev.year}. Ледник стал меньше.`, 3000);
+      if (ev.type === 'flooded') say(t('flooded'), 3000);
+      if (ev.type === 'left') say(t('left'), 3000);
+      if (ev.type === 'year') say(t('year', { y: ev.year - 1, h: Math.floor(g.harvest) }), 5000);
     }
     pickGhost(now);
     coach(now);

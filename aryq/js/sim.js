@@ -1,4 +1,4 @@
-// «Арық» — the whole game without drawing, so tools/check.mjs can play it in Node.
+// «Арык» — the whole game without drawing, so tools/check.mjs can play it in Node.
 // Water is a graph, not a fluid: every river or canal cell has a bed height, and water only moves
 // along an edge to a cell whose bed is lower. A canal bed drops a little with every dug cell,
 // so a canal always flows, but the ketmen can only cut so deep into a rise (MAX_CUT):
@@ -6,7 +6,7 @@
 import { makeValley } from './terrain.js';
 import { rng, clamp } from './util.js';
 
-export const DAY_SEC = 5; // real seconds per day at ×1
+export const DAY_SEC = 3.2; // real seconds per day at ×1: a year is about six minutes
 export const YEAR_DAYS = 120;
 export const WINTER = 105; // from this day gardens sleep and nothing new appears
 export const EPS = 0.04; // canal bed drop per cell
@@ -27,10 +27,10 @@ export const LAND = 0, RIVER = 1, CANAL = 2, ICE = 3;
 const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 export const SEASONS = [
-  { from: 0, name: 'Весна' },
-  { from: 30, name: 'Лето' },
-  { from: 75, name: 'Осень' },
-  { from: WINTER, name: 'Зима' },
+  { from: 0, key: 'spring' },
+  { from: 30, key: 'summer' },
+  { from: 75, key: 'autumn' },
+  { from: WINTER, key: 'winter' },
 ];
 export const seasonOf = (day) => SEASONS.reduce((s, x) => (day >= x.from ? x : s), SEASONS[0]);
 
@@ -343,14 +343,16 @@ function removeObject(g, o) {
 
 // ---------- where water can reach ----------
 
-// highest bed a new canal could have in every dry cell, and the way there
-export function reach(g) {
+// highest bed a new canal could have in every dry cell, and the way there;
+// from one water cell only when `from` is given (what a stroke started there can still reach)
+export function reach(g, from = -1) {
   const n = g.W * g.H;
   const best = new Float32Array(n).fill(-Infinity);
   const prev = new Int32Array(n).fill(-1);
   const len = new Int32Array(n);
   const queue = [];
-  for (let i = 0; i < n; i++) if (isWater(g, i)) { best[i] = g.bed[i]; queue.push(i); }
+  if (from >= 0) { best[from] = g.bed[from]; queue.push(from); }
+  else for (let i = 0; i < n; i++) if (isWater(g, i)) { best[i] = g.bed[i]; queue.push(i); }
   while (queue.length) {
     const a = queue.shift();
     const ax = a % g.W, ay = (a / g.W) | 0;
