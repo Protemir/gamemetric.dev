@@ -205,7 +205,7 @@ function placeKids(duel, reset = true) {
 function freshKon(cfg) {
   S.setYard(cfg.yard || 'yard', cv);
   setKids(!!cfg.duel);
-  g = newKon(cfg.k || 1, cfg.seed, { target: cfg.target, wind: cfg.wind, duel: cfg.duel, mods: mods(bag) });
+  g = newKon(cfg.k || 1, cfg.seed, { target: cfg.target, wind: cfg.wind, duel: cfg.duel, ice: cfg.ice, mods: mods(bag) });
   saka(g.w).look = (SAKAS[bag.saka] || SAKAS.red).look;
   hand.look = saka(g.w).look;
   for (const kid of kids) {
@@ -313,7 +313,7 @@ async function playStory(ci, ki) {
     story.seen = { ...(story.seen || {}), [ch.id]: true };
     store.set('asyk.story', story);
   }
-  freshKon({ k: ki + 1, target: kon.target, wind: kon.wind, duel: kon.duel, yard: ch.yard });
+  freshKon({ k: ki + 1, target: kon.target, wind: kon.wind, duel: kon.duel, yard: ch.yard, ice: ch.ice });
   begin();
   state = 'talk';
   if (ki === 0 || kon.duel) $('hint').classList.remove('show');
@@ -765,10 +765,12 @@ function update(dt) {
   const danger = g ? g.w.bodies.filter((b) => !b.fixed && Math.hypot(b.vx, b.vy) > 20) : [];
   const dogWas = life.dog.on;
   if (S.updateLife(life, dt, danger)) A.chirp();
-  if (life.hens.some((h) => h.run > 0.75)) cluck(0.7);
-  else if (rand() < dt / 9) cluck(0.35);
+  if (S.season !== 'winter') {
+    if (life.hens.some((h) => h.run > 0.75)) cluck(0.7);
+    else if (rand() < dt / 9) cluck(0.35);
+  }
   if (!dogWas && life.dog.on) A.sfx('dog', 0.35);
-  if (rand() < dt / 45) A.sfx('rooster', 0.3);
+  if (S.season !== 'winter' && rand() < dt / 45) A.sfx('rooster', 0.3);
   if (g && g.w.wind && rand() < dt / 7) A.sfx('wind', 0.4);
   // the wind lifts dust off the yard now and then
   if (g && g.w.wind && Math.random() < dt * 3) dust.push({ x: (g.w.wind > 0 ? -10 : 110) + Math.random() * 20, y: 10 + Math.random() * 120, z: 0.5, vx: g.w.wind * 3, vy: 0, r: 1.5, grow: 4, life: 1.6, max: 1.6, a: 0.18, col: '#e9d2a6' });

@@ -8,12 +8,15 @@ import { rng } from './util.js';
 const AR = 1920 / 1072; // the yard photos
 export const CAM = { x: 50, y: 230, h: 30, horizon: 0.41, focal: 2.0 };
 // each yard photo has its horizon at its own height
-const YARDS = { yard: { horizon: 0.41 }, school: { horizon: 0.55 } };
+const YARDS = { yard: { horizon: 0.41 }, school: { horizon: 0.55 }, winter: { horizon: 0.5 } };
+// winter: the kids in coats and fur hats, snow falling, the hens stay in the barn
+export let season = 'summer';
 let yardName = 'yard';
 export const hasYard = (name) => !!img[name];
 export function setYard(name, canvas) {
   yardName = img[name] ? name : 'yard';
   CAM.horizon = YARDS[yardName].horizon;
+  season = yardName === 'winter' && img['kidw0-watch'] ? 'winter' : 'summer';
   if (canvas) resize(canvas);
 }
 // world units per sprite pixel for the kids (all cut from frames of the same size)
@@ -58,8 +61,9 @@ export async function loadArt(onProgress) {
   let done = 0;
   // animals may be missing on an older build: the game goes on without them
   await Promise.all(names.map((n) => loadImage(n).then(() => onProgress && onProgress(++done / names.length), (e) => (ANIMALS.includes(n) ? null : Promise.reject(e)))));
-  const extra = ['school'];
-  for (const a of ['erlan', 'dauren']) for (const p of AGA_POSES) extra.push(`aga-${a}-${p}`);
+  const extra = ['school', 'winter'];
+  for (const a of ['erlan', 'dauren', 'saken']) for (const p of AGA_POSES) extra.push(`aga-${a}-${p}`);
+  for (let i = 0; i < 5; i++) for (const p of KID_POSES) extra.push(`kidw${i}-${p}`);
   extrasReady = Promise.all(extra.map((n) => loadImage(n).catch(() => null)));
   // the photos caught some green from the backdrop: no channel may beat red on a bone
   for (const c of ['white', 'red']) for (const s of SIDES) img[`asyk-${c}-${s}`] = degreen(img[`asyk-${c}-${s}`]);
@@ -413,7 +417,7 @@ export function updateKids(kids, now) {
 export function drawKid(c, k, now) {
   const p = project(k.x, k.y);
   if (!p) return;
-  const im = img[`kid${k.i}-${k.pose}`];
+  const im = img[`${season === 'winter' ? 'kidw' : 'kid'}${k.i}-${k.pose}`];
   const scale = KID_UNITS * p.k;
   const width = im.width * scale;
   const height = im.height * scale;
@@ -594,7 +598,7 @@ export function updateLife(L, dt, danger) {
 
 export function lifeItems(L) {
   const out = [];
-  for (const h of L.hens) {
+  for (const h of season === 'winter' ? [] : L.hens) {
     const name = h.kind === 'rooster' ? 'rooster' : h.peck > 0 && h.wait > 0 ? 'hen-peck' : 'hen-walk';
     out.push({ D: CAM.y - h.y, draw: (c) => drawAnimal(c, name, h.x, h.y, h.kind === 'rooster' ? 'rooster' : 'hen', h.dir, h.wait <= 0) });
   }
@@ -638,6 +642,21 @@ export function drawAir(c, L, t) {
     c.quadraticCurveTo(x - s * 0.4, y - s * 0.2, x, y);
     c.quadraticCurveTo(x + s * 0.4, y - s * 0.2, x + s, y - s * f);
     c.stroke();
+  }
+  if (season === 'winter') {
+    c.fillStyle = '#fffaf2';
+    for (const m of L.motes) {
+      for (let j = 0; j < 3; j++) {
+        const x = ((m.x + j * 0.31 + Math.sin(t * 0.6 + m.p + j) * 0.01) % 1) * view.w;
+        const y = ((m.y + j * 0.37 + t * (0.03 + m.s * 0.025)) % 1) * view.h;
+        c.globalAlpha = 0.55 + 0.3 * m.s * 0.5;
+        c.beginPath();
+        c.arc(x, y, 1 + m.s * 1.6, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+    c.restore();
+    return;
   }
   c.fillStyle = '#ffe7b0';
   for (const m of L.motes) {

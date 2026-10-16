@@ -11,12 +11,14 @@ export const PEOPLE = {
   askar: { name: ['Асқар', 'Askar'], kid: 4 },
   erlan: { name: ['Ерлан-аға', 'Erlan-aga'], aga: 'erlan' },
   dauren: { name: ['Даурен-аға', 'Dauren-aga'], aga: 'dauren' },
+  saken: { name: ['Сәкен-аға', 'Saken-aga'], aga: 'saken' },
 };
 
 // how good each aga is (0 sloppy .. 1 sharp)
 export const AGAS = {
   erlan: { skill: 0.62 },
   dauren: { skill: 0.78 },
+  saken: { skill: 0.86 },
 };
 
 export const CHAPTERS = [
@@ -111,9 +113,40 @@ export const CHAPTERS = [
   {
     id: 'winter',
     title: ['Қыс. Турнир на льду', 'Winter. Tournament on the ice'],
-    sub: ['Скоро.', 'Coming soon.'],
-    soon: true,
-    kons: [],
+    sub: ['Январь 1988-го. Каникулы, во дворе залили каток.', 'January 1988. Winter break, the yard is an ice rink.'],
+    yard: 'winter',
+    ice: true,
+    kons: [
+      {
+        target: 350,
+        intro: [
+          ['askar', 'Видишь лёд? Асыки тут катятся вдвое дальше. Бросай мягче.', 'See the ice? Bones slide twice as far here. Throw softer.'],
+          ['erke', 'У меня валенки мокрые, но я не уйду!', 'My felt boots are soaked, but I’m not leaving!'],
+        ],
+        win: [['bekzhan', 'Қалалық на льду как дома!', 'The city boy plays on ice like he was born on it!']],
+      },
+      {
+        target: 450,
+        intro: [['timur', 'Говорят, Сәкен-аға вернулся из армии. Он чемпион всего аула.', 'They say Saken-aga is back from the army. He’s the champion of the whole aul.']],
+        win: [['asem', 'Вон он идёт. В шинели!', 'Here he comes. In his army coat!']],
+      },
+      {
+        duel: { aga: 'saken', throws: 5 },
+        intro: [
+          ['saken', 'Ерлан с Дауреном мне все уши про тебя прожужжали. Ну, покажи, қалалық.', 'Erlan and Dauren talked my ears off about you. Go on, city boy, show me.'],
+          ['saken', 'На льду главное не сила, а рука. Начинай.', 'On ice it’s not strength, it’s the hand. You start.'],
+        ],
+        win: [
+          ['saken', '…Сильно. Я так даже в армии не бросал.', '…Strong. I didn’t throw like that even in the army.'],
+          ['asem', 'Приезжай летом снова, ладно?', 'Come back next summer, okay?'],
+          ['apa', 'Балам! Домой, замёрзнешь! Чай с бауырсақами стынет!', 'Balam! Come home, you’ll freeze! The tea and baursaks are getting cold!'],
+        ],
+        lose: [
+          ['saken', 'Лёд не прощает. Ещё раз?', 'The ice doesn’t forgive. Again?'],
+          ['askar', 'Бросай мягче, она скользит.', 'Throw softer, it slides.'],
+        ],
+      },
+    ],
   },
 ];
 

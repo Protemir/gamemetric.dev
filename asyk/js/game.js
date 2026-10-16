@@ -94,6 +94,7 @@ export function layout(k, seed) {
 export function newKon(k, seed = (Math.random() * 1e9) | 0, opts = {}) {
   const w = world(seed);
   w.wind = opts.wind || 0;
+  if (opts.ice) w.friction = 0.5;
   const g = {
     k,
     seed,

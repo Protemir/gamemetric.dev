@@ -142,6 +142,19 @@
         }
       ],
       "from": "Alex"
+    },
+    "saken": {
+      "voice": "GC6lSBdDbTgPRulcGFDX",
+      "describe": "Saken, a 17-year-old young man just back from the army, the village champion: calm, low, confident, few words.",
+      "sample": "На льду главное не сила, а рука. Начинай.",
+      "candidates": [
+        {
+          "name": "Daniel",
+          "voice": "GC6lSBdDbTgPRulcGFDX",
+          "owner": "aedaf5c438dede0de1cd378a864e5889a81110c3e02eaaa64da3728ad0e53c64"
+        }
+      ],
+      "from": "Daniel"
     }
   }
 }

@@ -122,7 +122,7 @@ $meta = @{}
 $enc = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
 $ep = New-Object System.Drawing.Imaging.EncoderParameters 1
 $ep.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 84L
-foreach ($yn in "yard", "school") {
+foreach ($yn in "yard", "school", "winter") {
   if (-not (Test-Path (Join-Path $Src "$yn.jpg"))) { continue }
   $y = Load "$yn.jpg"
   $small = New-Object System.Drawing.Bitmap 1920, ([int](1920 * $y.Height / $y.Width))
@@ -181,7 +181,8 @@ function SplitRow($file, $names, $scale) {
 # kids: the same kid keeps the same number in every pose
 foreach ($pose in "watch", "cheer", "sad") { SplitRow "kids-$pose.jpg" @(0..4 | ForEach-Object { "kid$_-$pose" }) 0.4 }
 # the agas: four poses of one teenager
-foreach ($a in "erlan", "dauren") { SplitRow "aga-$a.jpg" @("watch", "throw", "cheer", "sad" | ForEach-Object { "aga-$a-$_" }) 0.4 }
+foreach ($pose in "watch", "cheer", "sad") { SplitRow "kidsw-$pose.jpg" @(0..4 | ForEach-Object { "kidw$_-$pose" }) 0.4 }
+foreach ($a in "erlan", "dauren", "saken") { SplitRow "aga-$a.jpg" @("watch", "throw", "cheer", "sad" | ForEach-Object { "aga-$a-$_" }) 0.4 }
 SplitRow "animals.jpg" @("hen-walk", "hen-peck", "rooster", "dog-trot", "dog-sit") 0.3
 
 # knucklebones: two rows (pale, red) of four sides (alshy, taike, buk, shik)
