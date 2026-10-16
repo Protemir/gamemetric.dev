@@ -253,10 +253,26 @@ export class View {
         cx.fill();
         cx.stroke();
       }
+      // no water at all yet: a drop bobs above it
+      if (o.got < 0.01 && g.day < S.WINTER) this.drop(px, py - r * 1.9 + Math.sin(now / 220) * cs * 0.08, cs * 0.36);
       // thirst ring red, flood ring blue
       this.ring(px, py, r + 3, o.thirst, '#e0493e');
       if (o.type === 'house') this.ring(px, py, r + 7, o.flood, '#3d8fe0');
     }
+  }
+
+  drop(px, py, s) {
+    const cx = this.cx;
+    cx.fillStyle = '#4aa3e8';
+    cx.strokeStyle = 'rgba(255,255,255,0.9)';
+    cx.lineWidth = 1.5;
+    cx.beginPath();
+    cx.moveTo(px, py - s * 1.5);
+    cx.quadraticCurveTo(px + s * 1.05, py - s * 0.2, px + s * 0.75, py + s * 0.35);
+    cx.arc(px, py + s * 0.25, s * 0.78, 0.15, Math.PI - 0.15);
+    cx.quadraticCurveTo(px - s * 1.05, py - s * 0.2, px, py - s * 1.5);
+    cx.fill();
+    cx.stroke();
   }
 
   ring(px, py, r, k, color) {

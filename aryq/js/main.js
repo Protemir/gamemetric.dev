@@ -168,7 +168,7 @@ function showOver() {
 function showStart() {
   hud.hidden = true;
   const box = el('div', 'panel');
-  box.append(el('h1', null, 'Арық'), el('p', null, 'Веди воду от ледника к садам. Вода течёт только вниз.'));
+  box.append(el('h1', null, 'Арық'), el('p', null, 'Сады и дома хотят пить. Пальцем копай арык от реки к ним. Вода течёт только вниз по склону.'));
   const go = el('button', 'btn', 'Играть');
   go.addEventListener('click', start);
   box.append(go);
@@ -177,25 +177,29 @@ function showStart() {
 
 // ---------- the dashed path ----------
 
-// Until the very first garden has drunk, the way to it is drawn. After that the path comes back
-// only for a garden that is getting really thirsty, and goes as soon as it has water.
+// While the player is still learning (fewer than three gardens or houses ever watered), the way to
+// the thirstiest dry one is always drawn. After that only for one that is getting really thirsty.
 function pickGhost(now, force) {
   if (!force && now - (state.ghostAt || 0) < 500) return;
   state.ghostAt = now;
   if (g.over || g.cur) return;
-  const learned = store.get('aryq.dug', false);
-  const watered = (o) => o.s >= 0.6 && o.got > 0;
-  if (!learned && g.objects.some((o) => o.type === 'garden' && watered(o))) store.set('aryq.dug', true);
-  let target = null;
-  if (!store.get('aryq.dug', false)) target = g.objects.find((o) => o.type === 'garden');
-  else {
-    for (const o of g.objects) {
-      if (o.type !== 'garden' || o.thirst < 0.45 || watered(o) || g.day >= S.WINTER) continue;
-      if (!target || o.thirst > target.thirst) target = o;
+  for (const o of g.objects) {
+    if (!o.taught && o.s >= 0.6) {
+      o.taught = true;
+      store.set('aryq.taught', store.get('aryq.taught', 0) + 1);
     }
   }
-  const plan = target && S.planFor(g, target);
-  state.ghost = plan && plan.cells.length && !watered(target) ? { obj: target, ...plan } : null;
+  const learning = store.get('aryq.taught', 0) < 3;
+  let target = null;
+  if (g.day < S.WINTER) {
+    for (const o of g.objects) {
+      if (o.got > 0.01 || (!learning && o.thirst < 0.45)) continue;
+      const k = o.thirst + (o.type === 'garden' ? 0.01 : 0);
+      if (!target || k > target.k) target = { o, k };
+    }
+  }
+  const plan = target && S.planFor(g, target.o);
+  state.ghost = plan && plan.cells.length ? { obj: target.o, ...plan } : null;
 }
 
 // ---------- loop ----------
