@@ -41,6 +41,43 @@ export class View {
     this.cv = canvas;
     this.cx = canvas.getContext('2d');
     this.terrain = null;
+    this.bits = [];
+  }
+
+  // little effects: earth thrown out of a canal, rings on the water when an orchard drinks
+  burst(i, kind) {
+    const [x, y] = this.center(i);
+    const now = performance.now();
+    if (kind === 'splash') {
+      for (let k = 0; k < 3; k++) this.bits.push({ kind, x, y, at: now + k * 140, life: 900 });
+      return;
+    }
+    for (let k = 0; k < 7; k++) {
+      const an = Math.random() * Math.PI * 2, sp = (0.4 + Math.random()) * this.cs * 1.6;
+      this.bits.push({ kind, x, y, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp, at: now, life: 420 + Math.random() * 200, r: 1 + Math.random() * 2 });
+    }
+  }
+
+  drawBits(now) {
+    const cx = this.cx;
+    this.bits = this.bits.filter((b) => now - b.at < b.life);
+    for (const b of this.bits) {
+      const f = (now - b.at) / b.life;
+      if (f < 0) continue;
+      if (b.kind === 'splash') {
+        cx.strokeStyle = `rgba(190,232,255,${0.8 * (1 - f)})`;
+        cx.lineWidth = 2;
+        cx.beginPath();
+        cx.arc(b.x, b.y, this.cs * (0.4 + 1.1 * f), 0, Math.PI * 2);
+        cx.stroke();
+      } else {
+        const e = 1 - (1 - f) * (1 - f);
+        cx.fillStyle = `rgba(92,62,36,${1 - f})`;
+        cx.beginPath();
+        cx.arc(b.x + b.vx * e * 0.3, b.y + b.vy * e * 0.3 - Math.sin(f * Math.PI) * this.cs * 0.3, b.r, 0, Math.PI * 2);
+        cx.fill();
+      }
+    }
   }
 
   layout(g) {
@@ -243,7 +280,7 @@ export class View {
       const q = g.flow[b] || 0;
       if (q < 0.01 || g.gate[b]) continue;
       const river = g.kind[b] === S.RIVER;
-      const k = river ? clamp(q / 8, 0, 1) : clamp(q / S.CANAL_CAP, 0, 1);
+      const k = river ? clamp(q / 8, 0, 1) : clamp(q / g.cap, 0, 1);
       wetEdges.push([a, b, q, cs * (river ? 0.36 + 0.36 * k : 0.2 + 0.28 * k)]);
     }
     cx.strokeStyle = C.water;
@@ -315,6 +352,7 @@ export class View {
     }
 
     this.drawObjects(g, now);
+    this.drawBits(now);
     this.drawStroke(g);
     if (ui.ghost) this.drawGhost(ui.ghost, now);
     if (ui.blocked && now - ui.blocked.at < 700) {

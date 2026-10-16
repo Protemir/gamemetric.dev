@@ -36,8 +36,8 @@ export const seasonOf = (day) => SEASONS.reduce((s, x) => (day >= x.from ? x : s
 
 // how much the glacier gives: snowmelt peaks in late spring, the river is thin by autumn,
 // and every year the glacier is a little smaller
-const MELT = [[0, 4], [30, 8], [75, 4.6], [105, 3.4], [120, 4]];
-export function sourceFlow(day, year) {
+const MELT = [[0, 4], [30, 8], [75, 5.4], [105, 4.2], [120, 4]];
+export function sourceFlow(day, year, melt = 1) {
   let q = MELT[MELT.length - 1][1];
   for (let k = 1; k < MELT.length; k++) {
     const [d0, q0] = MELT[k - 1], [d1, q1] = MELT[k];
@@ -46,7 +46,7 @@ export function sourceFlow(day, year) {
       break;
     }
   }
-  return q * Math.max(0.65, 1 - 0.06 * (year - 1));
+  return q * melt * Math.max(0.65, 1 - 0.06 * (year - 1));
 }
 
 export function newGame(W, H, seed = 1) {
@@ -72,6 +72,8 @@ export function newGame(W, H, seed = 1) {
     exit: v.river[v.river.length - 1],
     river: v.river,
     dig: DIG_START,
+    cap: CANAL_CAP, // grows with the "wider canals" reward
+    melt: 1, // grows with the "glacier" reward
     day: 0,
     year: 1,
     harvest: 0,
@@ -229,12 +231,12 @@ export function flowStep(g) {
     for (const t of g.out[i]) {
       if (g.gate[t]) continue;
       open += 1;
-      w += Math.min(g.kind[t] === RIVER ? Infinity : CANAL_CAP, want[t]);
+      w += Math.min(g.kind[t] === RIVER ? Infinity : g.cap, want[t]);
     }
     if (!open && !g.near[i].length) w += SEEP; // where someone drinks at the end, nothing spills
-    want[i] = Math.min(w, CANAL_CAP);
+    want[i] = Math.min(w, g.cap);
   }
-  flow[g.source] = sourceFlow(g.day, g.year);
+  flow[g.source] = sourceFlow(g.day, g.year, g.melt);
   g.gone = 0;
   for (const i of g.order) {
     let q = flow[i];
@@ -439,6 +441,15 @@ function spawn(g, type) {
   rebuildNear(g);
   g.events.push({ type: 'spawn', obj: o });
   return o;
+}
+
+// the reward picked at the end of a year
+export const REWARDS = ['dig', 'cap', 'melt'];
+export function reward(g, kind) {
+  if (kind === 'dig') g.dig += 15;
+  if (kind === 'cap') g.cap += 0.6;
+  if (kind === 'melt') g.melt *= 1.12;
+  g.order = null;
 }
 
 export const gardens = (g) => g.objects.filter((o) => o.type === 'garden').length;

@@ -31,6 +31,7 @@ function start() {
   paused = false;
   state.ghost = null;
   state.calmShown = false;
+  state.harvestAtYear = 0;
   ui.replaceChildren();
   hud.hidden = false;
   S.advance(g, 0.01); // the first garden appears
@@ -82,6 +83,18 @@ const TEXT = {
     speed: 'Скорость',
     pause: 'Пауза',
     sound: 'Звук',
+    yearTitle: 'Год {y} пережит!',
+    yearStats: 'Урожай за год {h} · садов {n} · юрт {u}',
+    yearPick: 'Выбери подарок аула на новый год. Ледник стал меньше — воды будет меньше.',
+    rewardDig: '+15 кетменя',
+    rewardDigSub: 'больше клеток можно выкопать',
+    rewardCap: 'Шире арыки',
+    rewardCapSub: 'каждый арык поит на 2 сада больше',
+    rewardMelt: 'Щедрый ледник',
+    rewardMeltSub: 'в реке на 12% больше воды',
+    paused: 'Пауза',
+    resume: 'Продолжить',
+    pauseTip: 'Пока пауза, можно спокойно смотреть, куда вести воду.',
   },
   en: {
     title: 'Aryk',
@@ -118,6 +131,18 @@ const TEXT = {
     speed: 'Speed',
     pause: 'Pause',
     sound: 'Sound',
+    yearTitle: 'Year {y} survived!',
+    yearStats: 'Harvest this year {h} · orchards {n} · yurts {u}',
+    yearPick: 'Pick a gift from the village for the new year. The glacier shrank: there will be less water.',
+    rewardDig: '+15 digging',
+    rewardDigSub: 'dig more cells',
+    rewardCap: 'Wider canals',
+    rewardCapSub: 'every canal feeds 2 more orchards',
+    rewardMelt: 'Generous glacier',
+    rewardMeltSub: '12% more water in the river',
+    paused: 'Paused',
+    resume: 'Resume',
+    pauseTip: 'While paused you can calmly look where to lead the water.',
   },
 };
 const lang = (() => {
@@ -193,7 +218,10 @@ cv.addEventListener('pointermove', (e) => {
 // one step of the canal, with its sound
 function ext(b) {
   const r = S.extend(g, b);
-  if (r.ok && !r.back) sfx.dig();
+  if (r.ok && !r.back) {
+    sfx.dig();
+    view.burst(b, 'dirt');
+  }
   return r;
 }
 
@@ -317,9 +345,50 @@ function doUndo() {
   if (g && !g.over && S.undo(g)) updateHud();
 }
 function togglePause() {
-  if (!g || g.over) return;
+  if (!g || g.over || ui.querySelector('.rewards')) return;
   paused = !paused;
+  if (paused) showPause();
+  else ui.replaceChildren();
   updateHud();
+}
+
+function showPause() {
+  const box = el('div', 'panel');
+  box.append(el('h2', null, t('paused')), el('p', 'muted', t('pauseTip')));
+  const go = el('button', 'btn', t('resume'));
+  go.addEventListener('click', togglePause);
+  box.append(go);
+  ui.replaceChildren(box);
+}
+
+// the end of a year: the game stops and the player picks one gift
+function showYear(ev) {
+  paused = true;
+  const box = el('div', 'panel rewards');
+  const yurts = g.objects.filter((o) => o.type === 'house').length;
+  box.append(
+    el('h2', null, t('yearTitle', { y: ev.year - 1 })),
+    el('p', 'big', t('yearStats', { h: Math.floor(g.harvest - (state.harvestAtYear || 0)), n: S.gardens(g), u: yurts })),
+    el('p', 'muted', t('yearPick')),
+  );
+  state.harvestAtYear = g.harvest;
+  const list = el('div', 'choices');
+  const names = { dig: ['rewardDig', 'rewardDigSub', '⛏'], cap: ['rewardCap', 'rewardCapSub', '〰'], melt: ['rewardMelt', 'rewardMeltSub', '❄'] };
+  for (const kind of S.REWARDS) {
+    const [a, b, icon] = names[kind];
+    const btn = el('button', 'choice');
+    btn.append(el('span', 'choice-icon', icon), el('b', null, t(a)), el('small', null, t(b)));
+    btn.addEventListener('click', () => {
+      S.reward(g, kind);
+      sfx.click();
+      ui.replaceChildren();
+      paused = false;
+      updateHud();
+    });
+    list.append(btn);
+  }
+  box.append(list);
+  ui.replaceChildren(box);
 }
 
 function updateHud() {
@@ -425,13 +494,14 @@ function coach(now) {
 function listen(g) {
   let canals = 0;
   for (let i = 0; i < W * H; i++) if (g.kind[i] === S.CANAL) canals += g.flow[i];
-  const level = clamp(S.sourceFlow(g.day, g.year) / 8, 0, 1) * 0.6 + clamp(canals / 12, 0, 1) * 0.4;
+  const level = clamp(S.sourceFlow(g.day, g.year, g.melt) / 8, 0, 1) * 0.6 + clamp(canals / 12, 0, 1) * 0.4;
   sfx.ambient(g.over || paused ? 0.2 : level, g.day >= S.WINTER);
   if (g.over) return;
   for (const o of g.objects) {
     if (o.s >= 0.6 && !o.happy) {
       o.happy = true;
       sfx.watered();
+      view.burst(o.y * W + o.x, 'splash');
     } else if (o.s < 0.3) o.happy = false;
     if (o.thirst > 0.7 && !o.alarm && g.day < S.WINTER) {
       o.alarm = true;
@@ -458,8 +528,10 @@ function frame(now) {
         say(t('flooded'), 3000);
       }
       if (ev.type === 'left') say(t('left'), 3000);
-      if (ev.type === 'year') sfx.yearDone();
-      if (ev.type === 'year') say(t('year', { y: ev.year - 1, h: Math.floor(g.harvest) }), 5000);
+      if (ev.type === 'year') {
+        sfx.yearDone();
+        showYear(ev);
+      }
     }
     pickGhost(now);
     coach(now);
@@ -474,8 +546,9 @@ function frame(now) {
 window.addEventListener('resize', () => g && view.layout(g));
 document.addEventListener('visibilitychange', () => {
   sfx.holdAudio(document.hidden);
-  if (document.hidden && g && !g.over) {
+  if (document.hidden && g && !g.over && !paused) {
     paused = true;
+    showPause();
     updateHud();
   }
 });

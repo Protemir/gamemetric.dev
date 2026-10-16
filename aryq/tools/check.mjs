@@ -16,7 +16,7 @@ function check(g) {
     }
   }
   S.flowStep(g);
-  const into = S.sourceFlow(g.day, g.year);
+  const into = S.sourceFlow(g.day, g.year, g.melt);
   let used = 0;
   for (const o of g.objects) used += o.got;
   let spilt = 0;
@@ -45,6 +45,7 @@ for (let k = 0; k < games; k++) {
   let t = 0;
   while (!g.over && t < 6 * S.YEAR_DAYS) {
     botTurn(g);
+    for (const ev of g.events.splice(0)) if (ev.type === 'year') S.reward(g, S.REWARDS[ev.year % 3]);
     S.advance(g, 0.5);
     t += 0.5;
     if (t % 10 === 0) check(g);

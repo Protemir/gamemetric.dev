@@ -136,3 +136,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: 0 4px 0 #9c4325;
 }
 .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #9c4325; }
+
+.choices { display: grid; gap: 8px; margin-top: 12px; }
+.choice {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--paper-2);
+  color: var(--ink);
+  box-shadow: 0 3px 0 rgba(58, 32, 14, 0.25);
+}
+.choice:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(58, 32, 14, 0.25); }
+.choice-icon { grid-row: span 2; font-size: 22px; text-align: center; }
+.choice b { font-size: 16px; }
+.choice small { color: var(--muted); font-size: 13px; }
+.rewards .big { font-size: 15px; }
