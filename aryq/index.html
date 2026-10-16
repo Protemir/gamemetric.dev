@@ -13,7 +13,7 @@
 <canvas id="game" aria-label="Aryk"></canvas>
 <header class="hud" id="hud" hidden>
   <div class="hud-season">
-    <p id="season"></p>
+    <p id="season"><span id="seasonName"></span><small id="yearNo"></small></p>
     <div class="bar"><i id="dayBar"></i></div>
   </div>
   <p class="stat" title="Кетмень: сколько клеток можно выкопать">⛏ <b id="dig"></b></p>
@@ -21,6 +21,7 @@
   <button type="button" class="icon" id="undoBtn" aria-label="Отменить арык">↶</button>
   <button type="button" class="icon" id="speedBtn" aria-label="Скорость">×1</button>
   <button type="button" class="icon" id="pauseBtn" aria-label="Пауза">❚❚</button>
+  <button type="button" class="icon" id="soundBtn" aria-label="Звук">🔊</button>
 </header>
 <p class="hint-line" id="hint" aria-live="polite"></p>
 <div id="ui"></div>

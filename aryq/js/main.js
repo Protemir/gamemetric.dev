@@ -1,6 +1,7 @@
 import * as S from './sim.js';
 import { View } from './render.js';
-import { el, store } from './util.js';
+import { el, store, clamp } from './util.js';
+import * as sfx from './audio.js';
 
 const q = new URLSearchParams(location.search);
 const DEBUG = q.has('debug');
@@ -55,7 +56,7 @@ const TEXT = {
     when: 'Год {y}, {s}',
     result: 'Урожай {h} · садов {n}',
     best: 'Лучший урожай {b}',
-    hud: '{s} · {y}-й год',
+    hud: 'год {y}',
     spring: 'весна',
     summer: 'лето',
     autumn: 'осень',
@@ -80,6 +81,7 @@ const TEXT = {
     undo: 'Отменить арык',
     speed: 'Скорость',
     pause: 'Пауза',
+    sound: 'Звук',
   },
   en: {
     title: 'Aryk',
@@ -90,7 +92,7 @@ const TEXT = {
     when: 'Year {y}, {s}',
     result: 'Harvest {h} · orchards {n}',
     best: 'Best harvest {b}',
-    hud: '{s} · Y{y}',
+    hud: 'year {y}',
     spring: 'spring',
     summer: 'summer',
     autumn: 'autumn',
@@ -115,6 +117,7 @@ const TEXT = {
     undo: 'Undo canal',
     speed: 'Speed',
     pause: 'Pause',
+    sound: 'Sound',
   },
 };
 const lang = (() => {
@@ -132,6 +135,7 @@ $('harvest').parentElement.title = t('harvest');
 $('undoBtn').setAttribute('aria-label', t('undo'));
 $('speedBtn').setAttribute('aria-label', t('speed'));
 $('pauseBtn').setAttribute('aria-label', t('pause'));
+$('soundBtn').setAttribute('aria-label', t('sound'));
 cv.setAttribute('aria-label', t('title'));
 
 // ---------- input ----------
@@ -144,6 +148,7 @@ function toCell(e) {
 }
 
 cv.addEventListener('pointerdown', (e) => {
+  sfx.audioInit();
   if (!g || g.over || paused) return;
   const c = toCell(e);
   if (c < 0) return;
@@ -185,6 +190,13 @@ cv.addEventListener('pointermove', (e) => {
   walkTo(c);
 });
 
+// one step of the canal, with its sound
+function ext(b) {
+  const r = S.extend(g, b);
+  if (r.ok && !r.back) sfx.dig();
+  return r;
+}
+
 function walkTo(target) {
   // along the dashed path the canal sticks to it, so a shaky finger does not wander off into a rise
   const gh = state.ghost;
@@ -200,14 +212,15 @@ function walkTo(target) {
     });
     if (near >= 0) {
       for (let k = g.cur.cells.length; k <= near; k++) {
-        const r = S.extend(g, gh.cells[k]);
+        const r = ext(gh.cells[k]);
         if (!r.ok) {
+          if (!state.blocked || state.blocked.cell !== gh.cells[k]) sfx.block();
           state.blocked = { cell: gh.cells[k], at: performance.now() };
           say(WHY[r.why] || '');
           return;
         }
       }
-      while (g.cur.cells.length > near + 1) S.extend(g, g.cur.cells.length >= 2 ? g.cur.cells[g.cur.cells.length - 2] : g.cur.from);
+      while (g.cur.cells.length > near + 1) ext( g.cur.cells.length >= 2 ? g.cur.cells[g.cur.cells.length - 2] : g.cur.from);
       state.reach = S.reach(g, g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from).best;
       return;
     }
@@ -221,10 +234,10 @@ function walkTo(target) {
     // the longer way first; if that one is blocked and the finger goes slantwise, try the other
     const along = Math.abs(dx) > Math.abs(dy);
     let b = along ? a + Math.sign(dx) : a + Math.sign(dy) * W;
-    let r = S.extend(g, b);
+    let r = ext(b);
     if (!r.ok && dx && dy) {
       const b2 = along ? a + Math.sign(dy) * W : a + Math.sign(dx);
-      const r2 = S.extend(g, b2);
+      const r2 = ext(b2);
       if (r2.ok) {
         b = b2;
         r = r2;
@@ -234,6 +247,7 @@ function walkTo(target) {
     if (!r.ok) {
       if (r.why !== 'done' && (!state.blocked || state.blocked.cell !== b)) {
         state.blocked = { cell: b, at: performance.now() };
+        sfx.block();
         say(WHY[r.why] || '');
       }
       return;
@@ -264,7 +278,10 @@ function release() {
       const next = [g.from[c], ...g.out[c]].find((n) => n >= 0 && g.gate[n]);
       if (next != null) c = next;
     }
-    if (S.toggleGate(g, c)) say(g.gate[c] ? t('gateShut') : t('gateOpen'), 2200);
+    if (S.toggleGate(g, c)) {
+      sfx.gate(!!g.gate[c]);
+      say(g.gate[c] ? t('gateShut') : t('gateOpen'), 2200);
+    }
     else if (g.kind[c] === S.RIVER) say(t('gateRiver'), 1800);
   } else {
     S.endStroke(g);
@@ -290,6 +307,11 @@ $('speedBtn').addEventListener('click', () => {
   updateHud();
 });
 $('pauseBtn').addEventListener('click', togglePause);
+$('soundBtn').addEventListener('click', () => {
+  sfx.setSound(!sfx.sound.on);
+  sfx.click();
+  updateHud();
+});
 
 function doUndo() {
   if (g && !g.over && S.undo(g)) updateHud();
@@ -304,16 +326,19 @@ function updateHud() {
   if (!g) return;
   const s = S.seasonOf(g.day);
   const sn = t(s.key);
-  $('season').textContent = t('hud', { s: sn[0].toUpperCase() + sn.slice(1), y: g.year }) + (state.calm && !paused ? ' ⏩' : '');
+  $('seasonName').textContent = sn[0].toUpperCase() + sn.slice(1) + (state.calm && !paused ? ' ⏩' : '');
+  $('yearNo').textContent = t('hud', { y: g.year });
   $('dayBar').style.width = `${(g.day / S.YEAR_DAYS) * 100}%`;
   $('dig').textContent = g.dig;
   $('harvest').textContent = Math.floor(g.harvest);
   $('speedBtn').textContent = `×${speed}`;
   $('pauseBtn').textContent = paused ? '▶' : '❚❚';
+  $('soundBtn').textContent = sfx.sound.on ? '🔊' : '🔇';
 }
 
 function showOver() {
   hud.hidden = true;
+  sfx.lost();
   const box = el('div', 'panel');
   box.append(
     el('h2', null, t('over')),
@@ -324,7 +349,10 @@ function showOver() {
   store.set('aryq.best', best);
   box.append(el('p', 'muted', t('best', { b: best })));
   const again = el('button', 'btn', t('again'));
-  again.addEventListener('click', start);
+  again.addEventListener('click', () => {
+    sfx.audioInit();
+    start();
+  });
   box.append(again);
   ui.replaceChildren(box);
 }
@@ -334,7 +362,10 @@ function showStart() {
   const box = el('div', 'panel');
   box.append(el('h1', null, t('title')), el('p', null, t('tag')));
   const go = el('button', 'btn', t('play'));
-  go.addEventListener('click', start);
+  go.addEventListener('click', () => {
+    sfx.audioInit();
+    start();
+  });
   box.append(go);
   ui.replaceChildren(box);
 }
@@ -390,6 +421,25 @@ function coach(now) {
   }
 }
 
+// sounds that follow what happens in the valley
+function listen(g) {
+  let canals = 0;
+  for (let i = 0; i < W * H; i++) if (g.kind[i] === S.CANAL) canals += g.flow[i];
+  const level = clamp(S.sourceFlow(g.day, g.year) / 8, 0, 1) * 0.6 + clamp(canals / 12, 0, 1) * 0.4;
+  sfx.ambient(g.over || paused ? 0.2 : level, g.day >= S.WINTER);
+  if (g.over) return;
+  for (const o of g.objects) {
+    if (o.s >= 0.6 && !o.happy) {
+      o.happy = true;
+      sfx.watered();
+    } else if (o.s < 0.3) o.happy = false;
+    if (o.thirst > 0.7 && !o.alarm && g.day < S.WINTER) {
+      o.alarm = true;
+      sfx.warn();
+    } else if (o.thirst < 0.4) o.alarm = false;
+  }
+}
+
 // ---------- loop ----------
 
 function frame(now) {
@@ -403,12 +453,17 @@ function frame(now) {
     }
     if (g.over && !ui.firstChild) showOver();
     for (const ev of g.events.splice(0)) {
-      if (ev.type === 'flooded') say(t('flooded'), 3000);
+      if (ev.type === 'flooded') {
+        sfx.splash();
+        say(t('flooded'), 3000);
+      }
       if (ev.type === 'left') say(t('left'), 3000);
+      if (ev.type === 'year') sfx.yearDone();
       if (ev.type === 'year') say(t('year', { y: ev.year - 1, h: Math.floor(g.harvest) }), 5000);
     }
     pickGhost(now);
     coach(now);
+    listen(g);
     updateHud();
     view.draw(g, now, state);
   }
@@ -418,6 +473,7 @@ function frame(now) {
 
 window.addEventListener('resize', () => g && view.layout(g));
 document.addEventListener('visibilitychange', () => {
+  sfx.holdAudio(document.hidden);
   if (document.hidden && g && !g.over) {
     paused = true;
     updateHud();
