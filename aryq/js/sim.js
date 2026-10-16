@@ -49,11 +49,11 @@ export function sourceFlow(day, year, melt = 1) {
   return q * melt * Math.max(0.65, 1 - 0.06 * (year - 1));
 }
 
-export function newGame(W, H, seed = 1) {
-  const v = makeValley(W, H, seed);
+export function newGame(W, H, seed = 1, valley = 'mountain') {
+  const v = makeValley(W, H, seed, valley);
   const n = W * H;
   const g = {
-    W, H, seed,
+    W, H, seed, valley,
     rand: rng(seed ^ 0x5bd1e995),
     h: v.h,
     bed: new Float32Array(n).fill(NaN),
@@ -441,6 +441,47 @@ function spawn(g, type) {
   rebuildNear(g);
   g.events.push({ type: 'spawn', obj: o });
   return o;
+}
+
+// ---------- saving ----------
+
+// what is needed to rebuild a game later: the valley comes back from its seed, canals are dug again
+export function save(g) {
+  const gates = [];
+  for (let i = 0; i < g.W * g.H; i++) if (g.gate[i]) gates.push(i);
+  return {
+    v: 1, W: g.W, H: g.H, seed: g.seed, valley: g.valley,
+    strokes: g.strokes.map((s) => ({ from: s.from, cells: s.cells, join: s.join })),
+    gates,
+    objects: g.objects.map(({ type, x, y, need, thirst, flood, born }) => ({ type, x, y, need, thirst, flood, born })),
+    day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
+    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt,
+  };
+}
+
+export function load(d) {
+  const g = newGame(d.W, d.H, d.seed, d.valley);
+  g.dig = 1e9;
+  for (const s of d.strokes) {
+    startStroke(g, s.from);
+    for (const c of s.cells) extend(g, c);
+    if (s.join) extend(g, s.join[1]);
+    endStroke(g);
+  }
+  for (const i of d.gates) g.gate[i] = 1;
+  for (const o of d.objects) {
+    const obj = { ...o, got: 0, s: 1 };
+    g.objects.push(obj);
+    g.objAt[o.y * g.W + o.x] = obj;
+  }
+  rebuildNear(g);
+  for (const k of ['day', 'year', 'dig', 'harvest', 'lost', 'gardensEver', 'nextGarden', 'nextHouse', 'cap', 'melt']) g[k] = d[k];
+  g.rand = rng((d.seed ^ (d.year * 7919) ^ (d.gardensEver * 104729)) >>> 0);
+  g.order = null;
+  g.events = [];
+  flowStep(g);
+  for (const o of g.objects) o.s = o.need > 0 ? clamp(o.got / o.need, 0, 1) : 1;
+  return g;
 }
 
 // the reward picked at the end of a year

@@ -24,8 +24,17 @@ function seedNow() {
   return q.has('seed') ? +q.get('seed') : (Math.random() * 1e9) | 0;
 }
 
-function start() {
-  g = S.newGame(W, H, seedNow());
+// today's valley: the same seed for everyone, from the date
+const today = new Date().toISOString().slice(0, 10);
+const dailySeed = [...today].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) >>> 0, 7);
+const bestKey = (mode) => (mode === 'daily' ? 'aryq.best.daily.' + today : 'aryq.best.' + mode);
+let mode = store.get('aryq.mode', 'mountain');
+
+function start(m = mode, restored = null) {
+  mode = m;
+  if (m !== 'daily') store.set('aryq.mode', m);
+  g = restored || S.newGame(W, H, m === 'daily' ? dailySeed : seedNow(), m === 'daily' ? 'mountain' : m);
+  g.mode = m;
   view.layout(g);
   speed = 1;
   paused = false;
@@ -34,7 +43,12 @@ function start() {
   state.harvestAtYear = 0;
   ui.replaceChildren();
   hud.hidden = false;
-  S.advance(g, 0.01); // the first garden appears
+  if (!restored) S.advance(g, 0.01); // the first garden appears
+  else {
+    paused = true;
+    showPause();
+  }
+  saveNow();
   pickGhost(performance.now(), true);
   updateHud();
   if (DEBUG) window.__aryq = { g, S, view, state, step: (d) => S.advance(g, d) };
@@ -95,6 +109,18 @@ const TEXT = {
     paused: 'Пауза',
     resume: 'Продолжить',
     pauseTip: 'Пока пауза, можно спокойно смотреть, куда вести воду.',
+    resumeGame: 'Продолжить',
+    resumeSub: '{v}, год {y}',
+    menu: 'Меню',
+    mountain: 'Горная долина',
+    wide: 'Широкая долина',
+    gorge: 'Ущелье',
+    mountainSub: 'обычная',
+    wideSub: 'полегче',
+    gorgeSub: 'потруднее',
+    daily: 'Долина дня',
+    dailySub: 'одна на всех сегодня, {d}',
+    bestShort: 'рекорд {b}',
   },
   en: {
     title: 'Aryk',
@@ -143,6 +169,18 @@ const TEXT = {
     paused: 'Paused',
     resume: 'Resume',
     pauseTip: 'While paused you can calmly look where to lead the water.',
+    resumeGame: 'Continue',
+    resumeSub: '{v}, year {y}',
+    menu: 'Menu',
+    mountain: 'Mountain valley',
+    wide: 'Wide valley',
+    gorge: 'Gorge',
+    mountainSub: 'normal',
+    wideSub: 'easier',
+    gorgeSub: 'harder',
+    daily: 'Valley of the day',
+    dailySub: 'the same for everyone today, {d}',
+    bestShort: 'best {b}',
   },
 };
 const lang = (() => {
@@ -162,6 +200,22 @@ $('speedBtn').setAttribute('aria-label', t('speed'));
 $('pauseBtn').setAttribute('aria-label', t('pause'));
 $('soundBtn').setAttribute('aria-label', t('sound'));
 cv.setAttribute('aria-label', t('title'));
+
+// small drawn icons, so they look the same on every phone
+const ICON = {
+  wide: '<path d="M2 19c4-6 7-8 10-8s6 2 10 8z" fill="#9bb36a"/><path d="M2 19h20" stroke="#5f7a3a" stroke-width="2"/>',
+  mountain: '<path d="M1 20 9 6l4 6 3-4 7 12z" fill="#8a7f72"/><path d="M9 6l2.6 4.4L9 9.5l-2 1.6z" fill="#fff"/>',
+  gorge: '<path d="M2 4h6l3 16H2zM22 4h-6l-3 16h9z" fill="#8a7f72"/><path d="M11 20h2" stroke="#2f8ac4" stroke-width="3"/>',
+  daily: '<rect x="3" y="5" width="18" height="16" rx="3" fill="#fff" stroke="#d0623a" stroke-width="2"/><path d="M3 10h18" stroke="#d0623a" stroke-width="2"/><path d="M8 3v4M16 3v4" stroke="#3b2718" stroke-width="2" stroke-linecap="round"/>',
+  dig: '<path d="M5 19 15 9" stroke="#8a5530" stroke-width="2.6" stroke-linecap="round"/><path d="M12 4c4 0 7 3 8 7l-5-2-2-5z" fill="#6c7078"/>',
+  cap: '<path d="M2 9c3-3 5 3 8 0s5 3 8 0 3 0 4 0M2 15c3-3 5 3 8 0s5 3 8 0 3 0 4 0" stroke="#2f8ac4" stroke-width="2.6" fill="none" stroke-linecap="round"/>',
+  melt: '<path d="M12 2v20M3.5 7l17 10M20.5 7l-17 10" stroke="#5aa8d8" stroke-width="2.2" stroke-linecap="round"/>',
+};
+const icon = (k) => {
+  const s = el('span', 'choice-icon');
+  s.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">' + ICON[k] + '</svg>';
+  return s;
+};
 
 // ---------- input ----------
 
@@ -373,14 +427,15 @@ function showYear(ev) {
   );
   state.harvestAtYear = g.harvest;
   const list = el('div', 'choices');
-  const names = { dig: ['rewardDig', 'rewardDigSub', '⛏'], cap: ['rewardCap', 'rewardCapSub', '〰'], melt: ['rewardMelt', 'rewardMeltSub', '❄'] };
+  const names = { dig: ['rewardDig', 'rewardDigSub'], cap: ['rewardCap', 'rewardCapSub'], melt: ['rewardMelt', 'rewardMeltSub'] };
   for (const kind of S.REWARDS) {
-    const [a, b, icon] = names[kind];
+    const [a, b] = names[kind];
     const btn = el('button', 'choice');
-    btn.append(el('span', 'choice-icon', icon), el('b', null, t(a)), el('small', null, t(b)));
+    btn.append(icon(kind), el('b', null, t(a)), el('small', null, t(b)));
     btn.addEventListener('click', () => {
       S.reward(g, kind);
       sfx.click();
+      saveNow();
       ui.replaceChildren();
       paused = false;
       updateHud();
@@ -414,15 +469,18 @@ function showOver() {
     el('p', null, t('when', { y: g.year, s: t(S.seasonOf(g.day).key) })),
     el('p', 'big', t('result', { h: Math.floor(g.harvest), n: S.gardens(g) })),
   );
-  const best = Math.max(store.get('aryq.best', 0), Math.floor(g.harvest));
-  store.set('aryq.best', best);
+  const best = Math.max(store.get(bestKey(g.mode), 0), Math.floor(g.harvest));
+  store.set(bestKey(g.mode), best);
+  store.set('aryq.save', null);
   box.append(el('p', 'muted', t('best', { b: best })));
   const again = el('button', 'btn', t('again'));
   again.addEventListener('click', () => {
     sfx.audioInit();
-    start();
+    start(g.mode);
   });
-  box.append(again);
+  const menu = el('button', 'btn ghost', t('menu'));
+  menu.addEventListener('click', showStart);
+  box.append(again, menu);
   ui.replaceChildren(box);
 }
 
@@ -430,12 +488,43 @@ function showStart() {
   hud.hidden = true;
   const box = el('div', 'panel');
   box.append(el('h1', null, t('title')), el('p', null, t('tag')));
-  const go = el('button', 'btn', t('play'));
-  go.addEventListener('click', () => {
-    sfx.audioInit();
-    start();
-  });
-  box.append(go);
+  const saved = store.get('aryq.save', null);
+  if (saved && saved.v === 1) {
+    const cont = el('button', 'btn');
+    cont.append(el('span', null, t('resumeGame')), el('small', null, t('resumeSub', { v: t(saved.mode || 'mountain'), y: saved.year })));
+    cont.addEventListener('click', () => {
+      sfx.audioInit();
+      try {
+        const old = S.load(saved);
+        start(saved.mode || 'mountain', old);
+      } catch {
+        store.set('aryq.save', null);
+        start();
+      }
+    });
+    box.append(cont);
+  } else {
+    const go = el('button', 'btn', t('play'));
+    go.addEventListener('click', () => {
+      sfx.audioInit();
+      start(mode);
+    });
+    box.append(go);
+  }
+  const list = el('div', 'choices');
+  for (const m of ['wide', 'mountain', 'gorge', 'daily']) {
+    const btn = el('button', 'choice' + (m === mode && !saved ? ' picked' : ''));
+    const best = store.get(bestKey(m), 0);
+    const sub = m === 'daily' ? t('dailySub', { d: today.slice(8, 10) + '.' + today.slice(5, 7) }) : t(m + 'Sub');
+    btn.append(icon(m), el('b', null, t(m)), el('small', null, sub + (best ? ' · ' + t('bestShort', { b: best }) : '')));
+    btn.addEventListener('click', () => {
+      sfx.audioInit();
+      store.set('aryq.save', null);
+      start(m);
+    });
+    list.append(btn);
+  }
+  box.append(list);
   ui.replaceChildren(box);
 }
 
@@ -490,6 +579,16 @@ function coach(now) {
   }
 }
 
+// the game is saved every few seconds and when the tab goes away, so a closed tab can be continued
+let savedAt = 0;
+function saveNow() {
+  if (!g || g.over || DEBUG && !q.has('save')) return;
+  const d = S.save(g);
+  d.mode = g.mode;
+  store.set('aryq.save', d);
+  savedAt = performance.now();
+}
+
 // sounds that follow what happens in the valley
 function listen(g) {
   let canals = 0;
@@ -536,6 +635,7 @@ function frame(now) {
     pickGhost(now);
     coach(now);
     listen(g);
+    if (!paused && performance.now() - savedAt > 3000) saveNow();
     updateHud();
     view.draw(g, now, state);
   }
@@ -546,6 +646,7 @@ function frame(now) {
 window.addEventListener('resize', () => g && view.layout(g));
 document.addEventListener('visibilitychange', () => {
   sfx.holdAudio(document.hidden);
+  if (document.hidden) saveNow();
   if (document.hidden && g && !g.over && !paused) {
     paused = true;
     showPause();
