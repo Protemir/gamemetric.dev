@@ -30,6 +30,7 @@ html = html
   .split(/\r?\n/)
   .filter((l) => !/name="theme-color"|property="og:image"/.test(l))
   .join('\n')
+  .replace(/<title>[^<]*<\/title>/, '<title>Asyk: Knucklebones</title>')
   .replace(tag, `<script src="${SDK[portal]}"></script>\n<script>window.ASYK_PORTAL = '${portal}';</script>\n<script type="module" src="js/boot.js"></script>`);
 fs.writeFileSync(path.join(out, 'index.html'), html);
 

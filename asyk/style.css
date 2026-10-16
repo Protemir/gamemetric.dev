@@ -271,3 +271,5 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .buy.on { background: linear-gradient(180deg, #6aa54a, #4d8434); box-shadow: 0 3px 0 #2f5a1d; }
 .buy.poor { opacity: 0.45; }
 .tag { flex: none; font-style: normal; font-size: 13px; font-weight: 800; color: #4d8434; padding: 6px 10px; }
+
+.logo-sub { margin: 2px 0 0; font-family: var(--serif); font-size: 18px; letter-spacing: 0.18em; text-transform: uppercase; color: #b8762a; }

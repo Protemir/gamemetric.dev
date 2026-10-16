@@ -248,6 +248,14 @@ function aimNow() {
   else if (g.w.wind) hint(g.w.wind > 0 ? T('Ветер тянет вправо →', 'The wind pulls right →') : T('← Ветер тянет влево', '← The wind pulls left'));
 }
 
+// the title as the portal lists it: Latin with a subtitle in English
+function logo() {
+  const h = el('h1', 'logo', T('Асық', 'Asyk'));
+  const wrap = el('div', 'logo-wrap');
+  wrap.append(h, el('p', 'logo-sub', T('асық ату', 'Knucklebones')));
+  return wrap;
+}
+
 function menu() {
   state = 'menu';
   mode = null;
@@ -257,7 +265,7 @@ function menu() {
   freshKon({ k: 1, seed: 1986 });
   hand.hidden = 0;
   const kids2 = [
-    el('h1', 'logo', 'Асық'),
+    logo(),
     el('p', 'sub', T('Лето 1987-го. Аул под горами, вечер, соседские ребята уже выложили кон.', 'Summer 1987. A village under the mountains, evening; the kids next door have set up the kon.')),
     button(T('Сюжет', 'Story'), storyMenu),
     button(T('Свободная игра', 'Free play'), () => startFree(1), 'btn second'),
@@ -1054,7 +1062,7 @@ async function boot() {
   bar.style.cssText = 'margin: 18px auto 0; width: 70%; background: rgba(90, 40, 20, 0.15)';
   const fill = el('i');
   bar.append(fill);
-  panel([el('h1', 'logo', 'Асық'), el('p', 'sub', T('Аул просыпается…', 'The village wakes up…')), bar]);
+  panel([logo(), el('p', 'sub', T('Аул просыпается…', 'The village wakes up…')), bar]);
   try {
     await S.loadArt((k) => (fill.style.width = `${Math.round(k * 100)}%`));
   } catch {
