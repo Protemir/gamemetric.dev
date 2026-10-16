@@ -29,6 +29,7 @@ function start() {
   speed = 1;
   paused = false;
   state.ghost = null;
+  state.calmShown = false;
   ui.replaceChildren();
   hud.hidden = false;
   S.advance(g, 0.01); // the first garden appears
@@ -222,6 +223,23 @@ function pickGhost(now, force) {
   state.ghost = plan && plan.cells.length ? { obj: target.o, ...plan } : null;
 }
 
+// one-line tips for the moments a new player gets stuck
+function coach(now) {
+  if (g.over || g.cur || now < hintUntil) return;
+  for (const o of g.objects) {
+    if (o.type === 'house' && o.flood > 0.15 && !o.warned) {
+      o.warned = true;
+      say('Дом подтапливает: рядом кончается арык и вода льётся. Доведи арык до дома или обратно в реку, или закрой шлюз.', 5000);
+      return;
+    }
+  }
+  const allDrink = g.objects.length > 1 && g.objects.every((o) => o.got > 0.01);
+  if (allDrink && !state.calmShown && g.day < S.WINTER) {
+    state.calmShown = true;
+    say('Все пьют. Новые сады и дома появятся сами — не дай засохнуть ни одному. Можно ускорить ×3.', 5000);
+  }
+}
+
 // ---------- loop ----------
 
 function frame(now) {
@@ -238,6 +256,7 @@ function frame(now) {
       if (ev.type === 'year') say(`Год ${ev.year}. Ледник стал меньше.`, 3000);
     }
     pickGhost(now);
+    coach(now);
     updateHud();
     view.draw(g, now, state);
   }

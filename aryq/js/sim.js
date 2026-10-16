@@ -12,7 +12,7 @@ export const WINTER = 105; // from this day gardens sleep and nothing new appear
 export const EPS = 0.04; // canal bed drop per cell
 export const MAX_CUT = 1.6; // deepest cut into a rise
 export const CANAL_CAP = 2; // water per day one canal cell carries
-const SEEP = 0.1; // what a dead-end canal spills over its end
+const SEEP = 0.1; // what a dead-end canal nobody drinks from spills over its end
 export const GARDEN_NEED = 0.3;
 export const HOUSE_NEED = 0.12;
 const DRY = 1 / 16; // thirst per day with no water at all
@@ -231,7 +231,7 @@ export function flowStep(g) {
       open += 1;
       w += Math.min(g.kind[t] === RIVER ? Infinity : CANAL_CAP, want[t]);
     }
-    if (!open) w += SEEP;
+    if (!open && !g.near[i].length) w += SEEP; // where someone drinks at the end, nothing spills
     want[i] = Math.min(w, CANAL_CAP);
   }
   flow[g.source] = sourceFlow(g.day, g.year);
