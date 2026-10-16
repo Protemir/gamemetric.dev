@@ -39,27 +39,28 @@ function loadImage(n) {
   return new Promise((res, rej) => {
     const im = new Image();
     im.onload = () => {
-      img[n.replace(/\.(png|jpg)$/, '')] = im;
+      img[n] = im;
       res();
     };
     im.onerror = rej;
-    im.src = 'img/' + n;
+    im.src = `img/${n}.webp`;
   });
 }
 
+// the second yard and the agas are needed only later: they load while the first kon is played
+export let extrasReady = Promise.resolve();
+
 export async function loadArt(onProgress) {
   meta = await fetch('img/sprites.json').then((r) => r.json());
-  const names = ['yard.jpg', 'hand-hold.png', 'hand-open.png'];
-  for (let i = 0; i < 5; i++) for (const p of KID_POSES) names.push(`kid${i}-${p}.png`);
-  for (const c of ['white', 'red']) for (const s of SIDES) names.push(`asyk-${c}-${s}.png`);
-  // the rest may be missing on an older build: the game goes on without it
-  const extra = ['school.jpg'];
-  for (const a of ['erlan', 'dauren']) for (const p of AGA_POSES) extra.push(`aga-${a}-${p}.png`);
-  for (const a of ANIMALS) extra.push(`${a}.png`);
+  const names = ['yard', 'hand-hold', 'hand-open', ...ANIMALS];
+  for (let i = 0; i < 5; i++) for (const p of KID_POSES) names.push(`kid${i}-${p}`);
+  for (const c of ['white', 'red']) for (const s of SIDES) names.push(`asyk-${c}-${s}`);
   let done = 0;
-  const total = names.length + extra.length;
-  const tick = () => onProgress && onProgress(++done / total);
-  await Promise.all([...names.map((n) => loadImage(n).then(tick)), ...extra.map((n) => loadImage(n).then(tick, tick))]);
+  // animals may be missing on an older build: the game goes on without them
+  await Promise.all(names.map((n) => loadImage(n).then(() => onProgress && onProgress(++done / names.length), (e) => (ANIMALS.includes(n) ? null : Promise.reject(e)))));
+  const extra = ['school'];
+  for (const a of ['erlan', 'dauren']) for (const p of AGA_POSES) extra.push(`aga-${a}-${p}`);
+  extrasReady = Promise.all(extra.map((n) => loadImage(n).catch(() => null)));
   // the photos caught some green from the backdrop: no channel may beat red on a bone
   for (const c of ['white', 'red']) for (const s of SIDES) img[`asyk-${c}-${s}`] = degreen(img[`asyk-${c}-${s}`]);
   // dyed bones (worth more) are the red ones turned pink, so they never look like the saka

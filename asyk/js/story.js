@@ -29,14 +29,13 @@ export const CHAPTERS = [
       {
         target: 150,
         intro: [
-          ['apa', 'Балам, далеко не уходи! Как стемнеет — домой, ужинать.', 'Balam, don’t wander off! When it gets dark — home for dinner.'],
           ['bekzhan', 'О, қалалық приехал! В асық-то умеешь? Или в Алматы только в «Ну, погоди!» на «Электронике» режетесь?', 'Look, the қалалық is here — the city boy! Can you even play asyk? Or do you only play handheld games in Almaty?'],
           ['asem', 'Бекжан, отстань от него. Смотри: тянешь руку назад и бросаешь. Выбил асык за круг — он твой.', 'Bekzhan, leave him alone. Look: pull your hand back and throw. Knock a bone out of the circle — it’s yours.'],
-          ['timur', 'Сақа ляжет алшы — очки втрое. Шік — ещё бросок. Давай, покажи!', 'If your saka lands on alshy — triple points. Shik — another throw. Come on, show us!'],
         ],
         win: [
           ['askar', 'Нормально бросает.', 'He throws all right.'],
           ['bekzhan', 'Да повезло просто…', 'Just lucky…'],
+          ['apa', 'Балам, далеко не уходи! Как стемнеет — домой, ужинать.', 'Balam, don’t wander off! When it gets dark — home for dinner.'],
         ],
       },
       {

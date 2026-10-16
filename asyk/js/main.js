@@ -5,6 +5,7 @@ import * as S from './scene.js';
 import * as A from './audio.js';
 import { store, el, clamp, rng } from './util.js';
 import { voiceFile } from './voice.js';
+import { PORTAL, portalInit, portalLang, gameplay, happytime, onPortalMute, loading } from './portal.js';
 
 const cv = document.getElementById('game');
 const c = cv.getContext('2d');
@@ -83,6 +84,38 @@ $('soundBtn').addEventListener('click', () => {
   soundIcon();
 });
 soundIcon();
+
+let paused = null;
+$('menuBtn').addEventListener('click', () => {
+  A.audioInit();
+  if (paused || state === 'over' || state === 'load') return;
+  paused = state;
+  state = 'paused';
+  drag = aim = null;
+  panel([
+    el('h2', null, T('Пауза', 'Paused')),
+    button(T('Продолжить', 'Continue'), resume),
+    button(mode && mode.story ? T('Главы', 'Chapters') : T('В меню', 'Menu'), () => {
+      paused = null;
+      $('talk').hidden = true;
+      A.stopVoice();
+      if (mode && mode.story) {
+        menu();
+        storyMenu();
+      } else menu();
+    }, 'btn second'),
+    button(lang ? 'Русский' : 'English', () => {
+      lang = 1 - lang;
+      store.set('asyk.lang', lang);
+      resume();
+    }, 'btn ghost'),
+  ]);
+});
+function resume() {
+  ui.innerHTML = '';
+  state = paused || 'aim';
+  paused = null;
+}
 
 function hudThrows() {
   const box = $('hudThrows');
@@ -268,6 +301,8 @@ async function playStory(ci, ki) {
   const kon = ch.kons[ki];
   mode = { story: true, ch: ci, ki };
   ui.innerHTML = '';
+  // the school yard and the agas may still be on their way
+  await S.extrasReady;
   if (ki === 0 && ch.video && !story.seen?.[ch.id]) {
     await playVideo(ch.video);
     story.seen = { ...(story.seen || {}), [ch.id]: true };
@@ -395,6 +430,7 @@ function over() {
   $('turn').hidden = true;
   if (mode && mode.story) return storyOver();
   if (g.result === 'win') {
+    happytime();
     best = Math.max(best, g.k + 1);
     store.set('asyk.best', best);
     A.win();
@@ -431,6 +467,7 @@ async function storyOver() {
   const kon = CHAPTERS[ch].kons[ki];
   const won = g.result === 'win';
   if (won) {
+    happytime();
     A.win();
     kids.forEach((k, i) => S.setPose(k, 'cheer', clock, 3, i * 0.08));
     if (aga) aga.pose = 'sad';
@@ -604,6 +641,10 @@ function react(t) {
   else if (t.knocked && t.side.id === 'taike') bark('taike');
   else if (!t.knocked) bark('miss', rand() < 0.6 ? kids[1] : null);
   if (t.outs.some((b) => b.painted)) bark('dyed', kids[3]);
+  if (!store.get('asyk.ruleSides', 0) && t.knocked) {
+    store.set('asyk.ruleSides', 1);
+    hint(T('Сақа легла на сторону: алшы ×3, тәйке ×2, шік — ещё бросок', 'The saka landed on a side: alshy ×3, taike ×2, shik — one more throw'), 5000);
+  }
   if (t.knocked >= 2 || (t.knocked && t.side.id === 'alshy')) {
     kids.forEach((k) => S.setPose(k, 'cheer', now, 1.8, rand() * 0.2));
   } else if (t.knocked === 1) {
@@ -899,6 +940,7 @@ function draw() {
   if (state === 'aim' && !taught && !drag) S.drawPullHint(c, clock);
 }
 
+const PLAYING = new Set(['aim', 'flight', 'roll', 'reveal', 'tally', 'agaAim']);
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
@@ -907,10 +949,17 @@ function frame(now) {
     update(dt);
     draw();
   }
+  gameplay(!document.hidden && PLAYING.has(state));
   requestAnimationFrame(frame);
 }
 
 async function boot() {
+  await portalInit();
+  loading(true);
+  // on a portal its language wins unless the player chose one here
+  const pl = portalLang();
+  if (pl && !q.get('lang') && store.get('asyk.lang', null) == null) lang = pl === 'ru' ? 0 : 1;
+  onPortalMute((m) => A.holdAudio(m));
   const bar = el('div', 'bar');
   bar.style.cssText = 'margin: 18px auto 0; width: 70%; background: rgba(90, 40, 20, 0.15)';
   const fill = el('i');
@@ -922,8 +971,13 @@ async function boot() {
     panel([el('h2', null, T('Не загрузилось', 'Failed to load')), el('p', 'sub', T('Проверь интернет и обнови страницу.', 'Check your connection and reload.'))]);
     return;
   }
+  loading(false);
   layout();
-  menu();
+  const fresh = !taught && !Object.keys(story.done || {}).length;
+  if (fresh && !SHOT) {
+    menu();
+    playStory(0, 0);
+  } else menu();
 }
 boot();
 requestAnimationFrame(frame);
