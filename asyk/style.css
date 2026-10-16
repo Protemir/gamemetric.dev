@@ -242,6 +242,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .talk-name { font-family: var(--serif); color: #8f2f2a; font-size: 16px; }
 .talk-text { margin: 3px 0 0; font-size: 17px; line-height: 1.38; color: var(--ink); min-height: 2.6em; }
 .talk-next { color: #8f2f2a; font-size: 20px; animation: nudge 1s ease-in-out infinite; }
+.talk-skip { position: absolute; top: -40px; right: 0; padding: 7px 12px; border: 0; border-radius: 11px; background: rgba(52, 30, 18, 0.78); color: #fff4dc; font-size: 13px; font-weight: 700; }
 @keyframes nudge { 50% { transform: translateX(4px); } }
 
 /* chapter film */

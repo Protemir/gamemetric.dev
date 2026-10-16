@@ -336,6 +336,7 @@ function talk(lines) {
     if (!lines.length) return resolve();
     const box = $('talk');
     const pic = $('talkPic');
+    $('talkSkip').textContent = T('Пропустить ▸▸', 'Skip ▸▸');
     let i = -1;
     let typing = 0;
     let full = '';
@@ -398,10 +399,21 @@ function talk(lines) {
       });
     };
     talkDone = next;
+    talkSkip = () => {
+      clearInterval(typing);
+      typing = 0;
+      i = lines.length - 1;
+      next();
+    };
     next();
   });
 }
+let talkSkip = null;
 $('talk').addEventListener('click', () => talkDone && talkDone());
+$('talkSkip').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (talkSkip) talkSkip();
+});
 
 // ---------- the chapter film ----------
 function playVideo(src) {
