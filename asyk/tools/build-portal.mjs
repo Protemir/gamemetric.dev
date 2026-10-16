@@ -34,6 +34,10 @@ html = html
   .replace(tag, `<script src="${SDK[portal]}"></script>\n<script>window.ASYK_PORTAL = '${portal}';</script>\n<script type="module" src="js/boot.js"></script>`);
 fs.writeFileSync(path.join(out, 'index.html'), html);
 
+// the list of the game's files next to it on the site: a portal page can fetch the build from there
+const list = fs.readdirSync(out, { recursive: true }).filter((f) => fs.statSync(path.join(out, f)).isFile()).map((f) => f.split(path.sep).join('/')).filter((f) => f !== 'index.html').sort();
+fs.writeFileSync(path.join(game, 'files.json'), JSON.stringify(list) + '\n');
+
 const zip = path.join(repo, 'dist', `asyk-${portal}.zip`);
 fs.rmSync(zip, { force: true });
 execFileSync('powershell', ['-NoProfile', '-Command', `Compress-Archive -Path '${out}\\*' -DestinationPath '${zip}'`], { stdio: 'inherit' });
