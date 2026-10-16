@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Асық — выбей асыки из кона</title>
+<meta name="description" content="Асық ату в браузере: тяни сақу, выбивай асыки из кона, лови алшы и цепочки. Летний двор, вечернее солнце, как в детстве.">
+<!-- the first week's build: not in the hub and not for search yet -->
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#8a8a52">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="game" aria-label="Асық"></canvas>
+<header class="hud" id="hud" hidden>
+  <button type="button" class="icon" id="soundBtn" aria-label="Звук"></button>
+  <div class="hud-mid">
+    <p class="hud-kon"><b id="hudKon"></b> <span id="hudScore"></span></p>
+    <div class="bar"><i id="hudBar"></i></div>
+  </div>
+  <div class="throws" id="hudThrows" aria-label="Броски"></div>
+</header>
+<footer class="turn" id="turn" hidden>
+  <div class="calc">
+    <span class="box chips" id="turnChips">0</span>
+    <span class="x">×</span>
+    <span class="box mult" id="turnMult">1</span>
+  </div>
+  <p class="turn-note" id="turnNote"></p>
+</footer>
+<p class="hint-line" id="hint" aria-live="polite"></p>
+<div id="ui"></div>
+</body>
+</html>
