@@ -501,7 +501,7 @@ async function storyOver() {
   const btns = [];
   if (won && nextKon) btns.push(button(T('Дальше', 'Next'), () => playStory(ch, ki + 1)));
   else if (won && nextCh && !nextCh.soon) btns.push(button(T(`Глава ${ch + 2}: ${pick(nextCh.title)}`, `Chapter ${ch + 2}: ${pick(nextCh.title)}`), () => playStory(ch + 1, 0)));
-  else if (won) btns.push(button(T('Продолжение — зимой', 'To be continued in winter'), storyMenu));
+  else if (won) btns.push(button(T('Все главы пройдены!', 'All chapters done!'), storyMenu));
   else btns.push(button(T('Ещё раз', 'Try again'), () => playStory(ch, ki)));
   // the bazaar comes back here: the same next step
   const again = () => storyOver.after();

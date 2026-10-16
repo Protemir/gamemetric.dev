@@ -226,35 +226,50 @@ export function nextThrower(g, last) {
   return g.throws > 0 ? 'me' : 'aga';
 }
 
-// The aga thinks: tries some throws on a copy of the yard and keeps the best,
-// then his hand wobbles by skill (0 sloppy .. 1 sharp).
-export function agaPlan(g, rand, skill = 0.7) {
-  const tries = 4 + Math.round(skill * 8);
+// The aga throws like a person: picks a bone, judges the strength by eye from the distance and
+// throws with a hand that wobbles less the better he is (skill 0 sloppy .. 1 sharp).
+function agaGuess(g, rand, skill) {
   const live = g.w.bodies.filter((b) => b.kind === 'asyk' && !b.out);
+  if (!live.length) return { ux: 0, uy: 1, power: 0.7 };
+  // the nearest bones to his line are the ones he goes for, mostly
+  live.sort((p, q) => q.y - p.y);
+  const aim = live[Math.floor(Math.pow(rand(), 1.8) * live.length)];
+  const dx = aim.x - AWAY.x;
+  const dy = aim.y - AWAY.y;
+  const dist = Math.hypot(dx, dy);
+  // how far a throw of power p goes: through the air, then sliding on this ground
+  const mu = 62 * g.w.friction;
+  const reach = (p) => AIR.min + AIR.k * p + Math.pow(groundSpeed(p), 2) / (2 * mu);
+  let power = 1;
+  for (let p = 0.2; p <= 1; p += 0.01)
+    if (reach(p) >= dist + 6) {
+      power = p;
+      break;
+    }
+  const wob = 1 - skill;
+  const ang = Math.atan2(dy, dx) + (rand() - 0.5) * wob * 0.5;
+  power = Math.max(0.2, Math.min(1, power * (1 + (rand() - 0.5) * wob * 0.6)));
+  return { ux: Math.cos(ang), uy: Math.sin(ang), power };
+}
+
+// a few guesses tried out in his head (on a copy of the yard); a better aga weighs more of them
+export function agaPlan(g, rand, skill = 0.7) {
+  const tries = 1 + Math.round(skill * 4);
   let best = null;
-  for (let i = 0; i < tries && live.length; i++) {
-    const aim = live[Math.floor(rand() * live.length)];
-    const dx = aim.x - AWAY.x + (rand() - 0.5) * 8;
-    const dy = aim.y - AWAY.y;
-    const l = Math.hypot(dx, dy);
-    const ux = dx / l;
-    const uy = dy / l;
-    const power = 0.45 + rand() * 0.5;
+  for (let i = 0; i < tries; i++) {
+    const p = agaGuess(g, rand, skill);
     const copy = { ...g, w: { ...g.w, bodies: g.w.bodies.map((b) => ({ ...b })), events: [], rand: rng((rand() * 1e9) | 0) }, turn: null, duel: { ...g.duel } };
     startThrow(copy, 'aga');
-    throwFromHand(copy, ux, uy, power, AWAY);
-    let t = 0;
+    throwFromHand(copy, p.ux, p.uy, p.power, AWAY);
     let chips = 0;
+    let time = 0;
     do {
       step(copy.w, 1 / 30);
       for (const e of copy.w.events) if (e.type === 'out') chips += e.body.value;
       copy.w.events.length = 0;
-      t += 1 / 30;
-    } while (moving(copy.w) && t < 10);
-    if (!best || chips > best.chips) best = { chips, ux, uy, power };
+      time += 1 / 30;
+    } while (moving(copy.w) && time < 10);
+    if (!best || chips > best.chips) best = { ...p, chips };
   }
-  if (!best) return { ux: 0, uy: 1, power: 0.7 };
-  const wob = (1 - skill) * 0.12;
-  const a = Math.atan2(best.uy, best.ux) + (rand() - 0.5) * wob;
-  return { ux: Math.cos(a), uy: Math.sin(a), power: Math.min(1, best.power * (1 + (rand() - 0.5) * wob)) };
+  return best;
 }
