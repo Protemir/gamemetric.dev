@@ -87,6 +87,7 @@ const TEXT = {
     tagObject: 'занято',
     tagIce: 'лёд',
     startHere: 'начни тут',
+    update: 'Вышла новая версия — нажми, чтобы обновить (игра сохранится)',
     plenty: 'вдоволь',
     ghostStart: 'Пунктир начинается выше, у кольца «начни тут». От этого арыка вода туда не поднимется — начни от кольца.',
     start: 'Начинай от реки или от арыка и тяни.',
@@ -159,6 +160,7 @@ const TEXT = {
     tagObject: 'taken',
     tagIce: 'ice',
     startHere: 'start here',
+    update: 'A new version is out: tap to update (your game is saved)',
     plenty: 'plenty',
     ghostStart: 'The dashed line starts higher up, at the “start here” ring. From this canal water cannot climb there: start from the ring.',
     start: 'Start from the river or a canal and drag.',
@@ -752,6 +754,31 @@ document.addEventListener('visibilitychange', () => {
     updateHud();
   }
 });
+
+// a tab left open keeps running old code; now and then look whether a new version was uploaded.
+// On the menu it simply reloads, during a game it asks (the game is saved first).
+const running = new URL(import.meta.url).searchParams.get('v');
+let updateShown = false;
+async function checkUpdate() {
+  if (!running || updateShown || document.hidden) return;
+  try {
+    const html = await (await fetch(location.pathname, { cache: 'no-store' })).text();
+    const fresh = (html.match(/main\.js\?v=([0-9a-f]+)/) || [])[1];
+    if (!fresh || fresh === running) return;
+    if (!g || g.over) return location.reload();
+    updateShown = true;
+    const b = el('button', 'update', t('update'));
+    b.addEventListener('click', () => {
+      saveNow();
+      location.reload();
+    });
+    document.body.append(b);
+  } catch {
+    /* offline */
+  }
+}
+setInterval(checkUpdate, 60000);
+document.addEventListener('visibilitychange', () => setTimeout(checkUpdate, 500));
 
 showStart();
 requestAnimationFrame(frame);

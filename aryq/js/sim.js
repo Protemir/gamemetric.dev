@@ -48,7 +48,7 @@ export function sourceFlow(day, year, melt = 1) {
       break;
     }
   }
-  return q * melt * Math.max(0.65, 1 - 0.06 * (year - 1));
+  return q * melt * Math.max(0.5, 1 - 0.13 * (year - 1));
 }
 
 export function newGame(W, H, seed = 1, valley = 'mountain') {
@@ -246,6 +246,21 @@ export function flowStep(g) {
   // a canal only draws what is drunk below it: a dead end fills up and then takes just a trickle
   // that spills over its end (SEEP). The river takes everything.
   const want = g.want || (g.want = new Float32Array(g.W * g.H));
+  // every orchard or yurt orders its water from one cell only: the open water cell next to it that
+  // is highest (it gets water first). Ordering from every cell it touches drew the water twice,
+  // and the second half spilled as a puddle between two canals.
+  const tap = new Map();
+  for (const o of g.objects) {
+    let best = -1;
+    for (const [dx, dy] of N4) {
+      const x = o.x + dx, y = o.y + dy;
+      if (!inside(g, x, y)) continue;
+      const i = y * g.W + x;
+      if (!isWater(g, i) || g.gate[i]) continue;
+      if (best < 0 || g.bed[i] > g.bed[best]) best = i;
+    }
+    if (best >= 0) tap.set(o, best);
+  }
   for (let k = g.order.length - 1; k >= 0; k--) {
     const i = g.order[k];
     if (g.kind[i] === RIVER) {
@@ -253,7 +268,7 @@ export function flowStep(g) {
       continue;
     }
     let w = 0;
-    if (!sleeping) for (const o of g.near[i]) w += o.need;
+    if (!sleeping) for (const o of g.near[i]) if (tap.get(o) === i) w += o.need;
     let open = 0;
     for (const t of g.out[i]) {
       if (g.gate[t]) continue;
