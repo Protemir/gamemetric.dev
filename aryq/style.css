@@ -183,3 +183,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-weight: 700;
   box-shadow: var(--shadow);
 }
+.langs { display: flex; justify-content: center; gap: 6px; margin: 14px 0 0; }
+.langs button { border: 0; background: transparent; color: var(--muted); font-weight: 700; padding: 4px 8px; border-radius: 8px; }
+.langs button.on { background: var(--paper-2); color: var(--ink); }

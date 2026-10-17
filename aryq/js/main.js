@@ -80,10 +80,11 @@ const TEXT = {
     up: 'Туда вода не стечёт: там выше.',
     ice: 'По леднику не копают.',
     object: 'Тут занято.',
-    tired: 'Кетмень кончился: он сам прибавляется по одному каждые 5 секунд, и ещё с каждым новым садом.',
+    tired: 'Кетмень кончился: он сам прибавляется по одному каждые 3 секунды, и ещё с каждым новым садом.',
     lit: 'Светлые клетки — сюда вода дойдёт от этой точки. Веди палец по ним.',
     tagHigh: '▲ выше',
     tagTired: '⛏ нет сил',
+    tagTiredIn: '⛏ через {s} с',
     tagObject: 'занято',
     tagIce: 'лёд',
     startHere: 'начни тут',
@@ -153,10 +154,11 @@ const TEXT = {
     up: 'Water will not run there: it is higher.',
     ice: 'You cannot dig into the glacier.',
     object: 'Something is already here.',
-    tired: 'Out of digging: you get one more every 5 seconds, and more with every new orchard.',
+    tired: 'Out of digging: you get one more every 3 seconds, and more with every new orchard.',
     lit: 'The light cells are where water can reach from this point. Drag along them.',
     tagHigh: '▲ higher',
     tagTired: '⛏ no strength',
+    tagTiredIn: '⛏ in {s} s',
     tagObject: 'taken',
     tagIce: 'ice',
     startHere: 'start here',
@@ -210,7 +212,7 @@ const TEXT = {
   },
 };
 const lang = (() => {
-  const want = q.get('lang');
+  const want = q.get('lang') || store.get('aryq.lang', null);
   if (want && TEXT[want]) return want;
   const nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
   return /^(ru|kk|ky|be|uz|tg|uk)\b/i.test(nav) ? 'ru' : 'en';
@@ -276,9 +278,10 @@ cv.addEventListener('pointerdown', (e) => {
     }
   }
   // pressing near the start of the dashed path starts right there
-  if (state.ghost && !S.isWater(g, press.cell)) {
+  if (state.ghost) {
     const [gx, gy] = view.center(state.ghost.from);
-    if (Math.hypot(gx - press.x, gy - press.y) < view.cs * 1.3) press.cell = state.ghost.from;
+    const d = Math.hypot(gx - press.x, gy - press.y);
+    if (d < view.cs * 0.9 || (!S.isWater(g, press.cell) && d < view.cs * 1.3)) press.cell = state.ghost.from;
   }
   if (S.isWater(g, press.cell)) {
     state.reach = lit(press.cell);
@@ -339,10 +342,10 @@ function routeTo(target) {
   const o = g.objAt[target];
   if (o) {
     const tx = target % W, ty = (target / W) | 0;
-    if (Math.abs((last % W) - tx) + Math.abs(((last / W) | 0) - ty) === 1) return true; // already there
+    if (Math.max(Math.abs((last % W) - tx), Math.abs(((last / W) | 0) - ty)) === 1) return true; // already there
   } else if (g.kind[target] !== S.LAND) return false;
   const goal = o
-    ? (c) => Math.abs((c % W) - o.x) + Math.abs(((c / W) | 0) - o.y) === 1
+    ? (c) => Math.max(Math.abs((c % W) - o.x), Math.abs(((c / W) | 0) - o.y)) === 1
     : (c) => c === target;
   const way = S.route(g, [last], goal);
   if (!way) return false;
@@ -622,6 +625,18 @@ function showStart() {
     list.append(btn);
   }
   box.append(list);
+  const langs = el('p', 'langs');
+  for (const code of ['ru', 'en']) {
+    const a = el('button', code === lang ? 'on' : '', code.toUpperCase());
+    a.addEventListener('click', () => {
+      store.set('aryq.lang', code);
+      const u = new URL(location.href);
+      u.searchParams.delete('lang');
+      location.href = u.toString();
+    });
+    langs.append(a);
+  }
+  box.append(langs);
   ui.replaceChildren(box);
 }
 
@@ -737,7 +752,8 @@ function frame(now) {
     updateHud();
     if (state.hintPath && now > state.hintPath.until) state.hintPath = null;
     state.startLabel = t('startHere');
-    state.tags = { high: t('tagHigh'), up: t('tagHigh'), tired: t('tagTired'), object: t('tagObject'), ice: t('tagIce') };
+    const wait = Math.max(1, Math.ceil(((S.DIG_REGEN - (g.digTimer || 0)) * S.DAY_SEC) / speed));
+    state.tags = { high: t('tagHigh'), up: t('tagHigh'), tired: g.dig < 1 && g.cur ? t('tagTiredIn', { s: wait }) : t('tagTired'), object: t('tagObject'), ice: t('tagIce') };
     view.draw(g, now, state);
   }
   if (now > hintUntil && hintEl.textContent) hintEl.textContent = '';

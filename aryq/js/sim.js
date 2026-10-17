@@ -20,13 +20,14 @@ const WET = 1 / 6; // recovery per day when fully watered
 const ENOUGH = 0.6; // share of the need that keeps thirst still
 const FLOOD = 0.35; // flood per day per unit of spilled water next to a house
 const DIG_START = 30;
-const DIG_PER_GARDEN = 5;
+const DIG_PER_GARDEN = 8;
 const DIG_PER_YEAR = 10;
-export const DIG_REGEN = 1.5; // days for one more cell of digging
+export const DIG_REGEN = 1; // days for one more cell of digging
 export const DIG_CAP = 40; // the regrowth stops here (gifts can go above)
 
 export const LAND = 0, RIVER = 1, CANAL = 2, ICE = 3;
 const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const N8 = [...N4, [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 export const SEASONS = [
   { from: 0, key: 'spring' },
@@ -225,7 +226,7 @@ export function toggleGate(g, i) {
 function rebuildNear(g) {
   g.near = Array.from({ length: g.W * g.H }, () => []);
   for (const o of g.objects) {
-    for (const [dx, dy] of N4) {
+    for (const [dx, dy] of N8) {
       const x = o.x + dx, y = o.y + dy;
       if (inside(g, x, y)) g.near[y * g.W + x].push(o);
     }
@@ -243,16 +244,20 @@ export function flowStep(g) {
   spill.fill(0);
   const sleeping = g.day >= WINTER;
   for (const o of g.objects) o.got = 0;
-  // a canal only draws what is drunk below it: a dead end fills up and then takes just a trickle
-  // that spills over its end (SEEP). The river takes everything.
-  const want = g.want || (g.want = new Float32Array(g.W * g.H));
+  // Two numbers per canal cell, from the bottom up:
+  //   need  — what is drunk below it (orchards, yurts, and a trickle over a dead end nobody drinks at);
+  //   carry — what it could pass on if water is plentiful (a canal back into the river carries a full one).
+  // Water is then shared in two rounds: first everyone's need, then what is left goes on through
+  // canals that lead back to the river. So such a canal is never dry, yet never starves a neighbour.
+  const need = g.want || (g.want = new Float32Array(g.W * g.H));
+  const carry = g.carry || (g.carry = new Float32Array(g.W * g.H));
   // every orchard or yurt orders its water from one cell only: the open water cell next to it that
   // is highest (it gets water first). Ordering from every cell it touches drew the water twice,
   // and the second half spilled as a puddle between two canals.
   const tap = new Map();
   for (const o of g.objects) {
     let best = -1;
-    for (const [dx, dy] of N4) {
+    for (const [dx, dy] of N8) {
       const x = o.x + dx, y = o.y + dy;
       if (!inside(g, x, y)) continue;
       const i = y * g.W + x;
@@ -264,22 +269,49 @@ export function flowStep(g) {
   for (let k = g.order.length - 1; k >= 0; k--) {
     const i = g.order[k];
     if (g.kind[i] === RIVER) {
-      want[i] = Infinity;
+      need[i] = 0;
+      carry[i] = Infinity;
       continue;
     }
-    let w = 0;
+    let w = 0, c = 0;
     if (!sleeping) for (const o of g.near[i]) if (tap.get(o) === i) w += o.need;
+    c = w;
     let open = 0;
     for (const t of g.out[i]) {
       if (g.gate[t]) continue;
       open += 1;
-      if (g.kind[t] !== RIVER) w += Math.min(g.cap, want[t]);
+      if (g.kind[t] === RIVER) c += g.cap;
+      else {
+        w += Math.min(g.cap, need[t]);
+        c += Math.min(g.cap, carry[t]);
+      }
     }
-    if (!open && !g.near[i].length) w += SEEP; // where someone drinks at the end, nothing spills
-    want[i] = Math.min(w, g.cap);
+    if (!open && !g.near[i].length) {
+      w += SEEP; // where someone drinks at the end, nothing spills
+      c += SEEP;
+    }
+    need[i] = Math.min(w, g.cap);
+    carry[i] = Math.min(Math.max(c, w), g.cap);
   }
   flow[g.source] = sourceFlow(g.day, g.year, g.melt);
   g.gone = 0;
+  // fill targets up to their room, sharing equally, until q runs out or everyone is full
+  const share = (q, targets, room) => {
+    let open = targets.filter((t) => room(t) > 1e-6);
+    while (q > 1e-6 && open.length) {
+      const part = q / open.length;
+      const next = [];
+      for (const t of open) {
+        const give = Math.min(part, room(t));
+        flow[t] += give;
+        q -= give;
+        if (room(t) > 1e-6) next.push(t);
+      }
+      if (next.length === open.length) break;
+      open = next;
+    }
+    return q;
+  };
   for (const i of g.order) {
     let q = flow[i];
     if (q <= 1e-6) continue;
@@ -292,20 +324,14 @@ export function flowStep(g) {
         }
       }
     }
-    let open = g.out[i].filter((t) => !g.gate[t]);
-    const room = (t) => (g.kind[t] === RIVER ? Infinity : want[t] - flow[t]);
-    open = open.filter((t) => room(t) > 1e-6);
-    while (q > 1e-6 && open.length) {
-      const share = q / open.length;
-      const next = [];
-      for (const t of open) {
-        const give = Math.min(share, room(t));
-        flow[t] += give;
-        q -= give;
-        if (room(t) > 1e-6) next.push(t);
-      }
-      if (next.length === open.length) break; // nobody was full, all of q is given out
-      open = next;
+    const targets = g.out[i].filter((t) => !g.gate[t]);
+    // round 1: what is drunk below
+    q = share(q, targets, (t) => (g.kind[t] === RIVER ? 0 : need[t] - flow[t]));
+    // round 2: the rest. From the river a through canal gets at most a quarter, the river keeps the rest
+    if (q > 1e-6) {
+      const top = g.kind[i] === RIVER ? q * 0.25 : Infinity;
+      const base = new Map(targets.map((t) => [t, flow[t]]));
+      q = share(q, targets, (t) => (g.kind[t] === RIVER ? Infinity : Math.min(carry[t] - flow[t], top - (flow[t] - base.get(t)))));
     }
     // what the last river cell does not give to canals leaves the valley
     if (i === g.exit) g.gone = q;
@@ -459,13 +485,13 @@ export function route(g, sources, goal, maxSteps = 80) {
   return null;
 }
 
-const nextTo = (g, o) => (c) => Math.abs((c % g.W) - o.x) + Math.abs(((c / g.W) | 0) - o.y) === 1;
+const nextTo = (g, o) => (c) => Math.max(Math.abs((c % g.W) - o.x), Math.abs(((c / g.W) | 0) - o.y)) === 1;
 
 // the canal cells (from a water cell to a cell next to the object) a good digger would use;
 // with `r` (spawning checks hundreds of spots) a quick estimate from reach() instead
 export function planFor(g, o, r = null) {
   if (!r) {
-    for (const [dx, dy] of N4) {
+    for (const [dx, dy] of N8) {
       const x = o.x + dx, y = o.y + dy;
       if (inside(g, x, y) && isWater(g, y * g.W + x)) return { from: y * g.W + x, cells: [] };
     }
@@ -474,7 +500,7 @@ export function planFor(g, o, r = null) {
     return route(g, sources, nextTo(g, o));
   }
   let pick = -1;
-  for (const [dx, dy] of N4) {
+  for (const [dx, dy] of N8) {
     const x = o.x + dx, y = o.y + dy;
     if (!inside(g, x, y)) continue;
     const i = y * g.W + x;
@@ -508,7 +534,7 @@ function spawn(g, type) {
           if (!inside(g, xx, yy)) continue;
           const j = yy * W + xx;
           if (g.objAt[j] && Math.max(Math.abs(dx), Math.abs(dy)) <= 2) ok = false;
-          if (isWater(g, j) && Math.abs(dx) + Math.abs(dy) <= 1) ok = false;
+          if (isWater(g, j) && Math.max(Math.abs(dx), Math.abs(dy)) <= 1) ok = false;
         }
       if (!ok) continue;
       const o = { x, y };

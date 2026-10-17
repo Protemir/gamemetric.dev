@@ -624,8 +624,12 @@ export class View {
     if (this.startLabel) {
       cx.font = `700 ${Math.max(11, cs * 0.4)}px system-ui, sans-serif`;
       const tw = cx.measureText(this.startLabel).width + 10, th = Math.max(16, cs * 0.6);
-      const lx = Math.min(Math.max(sx - tw / 2, this.ox + 2), this.ox + this.bw - tw - 2);
-      const ly = sy - cs * 0.8 - th < this.oy ? sy + cs * 0.8 : sy - cs * 0.8 - th;
+      const [nx, ny] = pts[1] || pts[0];
+      const away = nx >= sx ? -1 : 1; // the side the path does not go
+      let lx = away < 0 ? sx - cs * 0.8 - tw : sx + cs * 0.8;
+      if (lx < this.ox + 2 || lx + tw > this.ox + this.bw - 2) lx = away < 0 ? sx + cs * 0.8 : sx - cs * 0.8 - tw;
+      lx = Math.min(Math.max(lx, this.ox + 2), this.ox + this.bw - tw - 2);
+      const ly = Math.min(Math.max(sy - th / 2 + (Math.abs(ny - sy) < 1 ? cs * 0.75 : 0), this.oy + 2), this.oy + this.bh - th - 2);
       cx.fillStyle = 'rgba(0,0,0,0.35)';
       this.roundRect(lx + 1, ly + 2, tw, th, 6);
       cx.fill();
