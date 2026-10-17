@@ -22,6 +22,8 @@ const FLOOD = 0.35; // flood per day per unit of spilled water next to a house
 const DIG_START = 30;
 const DIG_PER_GARDEN = 5;
 const DIG_PER_YEAR = 10;
+export const DIG_REGEN = 1.5; // days for one more cell of digging
+export const DIG_CAP = 40; // the regrowth stops here (gifts can go above)
 
 export const LAND = 0, RIVER = 1, CANAL = 2, ICE = 3;
 const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -319,6 +321,11 @@ function tick(g, dt) {
       g.lost += 1;
       g.events.push({ type: o.flood >= 1 ? 'flooded' : 'left', x: o.x, y: o.y });
     }
+  }
+  g.digTimer = (g.digTimer || 0) + dt;
+  if (g.digTimer >= DIG_REGEN) {
+    g.digTimer -= DIG_REGEN;
+    if (g.dig < DIG_CAP) g.dig += 1;
   }
   g.day += dt;
   if (g.day < WINTER) {

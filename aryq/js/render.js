@@ -341,8 +341,8 @@ export class View {
 
     // while digging: every cell the canal can still reach from here is lit
     if (ui.reach) {
-      cx.fillStyle = 'rgba(255,250,225,0.3)';
-      const m = cs * 0.1;
+      cx.fillStyle = 'rgba(190,230,255,0.32)';
+      const m = cs * 0.14;
       for (let i = 0; i < g.W * g.H; i++) {
         if (g.kind[i] !== S.LAND || g.objAt[i] || !(ui.reach[i] > -Infinity)) continue;
         const [px, py] = this.center(i);
@@ -360,8 +360,8 @@ export class View {
       const [px, py] = this.center(ui.blocked.cell);
       const r = cs * 0.3;
       // too high: a tag with an arrow up says why
-      if (ui.blocked.why === 'high' || ui.blocked.why === 'up') {
-        const label = '▲ ' + (ui.higherLabel || '');
+      if (ui.tags && ui.tags[ui.blocked.why]) {
+        const label = ui.tags[ui.blocked.why];
         cx.font = `700 ${Math.max(11, cs * 0.42)}px system-ui, sans-serif`;
         const tw = cx.measureText(label).width + 10, th = Math.max(16, cs * 0.62);
         const lx = Math.min(Math.max(px - tw / 2, this.ox + 2), this.ox + this.bw - tw - 2), ly = py - cs * 0.55 - th;

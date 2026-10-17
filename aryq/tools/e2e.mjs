@@ -141,6 +141,44 @@ try {
   // back to the game the next checks expect
   await B.js(`(() => { const a = ${A}; const h = a.S.load(${kept}); for (const k of Object.keys(a.g)) delete a.g[k]; Object.assign(a.g, h); a.view.layout(a.g); a.state.blocked = null; a.state.hintPath = null; return true; })()`);
 
+  // 3d. the complaints of 17.10: the ketmen is empty. The finger gets a tag that says so, the counter
+  //     blinks, the light cells do not promise what cannot be dug, and strength comes back by itself.
+  {
+    const kept2 = await B.js(`JSON.stringify(${A}.S.save(${A}.g))`);
+    r = await B.js(`(() => { const { g, S } = ${A}; for (const w of g.river.slice(4)) for (const d of [1, -1, g.W]) { const b = w + d; if (g.kind[b] === 0 && !g.objAt[b] && S.probe(g, w, b).ok) { g.dig = 0; return { w, xy: ${A}.view.center(w), to: ${A}.view.center(b) }; } } return null; })()`);
+    await mouse('mousePressed', ...r.xy);
+    const litCount = await B.js(`${A}.state.reach ? [...${A}.state.reach].filter((v, i) => v > -Infinity && ${A}.g.kind[i] === 0).length : -1`);
+    await mouse('mouseMoved', r.xy[0], r.xy[1] + 4);
+    await mouse('mouseMoved', ...r.to);
+    const st = await B.js(`JSON.stringify({ why: ${A}.state.blocked && ${A}.state.blocked.why, tag: ${A}.state.tags && ${A}.state.tags.tired, empty: document.getElementById('dig').parentElement.classList.contains('empty'), hint: document.getElementById('hint').textContent })`).then(JSON.parse);
+    await mouse('mouseReleased', ...r.to);
+    check('empty ketmen: no cells are lit', litCount === 0, String(litCount));
+    check('empty ketmen: the reason is under the finger', st.why === 'tired' && !!st.tag && st.empty, JSON.stringify(st));
+    r = await B.js(`(() => { const { g } = ${A}; g.objects.forEach((o) => (o.thirst = 0)); ${A}.step(8); return g.dig; })()`);
+    check('the ketmen gets strength back by itself', r >= 4, String(r));
+    await B.js(`(() => { const a = ${A}; const h = a.S.load(${kept2}); for (const k of Object.keys(a.g)) delete a.g[k]; Object.assign(a.g, h); a.view.layout(a.g); a.state.blocked = null; return true; })()`);
+  }
+
+  // 3e. straight down from the river, cell by cell, as far as the light cells go
+  r = await B.js(`(() => {
+    const { g, S } = ${A};
+    const W = g.W;
+    for (const w of g.river) {
+      const col = [];
+      let c = w + W;
+      const reach = S.reach(g, w).best;
+      while (c < g.W * g.H && g.kind[c] === 0 && !g.objAt[c] && reach[c] > -Infinity && col.length < 4) { col.push(c); c += W; }
+      if (col.length >= 3) return { w, col, pts: [w, ...col].map((i) => ${A}.view.center(i)) };
+    }
+    return null;
+  })()`);
+  if (r) {
+    await drag(r.pts);
+    const dug = await B.js(`JSON.stringify(${A}.g.strokes.at(-1) && ${A}.g.strokes.at(-1).cells)`);
+    check('straight down along the light cells digs straight down', dug === JSON.stringify(r.col), dug + ' vs ' + JSON.stringify(r.col));
+    await B.js(`${A}.S.undo(${A}.g)`);
+  } else check('straight down along the light cells digs straight down', false, 'no such column');
+
   // 4. layouts: the board fits, the bar does not cover it, cells are big enough for a finger
   for (const [w, h] of [[390, 844], [320, 568], [1280, 720], [844, 390], [768, 1024]]) {
     await B.size(w, h);

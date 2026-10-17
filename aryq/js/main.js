@@ -80,7 +80,12 @@ const TEXT = {
     up: 'Туда вода не стечёт: там выше.',
     ice: 'По леднику не копают.',
     object: 'Тут занято.',
-    tired: 'Нет сил копать: новые силы с новым садом и новым годом.',
+    tired: 'Кетмень кончился: он сам прибавляется по одному каждые 5 секунд, и ещё с каждым новым садом.',
+    lit: 'Светлые клетки — сюда вода дойдёт от этой точки. Веди палец по ним.',
+    tagHigh: '▲ выше',
+    tagTired: '⛏ нет сил',
+    tagObject: 'занято',
+    tagIce: 'лёд',
     start: 'Начинай от реки или от арыка и тяни.',
     gateShut: 'Шлюз закрыт: вода сюда не идёт. Нажми ещё раз — откроется.',
     gateOpen: 'Шлюз открыт',
@@ -142,7 +147,12 @@ const TEXT = {
     up: 'Water will not run there: it is higher.',
     ice: 'You cannot dig into the glacier.',
     object: 'Something is already here.',
-    tired: 'No strength left to dig: you get more with every new orchard and every new year.',
+    tired: 'Out of digging: you get one more every 5 seconds, and more with every new orchard.',
+    lit: 'The light cells are where water can reach from this point. Drag along them.',
+    tagHigh: '▲ higher',
+    tagTired: '⛏ no strength',
+    tagObject: 'taken',
+    tagIce: 'ice',
     start: 'Start from the river or a canal and drag.',
     gateShut: 'Gate closed: no water goes this way. Tap again to open it.',
     gateOpen: 'Gate open',
@@ -254,11 +264,18 @@ cv.addEventListener('pointerdown', (e) => {
     }
   }
   // pressing near the start of the dashed path starts right there
-  if (state.ghost) {
+  if (state.ghost && !S.isWater(g, press.cell)) {
     const [gx, gy] = view.center(state.ghost.from);
     if (Math.hypot(gx - press.x, gy - press.y) < view.cs * 1.3) press.cell = state.ghost.from;
   }
-  if (S.isWater(g, press.cell)) state.reach = S.reach(g, press.cell).best;
+  if (S.isWater(g, press.cell)) {
+    state.reach = lit(press.cell);
+    if (!store.get('aryq.litSeen', false)) {
+      store.set('aryq.litSeen', true);
+      say(t('lit'), 4000);
+    }
+    if (g.dig < 1) say(t('tired'), 3000);
+  }
   else say(t('start'), 1800);
 });
 
@@ -283,6 +300,14 @@ function ext(b) {
   return r;
 }
 
+// cells to light while digging: reachable from `from` and close enough for the digging left
+function lit(from) {
+  const r = S.reach(g, from);
+  const used = g.cur ? 0 : 0;
+  for (let i = 0; i < r.best.length; i++) if (r.best[i] > -Infinity && g.kind[i] === S.LAND && r.len[i] > g.dig - used) r.best[i] = -Infinity;
+  return r.best;
+}
+
 const lastCell = () => (g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from);
 
 // The canal finds its own way to where the finger is: the shortest way down the slope from the
@@ -295,7 +320,7 @@ function routeTo(target) {
   if (target === cur.from || cur.cells.includes(target)) {
     const keep = target === cur.from ? 0 : cur.cells.indexOf(target) + 1;
     while (cur.cells.length > keep) ext(cur.cells.length >= 2 ? cur.cells[cur.cells.length - 2] : cur.from);
-    state.reach = S.reach(g, lastCell()).best;
+    state.reach = lit(lastCell());
     return true;
   }
   const last = lastCell();
@@ -318,7 +343,7 @@ function routeTo(target) {
       break;
     }
   }
-  state.reach = S.reach(g, lastCell()).best;
+  state.reach = lit(lastCell());
   return true;
 }
 
@@ -355,7 +380,7 @@ function walkTo(target) {
         }
       }
       while (g.cur.cells.length > near + 1) ext( g.cur.cells.length >= 2 ? g.cur.cells[g.cur.cells.length - 2] : g.cur.from);
-      state.reach = S.reach(g, g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from).best;
+      state.reach = lit(lastCell());
       return;
     }
   }
@@ -378,7 +403,7 @@ function walkTo(target) {
         r = r2;
       }
     }
-    if (r.ok) state.reach = S.reach(g, g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from).best;
+    if (r.ok) state.reach = lit(lastCell());
     if (!r.ok) {
       if (r.why !== 'done' && (!state.blocked || state.blocked.cell !== b)) {
         state.blocked = { cell: b, at: performance.now(), why: r.why };
@@ -508,6 +533,7 @@ function updateHud() {
   $('yearNo').textContent = t('hud', { y: g.year });
   $('dayBar').style.width = `${(g.day / S.YEAR_DAYS) * 100}%`;
   $('dig').textContent = g.dig;
+  $('dig').parentElement.classList.toggle('empty', g.dig < 1);
   $('harvest').textContent = Math.floor(g.harvest);
   $('speedBtn').textContent = `×${speed}`;
   $('pauseBtn').textContent = paused ? '▶' : '❚❚';
@@ -692,7 +718,7 @@ function frame(now) {
     if (!paused && performance.now() - savedAt > 3000) saveNow();
     updateHud();
     if (state.hintPath && now > state.hintPath.until) state.hintPath = null;
-    state.higherLabel = t('higher');
+    state.tags = { high: t('tagHigh'), up: t('tagHigh'), tired: t('tagTired'), object: t('tagObject'), ice: t('tagIce') };
     view.draw(g, now, state);
   }
   if (now > hintUntil && hintEl.textContent) hintEl.textContent = '';
