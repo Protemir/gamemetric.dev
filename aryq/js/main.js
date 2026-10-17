@@ -85,6 +85,8 @@ const TEXT = {
     gateShut: 'Шлюз закрыт: вода сюда не идёт. Нажми ещё раз — откроется.',
     gateOpen: 'Шлюз открыт',
     gateRiver: 'Шлюз ставят на арык: нажми на сам арык.',
+    elsewhere: 'Отсюда туда не стечь: там выше. Начни там, где пунктир, — выше по склону.',
+    higher: 'выше',
     floodSoon: 'Юрту подтапливает: рядом кончается арык и вода льётся. Доведи арык до юрты или обратно в реку, или закрой шлюз.',
     lowWater: 'Саду мало воды: один арык поит 6 садов, а река к осени мелеет. Проведи к нему ещё один арык от реки.',
     calm: 'Все пьют — время идёт быстрее. Новые сады и юрты появятся сами, не дай засохнуть ни одному.',
@@ -145,6 +147,8 @@ const TEXT = {
     gateShut: 'Gate closed: no water goes this way. Tap again to open it.',
     gateOpen: 'Gate open',
     gateRiver: 'Gates go on canals: tap the canal itself.',
+    elsewhere: 'Water cannot run there from here: it is higher. Start where the dashed line starts, further up the slope.',
+    higher: 'higher',
     floodSoon: 'A yurt is flooding: a canal ends next to it and spills. Run the canal to the yurt or back into the river, or close a gate.',
     lowWater: 'This orchard is short of water: one canal feeds 6 orchards, and the river runs low by autumn. Dig it a second canal from the river.',
     calm: 'Everyone has water, so time runs faster. New orchards and yurts appear by themselves: do not let any dry up.',
@@ -279,6 +283,54 @@ function ext(b) {
   return r;
 }
 
+const lastCell = () => (g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from);
+
+// The canal finds its own way to where the finger is: the shortest way down the slope from the
+// end of the stroke. A finger over an orchard or a yurt means "to it". Back over the stroke takes
+// cells back. Returns false when there is no way from here, then the step-by-step digging below
+// shows what is in the way.
+function routeTo(target) {
+  if (!g.cur || g.cur.join) return true;
+  const cur = g.cur;
+  if (target === cur.from || cur.cells.includes(target)) {
+    const keep = target === cur.from ? 0 : cur.cells.indexOf(target) + 1;
+    while (cur.cells.length > keep) ext(cur.cells.length >= 2 ? cur.cells[cur.cells.length - 2] : cur.from);
+    state.reach = S.reach(g, lastCell()).best;
+    return true;
+  }
+  const last = lastCell();
+  const o = g.objAt[target];
+  if (o) {
+    const tx = target % W, ty = (target / W) | 0;
+    if (Math.abs((last % W) - tx) + Math.abs(((last / W) | 0) - ty) === 1) return true; // already there
+  } else if (g.kind[target] !== S.LAND) return false;
+  const goal = o
+    ? (c) => Math.abs((c % W) - o.x) + Math.abs(((c / W) | 0) - o.y) === 1
+    : (c) => c === target;
+  const way = S.route(g, [last], goal);
+  if (!way) return false;
+  for (const c of way.cells) {
+    const r = ext(c);
+    if (!r.ok) {
+      if (!state.blocked || state.blocked.cell !== c) sfx.block();
+      state.blocked = { cell: c, at: performance.now(), why: r.why };
+      say(WHY[r.why] || '');
+      break;
+    }
+  }
+  state.reach = S.reach(g, lastCell()).best;
+  return true;
+}
+
+// when the finger asks for a place this stroke cannot reach, show where it could start instead
+function showBetterStart(target) {
+  const o = g.objAt[target];
+  const plan = o ? S.planFor(g, o) : S.route(g, [...Array(W * H).keys()].filter((i) => S.isWater(g, i)), (c) => c === target);
+  if (!plan || !plan.cells.length || plan.from === (g.cur && g.cur.from)) return;
+  state.hintPath = { from: plan.from, cells: plan.cells, until: performance.now() + 3500 };
+  say(t('elsewhere'), 3500);
+}
+
 function walkTo(target) {
   // along the dashed path the canal sticks to it, so a shaky finger does not wander off into a rise
   const gh = state.ghost;
@@ -297,7 +349,7 @@ function walkTo(target) {
         const r = ext(gh.cells[k]);
         if (!r.ok) {
           if (!state.blocked || state.blocked.cell !== gh.cells[k]) sfx.block();
-          state.blocked = { cell: gh.cells[k], at: performance.now() };
+          state.blocked = { cell: gh.cells[k], at: performance.now(), why: r.why };
           say(WHY[r.why] || '');
           return;
         }
@@ -307,6 +359,7 @@ function walkTo(target) {
       return;
     }
   }
+  if (routeTo(target)) return;
   // step by step through 4-neighbours, so a fast swipe still digs every cell
   for (let guard = 0; guard < 60 && g.cur; guard++) {
     const a = g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from;
@@ -328,9 +381,10 @@ function walkTo(target) {
     if (r.ok) state.reach = S.reach(g, g.cur.cells.length ? g.cur.cells[g.cur.cells.length - 1] : g.cur.from).best;
     if (!r.ok) {
       if (r.why !== 'done' && (!state.blocked || state.blocked.cell !== b)) {
-        state.blocked = { cell: b, at: performance.now() };
+        state.blocked = { cell: b, at: performance.now(), why: r.why };
         sfx.block();
         say(WHY[r.why] || '');
+        if (r.why === 'high' || r.why === 'up') showBetterStart(target);
       }
       return;
     }
@@ -637,6 +691,8 @@ function frame(now) {
     listen(g);
     if (!paused && performance.now() - savedAt > 3000) saveNow();
     updateHud();
+    if (state.hintPath && now > state.hintPath.until) state.hintPath = null;
+    state.higherLabel = t('higher');
     view.draw(g, now, state);
   }
   if (now > hintUntil && hintEl.textContent) hintEl.textContent = '';

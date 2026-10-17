@@ -79,6 +79,68 @@ try {
   await mouse('mouseReleased', rx, ry);
   check('reachable cells light up on press', r > 10, `${r} cells`);
 
+  const kept = await B.js(`JSON.stringify(${A}.S.save(${A}.g))`);
+  // 3b. the bug from 16.10: an orchard below the end of a canal, straight down is too high but a way
+  //     around exists. One move of the finger from the canal end onto the orchard must dig that way.
+  r = await B.js(`(() => {
+    const { g, S } = ${A};
+    const W = g.W;
+    // find a water cell and an orchard spot where the straight line is blocked but a detour works
+    for (let seed = 1; seed < 400; seed++) {
+      const t = S.newGame(16, 26, seed, 'mountain');
+      for (const w of t.river) {
+        const wx = w % W, wy = (w / W) | 0;
+        for (const [ox, oy] of [[wx + 2, wy + 3], [wx - 2, wy + 3], [wx + 1, wy + 4], [wx - 1, wy + 4]]) {
+          if (ox < 1 || ox >= W - 1 || oy >= t.H - 1) continue;
+          const oc = oy * W + ox;
+          if (t.kind[oc] !== S.LAND) continue;
+          // the old way: straight down first, then across, step by step
+          let ok = true, a = w;
+          const steps = [];
+          for (let y = wy + 1; y <= oy - 1; y++) steps.push(y * W + wx);
+          for (let x = wx; x !== ox; x += Math.sign(ox - wx)) steps.push((oy - 1) * W + x + Math.sign(ox - wx));
+          S.startStroke(t, w);
+          for (const c of steps) { const res = S.extend(t, c); if (!res.ok) { ok = false; break; } }
+          S.endStroke(t); while (t.strokes.length) S.undo(t);
+          if (ok) continue;
+          const o = { x: ox, y: oy };
+          const way = S.route(t, [w], (c) => Math.abs((c % W) - ox) + Math.abs(((c / W) | 0) - oy) === 1);
+          if (way) return { seed, w, ox, oy, len: way.cells.length };
+        }
+      }
+    }
+    return null;
+  })()`);
+  check('found a valley like the one in the bug report', !!r, JSON.stringify(r));
+  if (r) {
+    const bug = r;
+    await B.js(`(() => { const a = ${A}; const g = a.S.newGame(16, 26, ${bug.seed}, 'mountain'); const o = { type: 'garden', x: ${bug.ox}, y: ${bug.oy}, need: 0.3, thirst: 0.5, flood: 0, born: 0 }; const d = a.S.save(g); d.objects = [o]; const h = a.S.load(d); for (const k of Object.keys(a.g)) delete a.g[k]; Object.assign(a.g, h); a.view.layout(a.g); return true; })()`);
+    const [[wx, wy], [ox, oy]] = await centers([bug.w, bug.oy * 16 + bug.ox]);
+    await drag([[wx, wy], [ox, oy]]);
+    await B.js(`${A}.step(0.3)`);
+    const got = await B.js(`JSON.stringify({ got: ${A}.g.objects[0].got, strokes: ${A}.g.strokes.length, cells: ${A}.g.strokes[0] && ${A}.g.strokes[0].cells.length })`).then(JSON.parse);
+    check('one move onto the orchard digs the way around', got.got > 0 && got.strokes === 1, JSON.stringify(got));
+  }
+
+  // 3c. asking for a place this start cannot reach: a "higher" tag and a dashed path from a better start
+  r = await B.js(`(() => {
+    const { g, S, view } = ${A};
+    const W = g.W;
+    const low = g.river[g.river.length - 2];
+    // the highest dry cell on the upper side rows: certainly out of reach from the bottom of the river
+    let high = -1;
+    for (let i = 3 * W; i < 8 * W; i++) if (g.kind[i] === S.LAND && !g.objAt[i] && (high < 0 || g.h[i] > g.h[high])) high = i;
+    return { low, high, lowXY: view.center(low), highXY: view.center(high) };
+  })()`);
+  await mouse('mousePressed', ...r.lowXY);
+  await mouse('mouseMoved', r.lowXY[0] + 3, r.lowXY[1]);
+  await mouse('mouseMoved', ...r.highXY);
+  const why = await B.js(`JSON.stringify({ blocked: ${A}.state.blocked && ${A}.state.blocked.why, hint: document.getElementById('hint').textContent })`).then(JSON.parse);
+  await mouse('mouseReleased', ...r.highXY);
+  check('out of reach: the reason is shown', why.blocked === 'high' || why.blocked === 'up', JSON.stringify(why));
+  // back to the game the next checks expect
+  await B.js(`(() => { const a = ${A}; const h = a.S.load(${kept}); for (const k of Object.keys(a.g)) delete a.g[k]; Object.assign(a.g, h); a.view.layout(a.g); a.state.blocked = null; a.state.hintPath = null; return true; })()`);
+
   // 4. layouts: the board fits, the bar does not cover it, cells are big enough for a finger
   for (const [w, h] of [[390, 844], [320, 568], [1280, 720], [844, 390], [768, 1024]]) {
     await B.size(w, h);

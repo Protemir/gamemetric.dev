@@ -355,9 +355,26 @@ export class View {
     this.drawBits(now);
     this.drawStroke(g);
     if (ui.ghost) this.drawGhost(ui.ghost, now);
-    if (ui.blocked && now - ui.blocked.at < 700) {
+    if (ui.hintPath) this.drawGhost(ui.hintPath, now);
+    if (ui.blocked && now - ui.blocked.at < 1400) {
       const [px, py] = this.center(ui.blocked.cell);
       const r = cs * 0.3;
+      // too high: a tag with an arrow up says why
+      if (ui.blocked.why === 'high' || ui.blocked.why === 'up') {
+        const label = '▲ ' + (ui.higherLabel || '');
+        cx.font = `700 ${Math.max(11, cs * 0.42)}px system-ui, sans-serif`;
+        const tw = cx.measureText(label).width + 10, th = Math.max(16, cs * 0.62);
+        const lx = Math.min(Math.max(px - tw / 2, this.ox + 2), this.ox + this.bw - tw - 2), ly = py - cs * 0.55 - th;
+        cx.fillStyle = 'rgba(0,0,0,0.35)';
+        this.roundRect(lx + 1, ly + 2, tw, th, 6);
+        cx.fill();
+        cx.fillStyle = '#fff8ea';
+        this.roundRect(lx, ly, tw, th, 6);
+        cx.fill();
+        cx.fillStyle = '#c0392b';
+        cx.textBaseline = 'middle';
+        cx.fillText(label, lx + 5, ly + th / 2 + 1);
+      }
       for (const [col, w] of [['rgba(0,0,0,0.4)', 0.24], [C.thirst, 0.13]]) {
         cx.strokeStyle = col;
         cx.lineWidth = Math.max(2, cs * w);

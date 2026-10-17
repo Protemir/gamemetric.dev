@@ -379,8 +379,58 @@ export function reach(g, from = -1) {
   return { best, prev, len };
 }
 
-// the canal cells (from a water cell to a cell next to the object) a good digger would use
-export function planFor(g, o, r = reach(g)) {
+// the shortest canal that works: from one of `sources` (water cells) to a dry cell where `goal`
+// says yes. A cell keeps every way in that is not beaten by one both shorter and higher,
+// because a higher bed can still climb what a lower one cannot.
+export function route(g, sources, goal, maxSteps = 80) {
+  const n = g.W * g.H;
+  const labels = Array.from({ length: n }, () => []);
+  const queue = [];
+  for (const s of sources) queue.push({ c: s, bed: g.bed[s], steps: 0, prev: null });
+  for (let qi = 0; qi < queue.length; qi++) {
+    const node = queue[qi];
+    if (node.steps > 0 && goal(node.c)) {
+      const cells = [];
+      let p = node;
+      while (p.prev) {
+        cells.unshift(p.c);
+        p = p.prev;
+      }
+      return { from: p.c, cells };
+    }
+    if (node.steps >= maxSteps) continue;
+    const ax = node.c % g.W, ay = (node.c / g.W) | 0;
+    for (const [dx, dy] of N4) {
+      const x = ax + dx, y = ay + dy;
+      if (!inside(g, x, y)) continue;
+      const b = y * g.W + x;
+      if (g.kind[b] !== LAND || g.objAt[b]) continue;
+      const bed = Math.min(g.h[b], node.bed - EPS);
+      if (g.h[b] - bed > MAX_CUT) continue;
+      const steps = node.steps + 1;
+      if (labels[b].some((l) => l.steps <= steps && l.bed >= bed - 1e-6)) continue;
+      labels[b] = labels[b].filter((l) => !(l.steps >= steps && l.bed <= bed));
+      labels[b].push({ steps, bed });
+      queue.push({ c: b, bed, steps, prev: node });
+    }
+  }
+  return null;
+}
+
+const nextTo = (g, o) => (c) => Math.abs((c % g.W) - o.x) + Math.abs(((c / g.W) | 0) - o.y) === 1;
+
+// the canal cells (from a water cell to a cell next to the object) a good digger would use;
+// with `r` (spawning checks hundreds of spots) a quick estimate from reach() instead
+export function planFor(g, o, r = null) {
+  if (!r) {
+    for (const [dx, dy] of N4) {
+      const x = o.x + dx, y = o.y + dy;
+      if (inside(g, x, y) && isWater(g, y * g.W + x)) return { from: y * g.W + x, cells: [] };
+    }
+    const sources = [];
+    for (let i = 0; i < g.W * g.H; i++) if (isWater(g, i)) sources.push(i);
+    return route(g, sources, nextTo(g, o));
+  }
   let pick = -1;
   for (const [dx, dy] of N4) {
     const x = o.x + dx, y = o.y + dy;
