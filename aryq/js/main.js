@@ -2,6 +2,7 @@ import * as S from './sim.js';
 import { View } from './render.js';
 import { el, store, clamp } from './util.js';
 import * as sfx from './audio.js';
+import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute } from './portal.js';
 
 const q = new URLSearchParams(location.search);
 const DEBUG = q.has('debug');
@@ -19,6 +20,7 @@ let paused = true;
 let last = performance.now();
 const state = { ghost: null, blocked: null };
 let hintUntil = 0;
+let portalMuted = false; // the portal's own mute button wins over ours
 
 function seedNow() {
   return q.has('seed') ? +q.get('seed') : (Math.random() * 1e9) | 0;
@@ -274,7 +276,7 @@ const TEXT = {
   },
 };
 const lang = (() => {
-  const want = q.get('lang') || store.get('aryq.lang', null);
+  const want = q.get('lang') || store.get('aryq.lang', null) || (PORTAL ? portalLang() : null);
   if (want && TEXT[want]) return want;
   const nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
   return /^(ru|kk|ky|be|uz|tg|uk)\b/i.test(nav) ? 'ru' : 'en';
@@ -282,7 +284,8 @@ const lang = (() => {
 const t = (k, v) => (TEXT[lang][k] || TEXT.en[k] || k).replace(/\{(\w+)\}/g, (_, n) => (v && v[n] != null ? v[n] : ''));
 const WHY = { high: t('high'), up: t('up'), ice: t('ice'), object: t('object'), tired: t('tired') };
 document.documentElement.lang = lang;
-document.title = t('title');
+// on portals the game is listed under its full English name
+document.title = PORTAL ? 'Aryk: Water the Valley' : t('title');
 $('dig').parentElement.title = t('dig');
 $('harvest').parentElement.title = t('harvest');
 $('undoBtn').setAttribute('aria-label', t('undo'));
@@ -869,6 +872,7 @@ function frame(now) {
       S.advance(g, (dt * speed * (g.day >= S.WINTER ? 4 : state.calm ? 2.5 : 1)) / S.DAY_SEC);
     }
     if (g.over && !ui.firstChild) showOver();
+    gameplay(!g.over && !paused && !hud.hidden);
     for (const ev of g.events.splice(0)) {
       if (ev.type === 'winter') say(t('winterCame'), 5000);
       if (ev.type === 'flooded') {
@@ -878,6 +882,7 @@ function frame(now) {
       if (ev.type === 'left') say(t('left'), 3000);
       if (ev.type === 'year') {
         sfx.yearDone();
+        happytime();
         showYear(ev);
       }
     }
@@ -899,7 +904,7 @@ function frame(now) {
 
 window.addEventListener('resize', () => g && view.layout(g));
 document.addEventListener('visibilitychange', () => {
-  sfx.holdAudio(document.hidden);
+  sfx.holdAudio(document.hidden || portalMuted);
   if (document.hidden) saveNow();
   if (document.hidden && g && !g.over && !paused) {
     paused = true;
@@ -913,7 +918,8 @@ document.addEventListener('visibilitychange', () => {
 const running = new URL(import.meta.url).searchParams.get('v');
 let updateShown = false;
 async function checkUpdate() {
-  if (!running || updateShown || document.hidden) return;
+  // a portal hosts its own copy of the files: nothing to look for there
+  if (PORTAL || !running || updateShown || document.hidden) return;
   try {
     const html = await (await fetch(location.pathname, { cache: 'no-store' })).text();
     const fresh = (html.match(/main\.js\?v=([0-9a-f]+)/) || [])[1];
@@ -952,4 +958,9 @@ document.addEventListener('visibilitychange', () => setTimeout(checkUpdate, 500)
 
 showStart();
 requestAnimationFrame(frame);
+requestAnimationFrame(() => loadingDone());
+onPortalMute((muted) => {
+  portalMuted = muted;
+  sfx.holdAudio(muted || document.hidden);
+});
 if (q.has('autostart')) start();

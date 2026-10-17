@@ -32,10 +32,13 @@ export function valueNoise(rand, W, H, step) {
   return out;
 }
 
+// on a portal (js/boot.js) saves go to its Data module, which has the same getItem/setItem
+const box = () => window.ARYQ_DATA || localStorage;
+
 export const store = {
   get(key, fallback) {
     try {
-      const raw = localStorage.getItem(key);
+      const raw = box().getItem(key);
       return raw == null ? fallback : JSON.parse(raw);
     } catch {
       return fallback;
@@ -43,7 +46,7 @@ export const store = {
   },
   set(key, value) {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      box().setItem(key, JSON.stringify(value));
     } catch {
       /* private mode */
     }
