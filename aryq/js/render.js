@@ -256,12 +256,10 @@ export class View {
       this.seg(a, b);
     }
     // dug channels: a rim of thrown-out earth, then the dark bed
+    // see-through layers go down as one shape each, or every joint would be painted twice (dark dots)
     cx.strokeStyle = C.soilRim;
-    for (const [a, b] of edges) {
-      if (isRiver(a, b)) continue;
-      cx.lineWidth = bedW(a, b) + cs * 0.2;
-      this.seg(a, b);
-    }
+    cx.lineWidth = cs * (0.56 + 0.2);
+    this.segs(edges.filter(([a, b]) => !isRiver(a, b)));
     for (const [a, b] of edges) {
       cx.strokeStyle = isRiver(a, b) ? '#5a4a36' : C.soil;
       cx.lineWidth = bedW(a, b);
@@ -269,9 +267,9 @@ export class View {
     }
     // inner shade: the bed is lower than the ground around it
     cx.strokeStyle = 'rgba(0,0,0,0.22)';
-    for (const [a, b] of edges) {
-      cx.lineWidth = bedW(a, b) * 0.55;
-      this.seg(a, b, cs * 0.06, cs * 0.06);
+    for (const river of [true, false]) {
+      cx.lineWidth = cs * (river ? 0.82 : 0.56) * 0.55;
+      this.segs(edges.filter(([a, b]) => isRiver(a, b) === river), cs * 0.06, cs * 0.06);
     }
 
     // water: deep in the middle, lighter at the edges, wider when more flows
@@ -402,6 +400,17 @@ export class View {
       cx.arc(px, py, cs * (0.85 + 0.12 * Math.sin(now / 150)), 0, Math.PI * 2);
       cx.stroke();
     }
+  }
+
+  segs(list, dx = 0, dy = 0) {
+    if (!list.length) return;
+    this.cx.beginPath();
+    for (const [a, b] of list) {
+      const [x1, y1] = this.center(a), [x2, y2] = this.center(b);
+      this.cx.moveTo(x1 + dx, y1 + dy);
+      this.cx.lineTo(x2 + dx, y2 + dy);
+    }
+    this.cx.stroke();
   }
 
   seg(a, b, dx = 0, dy = 0) {

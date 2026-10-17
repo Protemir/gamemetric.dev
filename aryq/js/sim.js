@@ -298,7 +298,7 @@ export function flowStep(g) {
         c += Math.min(g.cap, carry[t]);
       }
     }
-    if (!open && !g.near[i].length) {
+    if (!open && !g.near[i].some((o) => tap.get(o) === i)) {
       w += SEEP; // where someone drinks at the end, nothing spills
       c += SEEP;
     }

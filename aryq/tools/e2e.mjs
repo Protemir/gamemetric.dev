@@ -245,6 +245,35 @@ try {
   })()`);
   check('the water runs to the end of a canal by an orchard', r && r.end > 0.01 && r.got > 0.29, JSON.stringify(r));
 
+  // 3h. a dead end that only touches an orchard at a corner (the orchard drinks elsewhere) is not dry
+  r = await B.js(`(() => {
+    const { g, S } = ${A};
+    const W = g.W;
+    for (const w of g.river) {
+      for (const d of [1, -1]) {
+        const a = w + d, y = (a / W) | 0, ax = a % W;
+        if (Math.abs(ax - (w % W)) !== 1 || y < 4) continue;
+        // orchard right beside the river (it drinks from the river), the stub touches it at a corner
+        const ox = ax, oy = y - 1;
+        const oc = oy * W + ox;
+        if ([a, oc].some((c) => g.kind[c] !== 0 || g.objAt[c])) continue;
+        if (g.kind[oy * W + (w % W)] !== 1) continue;
+        S.startStroke(g, w);
+        if (!S.extend(g, a).ok) { S.endStroke(g); continue; }
+        S.endStroke(g);
+        if (g.strokes.at(-1).join) { S.undo(g); continue; }
+        const d2 = S.save(g);
+        d2.objects = [...d2.objects, { type: 'garden', x: ox, y: oy, need: 0.3, thirst: 0, flood: 0, born: 0 }];
+        S.undo(g);
+        const h = S.load(d2);
+        S.flowStep(h);
+        return { stub: +h.flow[a].toFixed(3), got: +h.objects.at(-1).got.toFixed(3) };
+      }
+    }
+    return null;
+  })()`);
+  check('a dead end by an orchard corner still gets its trickle', r && r.stub > 0.05 && r.got > 0.29, JSON.stringify(r));
+
   // 4. layouts: the board fits, the bar does not cover it, cells are big enough for a finger
   for (const [w, h] of [[390, 844], [320, 568], [1280, 720], [844, 390], [768, 1024]]) {
     await B.size(w, h);
