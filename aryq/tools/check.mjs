@@ -21,7 +21,7 @@ function check(g) {
   for (const o of g.objects) used += o.got;
   let spilt = 0;
   for (let i = 0; i < W * H; i++) spilt += g.spill[i];
-  const diff = into - used - spilt - g.gone;
+  const diff = into - used - spilt - g.gone - g.soak;
   if (Math.abs(diff) > 1e-3) throw new Error(`water does not add up: ${diff.toFixed(4)}`);
   // water spills only over a dead end (or a closed gate), never where it could run on
   for (let i = 0; i < W * H; i++) if (g.spill[i] > 0.02 && g.out[i].some((t) => !g.gate[t])) throw new Error(`spill at ${i} with a way on`);

@@ -361,7 +361,7 @@ try {
     let used = 0, spilt = 0;
     for (const o of g.objects) used += o.got;
     for (let i = 0; i < g.W * g.H; i++) spilt += g.spill[i];
-    const diff = S.sourceFlow(g.day, g.year, g.melt) - used - spilt - g.gone;
+    const diff = S.sourceFlow(g.day, g.year, g.melt) - used - spilt - g.gone - g.soak;
     // nobody thirsty right next to a cell with water to spare (the mesh of canals of 17.10)
     for (let k = 0; k < 4; k++) S.flowStep(g);
     let dryBeside = 0;

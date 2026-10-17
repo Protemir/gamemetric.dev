@@ -13,6 +13,7 @@ export const EPS = 0.04; // canal bed drop per cell
 export const MAX_CUT = 1.6; // deepest cut into a rise
 export const CANAL_CAP = 2; // water per day one canal cell carries
 const SEEP = 0.1; // what a dead-end canal nobody drinks from spills over its end
+export const SOAK = 0.006; // what one cell of earth canal soaks up per day (not in frozen winter)
 export const GARDEN_NEED = 0.3;
 export const HOUSE_NEED = 0.12;
 const DRY = 1 / 16; // thirst per day with no water at all
@@ -314,6 +315,7 @@ export function flowStep(g) {
     }
     let w = 0, c = 0;
     if (!sleeping) for (const o of g.near[i]) if (tap.get(o) === i) w += o.need;
+    if (!sleeping) w += SOAK; // the canal itself drinks a little: a valley dug all over dries the river
     c = w;
     let open = 0;
     for (const t of g.out[i]) {
@@ -335,6 +337,7 @@ export function flowStep(g) {
   }
   flow[g.source] = sourceFlow(g.day, g.year, g.melt);
   g.gone = 0;
+  g.soak = 0;
   // fill targets up to their room, sharing equally, until q runs out or everyone is full
   const share = (q, targets, room) => {
     let open = targets.filter((t) => room(t) > 1e-6);
@@ -355,6 +358,11 @@ export function flowStep(g) {
   for (const i of g.order) {
     let q = flow[i];
     if (q <= 1e-6) continue;
+    if (!sleeping && g.kind[i] === CANAL) {
+      const s = Math.min(q, SOAK);
+      g.soak += s;
+      q -= s;
+    }
     if (!sleeping) {
       for (const o of g.near[i]) {
         if (tap.get(o) !== i) continue; // each drinks from its own cell only
@@ -568,6 +576,7 @@ function spawn(g, type) {
   const { W, H } = g;
   const far = 3 + g.year * 2 + g.gardensEver * 0.3;
   const spots = [];
+  const near = [];
   for (let y = 3; y < H - 1; y++) {
     for (let x = 1; x < W - 1; x++) {
       const i = y * W + x;
@@ -590,10 +599,13 @@ function spawn(g, type) {
       if (type === 'house' && (y < H * 0.35)) continue;
       const lo = g.gardensEver === 0 ? 3 : 2;
       const hi = g.gardensEver === 0 ? 5 : far;
-      if (L < lo || L > hi) continue;
+      if (L > hi) continue;
+      if (L < lo) { near.push({ x, y, L }); continue; }
       spots.push({ x, y, L });
     }
   }
+  // a valley already dug all over still gets new orchards: one cell away from a canal
+  if (!spots.length && g.gardensEver > 0) spots.push(...near);
   if (!spots.length) return null;
   const p = spots[Math.floor(g.rand() * spots.length)];
   const o = {
@@ -667,7 +679,8 @@ export function reward(g, kind) {
 // how much water there is against how much is wanted right now (1 = just enough)
 export function waterShare(g) {
   if (g.day >= WINTER) return null;
-  const need = g.objects.reduce((s, o) => s + o.need, 0);
+  let need = g.objects.reduce((s, o) => s + o.need, 0);
+  for (let i = 0; i < g.W * g.H; i++) if (g.kind[i] === CANAL) need += SOAK;
   return need > 0 ? sourceFlow(g.day, g.year, g.melt) / need : null;
 }
 
