@@ -29,7 +29,7 @@ const boot = html.match(/"\.\/js\/boot\.js":"(\.\/js\/boot\.js\?v=[0-9a-f]+)"/);
 if (!main || !boot) throw new Error('index.html changed or not stamped: run node aryq/tools/stamp.mjs');
 html = html
   .split(/\r?\n/)
-  .filter((l) => !/name="theme-color"|name="robots"/.test(l))
+  .filter((l) => !/name="theme-color"|name="robots"|rel="canonical"|property="og:/.test(l))
   .join('\n')
   .replace(/<title>[^<]*<\/title>/, '<title>Aryk: Water the Valley</title>')
   .replace(main[0], `<script src="${SDK[portal]}"></script>\n<script>window.ARYQ_PORTAL = '${portal}';</script>\n<script type="module" src="${boot[1]}"></script>`);
