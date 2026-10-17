@@ -214,6 +214,37 @@ try {
   })()`);
   check('a canal ending by the river flows back into it', r.join && r.spill < 0.01, JSON.stringify(r));
 
+  // 3g. the screenshot of 17.10: a canal ends right beside an orchard that also touches the cell before
+  //     the end at a corner. The water must run to the very end, not stop one cell short.
+  r = await B.js(`(() => {
+    const { g, S } = ${A};
+    const W = g.W;
+    for (const w of g.river) {
+      for (const d of [1, -1]) {
+        const a = w + d, b = a + d;
+        const ax = a % W, bx = b % W, y = (a / W) | 0;
+        if (Math.abs(bx - (w % W)) !== 2 || y < 4) continue;
+        const o = { type: 'garden', x: bx, y: y - 1, need: 0.3, thirst: 0, flood: 0, born: 0 };
+        const oc = o.y * W + o.x;
+        if ([a, b, oc].some((c) => g.kind[c] !== 0 || g.objAt[c])) continue;
+        S.startStroke(g, w);
+        if (!S.extend(g, a).ok || !S.extend(g, b).ok) { S.endStroke(g); if (g.strokes.length) S.undo(g); continue; }
+        S.endStroke(g);
+        const st = g.strokes.at(-1);
+        if (st.join) { S.undo(g); continue; }
+        const ob = { ...o, got: 0, s: 0 };
+        g.objects.push(ob); g.objAt[oc] = ob;
+        const d2 = S.save(g); const h = S.load(d2);
+        S.flowStep(h);
+        const res = { end: +h.flow[b].toFixed(3), got: +h.objects.at(-1).got.toFixed(3) };
+        g.objects.pop(); g.objAt[oc] = null; S.undo(g);
+        return res;
+      }
+    }
+    return null;
+  })()`);
+  check('the water runs to the end of a canal by an orchard', r && r.end > 0.01 && r.got > 0.29, JSON.stringify(r));
+
   // 4. layouts: the board fits, the bar does not cover it, cells are big enough for a finger
   for (const [w, h] of [[390, 844], [320, 568], [1280, 720], [844, 390], [768, 1024]]) {
     await B.size(w, h);

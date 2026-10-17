@@ -367,12 +367,12 @@ export class View {
     if (ui.hintPath) this.drawGhost(ui.hintPath, now);
     if (ui.blocked && now - ui.blocked.at < 1400) {
       const [px, py] = this.center(ui.blocked.cell);
-      const r = cs * 0.3;
+      const r = cs * 0.2;
       // too high: a tag with an arrow up says why
       if (ui.tags && ui.tags[ui.blocked.why]) {
         const label = ui.tags[ui.blocked.why];
-        cx.font = `700 ${Math.max(11, cs * 0.42)}px system-ui, sans-serif`;
-        const tw = cx.measureText(label).width + 10, th = Math.max(16, cs * 0.62);
+        cx.font = `700 ${Math.max(11, Math.min(14, cs * 0.34))}px system-ui, sans-serif`;
+        const tw = cx.measureText(label).width + 10, th = Math.max(16, Math.min(22, cs * 0.5));
         const lx = Math.min(Math.max(px - tw / 2, this.ox + 2), this.ox + this.bw - tw - 2), ly = py - cs * 0.55 - th;
         cx.fillStyle = 'rgba(0,0,0,0.35)';
         this.roundRect(lx + 1, ly + 2, tw, th, 6);
@@ -384,7 +384,7 @@ export class View {
         cx.textBaseline = 'middle';
         cx.fillText(label, lx + 5, ly + th / 2 + 1);
       }
-      for (const [col, w] of [['rgba(0,0,0,0.4)', 0.24], [C.thirst, 0.13]]) {
+      for (const [col, w] of [['rgba(0,0,0,0.4)', 0.17], [C.thirst, 0.09]]) {
         cx.strokeStyle = col;
         cx.lineWidth = Math.max(2, cs * w);
         cx.beginPath();
@@ -619,11 +619,11 @@ export class View {
     cx.strokeStyle = `rgba(255,248,234,${0.55 + 0.4 * pulse})`;
     cx.lineWidth = Math.max(2, cs * 0.12);
     cx.beginPath();
-    cx.arc(sx, sy, cs * (0.55 + 0.15 * pulse), 0, Math.PI * 2);
+    cx.arc(sx, sy, cs * (0.48 + 0.1 * pulse), 0, Math.PI * 2);
     cx.stroke();
     if (this.startLabel) {
-      cx.font = `700 ${Math.max(11, cs * 0.4)}px system-ui, sans-serif`;
-      const tw = cx.measureText(this.startLabel).width + 10, th = Math.max(16, cs * 0.6);
+      cx.font = `700 ${Math.max(11, Math.min(14, cs * 0.32))}px system-ui, sans-serif`;
+      const tw = cx.measureText(this.startLabel).width + 10, th = Math.max(16, Math.min(22, cs * 0.5));
       const [nx, ny] = pts[1] || pts[0];
       const away = nx >= sx ? -1 : 1; // the side the path does not go
       let lx = away < 0 ? sx - cs * 0.8 - tw : sx + cs * 0.8;

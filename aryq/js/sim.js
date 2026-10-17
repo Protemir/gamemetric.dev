@@ -254,6 +254,14 @@ export function flowStep(g) {
   // every orchard or yurt orders its water from one cell only: the open water cell next to it that
   // is highest (it gets water first). Ordering from every cell it touches drew the water twice,
   // and the second half spilled as a puddle between two canals.
+  // cells water can get to at all: from the glacier along open canals
+  const linked = new Uint8Array(g.W * g.H);
+  const stack = [g.source];
+  linked[g.source] = 1;
+  while (stack.length) {
+    const a = stack.pop();
+    for (const t of g.out[a]) if (!g.gate[t] && !linked[t]) { linked[t] = 1; stack.push(t); }
+  }
   const tap = new Map();
   for (const o of g.objects) {
     let best = -1;
@@ -261,8 +269,12 @@ export function flowStep(g) {
       const x = o.x + dx, y = o.y + dy;
       if (!inside(g, x, y)) continue;
       const i = y * g.W + x;
-      if (!isWater(g, i) || g.gate[i]) continue;
-      if (best < 0 || g.bed[i] > g.bed[best]) best = i;
+      if (!linked[i]) continue;
+      // a cell right beside it wins over a corner one, then the higher one: the canal that was dug
+      // to it is the one it drinks from, so the water runs to the end of that canal
+      const side = dx === 0 || dy === 0;
+      const bestSide = best >= 0 && ((best % g.W) === o.x || ((best / g.W) | 0) === o.y);
+      if (best < 0 || (side && !bestSide) || (side === bestSide && g.bed[i] > g.bed[best])) best = i;
     }
     if (best >= 0) tap.set(o, best);
   }
@@ -317,6 +329,7 @@ export function flowStep(g) {
     if (q <= 1e-6) continue;
     if (!sleeping) {
       for (const o of g.near[i]) {
+        if (tap.get(o) !== i) continue; // each drinks from its own cell only
         const take = Math.min(q, o.need - o.got);
         if (take > 0) {
           o.got += take;
