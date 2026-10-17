@@ -362,14 +362,22 @@ try {
     for (const o of g.objects) used += o.got;
     for (let i = 0; i < g.W * g.H; i++) spilt += g.spill[i];
     const diff = S.sourceFlow(g.day, g.year, g.melt) - used - spilt - g.gone;
+    // nobody thirsty right next to a cell with water to spare (the mesh of canals of 17.10)
+    for (let k = 0; k < 4; k++) S.flowStep(g);
+    let dryBeside = 0;
+    for (const o of g.objects) {
+      if (o.got >= o.need * 0.6 || g.day >= S.WINTER) continue;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = o.x + dx, y = o.y + dy; if (x >= 0 && y >= 0 && x < g.W && y < g.H && S.isWater(g, y * g.W + x) && g.flow[y * g.W + x] >= o.need * 2) dryBeside++; }
+    }
     let spillOn = 0;
     for (let i = 0; i < g.W * g.H; i++) if (g.spill[i] > 0.02 && g.out[i].some((t) => !g.gate[t])) spillOn++;
-    return { bad, diff: +diff.toFixed(5), strokes: g.strokes.length, dig: g.dig, spillOn };
+    return { bad, diff: +diff.toFixed(5), strokes: g.strokes.length, dig: g.dig, spillOn, dryBeside };
   })()`);
   check('300 random swipes: water never runs uphill', r.bad === 0, JSON.stringify(r));
   check('300 random swipes: the water adds up', Math.abs(r.diff) < 1e-3, String(r.diff));
   check('digging budget never goes below zero', r.dig >= 0, String(r.dig));
   check('no puddles where water could run on', r.spillOn === 0, String(r.spillOn));
+  check('nobody dries up next to plenty of water', r.dryBeside === 0, String(r.dryBeside));
 
   // 10. the valley of the day is the same valley every time today
   await B.open(page('&lang=ru'), 390, 844);

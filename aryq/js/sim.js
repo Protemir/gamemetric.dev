@@ -242,10 +242,16 @@ export function flowStep(g) {
     g.order.sort((a, b) => g.bed[b] - g.bed[a]);
   }
   const { flow, spill } = g;
+  // last tick's water, to see which cell next to a thirsty orchard has some to spare
+  const before = g.flowBefore && g.flowBefore.length === flow.length ? g.flowBefore : (g.flowBefore = new Float32Array(flow.length));
+  before.set(flow);
   flow.fill(0);
   spill.fill(0);
   const sleeping = g.day >= WINTER;
-  for (const o of g.objects) o.got = 0;
+  for (const o of g.objects) {
+    o.gotBefore = o.got;
+    o.got = 0;
+  }
   // Two numbers per canal cell, from the bottom up:
   //   need  — what is drunk below it (orchards, yurts, and a trickle over a dead end nobody drinks at);
   //   carry — what it could pass on if water is plentiful (a canal back into the river carries a full one).
@@ -278,6 +284,21 @@ export function flowStep(g) {
       const bestSide = best >= 0 && ((best % g.W) === o.x || ((best / g.W) | 0) === o.y);
       if (best < 0 || (side && !bestSide) || (side === bestSide && g.bed[i] > g.bed[best])) best = i;
     }
+    // it keeps the cell it drinks from while that cell gives enough; when it does not, it moves to
+    // the neighbour that had the most water last tick (in a mesh of canals one cell can run short)
+    const kept = o.tap != null && linked[o.tap] && Math.max(Math.abs((o.tap % g.W) - o.x), Math.abs(((o.tap / g.W) | 0) - o.y)) === 1;
+    if (kept && o.gotBefore >= o.need * 0.99) best = o.tap;
+    else if (o.gotBefore != null && o.gotBefore < o.need * 0.99) {
+      let most = kept ? before[o.tap] : -1;
+      for (const [dx, dy] of N8) {
+        const x = o.x + dx, y = o.y + dy;
+        if (!inside(g, x, y)) continue;
+        const i = y * g.W + x;
+        if (linked[i] && before[i] > most + 1e-6) { most = before[i]; best = i; }
+      }
+      if (kept && most === before[o.tap]) best = o.tap;
+    }
+    o.tap = best >= 0 ? best : null;
     if (best >= 0) tap.set(o, best);
   }
   // a cell that water reaches from two canals splits its order between them; ordered in full from
@@ -601,7 +622,8 @@ export function save(g) {
     v: 1, W: g.W, H: g.H, seed: g.seed, valley: g.valley,
     strokes: g.strokes.map((s) => ({ from: s.from, cells: s.cells, join: s.join })),
     gates,
-    objects: g.objects.map(({ type, x, y, need, thirst, flood, born }) => ({ type, x, y, need, thirst, flood, born })),
+    objects: g.objects.map(({ type, x, y, need, thirst, flood, born, tap, got }) => ({ type, x, y, need, thirst, flood, born, tap, got })),
+    flow: Array.from(g.flow, (v) => Math.round(v * 1000) / 1000),
     day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
     nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt,
   };
@@ -618,7 +640,7 @@ export function load(d) {
   }
   for (const i of d.gates) g.gate[i] = 1;
   for (const o of d.objects) {
-    const obj = { ...o, got: 0, s: 1 };
+    const obj = { ...o, got: o.got || 0, s: 1 };
     g.objects.push(obj);
     g.objAt[o.y * g.W + o.x] = obj;
   }
@@ -627,6 +649,7 @@ export function load(d) {
   g.rand = rng((d.seed ^ (d.year * 7919) ^ (d.gardensEver * 104729)) >>> 0);
   g.order = null;
   g.events = [];
+  if (d.flow && d.flow.length === g.W * g.H) g.flow.set(d.flow);
   flowStep(g);
   for (const o of g.objects) o.s = o.need > 0 ? clamp(o.got / o.need, 0, 1) : 1;
   return g;

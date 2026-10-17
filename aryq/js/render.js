@@ -583,7 +583,7 @@ export class View {
 
   drawSnow() {
     const cx = this.cx;
-    cx.fillStyle = 'rgba(240,246,252,0.16)';
+    cx.fillStyle = 'rgba(225,238,250,0.07)';
     cx.fillRect(this.ox, this.oy, this.bw, this.bh);
     cx.fillStyle = 'rgba(255,255,255,0.85)';
     for (const [x, y, r] of this.snow) {
