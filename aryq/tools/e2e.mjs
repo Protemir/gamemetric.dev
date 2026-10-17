@@ -284,7 +284,7 @@ try {
         if (g.kind[i] !== 0 || g.objAt[i]) continue;
         const x = i % g.W, y = (i / g.W) | 0;
         let wet = false;
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const j = (y + dy) * g.W + x + dx; if (j >= 0 && j < g.W * g.H && S.isWater(g, j)) wet = true; }
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= g.W || yy >= g.H) continue; const j = yy * g.W + xx; if ((Math.max(Math.abs(dx), Math.abs(dy)) <= 1 && S.isWater(g, j)) || g.objAt[j]) wet = true; }
         if (wet) continue;
         const p = S.planFor(g, { x, y });
         if (!p || p.cells.length < 2 || p.cells.length > 6) continue;
@@ -296,10 +296,15 @@ try {
       return null;
     })()`);
     if (r) {
-      await mouse('mousePressed', ...r.xy);
-      await mouse('mouseReleased', ...r.xy);
+      // at the edge of the orchard, where a finger often lands (it is a different cell there)
+      const csz = await B.js(`${A}.view.cs`);
+      const side = await B.js(`${A}.view.ox + ${A}.view.bw / 2 > ${r.xy[0]} ? 1 : -1`);
+      const edge = [r.xy[0] + side * csz * 0.55, r.xy[1] - csz * 0.2];
+      await mouse('mousePressed', ...edge);
+      await mouse('mouseReleased', ...edge);
       const hp = await B.js(`JSON.stringify(${A}.state.hintPath && { from: ${A}.state.hintPath.from, cells: ${A}.state.hintPath.cells })`).then(JSON.parse);
-      check('a tap on a dry orchard shows the way', hp && hp.cells.length >= 2, JSON.stringify(hp));
+      const dbg = hp ? '' : await B.js(`JSON.stringify({ edge: ${JSON.stringify(edge)}, cell: ${A}.view.cellAt(${edge[0]}, ${edge[1]}), r: ${JSON.stringify(r)}, paused: document.getElementById('pauseBtn').textContent, over: !!${A}.g.over, ui: document.getElementById('ui').innerText.slice(0, 40), hint: document.getElementById('hint').textContent })`);
+      check('a tap on a dry orchard shows the way', hp && hp.cells.length >= 2, JSON.stringify(hp) + ' ' + dbg);
       if (hp) {
         await drag(await centers([hp.from, ...hp.cells]));
         await B.js(`${A}.step(0.3)`);

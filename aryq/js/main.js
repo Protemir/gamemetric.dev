@@ -278,9 +278,22 @@ cv.addEventListener('pointerdown', (e) => {
   cv.setPointerCapture(e.pointerId);
   const r = cv.getBoundingClientRect();
   press = { cell: c, tapped: c, moved: false, x: e.clientX - r.left, y: e.clientY - r.top };
+  // an orchard or a yurt is drawn as big as its cell: a press near its edge still means it
+  press.obj = g.objAt[c] || null;
+  if (!press.obj && !S.isWater(g, c)) {
+    let best = view.cs * 0.85;
+    for (const o of g.objects) {
+      const [ox, oy] = view.center(o.y * W + o.x);
+      const d = Math.hypot(ox - press.x, oy - press.y);
+      if (d < best) {
+        best = d;
+        press.obj = o;
+      }
+    }
+  }
   // a finger often lands just beside the end of a canal (the puddle is wider than the cell):
   // start from the nearest water cell if there is one right there
-  if (!S.isWater(g, c)) {
+  if (!S.isWater(g, c) && !press.obj) {
     let best = view.cs * 1.05;
     for (const d of [1, -1, W, -W, W + 1, W - 1, -W + 1, -W - 1]) {
       const n = c + d;
@@ -308,7 +321,7 @@ cv.addEventListener('pointerdown', (e) => {
     }
     if (g.dig < 1) tip('tired', 3000);
   }
-  else if (!g.objAt[press.tapped]) tip('start', 1800, 3);
+  else if (!press.obj) tip('start', 1800, 3);
 });
 
 cv.addEventListener('pointermove', (e) => {
@@ -457,9 +470,9 @@ function walkTo(target) {
 function release() {
   if (!press || !g) return;
   state.reach = null;
-  if (!press.moved && g.objAt[press.tapped]) {
+  if (!press.moved && press.obj) {
     // a tap on an orchard or a yurt shows how to bring it water
-    const o = g.objAt[press.tapped];
+    const o = press.obj;
     const short = o.got < o.need * 0.9 && g.day < S.WINTER;
     const touching = !!S.planFor(g, o) && S.planFor(g, o).cells.length === 0;
     const plan = S.planFor(g, o, null, short && touching);
