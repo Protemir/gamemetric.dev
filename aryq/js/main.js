@@ -44,10 +44,6 @@ function start(m = mode, restored = null) {
   ui.replaceChildren();
   hud.hidden = false;
   if (!restored) S.advance(g, 0.01); // the first garden appears
-  else {
-    paused = true;
-    showPause();
-  }
   saveNow();
   pickGhost(performance.now(), true);
   updateHud();
@@ -781,13 +777,30 @@ async function checkUpdate() {
     const html = await (await fetch(location.pathname, { cache: 'no-store' })).text();
     const fresh = (html.match(/main\.js\?v=([0-9a-f]+)/) || [])[1];
     if (!fresh || fresh === running) return;
-    if (!g || g.over) return location.reload();
+    // a plain reload can take the page from the same stale cache and find the same old code again,
+    // round and round: go to an address the cache has never seen, and try that only once per version
+    let tried = null;
+    try {
+      tried = sessionStorage.getItem('aryq.updateTo');
+    } catch {
+      /* storage blocked */
+    }
+    if (tried === fresh) return;
+    const go = () => {
+      try {
+        sessionStorage.setItem('aryq.updateTo', fresh);
+      } catch {
+        /* storage blocked */
+      }
+      saveNow();
+      const u = new URL(location.href);
+      u.searchParams.set('u', fresh);
+      location.replace(u.toString());
+    };
+    if (!g || g.over) return go();
     updateShown = true;
     const b = el('button', 'update', t('update'));
-    b.addEventListener('click', () => {
-      saveNow();
-      location.reload();
-    });
+    b.addEventListener('click', go);
     document.body.append(b);
   } catch {
     /* offline */

@@ -319,6 +319,22 @@ try {
   const s2 = await B.js(`${A}.g.seed`);
   check('valley of the day is stable', s1 === s2, `${s1} / ${s2}`);
 
+  // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads
+  //     even if the cache keeps giving the old code (the loop of 17.10)
+  await B.init(`try { localStorage.clear(); sessionStorage.removeItem('x'); } catch {}
+    window.__loads = (+sessionStorage.getItem('loads') || 0) + 1; sessionStorage.setItem('loads', window.__loads);
+    const realFetch = window.fetch;
+    window.fetch = (u, o) => (String(u).endsWith('/aryq/') ? Promise.resolve(new Response('<script src="js/main.js?v=deadbeef"></script>')) : realFetch(u, o));`);
+  await B.open(page('&lang=ru'), 390, 844);
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+  await B.js(`sessionStorage.setItem('loads', '1'); document.dispatchEvent(new Event('visibilitychange'))`);
+  await sleep(3000);
+  await B.js(`document.dispatchEvent(new Event('visibilitychange'))`).catch(() => {});
+  await sleep(3000);
+  r = await B.js(`JSON.stringify({ loads: +sessionStorage.getItem('loads'), url: location.search })`).then(JSON.parse);
+  check('an update reloads once and does not loop', r.loads === 2 && r.url.includes('u=deadbeef'), JSON.stringify(r));
+  await B.init('');
+
   check('no errors in the page', B.errors.length === 0, B.errors.slice(0, 3).join(' | '));
 } catch (e) {
   check('test ran to the end', false, e.message);
