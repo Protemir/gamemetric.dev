@@ -47,6 +47,18 @@ function start(m = mode, restored = null) {
   if (!restored) S.advance(g, 0.01); // the first garden appears
   saveNow();
   pickGhost(performance.now(), true);
+  if (!store.get('aryq.labelsSeen', false) && !restored) {
+    store.set('aryq.labelsSeen', true);
+    const first = g.objects.find((o) => o.type === 'garden');
+    state.labels = {
+      until: performance.now() + 9000,
+      list: [
+        { i: Math.floor(g.W / 2), text: t('lblGlacier') },
+        { i: g.river[Math.floor(g.river.length * 0.55)], text: t('lblRiver') },
+        ...(first ? [{ i: first.y * g.W + first.x, text: t('lblOrchard') }] : []),
+      ],
+    };
+  }
   updateHud();
   if (DEBUG) window.__aryq = { g, S, view, state, step: (d) => S.advance(g, d) };
 }
@@ -94,6 +106,23 @@ const TEXT = {
     tagObject: 'занято',
     tagIce: 'лёд',
     startHere: 'начни тут',
+    help: 'Как играть',
+    gotIt: 'Понятно',
+    lblGlacier: 'Ледник — отсюда течёт вся вода',
+    lblRiver: 'Река',
+    lblOrchard: 'Сад — напои его',
+    lgGlacier: 'Ледник — отсюда течёт вся вода. Весной тает сильнее, к осени меньше.',
+    lgRiver: 'Река течёт вниз по долине, от ледника.',
+    lgCanal: 'Арык копаешь сам: тяни палец от реки или другого арыка.',
+    lgLines: 'Линии высоты. Вода течёт вниз, а вверх арык поднимается не выше одной линии.',
+    lgOrchard: 'Сад пьёт воду. Засох хоть один — игра окончена.',
+    lgYurt: 'Юрта пьёт меньше. Арык, оборванный рядом с ней, её подтапливает.',
+    lgThirst: 'Капля — воды мало. Красное кольцо — жажда растёт. Тапни по саду — покажу путь воды.',
+    lgFlood: 'Синее кольцо — юрту подтапливает.',
+    lgGate: 'Шлюз: тап по арыку перекрывает воду, ещё тап — открывает.',
+    lgFoam: 'Белая пена — арык полон и больше не пропустит. Проведи ещё один от реки.',
+    lgWater: '💧 в шапке — хватает ли воды на всех. Каждый арык сам немного впитывает.',
+    lgDig: '⛏ — сколько клеток можно выкопать. Сам прибавляется со временем.',
     pathShown: 'Вот как сюда довести воду: начни у кольца и веди палец по пунктиру.',
     fullCanal: 'Арык, что поит этот сад, полон до краёв (белая пена по краям) — больше не пропустит. Вот путь от реки: веди по пунктиру.',
     alreadyWet: 'Здесь вода уже есть.',
@@ -173,6 +202,23 @@ const TEXT = {
     tagObject: 'taken',
     tagIce: 'ice',
     startHere: 'start here',
+    help: 'How to play',
+    gotIt: 'Got it',
+    lblGlacier: 'Glacier — all the water comes from here',
+    lblRiver: 'River',
+    lblOrchard: 'Orchard — give it water',
+    lgGlacier: 'The glacier is where all the water comes from. It melts more in spring and less by autumn.',
+    lgRiver: 'The river runs down the valley from the glacier.',
+    lgCanal: 'You dig canals yourself: drag from the river or from another canal.',
+    lgLines: 'Contour lines. Water runs downhill, and a canal can climb at most one line.',
+    lgOrchard: 'Orchards drink water. If one dries up, the game is over.',
+    lgYurt: 'Yurts drink less. A canal that ends right next to one floods it.',
+    lgThirst: 'A drop means little water. A red ring is growing thirst. Tap an orchard to see a way for water.',
+    lgFlood: 'A blue ring means the yurt is flooding.',
+    lgGate: 'Gate: tap a canal to close it, tap again to open.',
+    lgFoam: 'White foam: the canal is full and will not carry more. Dig another from the river.',
+    lgWater: '💧 at the top: is there water for everyone. Every canal soaks up a little.',
+    lgDig: '⛏ how many cells you can dig. It grows back over time.',
     pathShown: 'This is how to bring water here: start at the ring and drag along the dashed line.',
     fullCanal: 'The canal that feeds this orchard is full to the brim (white foam at its edges) and will not carry more. Here is a way from the river: drag along the dashed line.',
     alreadyWet: 'There is water here already.',
@@ -347,6 +393,7 @@ function ext(b) {
 
 // cells to light while digging: reachable from `from` and close enough for the digging left
 function lit(from) {
+  state.reachFrom = from;
   const r = S.reach(g, from);
   const used = g.cur ? 0 : 0;
   for (let i = 0; i < r.best.length; i++) if (r.best[i] > -Infinity && g.kind[i] === S.LAND && r.len[i] > g.dig - used) r.best[i] = -Infinity;
@@ -553,7 +600,42 @@ function showPause() {
   box.append(el('h2', null, t('paused')), el('p', 'muted', t('pauseTip')));
   const go = el('button', 'btn', t('resume'));
   go.addEventListener('click', togglePause);
-  box.append(go);
+  const how = el('button', 'btn ghost', t('help'));
+  how.addEventListener('click', () => showHelp(showPause));
+  box.append(go, how);
+  ui.replaceChildren(box);
+}
+
+// what everything on the field is, with small drawings in the colours of the game
+const LEGEND = [
+  ['lgGlacier', '<rect x="2" y="3" width="10" height="20" rx="2" fill="#eef3f6" stroke="#b9c7d2"/><path d="M12 13h12" stroke="#2f8ac4" stroke-width="4" stroke-linecap="round"/>'],
+  ['lgRiver', '<path d="M2 18c6-8 10 4 22-6" stroke="#c9b48a" stroke-width="9" fill="none" stroke-linecap="round"/><path d="M2 18c6-8 10 4 22-6" stroke="#2f8ac4" stroke-width="5" fill="none" stroke-linecap="round"/>'],
+  ['lgCanal', '<path d="M3 20h10V6h10" stroke="#6b4a2e" stroke-width="7" fill="none" stroke-linejoin="round"/><path d="M3 20h10V6h10" stroke="#2f8ac4" stroke-width="3" fill="none" stroke-linejoin="round"/>'],
+  ['lgLines', '<rect x="1" y="1" width="24" height="24" rx="4" fill="#a99a62"/><path d="M1 8c8 3 16-4 24 0M1 15c8 3 16-4 24 0M1 22c8 3 16-4 24 0" stroke="rgba(0,0,0,0.45)" fill="none"/>'],
+  ['lgOrchard', '<circle cx="9" cy="9" r="6" fill="#5f9a3a"/><circle cx="17" cy="10" r="6" fill="#5f9a3a"/><circle cx="12" cy="17" r="6" fill="#4f8a32"/><circle cx="10" cy="8" r="1.4" fill="#d9483b"/><circle cx="17" cy="12" r="1.4" fill="#d9483b"/>'],
+  ['lgYurt', '<circle cx="13" cy="13" r="10" fill="#f6efe2" stroke="#c9bba2"/><circle cx="13" cy="13" r="7" fill="none" stroke="#b0402e"/><circle cx="13" cy="13" r="3" fill="#6b4523"/>'],
+  ['lgThirst', '<path d="M13 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z" fill="#2f8ac4" stroke="#fff"/><path d="M5 22a10 10 0 0 0 16 0" stroke="#e2493b" stroke-width="3" fill="none"/>'],
+  ['lgFlood', '<circle cx="13" cy="13" r="7" fill="#f6efe2"/><path d="M13 3a10 10 0 1 1-9.5 13" stroke="#2f8ac4" stroke-width="3" fill="none"/>'],
+  ['lgGate', '<path d="M2 13h22" stroke="#2f8ac4" stroke-width="5"/><path d="M15 4v18" stroke="#8a5530" stroke-width="5"/>'],
+  ['lgFoam', '<path d="M2 13h22" stroke="#f5fcff" stroke-width="11"/><path d="M2 13h22" stroke="#2f8ac4" stroke-width="7"/>'],
+  ['lgWater', '<text x="2" y="19" font-size="16">💧</text>'],
+  ['lgDig', '<text x="2" y="19" font-size="16">⛏</text>'],
+];
+function showHelp(back) {
+  const box = el('div', 'panel help');
+  box.append(el('h2', null, t('help')));
+  const list = el('div', 'legend');
+  for (const [key, svg] of LEGEND) {
+    const row = el('div', 'legend-row');
+    const pic = el('span', 'legend-pic');
+    pic.innerHTML = '<svg viewBox="0 0 26 26" width="26" height="26" aria-hidden="true">' + svg + '</svg>';
+    row.append(pic, el('span', null, t(key)));
+    list.append(row);
+  }
+  box.append(list);
+  const ok = el('button', 'btn', t('gotIt'));
+  ok.addEventListener('click', back);
+  box.append(ok);
   ui.replaceChildren(box);
 }
 
@@ -671,6 +753,9 @@ function showStart() {
     list.append(btn);
   }
   box.append(list);
+  const how = el('button', 'btn ghost', t('help'));
+  how.addEventListener('click', () => showHelp(showStart));
+  box.append(how);
   const langs = el('p', 'langs');
   for (const code of ['ru', 'en']) {
     const a = el('button', code === lang ? 'on' : '', code.toUpperCase());
@@ -779,8 +864,9 @@ function frame(now) {
   if (g) {
     if (!paused && !g.over && !press?.moved) {
       // while everybody drinks there is nothing to do, so the days run faster on their own
-      state.calm = g.objects.length > 0 && g.objects.every((o) => o.s >= 0.6);
-      S.advance(g, (dt * speed * (state.calm ? 2.5 : 1)) / S.DAY_SEC);
+      state.calm = g.day >= S.WINTER || (g.objects.length > 0 && g.objects.every((o) => o.s >= 0.6));
+      // winter has nothing to do in it: it goes by four times faster
+      S.advance(g, (dt * speed * (g.day >= S.WINTER ? 4 : state.calm ? 2.5 : 1)) / S.DAY_SEC);
     }
     if (g.over && !ui.firstChild) showOver();
     for (const ev of g.events.splice(0)) {
@@ -801,6 +887,7 @@ function frame(now) {
     if (!paused && performance.now() - savedAt > 3000) saveNow();
     updateHud();
     if (state.hintPath && now > state.hintPath.until) state.hintPath = null;
+    if (state.labels && now > state.labels.until) state.labels = null;
     state.startLabel = t('startHere');
     const wait = Math.max(1, Math.ceil(((S.DIG_REGEN - (g.digTimer || 0)) * S.DAY_SEC) / speed));
     state.tags = { high: t('tagHigh'), up: t('tagHigh'), tired: g.dig < 1 && g.cur ? t('tagTiredIn', { s: wait }) : t('tagTired'), object: t('tagObject'), ice: t('tagIce') };

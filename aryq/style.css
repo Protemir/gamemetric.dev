@@ -187,3 +187,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .langs { display: flex; justify-content: center; gap: 6px; margin: 14px 0 0; }
 .langs button { border: 0; background: transparent; color: var(--muted); font-weight: 700; padding: 4px 8px; border-radius: 8px; }
 .langs button.on { background: var(--paper-2); color: var(--ink); }
+
+.panel.help { width: min(400px, calc(100vw - 24px)); max-height: calc(100vh - 40px); overflow-y: auto; text-align: left; }
+.panel.help h2 { text-align: center; }
+.legend { display: grid; gap: 8px; margin-top: 8px; }
+.legend-row { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; font-size: 14px; line-height: 1.35; }
+.legend-pic { display: grid; place-items: center; }

@@ -8,7 +8,7 @@ import { rng, clamp } from './util.js';
 
 export const DAY_SEC = 3.2; // real seconds per day at ×1: a year is about six minutes
 export const YEAR_DAYS = 120;
-export const WINTER = 105; // from this day gardens sleep and nothing new appears
+export const WINTER = 110; // from this day gardens sleep and nothing new appears (a short winter)
 export const EPS = 0.04; // canal bed drop per cell
 export const MAX_CUT = 1.6; // deepest cut into a rise
 export const CANAL_CAP = 2; // water per day one canal cell carries

@@ -51,12 +51,21 @@ try {
   check('start screen in English', r.includes('Aryk') && r.includes('Play') && !/[А-Яа-я]/.test(r), r.slice(0, 40).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'start-en.png'));
 
+  // 1b. the how-to-play panel from the menu explains every thing on the field
+  await B.open(page('&lang=ru'), 390, 844);
+  await clickText('Как играть');
+  r = await B.js(`({ rows: document.querySelectorAll('.legend-row').length, text: document.getElementById('ui').innerText })`);
+  check('how to play lists the things on the field', r.rows >= 10 && r.text.includes('Ледник') && r.text.includes('Шлюз'), r.rows + ' rows');
+  await clickText('Понятно');
+
   // 2. a new player: one orchard, a dashed path, digging it with the mouse waters the orchard
   await B.open(page('&lang=ru&seed=1004'), 390, 844);
   await clickText('Играть');
   await wait(200);
   r = await B.js(`JSON.stringify({ objects: ${A}.g.objects.length, ghost: ${A}.state.ghost && { from: ${A}.state.ghost.from, cells: ${A}.state.ghost.cells } })`).then(JSON.parse);
   check('first orchard and the dashed path', r.objects === 1 && r.ghost && r.ghost.cells.length >= 2, JSON.stringify(r.ghost));
+  const labels = await B.js(`${A}.state.labels ? ${A}.state.labels.list.map((l) => l.text).join(' | ') : ''`);
+  check('the first game names the glacier, the river and the orchard', labels.includes('Ледник') && labels.includes('Река') && labels.includes('Сад'), labels);
   const pts = await centers([r.ghost.from, ...r.ghost.cells]);
   // a shaky hand: every point a third of a cell off the line
   const cs = await B.js(`${A}.view.cs`);

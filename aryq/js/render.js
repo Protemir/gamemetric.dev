@@ -360,11 +360,34 @@ export class View {
         cx.fill();
       }
     }
+    // and the cells right next to the end of the canal that are too high get a small ▲, so it is
+    // clear before trying why water will not go that way
+    if (ui.reach && ui.reachFrom != null && S.isWater(g, ui.reachFrom)) {
+      const a = ui.reachFrom, ax = a % g.W, ay = (a / g.W) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const x = ax + dx, y = ay + dy;
+        if (x < 0 || y < 0 || x >= g.W || y >= g.H) continue;
+        const b = y * g.W + x;
+        if (g.kind[b] !== S.LAND || g.objAt[b] || ui.reach[b] > -Infinity) continue;
+        if (S.probe(g, a, b).why !== 'high') continue;
+        const [px, py] = this.center(b);
+        const s = cs * 0.2;
+        cx.fillStyle = 'rgba(0,0,0,0.35)';
+        cx.beginPath();
+        cx.moveTo(px + 1, py - s + 2); cx.lineTo(px + s + 1, py + s * 0.7 + 2); cx.lineTo(px - s + 1, py + s * 0.7 + 2);
+        cx.fill();
+        cx.fillStyle = '#ff7a5c';
+        cx.beginPath();
+        cx.moveTo(px, py - s); cx.lineTo(px + s, py + s * 0.7); cx.lineTo(px - s, py + s * 0.7);
+        cx.fill();
+      }
+    }
 
     this.drawObjects(g, now);
     this.drawBits(now);
     this.drawStroke(g);
     this.startLabel = ui.startLabel;
+    if (ui.labels) this.drawLabels(ui.labels, now);
     if (ui.ghost) this.drawGhost(ui.ghost, now);
     if (ui.hintPath) this.drawGhost(ui.hintPath, now);
     if (ui.blocked && now - ui.blocked.at < 1400) {
@@ -434,6 +457,37 @@ export class View {
     cx.arcTo(x, y + h, x, y, r);
     cx.arcTo(x, y, x + w, y, r);
     cx.closePath();
+  }
+
+  // names on the field the first time: a tag above the thing with a short stem to it
+  drawLabels(labels, now) {
+    const { cx, cs } = this;
+    const fade = clamp((labels.until - now) / 600, 0, 1);
+    cx.save();
+    cx.globalAlpha = fade;
+    cx.font = `700 ${Math.max(12, Math.min(15, cs * 0.36))}px system-ui, sans-serif`;
+    cx.textBaseline = 'middle';
+    for (const { i, text } of labels.list) {
+      const [px, py] = this.center(i);
+      const tw = cx.measureText(text).width + 14, th = Math.max(20, Math.min(26, cs * 0.6));
+      const lx = Math.min(Math.max(px - tw / 2, this.ox + 4), this.ox + this.bw - tw - 4);
+      const ly = Math.max(this.oy + 4, py - cs * 0.9 - th);
+      cx.strokeStyle = 'rgba(255,248,234,0.9)';
+      cx.lineWidth = 2;
+      cx.beginPath();
+      cx.moveTo(px, ly + th);
+      cx.lineTo(px, py - cs * 0.3);
+      cx.stroke();
+      cx.fillStyle = 'rgba(0,0,0,0.35)';
+      this.roundRect(lx + 1, ly + 2, tw, th, 8);
+      cx.fill();
+      cx.fillStyle = '#fff8ea';
+      this.roundRect(lx, ly, tw, th, 8);
+      cx.fill();
+      cx.fillStyle = '#3b2718';
+      cx.fillText(text, lx + 7, ly + th / 2 + 1);
+    }
+    cx.restore();
   }
 
   // an uneven puddle, the same shape every frame
