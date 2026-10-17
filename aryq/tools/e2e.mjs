@@ -29,6 +29,17 @@ async function drag(points) {
 const centers = (cells) => B.js(`JSON.stringify(${JSON.stringify(cells)}.map((i) => ${A}.view.center(i)))`).then(JSON.parse);
 const clickText = (text) => B.js(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.innerText.includes(${JSON.stringify(text)})); if (b) b.click(); return !!b; })()`);
 
+// 0. every file carries the version of its current content (node aryq/tools/stamp.mjs was run)
+{
+  const crypto = await import('node:crypto');
+  const html = fs.readFileSync(path.join(repo, 'aryq/index.html'), 'utf8');
+  const stale = fs.readdirSync(path.join(repo, 'aryq/js')).filter((f) => f.endsWith('.js')).filter((f) => {
+    const v = crypto.createHash('sha1').update(fs.readFileSync(path.join(repo, 'aryq/js', f))).digest('hex').slice(0, 8);
+    return !html.includes('./js/' + f + '?v=' + v);
+  });
+  check('versions in index.html are fresh', stale.length === 0, stale.join(', ') || 'all');
+}
+
 try {
   // 1. start screens in both languages
   await B.init('try { localStorage.clear(); } catch {}');

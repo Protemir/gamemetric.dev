@@ -258,7 +258,7 @@ export function flowStep(g) {
     for (const t of g.out[i]) {
       if (g.gate[t]) continue;
       open += 1;
-      w += Math.min(g.kind[t] === RIVER ? Infinity : g.cap, want[t]);
+      if (g.kind[t] !== RIVER) w += Math.min(g.cap, want[t]);
     }
     if (!open && !g.near[i].length) w += SEEP; // where someone drinks at the end, nothing spills
     want[i] = Math.min(w, g.cap);
@@ -573,6 +573,13 @@ export function reward(g, kind) {
   if (kind === 'cap') g.cap += 0.6;
   if (kind === 'melt') g.melt *= 1.12;
   g.order = null;
+}
+
+// how much water there is against how much is wanted right now (1 = just enough)
+export function waterShare(g) {
+  if (g.day >= WINTER) return null;
+  const need = g.objects.reduce((s, o) => s + o.need, 0);
+  return need > 0 ? sourceFlow(g.day, g.year, g.melt) / need : null;
 }
 
 export const gardens = (g) => g.objects.filter((o) => o.type === 'garden').length;

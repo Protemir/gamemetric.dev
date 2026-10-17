@@ -86,6 +86,9 @@ const TEXT = {
     tagTired: '⛏ нет сил',
     tagObject: 'занято',
     tagIce: 'лёд',
+    startHere: 'начни тут',
+    plenty: 'вдоволь',
+    ghostStart: 'Пунктир начинается выше, у кольца «начни тут». От этого арыка вода туда не поднимется — начни от кольца.',
     start: 'Начинай от реки или от арыка и тяни.',
     gateShut: 'Шлюз закрыт: вода сюда не идёт. Нажми ещё раз — откроется.',
     gateOpen: 'Шлюз открыт',
@@ -93,7 +96,9 @@ const TEXT = {
     elsewhere: 'Отсюда туда не стечь: там выше. Начни там, где пунктир, — выше по склону.',
     higher: 'выше',
     floodSoon: 'Юрту подтапливает: рядом кончается арык и вода льётся. Доведи арык до юрты или обратно в реку, или закрой шлюз.',
-    lowWater: 'Саду мало воды: один арык поит 6 садов, а река к осени мелеет. Проведи к нему ещё один арык от реки.',
+    lowWater: 'Этому саду мало воды: арык, который его поит, уже полон. Проведи к нему отдельный арык от реки.',
+    riverLow: 'Воды на всех не хватает: к осени ледник тает меньше (💧 в шапке). Закрой шлюз у тех, кто подождёт, или возьми «Щедрый ледник» в конце года.',
+    water: 'Сколько воды даёт ледник против того, сколько нужно садам и юртам',
     calm: 'Все пьют — время идёт быстрее. Новые сады и юрты появятся сами, не дай засохнуть ни одному.',
     flooded: 'Юрту затопило: не обрывай арык рядом с юртой.',
     left: 'Из юрты ушли: ей нужна вода.',
@@ -153,6 +158,9 @@ const TEXT = {
     tagTired: '⛏ no strength',
     tagObject: 'taken',
     tagIce: 'ice',
+    startHere: 'start here',
+    plenty: 'plenty',
+    ghostStart: 'The dashed line starts higher up, at the “start here” ring. From this canal water cannot climb there: start from the ring.',
     start: 'Start from the river or a canal and drag.',
     gateShut: 'Gate closed: no water goes this way. Tap again to open it.',
     gateOpen: 'Gate open',
@@ -160,7 +168,9 @@ const TEXT = {
     elsewhere: 'Water cannot run there from here: it is higher. Start where the dashed line starts, further up the slope.',
     higher: 'higher',
     floodSoon: 'A yurt is flooding: a canal ends next to it and spills. Run the canal to the yurt or back into the river, or close a gate.',
-    lowWater: 'This orchard is short of water: one canal feeds 6 orchards, and the river runs low by autumn. Dig it a second canal from the river.',
+    lowWater: 'This orchard is short of water: the canal that feeds it is already full. Dig it its own canal from the river.',
+    riverLow: 'There is not enough water for everyone: by autumn the glacier melts less (💧 at the top). Close a gate for those who can wait, or take the Generous glacier at the end of the year.',
+    water: 'How much water the glacier gives against how much orchards and yurts need',
     calm: 'Everyone has water, so time runs faster. New orchards and yurts appear by themselves: do not let any dry up.',
     flooded: 'A yurt was flooded: do not end a canal next to a yurt.',
     left: 'People left a yurt: it needs water.',
@@ -408,7 +418,9 @@ function walkTo(target) {
       if (r.why !== 'done' && (!state.blocked || state.blocked.cell !== b)) {
         state.blocked = { cell: b, at: performance.now(), why: r.why };
         sfx.block();
-        say(WHY[r.why] || '');
+        const gh = state.ghost || state.hintPath;
+        if (gh && g.cur && g.cur.from !== gh.from && (gh.cells.includes(b) || gh.cells.includes(target))) say(t('ghostStart'), 5000);
+        else say(WHY[r.why] || '');
         if (r.why === 'high' || r.why === 'up') showBetterStart(target);
       }
       return;
@@ -530,7 +542,10 @@ function updateHud() {
   const s = S.seasonOf(g.day);
   const sn = t(s.key);
   $('seasonName').textContent = sn[0].toUpperCase() + sn.slice(1) + (state.calm && !paused ? ' ⏩' : '');
-  $('yearNo').textContent = t('hud', { y: g.year });
+  const share = S.waterShare(g);
+  $('yearNo').textContent = share == null ? t('hud', { y: g.year }) : '💧' + (share >= 2 ? t('plenty') : Math.round(share * 100) + '%');
+  $('yearNo').classList.toggle('low', share != null && share < 1);
+  $('yearNo').title = t('water');
   $('dayBar').style.width = `${(g.day / S.YEAR_DAYS) * 100}%`;
   $('dig').textContent = g.dig;
   $('dig').parentElement.classList.toggle('empty', g.dig < 1);
@@ -648,7 +663,8 @@ function coach(now) {
   for (const o of g.objects) {
     if (o.type === 'garden' && o.got > 0.01 && o.s < 0.6 && o.thirst > 0.3 && !o.lowWarned && g.day < S.WINTER) {
       o.lowWarned = true;
-      say(t('lowWater'), 5000);
+      const share = S.waterShare(g);
+      say(share != null && share < 1.05 ? t('riverLow') : t('lowWater'), 6000);
       return;
     }
   }
@@ -718,6 +734,7 @@ function frame(now) {
     if (!paused && performance.now() - savedAt > 3000) saveNow();
     updateHud();
     if (state.hintPath && now > state.hintPath.until) state.hintPath = null;
+    state.startLabel = t('startHere');
     state.tags = { high: t('tagHigh'), up: t('tagHigh'), tired: t('tagTired'), object: t('tagObject'), ice: t('tagIce') };
     view.draw(g, now, state);
   }

@@ -165,3 +165,4 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .stat.empty { animation: empty 0.9s ease-in-out infinite; }
 @keyframes empty { 50% { background: #f6c3b4; color: #8f1f12; } }
+.hud-season p small.low { color: #c0392b; font-weight: 800; }

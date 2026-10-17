@@ -355,6 +355,7 @@ export class View {
     this.drawObjects(g, now);
     this.drawBits(now);
     this.drawStroke(g);
+    this.startLabel = ui.startLabel;
     if (ui.ghost) this.drawGhost(ui.ghost, now);
     if (ui.hintPath) this.drawGhost(ui.hintPath, now);
     if (ui.blocked && now - ui.blocked.at < 1400) {
@@ -605,6 +606,29 @@ export class View {
       cx.stroke();
     }
     cx.restore();
+    // where to start: a pulsing ring with a tag
+    const [sx, sy] = pts[0];
+    const pulse = 0.5 + 0.5 * Math.sin(now / 180);
+    cx.strokeStyle = `rgba(255,248,234,${0.55 + 0.4 * pulse})`;
+    cx.lineWidth = Math.max(2, cs * 0.12);
+    cx.beginPath();
+    cx.arc(sx, sy, cs * (0.55 + 0.15 * pulse), 0, Math.PI * 2);
+    cx.stroke();
+    if (this.startLabel) {
+      cx.font = `700 ${Math.max(11, cs * 0.4)}px system-ui, sans-serif`;
+      const tw = cx.measureText(this.startLabel).width + 10, th = Math.max(16, cs * 0.6);
+      const lx = Math.min(Math.max(sx - tw / 2, this.ox + 2), this.ox + this.bw - tw - 2);
+      const ly = sy - cs * 0.8 - th < this.oy ? sy + cs * 0.8 : sy - cs * 0.8 - th;
+      cx.fillStyle = 'rgba(0,0,0,0.35)';
+      this.roundRect(lx + 1, ly + 2, tw, th, 6);
+      cx.fill();
+      cx.fillStyle = '#fff8ea';
+      this.roundRect(lx, ly, tw, th, 6);
+      cx.fill();
+      cx.fillStyle = '#2f6f9e';
+      cx.textBaseline = 'middle';
+      cx.fillText(this.startLabel, lx + 5, ly + th / 2 + 1);
+    }
     const T = 1600 + pts.length * 260;
     const f = clamp(((now % T) - 500) / (T - 1100), 0, 1);
     const seg = f * (pts.length - 1);
