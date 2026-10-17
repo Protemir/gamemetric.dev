@@ -274,6 +274,42 @@ try {
   })()`);
   check('a dead end by an orchard corner still gets its trickle', r && r.stub > 0.05 && r.got > 0.29, JSON.stringify(r));
 
+  // 3i. "how do I get water there?": a tap on a dry orchard shows the way, and dragging along it waters it
+  {
+    const kept3 = await B.js(`JSON.stringify(${A}.S.save(${A}.g))`);
+    r = await B.js(`(() => {
+      const { g, S } = ${A};
+      // a fresh dry orchard a few cells from any water
+      for (let i = 4 * g.W; i < g.W * (g.H - 1); i++) {
+        if (g.kind[i] !== 0 || g.objAt[i]) continue;
+        const x = i % g.W, y = (i / g.W) | 0;
+        let wet = false;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const j = (y + dy) * g.W + x + dx; if (j >= 0 && j < g.W * g.H && S.isWater(g, j)) wet = true; }
+        if (wet) continue;
+        const p = S.planFor(g, { x, y });
+        if (!p || p.cells.length < 2 || p.cells.length > 6) continue;
+        const d = S.save(g); d.objects = [...d.objects, { type: 'garden', x, y, need: 0.3, thirst: 0.5, flood: 0, born: 0 }];
+        const h = S.load(d); for (const k of Object.keys(g)) delete g[k]; Object.assign(g, h); ${A}.view.layout(g);
+        g.dig = 30;
+        return { x, y, xy: ${A}.view.center(i) };
+      }
+      return null;
+    })()`);
+    if (r) {
+      await mouse('mousePressed', ...r.xy);
+      await mouse('mouseReleased', ...r.xy);
+      const hp = await B.js(`JSON.stringify(${A}.state.hintPath && { from: ${A}.state.hintPath.from, cells: ${A}.state.hintPath.cells })`).then(JSON.parse);
+      check('a tap on a dry orchard shows the way', hp && hp.cells.length >= 2, JSON.stringify(hp));
+      if (hp) {
+        await drag(await centers([hp.from, ...hp.cells]));
+        await B.js(`${A}.step(0.3)`);
+        const got = await B.js(`${A}.g.objects.find((o) => o.x === ${r.x} && o.y === ${r.y}).got`);
+        check('dragging along the shown way waters it', got > 0.29, String(got));
+      }
+    } else check('a tap on a dry orchard shows the way', false, 'no spot');
+    await B.js(`(() => { const a = ${A}; const h = a.S.load(${kept3}); for (const k of Object.keys(a.g)) delete a.g[k]; Object.assign(a.g, h); a.view.layout(a.g); a.state.hintPath = null; return true; })()`);
+  }
+
   // 4. layouts: the board fits, the bar does not cover it, cells are big enough for a finger
   for (const [w, h] of [[390, 844], [320, 568], [1280, 720], [844, 390], [768, 1024]]) {
     await B.size(w, h);

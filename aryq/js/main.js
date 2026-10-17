@@ -84,6 +84,9 @@ const TEXT = {
     tagObject: 'занято',
     tagIce: 'лёд',
     startHere: 'начни тут',
+    pathShown: 'Вот как сюда довести воду: начни у кольца и веди палец по пунктиру.',
+    alreadyWet: 'Здесь вода уже есть.',
+    noPath: 'Сюда воду пока не довести ни от одного арыка. Попробуй провести арык выше по склону.',
     winterCame: 'Зима: сады спят и не пьют до весны. Самое время спокойно провести новые арыки.',
     update: 'Вышла новая версия — нажми, чтобы обновить (игра сохранится)',
     plenty: 'вдоволь',
@@ -159,6 +162,9 @@ const TEXT = {
     tagObject: 'taken',
     tagIce: 'ice',
     startHere: 'start here',
+    pathShown: 'This is how to bring water here: start at the ring and drag along the dashed line.',
+    alreadyWet: 'There is water here already.',
+    noPath: 'No canal can bring water here yet. Try a canal higher up the slope.',
     winterCame: 'Winter: the orchards sleep and drink nothing until spring. A good time to dig new canals calmly.',
     update: 'A new version is out: tap to update (your game is saved)',
     plenty: 'plenty',
@@ -276,10 +282,11 @@ cv.addEventListener('pointerdown', (e) => {
     }
   }
   // pressing near the start of the dashed path starts right there
-  if (state.ghost) {
-    const [gx, gy] = view.center(state.ghost.from);
+  const shown = state.hintPath || state.ghost;
+  if (shown) {
+    const [gx, gy] = view.center(shown.from);
     const d = Math.hypot(gx - press.x, gy - press.y);
-    if (d < view.cs * 0.9 || (!S.isWater(g, press.cell) && d < view.cs * 1.3)) press.cell = state.ghost.from;
+    if (d < view.cs * 0.9 || (!S.isWater(g, press.cell) && d < view.cs * 1.3)) press.cell = shown.from;
   }
   if (S.isWater(g, press.cell)) {
     state.reach = lit(press.cell);
@@ -289,7 +296,7 @@ cv.addEventListener('pointerdown', (e) => {
     }
     if (g.dig < 1) say(t('tired'), 3000);
   }
-  else say(t('start'), 1800);
+  else if (!g.objAt[press.tapped]) say(t('start'), 1800);
 });
 
 cv.addEventListener('pointermove', (e) => {
@@ -371,7 +378,7 @@ function showBetterStart(target) {
 
 function walkTo(target) {
   // along the dashed path the canal sticks to it, so a shaky finger does not wander off into a rise
-  const gh = state.ghost;
+  const gh = state.hintPath || state.ghost;
   if (gh && g.cur && g.cur.from === gh.from && g.cur.cells.every((c, k) => gh.cells[k] === c)) {
     const tx = target % W, ty = (target / W) | 0;
     let near = -1, dist = 1.6;
@@ -435,7 +442,18 @@ function walkTo(target) {
 function release() {
   if (!press || !g) return;
   state.reach = null;
-  if (!press.moved) {
+  if (!press.moved && g.objAt[press.tapped]) {
+    // a tap on an orchard or a yurt shows how to bring it water
+    const o = g.objAt[press.tapped];
+    const plan = S.planFor(g, o);
+    if (!plan) say(t('noPath'), 4000);
+    else if (!plan.cells.length && o.got > 0.01) say(t('alreadyWet'), 2000);
+    else if (plan.cells.length) {
+      state.hintPath = { from: plan.from, cells: plan.cells, until: performance.now() + 6000 };
+      say(t('pathShown'), 4000);
+    }
+    sfx.click();
+  } else if (!press.moved) {
     // a tap near a closed gate opens that gate: a finger easily lands on the cell next to the bar,
     // and that must not put up a second gate
     let c = press.tapped;
