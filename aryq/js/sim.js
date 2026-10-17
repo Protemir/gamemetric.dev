@@ -172,7 +172,27 @@ function removeCell(g, c) {
 export function endStroke(g) {
   const s = g.cur;
   g.cur = null;
-  if (s && (s.cells.length || s.join)) g.strokes.push(s);
+  if (!s || !(s.cells.length || s.join)) return;
+  // a canal that ends right next to the river or another canal lower down flows into it by itself,
+  // instead of spilling over its end next to the water
+  if (!s.join && s.cells.length) {
+    const last = s.cells[s.cells.length - 1];
+    const lx = last % g.W, ly = (last / g.W) | 0;
+    let best = -1;
+    for (const [dx, dy] of N4) {
+      const x = lx + dx, y = ly + dy;
+      if (!inside(g, x, y)) continue;
+      const n = y * g.W + x;
+      if (!isWater(g, n) || n === g.from[last] || s.cells.includes(n) || !(g.bed[n] < g.bed[last])) continue;
+      if (best < 0 || (g.kind[n] === RIVER && g.kind[best] !== RIVER)) best = n;
+    }
+    if (best >= 0) {
+      g.out[last].push(best);
+      s.join = [last, best];
+      g.order = null;
+    }
+  }
+  g.strokes.push(s);
 }
 
 // takes back the last canal; later canals may hang off earlier ones, so only the last one goes

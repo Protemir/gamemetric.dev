@@ -307,14 +307,15 @@ export class View {
     cx.setLineDash([]);
     cx.globalAlpha = 1;
 
-    // spilt water: a muddy puddle
+    // spilt water: a trickle over the end of a canal is just wet ground, a real spill is a puddle
     for (let i = 0; i < g.W * g.H; i++) {
       const s = g.spill[i];
       if (s < 0.02) continue;
       const [px, py] = this.center(i);
-      const r = cs * (0.42 + 0.45 * clamp(s, 0, 1));
-      this.blob(px + 1, py + 1, r * 1.08, 'rgba(70,52,30,0.35)', i);
-      this.blob(px, py, r, 'rgba(47,138,196,0.6)', i);
+      const k = clamp((s - 0.1) / 0.9, 0, 1);
+      this.blob(px, py, cs * (0.4 + 0.25 * k), 'rgba(52,40,24,0.32)', i);
+      const r = cs * (0.18 + 0.5 * k);
+      this.blob(px, py, r, `rgba(47,138,196,${0.45 + 0.2 * k})`, i);
       cx.fillStyle = 'rgba(220,245,255,0.35)';
       cx.beginPath();
       cx.ellipse(px - r * 0.3, py - r * 0.3, r * 0.3, r * 0.14, -0.6, 0, Math.PI * 2);

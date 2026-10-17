@@ -179,6 +179,30 @@ try {
     await B.js(`${A}.S.undo(${A}.g)`);
   } else check('straight down along the light cells digs straight down', false, 'no such column');
 
+  // 3f. the drop of 17.10: a canal that ends next to the river lower down flows back into it, no puddle
+  r = await B.js(`(() => {
+    const { g, S } = ${A};
+    const W = g.W;
+    for (const w of g.river) {
+      for (const d of [1, -1]) {
+        const a = w + d, b = a + W;
+        if (b >= W * g.H || g.kind[a] !== 0 || g.kind[b] !== 0 || g.objAt[a] || g.objAt[b]) continue;
+        const touch = [b + 1, b - 1, b + W].some((n) => n !== a && g.kind[n] === 1);
+        if (!touch) continue;
+        S.startStroke(g, w);
+        if (!S.extend(g, a).ok || !S.extend(g, b).ok) { S.endStroke(g); S.undo(g); continue; }
+        S.endStroke(g);
+        const st = g.strokes.at(-1);
+        S.flowStep(g);
+        const res = { join: st.join, spill: g.spill[b], flowIn: g.flow[b] };
+        S.undo(g);
+        if (st.join) return res;
+      }
+    }
+    return { none: true };
+  })()`);
+  check('a canal ending by the river flows back into it', r.join && r.spill < 0.01, JSON.stringify(r));
+
   // 4. layouts: the board fits, the bar does not cover it, cells are big enough for a finger
   for (const [w, h] of [[390, 844], [320, 568], [1280, 720], [844, 390], [768, 1024]]) {
     await B.size(w, h);
