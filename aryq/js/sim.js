@@ -304,12 +304,21 @@ export function flowStep(g) {
   }
   // a cell that water reaches from two canals splits its order between them; ordered in full from
   // both, the water came twice and the second share spilled where the canals meet
-  const parents = new Uint8Array(g.W * g.H);
-  for (let a = 0; a < g.W * g.H; a++) if (linked[a]) for (const t of g.out[a]) if (!g.gate[t]) parents[t] += 1;
+  // ... by how much water each of them brought last tick: in a loop of canals one side can be nearly
+  // empty, and an equal split left the cell short by that side's half
+  const weight = (a) => Math.min(before[a], g.cap) + 0.02;
+  const parents = new Float32Array(g.W * g.H);
+  for (let a = 0; a < g.W * g.H; a++) if (linked[a]) for (const t of g.out[a]) if (!g.gate[t]) parents[t] += weight(a);
+  const part = (a, t) => (parents[t] > 0 ? weight(a) / parents[t] : 1);
   for (let k = g.order.length - 1; k >= 0; k--) {
     const i = g.order[k];
+    // the river knows what everything below it will drink, so it keeps that much for itself
+    // before a canal that leaves it and comes back lower down takes any
     if (g.kind[i] === RIVER) {
-      need[i] = 0;
+      let w = 0;
+      if (!sleeping) for (const o of g.near[i]) if (tap.get(o) === i) w += o.need;
+      for (const t of g.out[i]) if (!g.gate[t]) w += (g.kind[t] === RIVER ? need[t] : Math.min(g.cap, need[t])) * part(i, t);
+      need[i] = w;
       carry[i] = Infinity;
       continue;
     }
@@ -321,11 +330,12 @@ export function flowStep(g) {
     for (const t of g.out[i]) {
       if (g.gate[t]) continue;
       open += 1;
-      if (g.kind[t] === RIVER) c += g.cap;
-      else {
-        const split = Math.max(1, parents[t]);
-        w += Math.min(g.cap, need[t]) / split;
-        c += Math.min(g.cap, carry[t]) / split;
+      if (g.kind[t] === RIVER) {
+        c += g.cap;
+        w += need[t] * part(i, t); // water that the river below this joint will be asked for
+      } else {
+        w += Math.min(g.cap, need[t]) * part(i, t);
+        c += Math.min(g.cap, carry[t]) * part(i, t);
       }
     }
     if (!open && !g.near[i].some((o) => tap.get(o) === i)) {
@@ -377,14 +387,13 @@ export function flowStep(g) {
     // a cell fed from several canals takes from each only that canal's share of its order
     const base = new Map(targets.map((t) => [t, flow[t]]));
     const mine = (t) => flow[t] - base.get(t);
-    const part = (t) => Math.max(1, parents[t]);
     // round 1: what is drunk below
-    q = share(q, targets, (t) => (g.kind[t] === RIVER ? 0 : Math.min(need[t] - flow[t], need[t] / part(t) - mine(t))));
+    q = share(q, targets, (t) => Math.min(need[t] - flow[t], need[t] * part(i, t) - mine(t)));
     // round 2: the rest. From the river a through canal gets at most a quarter, the river keeps the rest
     if (q > 1e-6) {
       const top = g.kind[i] === RIVER ? q * 0.25 : Infinity;
       const base2 = new Map(targets.map((t) => [t, flow[t]]));
-      q = share(q, targets, (t) => (g.kind[t] === RIVER ? Infinity : Math.min(carry[t] - flow[t], carry[t] / part(t) - mine(t), top - (flow[t] - base2.get(t)))));
+      q = share(q, targets, (t) => (g.kind[t] === RIVER ? Infinity : Math.min(carry[t] - flow[t], carry[t] * part(i, t) - mine(t), top - (flow[t] - base2.get(t)))));
     }
     // what the last river cell does not give to canals leaves the valley
     if (i === g.exit) g.gone = q;
@@ -543,15 +552,23 @@ const nextTo = (g, o) => (c) => Math.max(Math.abs((c % g.W) - o.x), Math.abs(((c
 
 // the canal cells (from a water cell to a cell next to the object) a good digger would use;
 // with `r` (spawning checks hundreds of spots) a quick estimate from reach() instead
-export function planFor(g, o, r = null) {
+// `spare`: the object is short of water although it touches a canal, so look for a way from water
+// that has some to give: the river, or a canal that is not full
+export function planFor(g, o, r = null, spare = false) {
   if (!r) {
-    for (const [dx, dy] of N8) {
-      const x = o.x + dx, y = o.y + dy;
-      if (inside(g, x, y) && isWater(g, y * g.W + x)) return { from: y * g.W + x, cells: [] };
+    if (!spare) {
+      for (const [dx, dy] of N8) {
+        const x = o.x + dx, y = o.y + dy;
+        if (inside(g, x, y) && isWater(g, y * g.W + x)) return { from: y * g.W + x, cells: [] };
+      }
     }
     const sources = [];
-    for (let i = 0; i < g.W * g.H; i++) if (isWater(g, i)) sources.push(i);
-    return route(g, sources, nextTo(g, o));
+    for (let i = 0; i < g.W * g.H; i++) {
+      if (!isWater(g, i)) continue;
+      if (spare && g.kind[i] === CANAL && g.flow[i] >= g.cap * 0.9) continue;
+      sources.push(i);
+    }
+    return route(g, sources, nextTo(g, o)) || (spare ? planFor(g, o) : null);
   }
   let pick = -1;
   for (const [dx, dy] of N8) {

@@ -41,6 +41,7 @@ function start(m = mode, restored = null) {
   state.ghost = null;
   state.calmShown = false;
   state.harvestAtYear = 0;
+  told.clear();
   ui.replaceChildren();
   hud.hidden = false;
   if (!restored) S.advance(g, 0.01); // the first garden appears
@@ -48,6 +49,15 @@ function start(m = mode, restored = null) {
   pickGhost(performance.now(), true);
   updateHud();
   if (DEBUG) window.__aryq = { g, S, view, state, step: (d) => S.advance(g, d) };
+}
+
+// some tips are worth saying only the first few times in a game
+const told = new Map();
+function tip(key, ms, times = 2) {
+  const n = told.get(key) || 0;
+  if (n >= times) return;
+  told.set(key, n + 1);
+  say(t(key), ms);
 }
 
 function say(text, ms = 2200) {
@@ -85,6 +95,7 @@ const TEXT = {
     tagIce: 'лёд',
     startHere: 'начни тут',
     pathShown: 'Вот как сюда довести воду: начни у кольца и веди палец по пунктиру.',
+    fullCanal: 'Арык, что поит этот сад, полон до краёв (белая пена по краям) — больше не пропустит. Вот путь от реки: веди по пунктиру.',
     alreadyWet: 'Здесь вода уже есть.',
     noPath: 'Сюда воду пока не довести ни от одного арыка. Попробуй провести арык выше по склону.',
     winterCame: 'Зима: сады спят и не пьют до весны. Самое время спокойно провести новые арыки.',
@@ -98,7 +109,7 @@ const TEXT = {
     elsewhere: 'Отсюда туда не стечь: там выше. Начни там, где пунктир, — выше по склону.',
     higher: 'выше',
     floodSoon: 'Юрту подтапливает: рядом кончается арык и вода льётся. Доведи арык до юрты или обратно в реку, или закрой шлюз.',
-    lowWater: 'Этому саду мало воды: арык, который его поит, уже полон. Проведи к нему отдельный арык от реки.',
+    lowWater: 'Этому саду мало воды: арык, который его поит, уже полон. Тапни по саду — покажу путь от реки.',
     riverLow: 'Воды на всех не хватает (💧 в шапке): к осени ледник тает меньше, а каждый арык сам впитывает немного воды. Отмени лишние арыки (↶), закрой шлюз у тех, кто подождёт, или возьми «Щедрый ледник».',
     water: 'Сколько воды даёт ледник против того, сколько выпивают сады, юрты и сами арыки',
     calm: 'Все пьют — время идёт быстрее. Новые сады и юрты появятся сами, не дай засохнуть ни одному.',
@@ -163,6 +174,7 @@ const TEXT = {
     tagIce: 'ice',
     startHere: 'start here',
     pathShown: 'This is how to bring water here: start at the ring and drag along the dashed line.',
+    fullCanal: 'The canal that feeds this orchard is full to the brim (white foam at its edges) and will not carry more. Here is a way from the river: drag along the dashed line.',
     alreadyWet: 'There is water here already.',
     noPath: 'No canal can bring water here yet. Try a canal higher up the slope.',
     winterCame: 'Winter: the orchards sleep and drink nothing until spring. A good time to dig new canals calmly.',
@@ -176,7 +188,7 @@ const TEXT = {
     elsewhere: 'Water cannot run there from here: it is higher. Start where the dashed line starts, further up the slope.',
     higher: 'higher',
     floodSoon: 'A yurt is flooding: a canal ends next to it and spills. Run the canal to the yurt or back into the river, or close a gate.',
-    lowWater: 'This orchard is short of water: the canal that feeds it is already full. Dig it its own canal from the river.',
+    lowWater: 'This orchard is short of water: the canal that feeds it is already full. Tap the orchard to see a way from the river.',
     riverLow: 'There is not enough water for everyone (💧 at the top): by autumn the glacier melts less, and every canal soaks up a little water. Undo canals you do not need (↶), close a gate for those who can wait, or take the Generous glacier.',
     water: 'How much water the glacier gives against what orchards, yurts and the canals themselves drink',
     calm: 'Everyone has water, so time runs faster. New orchards and yurts appear by themselves: do not let any dry up.',
@@ -294,9 +306,9 @@ cv.addEventListener('pointerdown', (e) => {
       store.set('aryq.litSeen', true);
       say(t('lit'), 4000);
     }
-    if (g.dig < 1) say(t('tired'), 3000);
+    if (g.dig < 1) tip('tired', 3000);
   }
-  else if (!g.objAt[press.tapped]) say(t('start'), 1800);
+  else if (!g.objAt[press.tapped]) tip('start', 1800, 3);
 });
 
 cv.addEventListener('pointermove', (e) => {
@@ -359,7 +371,7 @@ function routeTo(target) {
     if (!r.ok) {
       if (!state.blocked || state.blocked.cell !== c) sfx.block();
       state.blocked = { cell: c, at: performance.now(), why: r.why };
-      say(WHY[r.why] || '');
+      if (WHY[r.why]) tip(r.why, 2200);
       break;
     }
   }
@@ -370,10 +382,11 @@ function routeTo(target) {
 // when the finger asks for a place this stroke cannot reach, show where it could start instead
 function showBetterStart(target) {
   const o = g.objAt[target];
-  const plan = o ? S.planFor(g, o) : S.route(g, [...Array(W * H).keys()].filter((i) => S.isWater(g, i)), (c) => c === target);
+  if (!o) return;
+  const plan = S.planFor(g, o);
   if (!plan || !plan.cells.length || plan.from === (g.cur && g.cur.from)) return;
   state.hintPath = { from: plan.from, cells: plan.cells, until: performance.now() + 3500 };
-  say(t('elsewhere'), 3500);
+  tip('elsewhere', 3500, 3);
 }
 
 function walkTo(target) {
@@ -395,7 +408,7 @@ function walkTo(target) {
         if (!r.ok) {
           if (!state.blocked || state.blocked.cell !== gh.cells[k]) sfx.block();
           state.blocked = { cell: gh.cells[k], at: performance.now(), why: r.why };
-          say(WHY[r.why] || '');
+          if (WHY[r.why]) tip(r.why, 2200);
           return;
         }
       }
@@ -429,9 +442,11 @@ function walkTo(target) {
         state.blocked = { cell: b, at: performance.now(), why: r.why };
         sfx.block();
         const gh = state.ghost || state.hintPath;
-        if (gh && g.cur && g.cur.from !== gh.from && (gh.cells.includes(b) || gh.cells.includes(target))) say(t('ghostStart'), 5000);
-        else say(WHY[r.why] || '');
-        if (r.why === 'high' || r.why === 'up') showBetterStart(target);
+        const following = gh && g.cur && g.cur.from !== gh.from && g.cur.cells.length > 0 && g.cur.cells.every((c) => gh.cells.includes(c) || gh.cells.some((x) => Math.abs((x % W) - (c % W)) + Math.abs(((x / W) | 0) - ((c / W) | 0)) === 1));
+        if (following && gh.cells.includes(b)) tip('ghostStart', 5000);
+        else if (WHY[r.why]) tip(r.why, 2200);
+        // a better start is shown only when the finger goes to an orchard or a yurt
+        if ((r.why === 'high' || r.why === 'up') && g.objAt[target]) showBetterStart(target);
       }
       return;
     }
@@ -445,12 +460,14 @@ function release() {
   if (!press.moved && g.objAt[press.tapped]) {
     // a tap on an orchard or a yurt shows how to bring it water
     const o = g.objAt[press.tapped];
-    const plan = S.planFor(g, o);
+    const short = o.got < o.need * 0.9 && g.day < S.WINTER;
+    const touching = !!S.planFor(g, o) && S.planFor(g, o).cells.length === 0;
+    const plan = S.planFor(g, o, null, short && touching);
     if (!plan) say(t('noPath'), 4000);
-    else if (!plan.cells.length && o.got > 0.01) say(t('alreadyWet'), 2000);
-    else if (plan.cells.length) {
+    else if (!plan.cells.length) say(t('alreadyWet'), 2000);
+    else {
       state.hintPath = { from: plan.from, cells: plan.cells, until: performance.now() + 6000 };
-      say(t('pathShown'), 4000);
+      say(short && touching ? t('fullCanal') : t('pathShown'), 5000);
     }
     sfx.click();
   } else if (!press.moved) {
@@ -697,7 +714,10 @@ function coach(now) {
     if (o.type === 'garden' && o.got > 0.01 && o.s < 0.6 && o.thirst > 0.3 && !o.lowWarned && g.day < S.WINTER) {
       o.lowWarned = true;
       const share = S.waterShare(g);
-      say(share != null && share < 1.05 ? t('riverLow') : t('lowWater'), 6000);
+      const key = share != null && share < 1.05 ? 'riverLow' : 'lowWater';
+      if (state.lowYear === g.year + key) continue;
+      state.lowYear = g.year + key;
+      say(t(key), 6000);
       return;
     }
   }

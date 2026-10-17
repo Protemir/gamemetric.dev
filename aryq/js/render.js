@@ -281,6 +281,10 @@ export class View {
       const k = river ? clamp(q / 8, 0, 1) : clamp(q / g.cap, 0, 1);
       wetEdges.push([a, b, q, cs * (river ? 0.36 + 0.36 * k : 0.2 + 0.28 * k)]);
     }
+    // a canal full to the brim: white foam along its edges
+    cx.strokeStyle = 'rgba(245,252,255,0.8)';
+    cx.lineWidth = cs * 0.5;
+    this.segs(wetEdges.filter(([a, b, q]) => g.kind[b] === S.CANAL && q >= g.cap * 0.97));
     cx.strokeStyle = C.water;
     for (const [a, b, , w] of wetEdges) {
       cx.lineWidth = w;
