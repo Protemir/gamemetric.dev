@@ -293,14 +293,21 @@ export class View {
       cx.lineWidth = w * 0.5;
       this.seg(a, b);
     }
-    // moving glints: short light streaks that run downstream
+    // moving glints: short light streaks that run downstream. Each edge keeps its own position and
+    // moves it by speed × frame time, so a change in the flow changes the speed smoothly
+    // (speed × total time would make the glints jump whenever the flow changes)
     const t = now / 1000;
+    const step = clamp((now - (this.lastNow || now)) / 1000, 0, 0.1);
+    this.lastNow = now;
+    if (!this.phase || this.phase.length !== g.W * g.H * 4) this.phase = new Float32Array(g.W * g.H * 4);
     cx.strokeStyle = C.shine;
     for (const [a, b, q, w] of wetEdges) {
       const speed = 0.6 + Math.min(q, 5) * 0.18;
+      const k = a * 4 + (b === a + 1 ? 0 : b === a - 1 ? 1 : b > a ? 2 : 3);
+      this.phase[k] = (this.phase[k] + step * speed) % 66;
       cx.lineWidth = Math.max(1, w * 0.16);
       cx.setLineDash([cs * 0.16, cs * 0.5]);
-      cx.lineDashOffset = -((t * speed * cs + a * 7.3) % (cs * 0.66));
+      cx.lineDashOffset = -((this.phase[k] * cs + a * 7.3) % (cs * 0.66));
       cx.globalAlpha = 0.55 + 0.3 * Math.sin(t * 3 + a);
       this.seg(a, b, -w * 0.12, -w * 0.12);
     }
