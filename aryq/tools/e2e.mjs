@@ -362,11 +362,14 @@ try {
     for (const o of g.objects) used += o.got;
     for (let i = 0; i < g.W * g.H; i++) spilt += g.spill[i];
     const diff = S.sourceFlow(g.day, g.year, g.melt) - used - spilt - g.gone;
-    return { bad, diff: +diff.toFixed(5), strokes: g.strokes.length, dig: g.dig };
+    let spillOn = 0;
+    for (let i = 0; i < g.W * g.H; i++) if (g.spill[i] > 0.02 && g.out[i].some((t) => !g.gate[t])) spillOn++;
+    return { bad, diff: +diff.toFixed(5), strokes: g.strokes.length, dig: g.dig, spillOn };
   })()`);
   check('300 random swipes: water never runs uphill', r.bad === 0, JSON.stringify(r));
   check('300 random swipes: the water adds up', Math.abs(r.diff) < 1e-3, String(r.diff));
   check('digging budget never goes below zero', r.dig >= 0, String(r.dig));
+  check('no puddles where water could run on', r.spillOn === 0, String(r.spillOn));
 
   // 10. the valley of the day is the same valley every time today
   await B.open(page('&lang=ru'), 390, 844);

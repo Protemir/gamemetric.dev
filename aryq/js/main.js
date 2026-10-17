@@ -84,6 +84,7 @@ const TEXT = {
     tagObject: 'занято',
     tagIce: 'лёд',
     startHere: 'начни тут',
+    winterCame: 'Зима: сады спят и не пьют до весны. Самое время спокойно провести новые арыки.',
     update: 'Вышла новая версия — нажми, чтобы обновить (игра сохранится)',
     plenty: 'вдоволь',
     ghostStart: 'Пунктир начинается выше, у кольца «начни тут». От этого арыка вода туда не поднимется — начни от кольца.',
@@ -158,6 +159,7 @@ const TEXT = {
     tagObject: 'taken',
     tagIce: 'ice',
     startHere: 'start here',
+    winterCame: 'Winter: the orchards sleep and drink nothing until spring. A good time to dig new canals calmly.',
     update: 'A new version is out: tap to update (your game is saved)',
     plenty: 'plenty',
     ghostStart: 'The dashed line starts higher up, at the “start here” ring. From this canal water cannot climb there: start from the ring.',
@@ -731,6 +733,7 @@ function frame(now) {
     }
     if (g.over && !ui.firstChild) showOver();
     for (const ev of g.events.splice(0)) {
+      if (ev.type === 'winter') say(t('winterCame'), 5000);
       if (ev.type === 'flooded') {
         sfx.splash();
         say(t('flooded'), 3000);

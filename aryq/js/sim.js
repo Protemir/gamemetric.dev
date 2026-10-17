@@ -136,6 +136,8 @@ export function extend(g, b) {
   const s = g.cur;
   if (!s || s.join) return { ok: false, why: 'done' };
   const a = lastOf(g);
+  // only a side neighbour inside the valley
+  if (!(b >= 0 && b < g.W * g.H) || Math.abs((b % g.W) - (a % g.W)) + Math.abs(((b / g.W) | 0) - ((a / g.W) | 0)) !== 1) return { ok: false, why: 'far' };
   const back = s.cells.length >= 2 ? s.cells[s.cells.length - 2] : s.cells.length === 1 ? s.from : -1;
   if (b === back) {
     removeCell(g, s.cells.pop());
@@ -278,6 +280,10 @@ export function flowStep(g) {
     }
     if (best >= 0) tap.set(o, best);
   }
+  // a cell that water reaches from two canals splits its order between them; ordered in full from
+  // both, the water came twice and the second share spilled where the canals meet
+  const parents = new Uint8Array(g.W * g.H);
+  for (let a = 0; a < g.W * g.H; a++) if (linked[a]) for (const t of g.out[a]) if (!g.gate[t]) parents[t] += 1;
   for (let k = g.order.length - 1; k >= 0; k--) {
     const i = g.order[k];
     if (g.kind[i] === RIVER) {
@@ -294,8 +300,9 @@ export function flowStep(g) {
       open += 1;
       if (g.kind[t] === RIVER) c += g.cap;
       else {
-        w += Math.min(g.cap, need[t]);
-        c += Math.min(g.cap, carry[t]);
+        const split = Math.max(1, parents[t]);
+        w += Math.min(g.cap, need[t]) / split;
+        c += Math.min(g.cap, carry[t]) / split;
       }
     }
     if (!open && !g.near[i].some((o) => tap.get(o) === i)) {
@@ -338,13 +345,17 @@ export function flowStep(g) {
       }
     }
     const targets = g.out[i].filter((t) => !g.gate[t]);
+    // a cell fed from several canals takes from each only that canal's share of its order
+    const base = new Map(targets.map((t) => [t, flow[t]]));
+    const mine = (t) => flow[t] - base.get(t);
+    const part = (t) => Math.max(1, parents[t]);
     // round 1: what is drunk below
-    q = share(q, targets, (t) => (g.kind[t] === RIVER ? 0 : need[t] - flow[t]));
+    q = share(q, targets, (t) => (g.kind[t] === RIVER ? 0 : Math.min(need[t] - flow[t], need[t] / part(t) - mine(t))));
     // round 2: the rest. From the river a through canal gets at most a quarter, the river keeps the rest
     if (q > 1e-6) {
       const top = g.kind[i] === RIVER ? q * 0.25 : Infinity;
-      const base = new Map(targets.map((t) => [t, flow[t]]));
-      q = share(q, targets, (t) => (g.kind[t] === RIVER ? Infinity : Math.min(carry[t] - flow[t], top - (flow[t] - base.get(t)))));
+      const base2 = new Map(targets.map((t) => [t, flow[t]]));
+      q = share(q, targets, (t) => (g.kind[t] === RIVER ? Infinity : Math.min(carry[t] - flow[t], carry[t] / part(t) - mine(t), top - (flow[t] - base2.get(t)))));
     }
     // what the last river cell does not give to canals leaves the valley
     if (i === g.exit) g.gone = q;
@@ -401,6 +412,7 @@ function tick(g, dt) {
     g.digTimer -= DIG_REGEN;
     if (g.dig < DIG_CAP) g.dig += 1;
   }
+  if (g.day < WINTER && g.day + dt >= WINTER) g.events.push({ type: 'winter' });
   g.day += dt;
   if (g.day < WINTER) {
     if (g.day >= g.nextGarden) {
