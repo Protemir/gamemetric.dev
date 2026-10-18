@@ -1,11 +1,12 @@
 // Көкпар — игра: 3×3, мешок-серке, два казана, тартыс (перетягивание мешка на скаку), боты.
 // ?debug — window.__kokpar; ?sim=N — N матчей ботов без картинки (проверка баланса); ?bots — игрок тоже бот.
 import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
-import { Rider } from './rider.js';
+import { Rider, loadRider } from './rider.js';
 import { makeSerke } from './serke.js';
 import { initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
+const OFF_RIDERS = (P.get('no') || '').includes('riders'), NO_SHADOW_RIDERS = (P.get('no') || '').includes('rshadow');
 const MATCH_LEN = Number(P.get('len') || 180); // с
 const GOAL_X = 52, KAZAN_R = 3.0, SCORE_R = KAZAN_R + 1.5; // к казану надо подъехать вплотную
 const TUG_RANGE = 2.7, TUG_BREAK = 3.5, PICK_R = 1.8;
@@ -107,6 +108,8 @@ function makeEnt(team, idx, isMe) {
   h.ai = false;
   // масть: у игрока гнедой; тоқым — цвет команды
   const r = new Rider(h, TEAMS[team].color);
+  if (OFF_RIDERS) r.root.visible = false; // ?no=riders — замер без всадников
+if (NO_SHADOW_RIDERS) r.root.traverse((o) => { o.castShadow = false; });
   const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: isMe ? '#ffffff' : TEAMS[team].css, transparent: true, opacity: isMe ? 0.75 : 0.45, depthWrite: false }));
   ring.position.y = 0.04;
   scene.add(ring);
@@ -510,7 +513,7 @@ function updateCamera(dt, snap) {
 // ---------- интерфейс ----------
 const el = Object.fromEntries(['scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'end', 'endTitle', 'endScore', 'again', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
 el.bigText = el.banner.querySelector('.big'); el.subText = el.banner.querySelector('.small');
-const CREDITS = 'Рельеф / Terrain: SRTM (USGS), AWS Terrain Tiles · Снимок / Imagery: EOxCloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016), CC BY 4.0 · Конь / Horse: Warhorse Lite by Literock Studios';
+const CREDITS = 'Рельеф / Terrain: SRTM (USGS), AWS Terrain Tiles · Снимок / Imagery: EOxCloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016), CC BY 4.0 · Конь / Horse: Warhorse Lite by Literock Studios · Всадник / Rider: Heraklios by A. Dizon (Mixamo)';
 for (const c of document.querySelectorAll('[data-credits]')) c.textContent = CREDITS;
 function applyLang() {
   document.documentElement.lang = lang;
@@ -604,7 +607,7 @@ function frame(now) {
 }
 
 if (!SIM) applyLang();
-await Promise.all([loadModel(), SIM ? null : loadTerrain()]);
+await Promise.all([loadModel(), loadRider(), SIM ? null : loadTerrain()]);
 for (const team of [0, 1]) for (let i = 0; i < 3; i++) ents.push(makeEnt(team, i, team === 0 && i === 1));
 me = ents.find((e) => e.me);
 // масти: игроку — гнедой, остальным разные
