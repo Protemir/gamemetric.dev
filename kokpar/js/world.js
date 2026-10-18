@@ -817,7 +817,7 @@ class Horse {
     if (this.halt > 0 && this.v < 0.3) this.halt = 0;
     this.acc = THREE.MathUtils.lerp(this.acc, (this.v - prev) / Math.max(dt, 1e-4), 1 - Math.exp(-dt * 6));
     // Поворот: на галопе радиус шире, на месте — разворот шагом.
-    const maxTurn = this.v < 0.5 ? 1.3 : 2.4 / (1 + this.v * 0.22);
+    const maxTurn = (this.v < 0.5 ? 1.3 : 2.4 / (1 + this.v * 0.22)) * (this.turnMul || 1);
     this.turn = THREE.MathUtils.lerp(this.turn, rearing ? 0 : this.steer * maxTurn, 1 - Math.exp(-dt * 5));
     this.yaw += this.turn * dt;
     const p = this.obj.position;

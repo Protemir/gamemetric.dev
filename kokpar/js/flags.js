@@ -71,6 +71,33 @@ const SIGNS = {
   horns(g, cx, cy, s) { // Кеген — бараньи рога
     g.lineWidth = s * 0.09; horn(g, cx, cy - s * 0.05, s * 0.85, 1); horn(g, cx, cy + s * 0.05, s * 0.85, -1);
   },
+  arrows(g, cx, cy, s) { // Жаркент — скрещённые стрелы
+    g.lineWidth = s * 0.07;
+    for (const d of [1, -1]) {
+      const x0 = cx - d * s * 0.42, y0 = cy + s * 0.42, x1 = cx + d * s * 0.42, y1 = cy - s * 0.42;
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      const a = Math.atan2(y1 - y0, x1 - x0), L = s * 0.17;
+      g.beginPath(); g.moveTo(x1, y1); g.lineTo(x1 - Math.cos(a - 0.45) * L, y1 - Math.sin(a - 0.45) * L); g.lineTo(x1 - Math.cos(a + 0.45) * L, y1 - Math.sin(a + 0.45) * L); g.closePath(); g.fill();
+      for (const k of [0.1, 0.2]) { const fx = x0 + (x1 - x0) * k, fy = y0 + (y1 - y0) * k; g.beginPath(); g.moveTo(fx, fy); g.lineTo(fx - Math.cos(a - 0.7) * L * 0.7, fy - Math.sin(a - 0.7) * L * 0.7); g.moveTo(fx, fy); g.lineTo(fx - Math.cos(a + 0.7) * L * 0.7, fy - Math.sin(a + 0.7) * L * 0.7); g.stroke(); }
+    }
+  },
+  moon(g, cx, cy, s, field) { // Текели — полумесяц и звезда
+    g.beginPath(); g.arc(cx - s * 0.05, cy, s * 0.42, 0, 6.283); g.fill();
+    g.fillStyle = field; g.beginPath(); g.arc(cx + s * 0.1, cy - s * 0.05, s * 0.36, 0, 6.283); g.fill();
+    g.fillStyle = GOLD;
+    SIGNS.star(g, cx + s * 0.22, cy - s * 0.02, s * 0.2);
+  },
+  wing(g, cx, cy, s) { // Шонжы — Самұрық: раскинутые крылья
+    for (const d of [1, -1]) {
+      for (let i = 0; i < 4; i++) {
+        g.beginPath();
+        g.ellipse(cx + d * s * (0.14 + i * 0.09), cy - s * (0.04 + i * 0.06), s * 0.07, s * (0.34 - i * 0.05), d * (0.5 + i * 0.25), 0, 6.283);
+        g.fill();
+      }
+    }
+    g.beginPath(); g.ellipse(cx, cy + s * 0.08, s * 0.09, s * 0.22, 0, 0, 6.283); g.fill();
+    g.beginPath(); g.arc(cx, cy - s * 0.2, s * 0.08, 0, 6.283); g.fill();
+  },
   khan(g, cx, cy, s) { // Нарынкол — Хан-Тенгри и звезда над ним
     peak(g, cx, cy + s * 0.45, s * 0.95, s * 0.8);
     g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(cx, cy - s * 0.35); g.lineTo(cx - s * 0.13, cy - s * 0.12); g.lineTo(cx + s * 0.13, cy - s * 0.12); g.closePath(); g.fill();
@@ -79,6 +106,7 @@ const SIGNS = {
 };
 
 const cache = new Map();
+export const SIGN_LIST = Object.keys(SIGNS);
 export function flagCanvas(team, w = 240, h = 150) {
   const key = team.color + team.sign + w;
   if (cache.has(key)) return cache.get(key);
@@ -95,7 +123,7 @@ export function flagCanvas(team, w = 240, h = 150) {
   for (let y = bw * 0.55; y < h; y += bw * 1.05) horn(g, bw / 2, y, bw * 0.7, 1);
   // знак
   g.fillStyle = GOLD; g.strokeStyle = GOLD; g.lineCap = 'round'; g.lineJoin = 'round';
-  (SIGNS[team.sign] || SIGNS.shanyrak)(g, bw + (w - bw) / 2, h / 2, h * 0.62);
+  (SIGNS[team.sign] || SIGNS.shanyrak)(g, bw + (w - bw) / 2, h / 2, h * 0.62, team.color);
   cache.set(key, c);
   return c;
 }

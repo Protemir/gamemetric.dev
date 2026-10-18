@@ -4,6 +4,7 @@ import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerra
 import { Rider, loadRider } from './rider.js';
 import { makeSerke } from './serke.js';
 import { makeKazan } from './kazan.js';
+import * as career from './career.js';
 import { flagCanvas } from './flags.js';
 import { initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
 
@@ -51,23 +52,11 @@ const tr = (k) => TEXT[lang][k];
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = THREE.MathUtils.clamp;
 
-// ---------- лига аулов: 8 соперников, каждый сильнее ----------
-const HOME = { color: '#b8262c', css: '#ff6a6e', grad: ['#ffb1b3', '#e0393e'], hud: ['#e0393e', '#8f1418'], sign: 'shanyrak' }; // Аксай — свои
-const LEAGUE = [
-  { ru: 'Кайнар', en: 'Kainar', pull: -0.05, react: 0.8, speed: 0.92, color: '#2f7a3a', css: '#86e596', grad: ['#c3f0c9', '#3aa64c'], hud: ['#3aa64c', '#15501f'], sign: 'spring' },
-  { ru: 'Таусамалы', en: 'Tausamaly', pull: -0.03, react: 0.68, speed: 0.95, color: '#2456a8', css: '#7fb0ff', grad: ['#b9d4ff', '#3a7be0'], hud: ['#3a7be0', '#13398a'], sign: 'mountain' },
-  { ru: 'Каскелен', en: 'Kaskelen', pull: -0.01, react: 0.58, speed: 0.97, color: '#c0601c', css: '#ffb070', grad: ['#ffd9b0', '#e0782a'], hud: ['#e0782a', '#8a3c0c'], sign: 'sun' },
-  { ru: 'Уштерек', en: 'Ushterek', pull: 0.0, react: 0.54, speed: 0.98, color: '#1f8a86', css: '#6fe0dc', grad: ['#bff2ef', '#2aa8a3'], hud: ['#2aa8a3', '#0d5a58'], sign: 'poplars' },
-  { ru: 'Талгар', en: 'Talgar', pull: 0.02, react: 0.5, speed: 0.99, color: '#6a3a9a', css: '#c49bff', grad: ['#e2cfff', '#8a52c8'], hud: ['#8a52c8', '#3e1f63'], sign: 'star' },
-  { ru: 'Иссык', en: 'Yesik', pull: 0.04, react: 0.45, speed: 1.0, color: '#2a86c8', css: '#8fd0ff', grad: ['#c8eaff', '#3aa0e0'], hud: ['#3aa0e0', '#145c8a'], sign: 'wave' },
-  { ru: 'Шелек', en: 'Shelek', pull: 0.06, react: 0.4, speed: 1.02, color: '#b8901e', css: '#ffe07a', grad: ['#fff0b8', '#e0b83a'], hud: ['#d4a82e', '#7a5a0c'], sign: 'tamga' },
-  { ru: 'Кеген', en: 'Kegen', pull: 0.08, react: 0.35, speed: 1.03, color: '#2e2e2e', css: '#e0e0e0', grad: ['#f2f2f2', '#7a7a7a'], hud: ['#5a5a5a', '#1a1a1a'], sign: 'horns' },
-  { ru: 'Нарынкол', en: 'Narynkol', pull: 0.1, react: 0.3, speed: 1.05, color: '#1e3366', css: '#9fb6ff', grad: ['#d0dbff', '#3a5aa8'], hud: ['#3a5aa8', '#0f1a3a'], sign: 'khan' },
-];
-const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* приватный режим */ } } };
-let stage = Math.min(LEAGUE.length - 1, Number(P.get('stage') ?? store.get('kokpar.stage', 0)) || 0);
-const foeName = () => LEAGUE[stage][lang];
-const teamName = (t) => (t === 0 ? tr('home') : foeName());
+// ---------- матч карьеры: соперник, его форма и сила (career.js) ----------
+let fx = null; // текущий матч: { name, kit, diff, ko, final, arena }
+const DEFAULT_FX = { id: 'kainar', name: 'Kainar', ko: false, final: false, arena: 'day', kit: career.makeKit('#2456a8', 'mountain'), diff: { pull: 0.06, react: 0.45, speed: 1 } };
+let HB = { speed: 1, drain: 1, pull: 0, turn: 1, coat: [1.7, 1.7, 1.7] }; // прокачка коней клуба
+const teamName = (t) => (t === 0 ? career.clubName('me') : (fx || DEFAULT_FX).name);
 
 // ---------- поле: казаны, флажки, разметка ----------
 const SWAP = P.has('swap') ? -1 : 1; // ?swap — команды меняются сторонами (проверка перекоса)
@@ -277,7 +266,7 @@ function stepTug(dt) {
   if (!T) return;
   T.t += dt;
   const d = T.att.h.obj.position.distanceTo(T.car.h.obj.position);
-  const pull = (e) => (e.me && !AI_PLAYER ? 0.42 : 0.42 + (e.team === 1 && !SIM ? DIFF.pull : 0) + (rnd() - 0.5) * 0.5) * (0.65 + 0.35 * e.stamina / 100);
+  const pull = (e) => ((e.me && !AI_PLAYER ? 0.42 : 0.42 + (e.team === 1 && !SIM ? DIFF.pull : 0) + (rnd() - 0.5) * 0.5) + (e.team === 0 ? HB.pull : 0)) * (0.65 + 0.35 * e.stamina / 100);
   // всадники держат один мешок — кони сцеплены: не разбегаются, несущий притормаживает
   if (d > 2.3) {
     V.subVectors(T.car.h.obj.position, T.att.h.obj.position).setY(0).multiplyScalar((d - 2.3) / d * 0.5);
@@ -317,8 +306,8 @@ const DIFF = { pull: Number(P.get('pull') || 0.06), react: 0.45, speed: 1 }; // 
 const painted = ['', ''];
 function paintTeam(t, def) {
   Object.assign(TEAMS[t], { color: def.color, css: def.css, grad: def.grad, sign: def.sign });
-  if (painted[t] === def.color) return;
-  painted[t] = def.color;
+  if (painted[t] === def.color + def.sign) return;
+  painted[t] = def.color + def.sign;
   for (const e of ents) if (e.team === t) {
     e.r.setColor(def.color);
     if (e.h.blanket) e.h.blanket.material = feltMat(def.color);
@@ -339,10 +328,16 @@ function paintTeam(t, def) {
   }
 }
 function applyStage() {
-  const L = LEAGUE[stage];
-  paintTeam(0, HOME); paintTeam(1, L);
-  if (!SIM && !P.has('pull')) { DIFF.pull = L.pull; DIFF.react = L.react; DIFF.speed = L.speed; }
+  fx = SIM ? DEFAULT_FX : career.fixture() || DEFAULT_FX;
+  if (!SIM) HB = career.horse();
+  paintTeam(0, career.myKit()); paintTeam(1, fx.kit);
+  if (!SIM) { el.nmR.textContent = teamName(0); el.nmB.textContent = teamName(1); }
+  if (!SIM && !P.has('pull')) Object.assign(DIFF, fx.diff);
+  for (const e of ents) if (e.team === 0) e.h.turnMul = HB.turn;
+  paintCoat();
 }
+function paintCoat() { if (me) me.h.obj.traverse((o) => { if (o.isSkinnedMesh) o.material.color.setRGB(...HB.coat); }); }
+globalThis.__kokparCoat = () => { HB = career.horse(); paintCoat(); };
 let roleT = 0;
 function assignRoles() {
   const carrier = sack.carrier;
@@ -490,15 +485,16 @@ function playerInput(dt) {
 // ---------- шаг игры ----------
 function stepEnt(e, dt) {
   // қамшы: рывок, тратит силы; силы восполняются
-  if (e.wantSprint && e.stamina > 8 && e.h.gait >= 3) { e.sprint = 0.2; e.stamina -= 26 * dt; if (!SIM && e.me && !e.whipT) { whip(); e.whipT = 0.6; } }
-  else if (e.h.gait >= 4 && e.h.v > 8) e.stamina = Math.max(0, e.stamina - 1.8 * dt); // галоп утомляет
+  const drain = e.team === 0 ? HB.drain : 1;
+  if (e.wantSprint && e.stamina > 8 && e.h.gait >= 3) { e.sprint = 0.2; e.stamina -= 26 * drain * dt; if (!SIM && e.me && !e.whipT) { whip(); e.whipT = 0.6; } }
+  else if (e.h.gait >= 4 && e.h.v > 8) e.stamina = Math.max(0, e.stamina - 1.8 * drain * dt); // галоп утомляет
   else e.stamina = Math.min(100, e.stamina + 11 * dt);
   e.tired = e.stamina < 10 ? true : e.stamina > 35 ? false : e.tired;
   e.whipT = Math.max(0, (e.whipT || 0) - dt);
   e.sprint = Math.max(0, e.sprint - dt);
   e.tugCD = Math.max(0, e.tugCD - dt); e.pickCD = Math.max(0, e.pickCD - dt); e.stun = Math.max(0, e.stun - dt);
   const tugging = state.tug && (state.tug.car === e || state.tug.att === e);
-  e.h.speedMul = (e.sprint > 0 ? 1.22 : 1) * (sack.carrier === e ? 0.9 : 1) * (e.stun > 0 ? 0.6 : 1) * (tugging ? 0.75 : 1) * (e.tired ? 0.82 : 1) * (e.team === 1 ? DIFF.speed : 1);
+  e.h.speedMul = (e.sprint > 0 ? 1.22 : 1) * (sack.carrier === e ? 0.9 : 1) * (e.stun > 0 ? 0.6 : 1) * (tugging ? 0.75 : 1) * (e.tired ? 0.82 : 1) * (e.team === 1 ? DIFF.speed : HB.speed);
 }
 function stepSack(dt) {
   if (sack.flight) { // летит: после гола на казан или брошена
@@ -598,13 +594,17 @@ function step(dt) {
     if (roleT <= 0) { assignRoles(); roleT = 0.3; }
     for (const e of ents) if (!e.me || AI_PLAYER) think(e, dt);
     if (me && !AI_PLAYER && !me.r.fallen) playerInput(dt);
-    if (state.clock <= 0) { state.clock = 0; endMatch(); }
+    if (state.clock <= 0) {
+      state.clock = 0;
+      if (fx?.ko && !SIM && state.score[0] === state.score[1]) { if (!state.golden) { state.golden = true; banner(lang === 'ru' ? 'ЗОЛОТОЙ ГОЛ' : 'GOLDEN GOAL', ['#fff3c0', '#f0a01c'], 2.2, career.goldenText()); } }
+      else endMatch();
+    }
   } else if (state.phase === 'goal') {
     for (const e of ents) {
       e.h.gait = e.celebrate ? 0 : 1; e.h.steer = 0;
       if (e.celebrate && e.h.v < 1.4 && !SIM) { e.h.rear(); e.celebrate = false; } // свечка и ржание
     }
-    if (state.t <= 0) { for (const e of ents) e.celebrate = false; kickoff(false); }
+    if (state.t <= 0) { for (const e of ents) e.celebrate = false; if (state.golden) endMatch(); else kickoff(false); }
   } else if (state.phase === 'end' || state.phase === 'menu') {
     for (const e of ents) { e.h.gait = 0; e.h.steer = 0; }
   }
@@ -641,20 +641,12 @@ function step(dt) {
 }
 function endMatch() {
   state.phase = 'end';
-  const [a, b] = state.score;
   if (SIM) return;
-  const mine = me.team, won = state.score[mine] > state.score[1 - mine], draw = a === b;
-  const champ = won && stage === LEAGUE.length - 1;
-  if (won && stage < LEAGUE.length - 1) { stage++; store.set('kokpar.stage', stage); }
-  el.again.textContent = won ? (champ ? tr('retry') : tr('next')) : tr('retry');
-  el.endNext.innerHTML = champ ? tr('champion') : won ? tr('unlocked') + ': <b>' + foeName() + '</b>' : tr('vs') + ': <b>' + foeName() + '</b>';
-  ladder(el.endLadder);
+  const sum = career.report(state.score[0], state.score[1]);
   el.banner.classList.remove('on'); bannerT = 0; delete el.hint.dataset.keep; el.hint.textContent = ''; el.tug.hidden = true;
-  el.endTitle.textContent = draw ? tr('draw') : won ? tr('win') : tr('lose');
-  const g = won || draw ? ['#ffe58a', '#f0a01c'] : ['#d9d9d9', '#7d7d7d'];
-  el.endTitle.style.setProperty('--c1', g[0]); el.endTitle.style.setProperty('--c2', g[1]);
-  el.endScore.innerHTML = `<span style="color:${TEAMS[0].css}">${a}</span> : <span style="color:${TEAMS[1].css}">${b}</span>`;
-  el.end.hidden = false;
+  career.showResult(sum);
+  el.menu.hidden = false;
+  if (sum.res === 'win') cheer(true);
 }
 
 // ---------- камера ----------
@@ -678,15 +670,15 @@ function updateCamera(dt, snap) {
 }
 
 // ---------- интерфейс ----------
-const el = Object.fromEntries(['menu', 'menuTitle', 'menuSub', 'menuVs', 'menuLadder', 'playBtn', 'endNext', 'endLadder', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'end', 'endTitle', 'endScore', 'again', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
+const el = Object.fromEntries(['menu', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
 el.bigText = el.banner.querySelector('.big'); el.subText = el.banner.querySelector('.small');
 const CREDITS = 'Рельеф / Terrain: SRTM (USGS), AWS Terrain Tiles · Снимок / Imagery: EOxCloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016), CC BY 4.0 · Конь / Horse: Warhorse Lite by Literock Studios · Всадник / Rider: Heraklios by A. Dizon (Mixamo)';
 for (const c of document.querySelectorAll('[data-credits]')) c.textContent = CREDITS;
 function applyLang() {
-  document.documentElement.lang = lang;
+  document.documentElement.lang = lang; globalThis.__kokparLang = lang;
   el.nmR.textContent = teamName(0); el.nmB.textContent = teamName(1);
   el.stamlbl.textContent = tr('stamina'); el.btnTug.textContent = tr('btnTug'); el.btnWhip.textContent = tr('btnWhip');
-  if (state.phase === 'menu') showMenu();
+  if (state.phase === 'menu') career.showHub();
   el.lang.textContent = lang === 'ru' ? 'EN' : 'RU';
   if (el.hint.dataset.keep) el.hint.innerHTML = touch ? tr('helpTouch') : tr('help');
 }
@@ -706,6 +698,7 @@ function hud(dt) {
   el.scR.textContent = state.score[0]; el.scB.textContent = state.score[1];
   const c = Math.ceil(state.clock);
   el.clock.textContent = `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
+  if (state.golden) el.clock.textContent = '⚡';
   el.stam.style.width = me.stamina + '%';
   el.stam.style.background = me.stamina < 25 ? 'linear-gradient(90deg,#8f1418,#e0393e)' : '';
   const T = state.tug, mine = T && (T.att === me || T.car === me);
@@ -774,22 +767,15 @@ el.btnWhip.addEventListener('pointerdown', (e) => { e.preventDefault(); if (canR
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.btnWhip.addEventListener(ev, () => { whipHeld = false; });
 function startMatch() {
   applyStage(); applyLang();
-  el.end.hidden = true; el.menu.hidden = true;
-  state.score = [0, 0]; state.clock = MATCH_LEN; kickoff(true);
+  el.menu.hidden = true;
+  state.score = [0, 0]; state.clock = MATCH_LEN; state.golden = false; kickoff(true);
 }
-el.again.addEventListener('click', startMatch);
-el.playBtn.addEventListener('click', () => { initAudio(); goLandscape(); startMatch(); });
-function ladder(box) { // ступени лиги: пройденные, текущая, закрытые
-  box.innerHTML = LEAGUE.map((L, i) => '<span class="' + (i < stage ? 'done' : i === stage ? 'cur' : 'lock') + '"><img src="' + flagCanvas(L, 96, 60).toDataURL() + '" alt="">' + (i < stage ? '✓ ' : '') + L[lang] + '</span>').join('');
-}
+career.initCareer(document.getElementById('hub'), () => { initAudio(); goLandscape(); startMatch(); });
 function showMenu() {
   state.phase = 'menu';
-  applyStage(); // команда соперника в своих цветах уже в меню
+  applyStage(); // соперник в своих цветах уже в меню
   el.banner.classList.remove('on'); bannerT = 0;
-  el.menuTitle.textContent = tr('league'); el.menuSub.textContent = tr('menuSub');
-  el.menuVs.innerHTML = tr('stageOf')(stage + 1, LEAGUE.length) + ' · ' + tr('vs') + ': <b>' + foeName() + '</b>';
-  el.playBtn.textContent = tr('play');
-  ladder(el.menuLadder);
+  career.showHub();
   el.menu.hidden = false;
 }
 addEventListener('resize', onResize);
@@ -816,6 +802,7 @@ me = ents.find((e) => e.me);
 {
   const coats = [[1.7, 1.7, 1.7], [2.9, 1.6, 0.95], [0.75, 0.72, 0.72], [3.1, 2.6, 1.7], [1.2, 1.1, 1.05], [3.3, 2.2, 1.3]];
   ents.forEach((e, i) => e.h.obj.traverse((o) => { if (o.isSkinnedMesh) o.material.color.setRGB(...coats[e.me ? 0 : (i + 1) % coats.length]); }));
+  if (!SIM) globalThis.__kokparCoat();
 }
 kickoff(true);
 
@@ -843,4 +830,4 @@ if (SIM) {
   setTimeout(() => { delete el.hint.dataset.keep; }, 9000);
   requestAnimationFrame(frame);
 }
-if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };
+if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };
