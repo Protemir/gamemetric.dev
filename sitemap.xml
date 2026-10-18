@@ -26,6 +26,11 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/asyk/?lang=en"/>
   </url>
   <url>
+    <loc>https://gamemetric.dev/kokpar/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/kokpar/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/kokpar/?lang=en"/>
+  </url>
+  <url>
     <loc>https://gamemetric.dev/survivors/</loc>
     <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/survivors/?lang=ru"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/survivors/?lang=en"/>
