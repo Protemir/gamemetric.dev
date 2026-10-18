@@ -74,7 +74,10 @@ const HORIZON = new THREE.Color('#dcd8cc');
 scene.fog = new THREE.FogExp2(HORIZON, 0.0015); // дымка: даль и горы светлеют постепенно
 const camera = new THREE.PerspectiveCamera(55, view.w / view.h, 0.1, 4000);
 
-scene.add(new THREE.HemisphereLight('#bcd6f5', '#7a5c32', 1.05));
+const ENV = { snow: { value: 0 }, stars: { value: 0 } };
+const HAZE = new THREE.Color('#b9c7d8');
+const hemi = new THREE.HemisphereLight('#bcd6f5', '#7a5c32', 1.05);
+scene.add(hemi);
 // Солнце ближе к вечеру: тёплое и ниже — длинные тени, рельефнее конь.
 const SUN_DIR = new THREE.Vector3(-0.62, 0.5, 0.6).normalize();
 const sun = new THREE.DirectionalLight('#ffe0ad', 3.1);
@@ -109,19 +112,23 @@ const cloudTex = (() => {
 })();
 const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
-  uniforms: { top: { value: new THREE.Color('#4a82c8') }, bot: { value: HORIZON }, sunDir: { value: SUN_DIR }, time: { value: 0 }, clouds: { value: cloudTex } },
+  uniforms: { top: { value: new THREE.Color('#4a82c8') }, bot: { value: HORIZON }, sunDir: { value: SUN_DIR }, time: { value: 0 }, clouds: { value: cloudTex }, stars: ENV.stars, glow: { value: 1 } },
   vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-  fragmentShader: `uniform vec3 top; uniform vec3 bot; uniform vec3 sunDir; uniform float time; uniform sampler2D clouds; varying vec3 vDir;
+  fragmentShader: `uniform vec3 top; uniform vec3 bot; uniform vec3 sunDir; uniform float time; uniform sampler2D clouds; uniform float stars; uniform float glow; varying vec3 vDir;
     void main(){
       vec3 d = normalize(vDir);
       float h = max(d.y, 0.);
       vec3 col = mix(bot, top, smoothstep(0., .5, h));
       float s = max(dot(d, sunDir), 0.);
-      col += vec3(1., .78, .5) * (pow(s, 6.) * .22 + pow(s, 300.) * 1.4);
+      col += vec3(1., .78, .5) * (pow(s, 6.) * .22 + pow(s, 300.) * 1.4) * glow;
+      // ночью — звёзды: мелкие яркие точки из той же текстуры шума
+      vec2 su = d.xz / (d.y + .05) * 3.1;
+      float st = smoothstep(.86, .93, texture2D(clouds, su).r * texture2D(clouds, su * 1.7 + .5).r * 1.6);
+      col += vec3(.9, .95, 1.) * st * stars * smoothstep(.05, .3, d.y);
       vec2 uv = d.xz / (d.y + .12) * .2 + vec2(time * .0005, time * .0002);
       float n = texture2D(clouds, uv).r * .7 + texture2D(clouds, uv * 2.7 + .37).r * .3;
       float c = smoothstep(.5, .74, n) * smoothstep(.02, .22, d.y);
-      vec3 cloud = mix(vec3(.93, .9, .86), vec3(1., .93, .8), pow(s, 3.));
+      vec3 cloud = mix(vec3(.93, .9, .86), vec3(1., .93, .8), pow(s, 3.)) * mix(1., .12, stars);
       col = mix(col, cloud, c * .85);
       gl_FragColor = vec4(col, 1.);
       #include <tonemapping_fragment>
@@ -188,10 +195,11 @@ macroTex.wrapS = macroTex.wrapT = THREE.RepeatWrapping;
 const groundMat = new THREE.MeshLambertMaterial({ map: groundTex });
 groundMat.onBeforeCompile = (sh) => {
   sh.uniforms.macro = { value: macroTex };
+  sh.uniforms.snow = ENV.snow;
   sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vW;')
     .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvW = (modelMatrix * vec4(transformed, 1.)).xz;');
-  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D macro; varying vec2 vW;')
-    .replace('#include <map_fragment>', '#include <map_fragment>\nfloat mc = texture2D(macro, vW / 140.).r * .6 + texture2D(macro, vW / 37. + .3).r * .4;\ndiffuseColor.rgb *= mix(.78, 1.2, mc);');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D macro; uniform float snow; varying vec2 vW;')
+    .replace('#include <map_fragment>', '#include <map_fragment>\nfloat mc = texture2D(macro, vW / 140.).r * .6 + texture2D(macro, vW / 37. + .3).r * .4;\ndiffuseColor.rgb *= mix(.78, 1.2, mc);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(.84, .87, .93) * mix(.86, 1.06, mc) * (.9 + diffuseColor.g * .25), snow);');
 };
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), groundMat);
 ground.rotation.x = -Math.PI / 2;
@@ -230,6 +238,8 @@ if (GRASS) {
   const mat = new THREE.MeshLambertMaterial({ map: bladeTex, alphaTest: 0.45 });
   mat.onBeforeCompile = (sh) => { // ветер: верх пучка качается, волны идут по степи
     sh.uniforms.time = wind;
+    sh.uniforms.snow = ENV.snow;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float snow;').replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(.86, .88, .9) * (.55 + diffuseColor.r * .6), snow * .75);');
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float time;').replace('#include <begin_vertex>', `#include <begin_vertex>
       vec2 ip = vec2(instanceMatrix[3].x, instanceMatrix[3].z);
       float k = position.y * position.y * 3.;
@@ -273,7 +283,8 @@ function mergeQuads(list) {
 // потом очищаем глубину и рисуем поле с конями обычной камерой — так нет мерцания вблизи.
 const farScene = new THREE.Scene();
 const farCam = new THREE.PerspectiveCamera(55, view.w / view.h, 30, 200000);
-farScene.add(new THREE.HemisphereLight('#bcd6f5', '#7a5c32', 1.0));
+const farHemi = new THREE.HemisphereLight('#bcd6f5', '#7a5c32', 1.0);
+farScene.add(farHemi);
 const farSun = new THREE.DirectionalLight('#ffe0ad', 2.6);
 farSun.position.copy(SUN_DIR).multiplyScalar(1000);
 farScene.add(farSun);
@@ -401,11 +412,12 @@ async function loadTerrain() {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.elev0 = { value: m.elev0 };
     sh.uniforms.exag = { value: EXAG };
-    sh.uniforms.haze = { value: new THREE.Color('#b9c7d8') };
+    sh.uniforms.haze = { value: HAZE };
+    sh.uniforms.snow = ENV.snow;
     sh.uniforms.horizon = { value: HORIZON };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vW;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvW = (modelMatrix * vec4(transformed, 1.)).xyz;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vW; uniform float elev0; uniform float exag; uniform vec3 haze; uniform vec3 horizon;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vW; uniform float elev0; uniform float exag; uniform vec3 haze; uniform vec3 horizon; uniform float snow;')
       .replace('#include <map_fragment>', `#include <map_fragment>
         float elev = vW.y / exag + elev0; // настоящая высота (рельеф вытянут в EXAG раз)
         float lum = dot(diffuseColor.rgb, vec3(.3, .59, .11));
@@ -414,7 +426,8 @@ async function loadTerrain() {
         vec3 steppe = mix(vec3(.42, .33, .17), vec3(.62, .52, .30), clamp(lum * 4., 0., 1.));
         diffuseColor.rgb = mix(diffuseColor.rgb, steppe, plain * .9);
         // снег и лёд на вершинах ярче и белее
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.93, .95, .98), smoothstep(3300., 3900., elev) * smoothstep(.18, .45, lum));`)
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.93, .95, .98), smoothstep(3300., 3900., elev) * smoothstep(.18, .45, lum));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.86, .89, .95) * (.72 + lum * .5), snow * smoothstep(.04, .3, lum + .08) * .92);`)
       .replace('#include <fog_fragment>', `
         float d = length(vW - cameraPosition);
         float hz = (1. - exp(-d / 24000.)) * mix(1., .55, smoothstep(1500., 4500., vW.y / exag + elev0)); // дымка гуще внизу
@@ -1020,7 +1033,72 @@ export function pushOut(h, cx, cz, r) {
   return true;
 }
 
+// ---------- арены ----------
+const ARENAS = {
+  day: { sun: [-0.62, 0.5, 0.6], sunC: '#ffe0ad', sunI: 3.1, sky: '#bcd6f5', gnd: '#7a5c32', hemiI: 1.05, top: '#4a82c8', hor: '#dcd8cc', haze: '#b9c7d8', fog: 0.0015, exp: 1.05, snow: 0, stars: 0, glow: 1 },
+  evening: { sun: [-0.86, 0.17, 0.48], sunC: '#ffb27a', sunI: 2.5, sky: '#d8c0b4', gnd: '#4a3a2c', hemiI: 0.9, top: '#4a5f98', hor: '#ecbc94', haze: '#cfa898', fog: 0.0017, exp: 1.02, snow: 0, stars: 0, glow: 1.6 },
+  winter: { sun: [-0.5, 0.36, 0.72], sunC: '#fff2e0', sunI: 2.3, sky: '#dfe8f5', gnd: '#aab4c2', hemiI: 1.3, top: '#7fa3cf', hor: '#e4e9ef', haze: '#d8e0ea', fog: 0.0024, exp: 1.0, snow: 1, stars: 0, glow: 0.7, flakes: true },
+  night: { sun: [0.25, 0.85, -0.35], sunC: '#f4f6ff', sunI: 0.9, sky: '#2c3a5c', gnd: '#141210', hemiI: 0.3, top: '#04081a', hor: '#1a2338', haze: '#141c2e', fog: 0.0026, exp: 1.1, snow: 0, stars: 1, glow: 0, flood: true },
+};
+const sunOff = new THREE.Vector3();
+let flood = null, flakes = null;
+function makeFlood() { // 4 мачты по углам поля: лампы светятся, свет — прожекторы на поле
+  const g = new THREE.Group();
+  const glowTex = canvasTex(64, 64, (c, w, h) => { const r = c.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.25, 'rgba(255,248,220,.7)'); r.addColorStop(1, 'rgba(255,240,200,0)'); c.fillStyle = r; c.fillRect(0, 0, w, h); });
+  const poleMat = new THREE.MeshLambertMaterial({ color: '#7a7f88' }), headMat = new THREE.MeshBasicMaterial({ color: '#fffbe8' });
+  for (const [x, z] of [[-74, -50], [74, -50], [-74, 50], [74, 50]]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.6, 26, 8), poleMat); pole.position.set(x, 13, z); g.add(pole);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 0.5), headMat); head.position.set(x * 0.98, 26.5, z * 0.98); head.lookAt(0, 0, 0); g.add(head);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: '#fff6d8', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    glow.scale.setScalar(22); glow.position.copy(head.position); g.add(glow);
+    const sp = new THREE.SpotLight('#fff4e0', 9000, 180, 0.52, 0.65, 2); // свет мачты гаснет к краю поля
+    sp.position.copy(head.position); sp.target.position.set(x * 0.2, 0, z * 0.2); g.add(sp, sp.target);
+  }
+  return g;
+}
+function makeFlakes() { // снег идёт: точки в коробке вокруг камеры
+  const N = Q === 'low' ? 900 : 2400, pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) { pos[i * 3] = (Math.random() - 0.5) * 70; pos[i * 3 + 1] = Math.random() * 30; pos[i * 3 + 2] = (Math.random() - 0.5) * 70; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#ffffff', size: 0.09, transparent: true, opacity: 0.85, depthWrite: false }));
+  pts.frustumCulled = false;
+  return pts;
+}
+let arena = 'day';
+function setArena(id) {
+  const A = ARENAS[id] || ARENAS.day;
+  arena = ARENAS[id] ? id : 'day';
+  SUN_DIR.set(...A.sun).normalize();
+  sun.color.set(A.sunC); sun.intensity = A.sunI;
+  farSun.color.set(A.sunC); farSun.intensity = A.sunI * 0.85; farSun.position.copy(SUN_DIR).multiplyScalar(1000);
+  hemi.color.set(A.sky); hemi.groundColor.set(A.gnd); hemi.intensity = A.hemiI;
+  farHemi.color.set(A.sky); farHemi.groundColor.set(A.gnd); farHemi.intensity = A.hemiI;
+  skyMat.uniforms.top.value.set(A.top); HORIZON.set(A.hor); HAZE.set(A.haze);
+  scene.fog.color.copy(HORIZON); scene.fog.density = A.fog;
+  renderer.toneMappingExposure = A.exp;
+  ENV.snow.value = A.snow; ENV.stars.value = A.stars; skyMat.uniforms.glow.value = A.glow;
+  if (A.flood && !flood) { flood = makeFlood(); scene.add(flood); }
+  if (flood) flood.visible = !!A.flood;
+  if (A.flakes && !flakes) { flakes = makeFlakes(); scene.add(flakes); }
+  if (flakes) flakes.visible = !!A.flakes;
+}
+// солнце (и тени) следует за местом действия
+function followSun(x, z) {
+  sunOff.copy(SUN_DIR).multiplyScalar(80);
+  sun.position.set(x + sunOff.x, sunOff.y, z + sunOff.z);
+  sun.target.position.set(x, 0, z);
+}
 function stepWorld(dt) {
+  if (flakes?.visible) { // снежинки падают и кружатся, коробка ездит за камерой
+    const a = flakes.geometry.attributes.position, t = skyMat.uniforms.time.value;
+    for (let i = 0; i < a.count; i++) {
+      let y = a.getY(i) - dt * (1.1 + (i % 7) * 0.12);
+      if (y < 0) y += 30;
+      a.setY(i, y); a.setX(i, a.getX(i) + Math.sin(t * 0.9 + i) * dt * 0.35);
+    }
+    a.needsUpdate = true;
+    flakes.position.set(camera.position.x, 0, camera.position.z);
+  }
   stepDust(dt);
   wind.value += dt; skyMat.uniforms.time.value += dt; riverMat.uniforms.time.value += dt;
 }
@@ -1033,4 +1111,4 @@ function onResize() {
   for (const P of particleSets) P.pts.material.uniforms.scale.value = view.h / 2;
 }
 const getProto = () => proto;
-export { THREE, P, Q, renderer, scene, camera, sun, SUN_DIR, rnd, canvasTex, loadModel, loadTerrain, renderAll, getProto, feltMat, Horse, GAITS, riverDist, terrainH, stepWorld, onResize, puff };
+export { THREE, P, Q, renderer, scene, camera, sun, SUN_DIR, rnd, canvasTex, loadModel, loadTerrain, renderAll, getProto, feltMat, setArena, followSun, Horse, GAITS, riverDist, terrainH, stepWorld, onResize, puff };

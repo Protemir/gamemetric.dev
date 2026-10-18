@@ -1,6 +1,6 @@
 // Көкпар — игра: 3×3, мешок-серке, два казана, тартыс (перетягивание мешка на скаку), боты.
 // ?debug — window.__kokpar; ?sim=N — N матчей ботов без картинки (проверка баланса); ?bots — игрок тоже бот.
-import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, view, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
+import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, setArena, followSun, view, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
 import { Rider, loadRider } from './rider.js';
 import { makeSerke } from './serke.js';
 import { makeKazan } from './kazan.js';
@@ -378,6 +378,7 @@ function applyStage() {
   fx = SIM ? DEFAULT_FX : career.fixture() || DEFAULT_FX;
   if (!SIM) HB = career.horse();
   paintTeam(0, career.myKit()); paintTeam(1, fx.kit);
+  setArena(P.get('arena') || fx.arena);
   if (!SIM) { el.nmR.textContent = teamName(0); el.nmB.textContent = teamName(1); }
   if (!SIM && !P.has('pull')) Object.assign(DIFF, fx.diff);
   for (const e of ents) if (e.team === 0) e.h.turnMul = HB.turn;
@@ -712,6 +713,7 @@ function updateCamera(dt, snap) {
   camera.lookAt(cam.look);
   const fov = 58 + Math.min(h.v, 12) * 0.6 + (me.sprint > 0 ? 4 : 0);
   if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-dt * 3)); camera.updateProjectionMatrix(); }
+  followSun(cam.look.x, cam.look.z);
   setListener(camera.position.x, camera.position.z, cam.yaw);
   ambience(h.v, riverDist(camera.position.x, camera.position.z));
 }
