@@ -18,13 +18,19 @@ const MODELS = {
     clips: { idle: 'Idle', walk: 'Walk', trot: null, canter: null, gallop: 'Gallop', left: null, right: null, halt: null },
     neck: ['Neck1', 'Neck2', 'Neck3'], head: 'Head', hooves: ['FrontLowerLeg.L_end', 'FrontLowerLeg.R_end', 'BackLowerLeg.L_end', 'BackLowerLeg.R_end'],
   },
+  // Warhorse Lite (Literock Studios, бесплатная лицензия, можно в коммерческой игре; сам файл отдельно не выкладывать)
+  warhorse: {
+    file: 'models/warhorse-2048.glb', height: 1.75, maxScale: 1.9, gallop: 8.5,
+    clips: { idle: 'idle_loop', walk: 'walk_loop', trot: null, canter: 'canter_loop', gallop: null, left: null, right: null, halt: null, rear: 'rear' },
+    neck: ['neck_01', 'neck_02', 'neck_03'], head: 'head', hooves: ['finger_L', 'finger_R', 'toe_L', 'toe_R'],
+  },
   pack: {
     file: 'models/horse.glb', height: 1.75, maxScale: 1.4,
     clips: { idle: 'idle_main', walk: 'walk', trot: 'trot', canter: 'canter', gallop: 'gallop', left: 'gallop_left', right: 'gallop_right', halt: 'halt' },
     neck: ['neck_01', 'neck_02'], head: 'head', hooves: [],
   },
 };
-const M = MODELS[P.get('model') || 'stand-in'];
+const M = MODELS[P.get('model') || 'warhorse'];
 
 // Скорости аллюров настоящего коня, м/с: шаг ~6 км/ч, рысь ~14, кентер ~22, галоп ~45.
 const GAITS = [
@@ -77,6 +83,19 @@ scene.add(new THREE.Mesh(
       }`,
   }),
 ));
+
+// Отражения для PBR-материалов коня: окружение из того же неба.
+{
+  const env = new THREE.Scene();
+  env.add(scene.children[scene.children.length - 1].clone());
+  const g = new THREE.Mesh(new THREE.CircleGeometry(900, 24), new THREE.MeshBasicMaterial({ color: '#9c8656' }));
+  g.rotation.x = -Math.PI / 2; g.position.y = -2;
+  env.add(g);
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(env, 0.02).texture;
+  scene.environmentIntensity = 0.95;
+  pm.dispose();
+}
 
 function canvasTex(w, h, draw, repeat) {
   const c = document.createElement('canvas');
@@ -315,7 +334,7 @@ class Horse {
     this.act = {};
     for (const [k, c] of Object.entries(proto.clips)) {
       const a = this.mixer.clipAction(c);
-      if (k === 'halt') { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = false; }
+      if (k === 'halt' || k === 'rear') { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = false; }
       else { a.play(); a.time = rnd() * c.duration; }
       a.weight = 0;
       this.act[k] = a;
@@ -395,6 +414,12 @@ class Horse {
       a.weight = wk;
       if (k !== 'idle') a.timeScale = this.scaleFor(k);
     }
+    // Свечка: одноразовый клип поверх всего, конь стоит.
+    if (A.rear) {
+      const on = A.rear.isRunning();
+      A.rear.weight = on ? 1 : 0;
+      if (on) for (const k of Object.keys(w)) if (A[k]) A[k].weight = 0;
+    }
     // Резкий стоп: одноразовый клип, если он есть.
     if (A.halt) {
       if (this.halt > 0 && !A.halt.isRunning()) { A.halt.reset().play(); }
@@ -423,6 +448,12 @@ class Horse {
       }
     }
   }
+  rear() {
+    const a = this.act.rear;
+    if (!a || a.isRunning() || this.v > 1.5) return;
+    this.gait = 0;
+    a.reset().play();
+  }
   scaleFor(k) {
     const nat = proto.native[k];
     if (!nat) return 1;
@@ -440,6 +471,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyW' || e.code === 'ArrowUp' || e.code === 'KeyZ') player.gait = Math.min(4, player.gait + 1);
   if (e.code === 'KeyS' || e.code === 'ArrowDown') player.gait = Math.max(0, player.gait - 1);
   if (e.code === 'Space') { player.gait = 0; if (player.v > 4) player.halt = 1; }
+  if (e.code === 'KeyR') player.rear();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 const stickEl = document.getElementById('stick');
