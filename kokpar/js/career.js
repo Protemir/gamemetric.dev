@@ -1,6 +1,7 @@
 // Карьера: свой клуб, Лига чемпионов Жетісу (группа → полуфинал → финал), призовые и конюшня.
 // Всё хранится в localStorage; экраны рисуются в #menu вместо старой лестницы аулов.
 import { flagCanvas, SIGN_LIST } from './flags.js';
+import { IC } from './icons.js';
 
 const KEY = 'kokpar.career';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } };
@@ -89,6 +90,9 @@ const T = {
     upgrade: 'Улучшить', max: 'Максимум', coat: 'Масть вашего коня', buy: 'Купить', chosen: 'Выбрана', choose: 'Выбрать',
     stableSub: 'Улучшения действуют на всех коней клуба', rating: 'Сила', bracket: 'Плей-офф', tbd: '—', you: 'вы',
     goldenGoal: 'Ничья в плей-офф — играем до золотого гола',
+    quests: 'Задания', settings: 'Настройки', daily: 'Награда дня', dayN: (n) => 'День ' + n, claim: 'Забрать', streakNote: 'Заходи каждый день — награда растёт. Пропустишь день — начнёшь с первого.',
+    questsTitle: 'Задания дня', questDone: 'Выполнено', questReward: 'Задание', newIn: (h) => 'Новые задания через ' + h, allDone: 'Все задания на сегодня выполнены!',
+    q: { win: 'Выиграй матч', goals: (n) => 'Забей командой ' + n + ' голов', my: (n) => 'Забей сам ' + n + ' гола', throw: 'Забей броском в казан', tugs: (n) => 'Выиграй ' + n + ' тартыса', falls: (n) => 'Сбей с коня ' + n + ' соперников', matches: (n) => 'Сыграй ' + n + ' матча', clean: 'Выиграй, пропустив не больше 1 гола' },
   },
   en: {
     cup: 'Zhetysu Champions League', season: (n) => 'Season ' + n, group: (g, r) => 'Group ' + g + ' · round ' + r + ' of 3', semi: 'Semi-final', final: 'Final',
@@ -102,6 +106,9 @@ const T = {
     upgrade: 'Upgrade', max: 'Max', coat: 'Your horse coat', buy: 'Buy', chosen: 'Selected', choose: 'Select',
     stableSub: 'Upgrades apply to every horse of the club', rating: 'Strength', bracket: 'Play-offs', tbd: '—', you: 'you',
     goldenGoal: 'Draw in a knockout — golden goal decides',
+    quests: 'Quests', settings: 'Settings', daily: 'Daily reward', dayN: (n) => 'Day ' + n, claim: 'Claim', streakNote: 'Come back every day and the reward grows. Miss a day and you start over.',
+    questsTitle: 'Daily quests', questDone: 'Done', questReward: 'Quest', newIn: (h) => 'New quests in ' + h, allDone: 'All quests done for today!',
+    q: { win: 'Win a match', goals: (n) => 'Score ' + n + ' team goals', my: (n) => 'Score ' + n + ' goals yourself', throw: 'Score with a throw into the kazan', tugs: (n) => 'Win ' + n + ' tugs of war', falls: (n) => 'Unhorse ' + n + ' rivals', matches: (n) => 'Play ' + n + ' matches', clean: 'Win conceding at most 1 goal' },
   },
 };
 
@@ -145,6 +152,48 @@ export function standings(ids) {
   return [...ids].sort((a, b) => t[b].pts - t[a].pts || (t[b].gf - t[b].ga) - (t[a].gf - t[a].ga) || t[b].gf - t[a].gf || rating(b) - rating(a));
 }
 
+// ---------- каждый день: награда за вход подряд и три задания ----------
+const DAILY = [500, 800, 1200, 1600, 2000, 2500, 4000];
+const QUESTS = [
+  { id: 'win', n: 1, r: 1000 }, { id: 'goals', n: 5, r: 800 }, { id: 'my', n: 2, r: 900 }, { id: 'throw', n: 1, r: 700 },
+  { id: 'tugs', n: 4, r: 800 }, { id: 'falls', n: 2, r: 900 }, { id: 'matches', n: 2, r: 600 }, { id: 'clean', n: 1, r: 1200 },
+];
+const dayKey = (d = new Date()) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+function questsToday() {
+  const today = dayKey();
+  if (S.quests?.date !== today) {
+    let seed = [...today].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+    const pool = [...QUESTS], pick = [];
+    while (pick.length < 3) { seed = (seed * 1103515245 + 12345) >>> 0; pick.push(pool.splice(seed % pool.length, 1)[0]); }
+    S.quests = { date: today, list: pick.map((q) => ({ id: q.id, n: q.n, r: q.r, p: 0, done: false })) };
+    save(S);
+  }
+  return S.quests.list;
+}
+const questText = (q) => { const f = tr('q')[q.id]; return typeof f === 'function' ? f(q.n) : f; };
+// после матча: продвинуть задания, выполненные — сразу в кассу
+function trackQuests(st) {
+  const add = { win: st.won ? 1 : 0, goals: st.goals, my: st.myGoals, throw: st.throwGoals, tugs: st.tugs, falls: st.falls, matches: 1, clean: st.won && st.against <= 1 ? 1 : 0 };
+  const done = [];
+  for (const q of questsToday()) {
+    if (q.done) continue;
+    q.p = Math.min(q.n, q.p + (add[q.id] || 0));
+    if (q.p >= q.n) { q.done = true; done.push(q); }
+  }
+  return done;
+}
+function dailyState() {
+  const today = dayKey(), y = new Date(); y.setDate(y.getDate() - 1);
+  const d = S.daily || { last: null, streak: 0 };
+  const next = d.last === dayKey(y) ? (d.streak % 7) + 1 : 1;
+  return { ready: d.last !== today, day: d.last === today ? d.streak : next };
+}
+function untilMidnight() {
+  const n = new Date(), m = new Date(n); m.setHours(24, 0, 0, 0);
+  const s = Math.max(0, (m - n) / 1000), h = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60);
+  return h + (L() === 'ru' ? ' ч ' : 'h ') + mm + (L() === 'ru' ? ' мин' : 'm');
+}
+
 // ---------- для игры ----------
 const L = () => (globalThis.__kokparLang === 'en' ? 'en' : 'ru');
 const tr = (k) => T[L()][k];
@@ -185,7 +234,7 @@ export const arenaName = (a) => ARENAS[a][L()];
 export const hasClub = () => !!S.club;
 
 // итог матча игрока: таблица, остальные матчи тура, призовые; возвращает сводку для экрана
-export function report(my, their) {
+export function report(my, their, st = {}) {
   const c = S.cup, id = oppId(), lines = [];
   const res = my > their ? 'win' : my < their ? 'loss' : 'draw';
   lines.push([tr(res === 'win' ? 'forWin' : res === 'draw' ? 'forDraw' : 'forLoss'), PRIZE[res]]);
@@ -217,10 +266,12 @@ export function report(my, their) {
     if (my > their) { c.result = 'champion'; S.titles++; lines.push([tr('forTitle'), PRIZE.title]); note = tr('champion'); }
     else { c.result = 'final'; note = tr('runnerUp'); }
   }
+  const quests = trackQuests({ won: my > their, goals: my, against: their, ...st });
+  for (const q of quests) lines.push([tr('questReward') + ': ' + questText(q), q.r]);
   const total = lines.reduce((a, l) => a + l[1], 0);
   S.money += total;
   save(S);
-  return { res, my, their, opp: id, lines, total, note, champion: c.result === 'champion' && c.phase === 'done' };
+  return { res, my, their, opp: id, lines, total, note, quests: quests.length, champion: c.result === 'champion' && c.phase === 'done' };
 }
 
 // ---------- экраны ----------
@@ -230,8 +281,9 @@ const kitOf = (id) => (id === 'me' ? myKit() : makeKit(byId(id).c, byId(id).sign
 const money = (n) => n.toLocaleString('ru-RU').replace(/,/g, ' ') + ' ₸';
 const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
-export function initCareer(el, play) {
-  root = el; onPlay = play;
+let onSettings = null;
+export function initCareer(el, play, settings) {
+  root = el; onPlay = play; onSettings = settings;
   root.addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]');
     if (!b || b.disabled) return;
@@ -260,16 +312,42 @@ const ACTS = {
     S.coat = i; save(S); showStable(); window.__kokparCoat?.();
   },
   season: () => { S.season++; S.cup = newCup(); save(S); showHub(); },
+  quests: () => showQuests(),
+  settings: () => onSettings?.(),
+  claim: () => {
+    const d = dailyState();
+    if (!d.ready) return;
+    S.money += DAILY[d.day - 1]; S.daily = { last: dayKey(), streak: d.day }; save(S);
+    showHub(true);
+  },
 };
 
 function head() {
   const k = myKit();
   return `<div class="h-top">
     <button class="h-club" data-act="club"><img src="${flag(k)}" alt=""><span>${esc(clubName('me'))}</span></button>
-    <div class="h-money"><small>${tr('money')}</small>${money(S.money)}</div>
+    <div class="h-right"><div class="h-money"><small>${tr('money')}</small>${money(S.money)}</div><button class="h-icon" data-act="settings" aria-label="${tr('settings')}">${IC.gear}</button></div>
   </div>`;
 }
-export function showHub() {
+function tabs(active) { // нижние вкладки с иконками; у заданий — счётчик невыполненных
+  const left = questsToday().filter((q) => !q.done).length;
+  const t = (act, icon, label, badge) => `<button class="h-tab${act === active ? ' on' : ''}" data-act="${act}">${icon}<span>${label}</span>${badge ? `<i class="h-badge">${badge}</i>` : ''}</button>`;
+  return `<nav class="h-tabs">${t('hub', IC.trophy, tr('cup').split(' ')[0] === 'Лига' ? 'Лига' : 'League')}${t('table', IC.cal.replace('M9 15l2 2 4-4', 'M7 14h10M7 17h6'), tr('table'))}${t('stable', IC.horse, tr('stable'))}${t('quests', IC.cal, tr('quests'), left)}</nav>`;
+}
+function dailyModal() {
+  const d = dailyState();
+  const tiles = DAILY.map((r, i) => `<div class="d-tile${i + 1 < d.day ? ' got' : i + 1 === d.day ? ' now' : ''}${i === 6 ? ' big' : ''}"><small>${tr('dayN')(i + 1)}</small>${i === 6 ? IC.gift : IC.coin}<b>${money(r)}</b></div>`).join('');
+  return `<div class="d-modal"><div class="d-box"><div class="h-cup disp">${tr('daily')}</div><div class="d-tiles">${tiles}</div>
+    <div class="h-season">${tr('streakNote')}</div><button class="big-btn" data-act="claim">${tr('claim')} +${money(DAILY[d.day - 1])}</button></div></div>`;
+}
+export function showQuests() {
+  const list = questsToday();
+  const rows = list.map((q) => `<div class="q-row${q.done ? ' done' : ''}"><div class="q-t"><b>${questText(q)}</b><div class="q-bar"><i style="width:${(q.p / q.n) * 100}%"></i></div></div><div class="q-r">${q.done ? '✓ ' + tr('questDone') : '+' + money(q.r)}<small>${q.p}/${q.n}</small></div></div>`).join('');
+  root.innerHTML = `<div class="hub">${head()}<div class="h-cup disp">${tr('questsTitle')}</div>
+    <div class="h-season">${list.every((q) => q.done) ? tr('allDone') + ' · ' : ''}${tr('newIn')(untilMidnight())}</div>
+    <div class="q-list">${rows}</div>${tabs('quests')}</div>`;
+}
+export function showHub(skipDaily) {
   if (!S.club) return showCreate();
   if (!S.cup) { S.cup = newCup(); save(S); }
   const c = S.cup, f = fixture();
@@ -294,8 +372,8 @@ export function showHub() {
     <div class="h-logo disp">KOKPAR</div>
     <div class="h-cup disp">${tr('cup')}</div><div class="h-season">${tr('season')(S.season)}${S.titles ? ' · ' + tr('titles')(S.titles) : ''}</div>
     ${body}
-    <div class="h-tabs"><button data-act="table">${tr('table')}</button><button data-act="stable">${tr('stable')}</button></div>
-  </div>`;
+    ${tabs('hub')}
+  </div>${!skipDaily && dailyState().ready ? dailyModal() : ''}`;
 }
 function tableHTML(ids, g) {
   const t = S.cup.table;
@@ -323,7 +401,7 @@ function bracketHTML() {
 export function showTable() {
   root.innerHTML = `<div class="hub">${head()}<div class="h-cup disp">${tr('cup')}</div>
     <div class="h-groups">${tableHTML(S.cup.A, 'A')}${tableHTML(S.cup.B, 'B')}</div>${bracketHTML()}
-    <div class="h-tabs"><button data-act="hub">${tr('back')}</button></div></div>`;
+    ${tabs('table')}</div>`;
 }
 export function showStable() {
   const rows = STATS.map((k) => {
@@ -340,7 +418,7 @@ export function showStable() {
   }).join('');
   root.innerHTML = `<div class="hub">${head()}<div class="h-cup disp">${tr('stable')}</div><div class="h-season">${tr('stableSub')}</div>
     <div class="h-stats">${rows}</div><div class="h-gt">${tr('coat')}</div><div class="h-coats">${coats}</div>
-    <div class="h-tabs"><button data-act="hub">${tr('back')}</button></div></div>`;
+    ${tabs('stable')}</div>`;
 }
 export function showCreate(keep) {
   if (!keep) draft = { color: S.club?.color || PALETTE[0], sign: S.club?.sign || 'shanyrak', name: S.club?.name || tr('defName') };

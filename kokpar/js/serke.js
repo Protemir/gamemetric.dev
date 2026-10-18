@@ -11,11 +11,22 @@ function furTexture(w, h, base, belly) {
   const gr = g.createLinearGradient(0, 0, 0, h);
   gr.addColorStop(0, base); gr.addColorStop(0.62, base); gr.addColorStop(1, belly);
   g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  // пятна: бурые и тёмные, с мягкими краями (пёстрый козёл)
+  for (let i = 0; i < 7; i++) {
+    const x = Math.random() * w, y = Math.random() * h * 0.7, r = 25 + Math.random() * 60;
+    const col = Math.random() < 0.6 ? '122,86,54' : '58,46,38';
+    for (let k = 0; k < 6; k++) {
+      const rx = x + (Math.random() - 0.5) * r * 0.8, ry = y + (Math.random() - 0.5) * r * 0.5, rr = r * (0.4 + Math.random() * 0.5);
+      const pg = g.createRadialGradient(rx, ry, 0, rx, ry, rr);
+      pg.addColorStop(0, `rgba(${col},0.85)`); pg.addColorStop(0.7, `rgba(${col},0.6)`); pg.addColorStop(1, `rgba(${col},0)`);
+      g.fillStyle = pg; g.beginPath(); g.ellipse(rx, ry, rr * 1.3, rr * 0.8, Math.random(), 0, 6.3); g.fill();
+    }
+  }
   g.lineCap = 'round';
   for (let i = 0; i < 9000; i++) { // шерстинки: длинные, вдоль тела, с завитками
     const x = Math.random() * w, y = Math.random() * h, l = 4 + Math.random() * 10, a = 0.15 + (Math.random() - 0.5) * 0.7;
     const light = Math.random();
-    g.strokeStyle = light < 0.5 ? `rgba(20,14,8,${0.25 + Math.random() * 0.3})` : `rgba(${150 + Math.random() * 60},${120 + Math.random() * 50},${90 + Math.random() * 40},${0.12 + Math.random() * 0.2})`;
+    g.strokeStyle = light < 0.35 ? `rgba(40,30,20,${0.1 + Math.random() * 0.14})` : `rgba(${225 + Math.random() * 30},${215 + Math.random() * 30},${195 + Math.random() * 30},${0.2 + Math.random() * 0.25})`; // светлые шерстинки, редкие тёмные
     g.lineWidth = 0.6 + Math.random() * 0.9;
     g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a) * l * 0.5, y + Math.sin(a) * l * 0.5 + 2, x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
   }
@@ -45,7 +56,7 @@ function bumpTexture(w, h) {
 
 export function makeSerke() {
   const g = new THREE.Group();
-  const hide = new THREE.MeshStandardMaterial({ map: furTexture(512, 256, '#8a7258', '#cdbb9a'), normalMap: bumpTexture(256, 128), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95 });
+  const hide = new THREE.MeshStandardMaterial({ map: furTexture(512, 256, '#d6cbb8', '#efe8da'), normalMap: bumpTexture(256, 128), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95 });
   hide.map.repeat.set(2, 1); hide.normalMap.repeat.set(3, 2);
   const legHide = hide.clone(); legHide.map = hide.map.clone(); legHide.map.repeat.set(1, 0.5); legHide.map.needsUpdate = true;
   const rope = new THREE.MeshStandardMaterial({ color: '#7a6040', roughness: 0.9 });

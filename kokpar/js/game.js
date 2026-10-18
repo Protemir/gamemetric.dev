@@ -6,8 +6,9 @@ import { makeSerke } from './serke.js';
 import { makeKazan } from './kazan.js';
 import * as career from './career.js';
 import { makeCrowd } from './crowd.js';
+import { IC } from './icons.js';
 import { flagCanvas } from './flags.js';
-import { isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
+import { crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
 if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
@@ -186,7 +187,7 @@ function goal(team, scorer, landed) {
   if (landed) { sack.flight = null; sack.pos.set(k.x, KAZAN_TOP, 0); sack.vel.set(0, 0, 0); } // брошена — уже лежит на казане
   else sack.flight = { from: sack.pos.clone(), to: new THREE.Vector3(k.x, KAZAN_TOP, 0), t: 0 };
   banner(tr('goal'), TEAMS[team].grad, 2.4, teamName(team));
-  state.events.push({ t: 'goal', team });
+  state.events.push({ t: 'goal', team, landed: !!landed, me: !!scorer?.me });
   if (!SIM) cheer(team === me?.team);
   crowd?.cheer(3.5);
   state.cine = { t: 0, x: k.x, a0: Math.atan2(sack.pos.z, sack.pos.x - k.x) || 0 }; // гол крупным планом
@@ -278,6 +279,7 @@ function fallRider(e, nx, nz) {
   e.r.fall(scene, fx * hv * 0.7 + nx * 2.5, 2.4, fz * hv * 0.7 + nz * 2.5, side);
   e.down = 3; e.wait = 0; e.stun = 3.3; e.pickCD = 3.5; e.tugCD = 3.5;
   state.events.push({ t: 'fall', team: e.team });
+  if (!SIM) crowdShout('ooh');
   if (!SIM) neigh(e.h.obj.position.x, e.h.obj.position.z);
   if (!SIM && (e.me || e.team === me?.team)) banner(tr('unhorsed'), e.me ? null : TEAMS[e.team].grad, 1.1);
 }
@@ -344,13 +346,14 @@ function stepTug(dt) {
     T.car.tugCD = 1.6; T.car.pickCD = 1.0; T.car.stun = 0.3;
     T.att.stats.tugsWon++;
     giveSack(T.att);
+    if (!SIM) crowdShout('ah');
     if (!SIM && (T.att.me || T.car.me)) banner(T.att.me ? tr('stoleMe') : tr('stoleThem'), TEAMS[T.att.team].grad, 1.1);
   } else {
     T.att.tugCD = 2.0; T.att.stun = 0.5;
     T.car.stats.tugsWon++;
     if (!SIM && (T.att.me || T.car.me)) banner(T.car.me ? tr('heldMe') : tr('heldThem'), TEAMS[T.car.team].grad, 1.1);
   }
-  state.events.push({ t: 'tugEnd', winner });
+  state.events.push({ t: 'tugEnd', winner, team: (winner === 'att' ? T.att : T.car).team });
 }
 
 // ---------- боты ----------
@@ -557,13 +560,15 @@ function stepSack(dt) {
     const f = sack.flight; f.t = Math.min(1, f.t + dt / (f.T || 0.62));
     sack.pos.lerpVectors(f.from, f.to, f.t); sack.pos.y += Math.sin(f.t * Math.PI) * (f.arc || 3);
     sack.mesh.position.copy(sack.pos);
-    sack.mesh.rotation.z += dt * 6;
+    sack.mesh.rotation.z = Math.sin(f.t * Math.PI) * 0.7; // в воздухе чуть переворачивается
+    sack.mesh.rotation.x += (sack.lie - sack.mesh.rotation.x) * Math.min(1, dt * 4);
     if (f.t >= 1 && f.kind === 'throw') {
       sack.flight = null;
       if (f.hit && state.phase === 'play') goal(f.team, f.scorer, true);
       else {
         dropSack(f.to.clone().setY(GROUND_Y + 0.3), new THREE.Vector3((rnd() - 0.5) * 3, 1.2, (rnd() - 0.5) * 3));
         state.events.push({ t: 'miss' });
+        if (!SIM) crowdShout('ooh');
         if (!SIM) banner(tr('missed'), null, 0.9);
       }
     }
@@ -645,9 +650,19 @@ function onHit(a, b, imp, nx, nz) {
     }
   }
 }
+let tension = 0;
 function step(dt) {
   state.t -= dt;
   crowd?.update(dt);
+  if (!SIM) { // толпа заводится, когда серке везут к казану
+    let want = 0;
+    const c = sack.carrier;
+    if (state.phase === 'play' && c) { const k = kazans[c.team === 0 ? 1 : 0]; want = clamp(1 - (Math.hypot(c.h.obj.position.x - k.x, c.h.obj.position.z) - 7) / 28, 0, 1); }
+    if (state.tug) want = Math.max(want, 0.4);
+    if (state.phase === 'goal') want = 0.3;
+    tension += (want - tension) * (1 - Math.exp(-dt * 2));
+    crowdTension(tension, ['play', 'goal', 'countdown'].includes(state.phase) && !paused);
+  }
   if (state.phase === 'countdown') {
     for (const e of ents) { e.h.gait = 0; e.h.steer = 0; }
     if (!SIM) { const n = Math.ceil(state.t - 0.2); if (n > 0 && n <= 3 && el.bigText.textContent !== String(n) && state.t < 3.2) banner(String(n)); }
@@ -695,8 +710,10 @@ function step(dt) {
     e.ring.position.x = e.h.obj.position.x; e.ring.position.z = e.h.obj.position.z;
   }
   if (!SIM) {
-    sackMarker.visible = !sack.carrier && !sack.flight;
-    sackMarker.position.set(sack.pos.x, 2.4 + Math.sin(performance.now() / 250) * 0.15, sack.pos.z);
+    const bobM = Math.sin(performance.now() / 250) * 0.15, cr = sack.carrier;
+    sackMarker.visible = !sack.flight && state.phase !== 'goal';
+    if (cr) { const p = cr.h.obj.position; sackMarker.position.set(p.x, 3.35 + bobM, p.z); sackMarker.material.color.set(TEAMS[cr.team].css); sackMarker.scale.setScalar(1.25); }
+    else { sackMarker.position.set(sack.pos.x, 2.4 + bobM, sack.pos.z); sackMarker.material.color.set('#ffd23a'); sackMarker.scale.setScalar(1); }
     for (const k of kazans) { // флаги колышутся
       const a = k.flag.geometry.attributes.position, base = k.flag.userData.base, t = performance.now() / 1000;
       for (let i = 0; i < a.count; i++) { const x = base[i * 3]; a.setZ(i, Math.sin(x * 3 - t * 5) * 0.12 * x); }
@@ -708,7 +725,11 @@ function step(dt) {
 function endMatch() {
   state.phase = 'end';
   if (SIM) return;
-  const sum = career.report(state.score[0], state.score[1]);
+  const ev = state.events;
+  const sum = career.report(state.score[0], state.score[1], {
+    myGoals: ev.filter((x) => x.t === 'goal' && x.me).length, throwGoals: ev.filter((x) => x.t === 'goal' && x.team === 0 && x.landed).length,
+    tugs: ev.filter((x) => x.t === 'tugEnd' && x.team === 0).length, falls: ev.filter((x) => x.t === 'fall' && x.team === 1).length,
+  });
   el.banner.classList.remove('on'); bannerT = 0; delete el.hint.dataset.keep; el.hint.textContent = ''; el.tug.hidden = true;
   career.showResult(sum);
   el.menu.hidden = false;
@@ -834,6 +855,7 @@ function goLandscape() {
   (d.requestFullscreen?.({ navigationUI: 'hide' }) || Promise.reject()).then(() => screen.orientation?.lock?.('landscape')).catch(() => {}).finally(() => setTimeout(onResize, 300));
 }
 if (touch) document.body.classList.add('touch');
+if (touch) addEventListener('pointerdown', () => goLandscape(), { once: true, capture: true });
 addEventListener('pointerdown', (e) => {
   initAudio();
   if (e.pointerType !== 'touch' || e.target.closest('button')) return;
@@ -859,21 +881,35 @@ for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.btnWhip.addE
 function startMatch() {
   applyStage(); applyLang();
   el.menu.hidden = true;
-  state.score = [0, 0]; state.clock = MATCH_LEN; state.golden = false; kickoff(true);
+  state.score = [0, 0]; state.clock = MATCH_LEN; state.golden = false; state.events = []; kickoff(true);
 }
 el.pause.addEventListener('click', (e) => {
   const b = e.target.closest('[data-p]');
   if (!b) return;
   const [act, arg] = b.dataset.p.split(':');
   if (act === 'resume') togglePause(false);
+  else if (act === 'close') { el.pause.hidden = true; career.showHub(); }
   else if (act === 'mute') { toggleMute(); renderPause(); }
-  else if (act === 'q') { try { localStorage.setItem('kokpar.q', arg); } catch { /* приватный режим */ } location.reload(); }
-  else if (act === 'quit') { togglePause(false); state.tug = null; showMenu(); }
+  else if (act === 'full') { (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}).finally(() => setTimeout(renderPause, 200)); }
+  else if (act === 'lang') { lang = arg; try { localStorage.setItem('kokpar.lang', lang); } catch { /* приватный режим */ } applyLang(); renderPause(); }
+  else if (act === 'q') {
+    if (arg === Q) return;
+    if (setMode === 'pause' && !confirm(PT[lang].reload)) return;
+    try { localStorage.setItem('kokpar.q', arg); } catch { /* приватный режим */ }
+    location.reload();
+  } else if (act === 'quit') { togglePause(false); state.tug = null; showMenu(); }
+});
+el.pause.addEventListener('input', (e) => { // ползунки громкости
+  const k = e.target.dataset?.v;
+  if (!k) return;
+  setVolume(k, e.target.value / 100);
+  e.target.nextElementSibling.textContent = e.target.value;
+  e.target.style.setProperty('--p', e.target.value + '%');
 });
 el.pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePause(); });
 el.pauseBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
 addEventListener('blur', () => { if (!SIM && state.phase === 'play' && !P.has('debug')) togglePause(true); }); // ушёл со вкладки — пауза
-career.initCareer(document.getElementById('hub'), () => { initAudio(); goLandscape(); startMatch(); });
+career.initCareer(document.getElementById('hub'), () => { initAudio(); goLandscape(); startMatch(); }, openSettings);
 function showMenu() {
   state.phase = 'menu';
   applyStage(); // соперник в своих цветах уже в меню
@@ -889,23 +925,39 @@ let paused = false;
 function togglePause(force) {
   const on = force ?? !paused;
   if (on && !['play', 'countdown', 'goal'].includes(state.phase)) return;
-  paused = on;
+  paused = on; setMode = 'pause';
   el.pause.hidden = !paused;
   if (paused) renderPause();
 }
 const PT = {
-  ru: { title: 'Пауза', resume: 'Продолжить', sound: 'Звук', on: 'вкл', off: 'выкл', gfx: 'Графика', low: 'Низкая', medium: 'Средняя', high: 'Высокая', quit: 'Выйти в меню', note: 'Матч не засчитается', keys: 'Esc — пауза · M — звук' },
-  en: { title: 'Paused', resume: 'Resume', sound: 'Sound', on: 'on', off: 'off', gfx: 'Graphics', low: 'Low', medium: 'Medium', high: 'High', quit: 'Quit to menu', note: 'The match will not count', keys: 'Esc — pause · M — sound' },
+  ru: { title: 'Пауза', settings: 'Настройки', resume: 'Продолжить', close: 'Готово', sound: 'Звук', master: 'Громкость', crowdVol: 'Толпа', mute: 'Без звука', gfx: 'Графика', low: 'Низкая', medium: 'Средняя', high: 'Высокая', full: 'Во весь экран', lang: 'Язык', controls: 'Управление', quit: 'Выйти в меню', note: 'Матч не засчитается', reload: 'Графика сменится после перезапуска — перезапустить?',
+    keys: [['W', 'вперёд'], ['S', 'стоп'], ['A D', 'поворот'], ['Shift', 'камча · таран'], ['E', 'вырвать · бросок (держать)'], ['R', 'свечка'], ['Esc', 'пауза'], ['M', 'звук']],
+    touchKeys: [['◐', 'палец слева — куда скакать'], ['ВЫРВАТЬ', 'отнять серке · держать — бросок'], ['КАМЧА', 'рывок · стоя — свечка']] },
+  en: { title: 'Paused', settings: 'Settings', resume: 'Resume', close: 'Done', sound: 'Sound', master: 'Volume', crowdVol: 'Crowd', mute: 'Mute', gfx: 'Graphics', low: 'Low', medium: 'Medium', high: 'High', full: 'Fullscreen', lang: 'Language', controls: 'Controls', quit: 'Quit to menu', note: 'The match will not count', reload: 'Graphics change after a restart — restart now?',
+    keys: [['W', 'go'], ['S', 'stop'], ['A D', 'steer'], ['Shift', 'whip · ram'], ['E', 'grab · throw (hold)'], ['R', 'rear up'], ['Esc', 'pause'], ['M', 'sound']],
+    touchKeys: [['◐', 'left thumb — where to ride'], ['GRAB', 'take the serke · hold — throw'], ['WHIP', 'burst · standing — rear up']] },
 };
+let setMode = 'pause'; // 'pause' — во время матча, 'menu' — из главного меню
+const canFull = !!document.documentElement.requestFullscreen;
 function renderPause() {
-  const t = PT[lang];
-  el.pause.innerHTML = `<div class="hub pausebox"><div class="h-cup disp">${t.title}</div>
-    <button class="big-btn" data-p="resume">${t.resume}</button>
-    <div class="p-row"><span>${t.sound}</span><button data-p="mute" class="p-tog${isMuted() ? '' : ' on'}">${isMuted() ? t.off : t.on}</button></div>
-    <div class="p-row"><span>${t.gfx}</span><div class="p-seg">${['low', 'medium', 'high'].map((q) => `<button data-p="q:${q}" class="${q === Q ? 'on' : ''}">${t[q]}</button>`).join('')}</div></div>
-    <button class="p-quit" data-p="quit">${t.quit}<small>${t.note}</small></button>
-    <div class="h-season">${touch ? '' : t.keys}</div></div>`;
+  const t = PT[lang], inMatch = setMode === 'pause';
+  const slider = (k, label, icon) => `<div class="s-row"><span class="s-l">${icon}${label}</span><input type="range" min="0" max="100" value="${Math.round(getVolume(k) * 100)}" style="--p:${Math.round(getVolume(k) * 100)}%" data-v="${k}" aria-label="${label}"><b class="s-n">${Math.round(getVolume(k) * 100)}</b></div>`;
+  const tog = (act, on, label, icon) => `<div class="s-row"><span class="s-l">${icon}${label}</span><button class="s-sw${on ? ' on' : ''}" data-p="${act}" role="switch" aria-checked="${on}"><i></i></button></div>`;
+  const keys = (touch ? t.touchKeys : t.keys).map(([k, d]) => `<div class="s-key"><kbd>${k}</kbd><span>${d}</span></div>`).join('');
+  el.pause.innerHTML = `<div class="hub pausebox">
+    <div class="s-head"><div class="h-cup disp">${inMatch ? t.title : t.settings}</div>${inMatch ? '' : `<button class="s-x" data-p="close" aria-label="${t.close}">${IC.close}</button>`}</div>
+    ${inMatch ? `<button class="big-btn" data-p="resume">${IC.play}${t.resume}</button>` : ''}
+    <div class="s-sec"><div class="s-t">${t.sound}</div>
+      ${slider('master', t.master, IC.sound)}${slider('crowd', t.crowdVol, IC.crowd)}${tog('mute', isMuted(), t.mute, '')}</div>
+    <div class="s-sec"><div class="s-t">${t.gfx}</div>
+      <div class="s-row"><span class="s-l">${IC.screen}${t.gfx}</span><div class="p-seg">${['low', 'medium', 'high'].map((q) => `<button data-p="q:${q}" class="${q === Q ? 'on' : ''}">${t[q]}</button>`).join('')}</div></div>
+      ${canFull ? tog('full', !!document.fullscreenElement, t.full, IC.full) : ''}
+      <div class="s-row"><span class="s-l">${IC.globe}${t.lang}</span><div class="p-seg"><button data-p="lang:ru" class="${lang === 'ru' ? 'on' : ''}">Русский</button><button data-p="lang:en" class="${lang === 'en' ? 'on' : ''}">English</button></div></div></div>
+    <div class="s-sec"><div class="s-t">${t.controls}</div><div class="s-keys">${keys}</div></div>
+    ${inMatch ? `<button class="p-quit" data-p="quit">${IC.exit}<span>${t.quit}<small>${t.note}</small></span></button>` : `<button class="big-btn" data-p="close">${t.close}</button>`}
+  </div>`;
 }
+function openSettings() { setMode = 'menu'; el.pause.hidden = false; renderPause(); }
 function frame(now) {
   if (frozen) return;
   let dt = Math.min(0.05, (now - last) / 1000);

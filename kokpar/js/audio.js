@@ -1,5 +1,6 @@
 // Звук пробы — всё синтезом (Web Audio), без файлов: топот, фырканье, ветер, река, толчок.
 // Включается с первого касания или клавиши (так требуют браузеры и CrazyGames), M — выкл/вкл.
+let crowdBus = null, bedG = null, roarG = null, roarOsc = [];
 let ctx = null, master = null, noise = null, windG = null, windHi = null, riverG = null, muted = false;
 const listener = { x: 0, z: 0, yaw: 0 };
 export const stats = { hooves: 0, get state() { return ctx ? ctx.state : 'нет'; } }; // для проверки
@@ -21,8 +22,9 @@ function filter(type, freq, q = 0.7) { const f = ctx.createBiquadFilter(); f.typ
 export function initAudio() {
   if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
   ctx = new (window.AudioContext || window.webkitAudioContext)();
-  master = ctx.createGain(); master.gain.value = muted ? 0 : 0.9; master.connect(ctx.destination);
+  master = ctx.createGain(); master.gain.value = muted ? 0 : vol.master; master.connect(ctx.destination);
   noise = makeNoise(ctx);
+  initCrowd();
   windG = ctx.createGain(); windG.gain.value = 0.05; loop([filter('lowpass', 420)], windG); // ровный степной ветер
   windHi = ctx.createGain(); windHi.gain.value = 0; loop([filter('bandpass', 900, 0.5)], windHi); // свист в ушах на скорости
   riverG = ctx.createGain(); riverG.gain.value = 0; loop([filter('bandpass', 1400, 0.4), filter('lowpass', 3200)], riverG); // журчание
@@ -31,11 +33,19 @@ export function initAudio() {
 }
 let neighBuf = null;
 export const isMuted = () => muted;
+const vol = { master: 0.9, crowd: 0.8 };
+try { Object.assign(vol, JSON.parse(localStorage.getItem('kokpar.vol') || '{}')); } catch { /* приватный режим */ }
+export const getVolume = (k) => vol[k];
+export function setVolume(k, v) {
+  vol[k] = Math.max(0, Math.min(1, v));
+  try { localStorage.setItem('kokpar.vol', JSON.stringify(vol)); } catch { /* приватный режим */ }
+  if (ctx) { master.gain.setTargetAtTime(muted ? 0 : vol.master, ctx.currentTime, 0.05); crowdBus.gain.setTargetAtTime(vol.crowd, ctx.currentTime, 0.05); }
+}
 try { muted = localStorage.getItem('kokpar.mute') === '1'; } catch { /* приватный режим */ }
 export function toggleMute() {
   muted = !muted;
   try { localStorage.setItem('kokpar.mute', muted ? '1' : '0'); } catch { /* приватный режим */ }
-  if (master) master.gain.setTargetAtTime(muted ? 0 : 0.9, ctx.currentTime, 0.05);
+  if (master) master.gain.setTargetAtTime(muted ? 0 : vol.master, ctx.currentTime, 0.05);
   return muted;
 }
 document.addEventListener('visibilitychange', () => { if (ctx) document.hidden ? ctx.suspend() : ctx.resume(); });
@@ -192,5 +202,52 @@ export function cheer(ours) { // гол: толпа кричит «уа-а!», �
     ng.gain.setValueAtTime(0.0001, st); ng.gain.exponentialRampToValueAtTime(0.5, st + 0.03); ng.gain.setValueAtTime(0.45, st + len * 0.7); ng.gain.exponentialRampToValueAtTime(0.0001, st + len);
     h.connect(ng); h2.connect(ng); ng.connect(lp);
     h.start(st); h.stop(st + len + 0.05); h2.start(st); h2.stop(st + len + 0.05);
+  }
+}
+
+// ---------- толпа ----------
+// Тихий гул всё время; когда несущий подъезжает к казану — нарастает «у-у-у-а-а» (тембр и высота растут).
+function initCrowd() {
+  crowdBus = ctx.createGain(); crowdBus.gain.value = vol.crowd; crowdBus.connect(master);
+  bedG = ctx.createGain(); bedG.gain.value = 0;
+  loop([filter('bandpass', 620, 0.7), filter('lowpass', 1800)], bedG); // гомон: шум в полосе голоса
+  bedG.disconnect(); bedG.connect(crowdBus);
+  roarG = ctx.createGain(); roarG.gain.value = 0;
+  const fa = filter('bandpass', 720, 3), fb = filter('bandpass', 1150, 4);
+  fa.connect(roarG); fb.connect(roarG); roarG.connect(crowdBus);
+  for (let i = 0; i < 10; i++) { // голоса: пила через форманты «у/а», каждый со своей высотой и дрожью
+    const o = ctx.createOscillator(), og = ctx.createGain(), vib = ctx.createOscillator(), vg = ctx.createGain();
+    o.type = 'sawtooth'; o.frequency.value = 150 + Math.random() * 160;
+    vib.frequency.value = 4 + Math.random() * 3; vg.gain.value = o.frequency.value * 0.025;
+    vib.connect(vg); vg.connect(o.frequency);
+    og.gain.value = 0.05; o.connect(og); og.connect(fa); og.connect(fb);
+    o.start(); vib.start();
+    roarOsc.push({ o, f0: o.frequency.value });
+  }
+}
+let lastTension = 0;
+export function crowdTension(t, active) { // t 0..1: насколько близко к голу; active — идёт матч
+  if (!ctx || !crowdBus) return;
+  const now = ctx.currentTime;
+  bedG.gain.setTargetAtTime(active ? 0.035 + t * 0.09 : 0, now, 0.8);
+  roarG.gain.setTargetAtTime(active ? Math.pow(t, 1.6) * 0.5 : 0, now, t > lastTension ? 0.5 : 1.2);
+  for (const v of roarOsc) v.o.frequency.setTargetAtTime(v.f0 * (1 + t * 0.18), now, 0.6); // ближе к казану — выше и громче
+  lastTension = t;
+}
+// короткие возгласы: «у-ух!» (падение, промах) и «а-а!» (вырвал серке)
+export function crowdShout(kind = 'ooh') {
+  if (!ctx || muted || !crowdBus) return;
+  const t = ctx.currentTime, L = kind === 'ooh' ? 1.1 : 0.9;
+  const fa = filter('bandpass', kind === 'ooh' ? 480 : 820, 3), fb = filter('bandpass', kind === 'ooh' ? 900 : 1250, 4), gg = ctx.createGain();
+  gg.gain.setValueAtTime(0.0001, t); gg.gain.exponentialRampToValueAtTime(0.5, t + 0.12); gg.gain.exponentialRampToValueAtTime(0.0001, t + L);
+  fa.connect(gg); fb.connect(gg); gg.connect(crowdBus);
+  for (let i = 0; i < 8; i++) {
+    const o = ctx.createOscillator(), og = ctx.createGain(), st = t + Math.random() * 0.12, f0 = 170 + Math.random() * 150;
+    o.type = 'sawtooth';
+    // «у-ух» — вверх и вниз; «а-а» — вверх и держит
+    o.frequency.setValueAtTime(f0, st); o.frequency.linearRampToValueAtTime(f0 * 1.25, st + 0.18);
+    o.frequency.linearRampToValueAtTime(kind === 'ooh' ? f0 * 0.85 : f0 * 1.2, st + L);
+    og.gain.value = 0.07; o.connect(og); og.connect(fa); og.connect(fb);
+    o.start(st); o.stop(st + L + 0.05);
   }
 }

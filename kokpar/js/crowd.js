@@ -9,8 +9,64 @@ function bounce(mat) { // общий для тела и головы сдвиг 
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float excite; uniform float time;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         float ph = instanceMatrix[3].x * 1.7 + instanceMatrix[3].z * 3.1;
-        float idle = sin(time * 1.3 + ph) * .015;
-        transformed.y += idle + excite * abs(sin(time * 9. + ph)) * .28;`);
+        transformed.y += sin(time * 1.3 + ph) * .012 + excite * abs(sin(time * 9. + ph)) * .2;`);
+  };
+  return mat;
+}
+function person() {
+  const parts = [];
+  const add = (geo, color, part, x = 0, y = 0, z = 0, rz = 0) => {
+    geo = geo.toNonIndexed(); if (rz) geo.rotateZ(rz); geo.translate(x, y, z);
+    const n = geo.attributes.position.count, c = new THREE.Color(color), col = new Float32Array(n * 3), pa = new Float32Array(n);
+    for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; pa[i] = part; }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setAttribute('part', new THREE.BufferAttribute(pa, 1));
+    geo.deleteAttribute('uv'); parts.push(geo);
+  };
+  for (const sx of [-0.09, 0.09]) {
+    add(new THREE.CylinderGeometry(0.07, 0.065, 0.62, 6), '#2b2622', 0, sx, 0.5, 0); // штаны
+    add(new THREE.CylinderGeometry(0.075, 0.085, 0.24, 6), '#1a1512', 0, sx, 0.12, 0.01); // сапоги
+  }
+  // чапан: от подола до плеч, в талии уже, с плечами
+  const prof = [[0.001, 0.42], [0.27, 0.42], [0.25, 0.62], [0.2, 0.95], [0.22, 1.2], [0.23, 1.32], [0.16, 1.42], [0.06, 1.46], [0.001, 1.46]].map(([r, y]) => new THREE.Vector2(r, y));
+  const coat = new THREE.LatheGeometry(prof, 10); coat.scale(1, 1, 0.72); add(coat, '#ffffff', 1);
+  add(new THREE.CylinderGeometry(0.205, 0.205, 0.05, 10).scale(1, 1, 0.74), '#3a2a1c', 0, 0, 0.98, 0); // кушак
+  for (const [sx, p] of [[-0.25, 2], [0.25, 3]]) {
+    add(new THREE.CapsuleGeometry(0.058, 0.48, 2, 6), '#ffffff', p, sx, 1.08, 0, sx < 0 ? -0.08 : 0.08); // рукав
+    add(new THREE.SphereGeometry(0.05, 6, 4), '#c79a76', p, sx * 1.07, 0.78, 0.01); // кисть
+  }
+  add(new THREE.CylinderGeometry(0.05, 0.055, 0.08, 6), '#c79a76', 0, 0, 1.5, 0); // шея
+  add(new THREE.SphereGeometry(0.11, 10, 8).scale(0.92, 1.08, 0.98), '#c79a76', 0, 0, 1.63, 0.005); // голова
+  // склеиваем
+  let n = 0; for (const g of parts) n += g.attributes.position.count;
+  const out = new THREE.BufferGeometry();
+  for (const name of ['position', 'normal', 'color', 'part']) {
+    const size = parts[0].attributes[name].itemSize, arr = new Float32Array(n * size);
+    let o = 0; for (const g of parts) { arr.set(g.attributes[name].array, o); o += g.attributes[name].array.length; }
+    out.setAttribute(name, new THREE.BufferAttribute(arr, size));
+  }
+  return out;
+}
+// материал: чапан — цвет экземпляра, остальное — свой; руки на гол поднимаются и машут
+function personMat() {
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.excite = excite; sh.uniforms.time = time;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float excite; uniform float time; attribute float part;')
+      .replace('#include <color_vertex>', `vColor = vec4(color, 1.);
+        #ifdef USE_INSTANCING_COLOR
+          if (part > .5) vColor.rgb *= instanceColor.rgb; // чапан и рукава — цвета болельщика
+        #endif`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float ph = instanceMatrix[3].x * 1.7 + instanceMatrix[3].z * 3.1;
+        float up = excite * (.75 + .25 * sin(time * 7. + ph)); // руки вверх и качаются
+        if (part > 1.5) {
+          float sd = part > 2.5 ? 1. : -1.;
+          vec2 piv = vec2(.25 * sd, 1.34);
+          float a = sd * up * 2.7;
+          vec2 d = transformed.xy - piv;
+          transformed.xy = piv + vec2(d.x * cos(a) - d.y * sin(a), d.x * sin(a) + d.y * cos(a));
+        }
+        transformed.y += sin(time * 1.3 + ph) * .012 + excite * abs(sin(time * 9. + ph)) * .2;`);
   };
   return mat;
 }
@@ -54,12 +110,11 @@ export function makeCrowd(scene, { lenX = 60, rowZ = 43 } = {}) {
     people.push([side * (72 + row * 1.3 + Math.random() * 0.4), z, row]);
   }
   const N = people.length;
-  const bodyGeo = new THREE.CapsuleGeometry(0.21, 0.78, 3, 8); bodyGeo.translate(0, 0.62, 0);
-  const headGeo = new THREE.SphereGeometry(0.13, 10, 8); headGeo.translate(0, 1.36, 0);
-  const hatGeo = new THREE.ConeGeometry(0.15, 0.24, 8); hatGeo.translate(0, 1.55, 0); // қалпақ
-  const bodies = new THREE.InstancedMesh(bodyGeo, bounce(new THREE.MeshLambertMaterial()), N);
-  const heads = new THREE.InstancedMesh(headGeo, bounce(new THREE.MeshLambertMaterial({ color: '#c79a76' })), N);
-  const hats = new THREE.InstancedMesh(hatGeo, bounce(new THREE.MeshLambertMaterial()), N);
+  // шапки: қалпақ (войлочный конус с полями) и тымақ (меховая шапка)
+  const kalpak = new THREE.LatheGeometry([[0.001, 0], [0.16, 0], [0.15, 0.03], [0.115, 0.05], [0.08, 0.2], [0.001, 0.25]].map(([r, y]) => new THREE.Vector2(r, y)), 10); kalpak.translate(0, 1.7, 0);
+  const bodies = new THREE.InstancedMesh(person(), personMat(), N);
+  const hats = new THREE.InstancedMesh(kalpak, bounce(new THREE.MeshLambertMaterial()), N);
+  const heads = { setMatrixAt() {}, setColorAt() {} }; // голова теперь часть человека
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
   people.forEach(([x, z, row], i) => {
     const k = 0.9 + Math.random() * 0.22;
@@ -67,11 +122,11 @@ export function makeCrowd(scene, { lenX = 60, rowZ = 43 } = {}) {
     q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, Math.atan2(-x, -z) + (Math.random() - 0.5) * 0.6); // смотрят на поле
     s.set(k, k * (0.92 + Math.random() * 0.16), k);
     m.compose(p, q, s);
-    bodies.setMatrixAt(i, m); heads.setMatrixAt(i, m); hats.setMatrixAt(i, m);
-    heads.setColorAt(i, c.set('#c79a76').offsetHSL(0, 0, (Math.random() - 0.5) * 0.12));
-    hats.setColorAt(i, c.set(Math.random() < 0.6 ? '#f0ece2' : '#2a2420'));
+    bodies.setMatrixAt(i, m); hats.setMatrixAt(i, m);
+    bodies.setColorAt(i, c.set('#555'));
+    hats.setColorAt(i, c.set(Math.random() < 0.6 ? '#f0ece2' : Math.random() < 0.5 ? '#2a2420' : '#6b4a2a'));
   });
-  for (const im of [bodies, heads, hats]) { im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false; root.add(im); }
+  for (const im of [bodies, hats]) { im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false; root.add(im); }
   // верёвка на столбиках вдоль поля
   const postMat = new THREE.MeshLambertMaterial({ color: '#8a6a44' }), ropeMat = new THREE.LineBasicMaterial({ color: '#e8dcc0' });
   for (const side of [-1, 1]) {
