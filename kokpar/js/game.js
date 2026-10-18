@@ -2,6 +2,7 @@
 // ?debug — window.__kokpar; ?sim=N — N матчей ботов без картинки (проверка баланса); ?bots — игрок тоже бот.
 import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
 import { Rider } from './rider.js';
+import { makeSerke } from './serke.js';
 import { initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
@@ -83,35 +84,11 @@ const kazans = [-GOAL_X * SWAP, GOAL_X * SWAP].map((x, t) => {
   }
 }
 
-// ---------- серке (мешок) ----------
-const sackGeo = (() => {
-  const g = new THREE.SphereGeometry(0.5, 18, 12);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { // комковатый, вытянутый
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const n = 1 + 0.08 * Math.sin(x * 9 + z * 5) + 0.06 * Math.sin(y * 11 + x * 3);
-    p.setXYZ(i, x * 0.95 * n, y * 0.44 * n, z * 0.46 * n);
-  }
-  g.computeVertexNormals();
-  return g;
-})();
-const sackMat = new THREE.MeshStandardMaterial({
-  roughness: 1,
-  map: canvasTex(128, 128, (c, w, h) => { // мешковина
-    c.fillStyle = '#9a8460'; c.fillRect(0, 0, w, h);
-    for (let y = 0; y < h; y += 3) { c.fillStyle = 'rgba(70,55,35,0.35)'; c.fillRect(0, y, w, 1); }
-    for (let x = 0; x < w; x += 3) { c.fillStyle = 'rgba(200,180,140,0.25)'; c.fillRect(x, 0, 1, h); }
-  }, 2),
-});
-const sack = { mesh: new THREE.Group(), pos: new THREE.Vector3(0, 0.25, 0), vel: new THREE.Vector3(), carrier: null, flight: null };
-{
-  const body = new THREE.Mesh(sackGeo, sackMat);
-  body.castShadow = true;
-  sack.mesh.add(body);
-  const rope = new THREE.MeshLambertMaterial({ color: '#4b3a26' });
-  for (const x of [-0.25, 0.25]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.025, 6, 16), rope); r.rotation.y = Math.PI / 2; r.position.x = x; r.scale.set(1, 1.05, 1); sack.mesh.add(r); }
-  scene.add(sack.mesh);
-}
+// ---------- серке: муляж туши козла (как на турнирах) ----------
+const GROUND_Y = 0.17; // лежит на боку — центр туши над землёй
+const sack = { mesh: makeSerke(), pos: new THREE.Vector3(0, GROUND_Y, 0), vel: new THREE.Vector3(), carrier: null, flight: null, lie: Math.PI / 2 };
+sack.mesh.rotation.order = 'YXZ';
+scene.add(sack.mesh);
 // маркер над лежащим мешком: виден издалека
 const sackMarker = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.6, 4), new THREE.MeshBasicMaterial({ color: '#ffd23a' }));
 sackMarker.rotation.x = Math.PI;
@@ -160,13 +137,14 @@ function kickoff(first) {
     e.h.v = 0; e.h.gait = 0; e.h.push.set(0, 0, 0);
     e.stamina = 100; e.tugCD = 0; e.pickCD = 0; e.stun = 0;
   });
-  dropSack(new THREE.Vector3(0, 0.25, 0), new THREE.Vector3());
+  dropSack(new THREE.Vector3(0, GROUND_Y, 0), new THREE.Vector3());
   state.tug = null;
   state.phase = 'countdown';
   state.t = first ? 3.2 : 2.2;
   banner(first ? '3' : tr('ready'));
 }
 function dropSack(pos, vel) {
+  sack.lie = (rnd() < 0.5 ? 1 : -1) * Math.PI / 2; // упадёт на левый или правый бок
   sack.carrier = null; sack.flight = null; roleT = 0;
   sack.pos.copy(pos); sack.vel.copy(vel);
 }
@@ -179,6 +157,7 @@ function giveSack(e) {
 function goal(team, scorer) {
   state.score[team]++;
   scorer.stats.goals++;
+  scorer.celebrate = true;
   state.lastGoal = team;
   state.phase = 'goal';
   state.t = 2.8;
@@ -392,7 +371,7 @@ function stepSack(dt) {
   if (c) {
     // висит у правого бедра всадника; в тартысе тянется к сопернику
     c.h.obj.updateMatrixWorld(true); // без рендера (прогон ботов) матрицы сами не обновляются
-    V.set(-0.46, -0.42, 0.08);
+    V.set(-0.5, -0.5, 0.05); // туша зажата под правой ногой всадника, ноги свисают
     c.r.root.localToWorld(V);
     if (state.tug && state.tug.car === c) {
       state.tug.att.h.obj.updateMatrixWorld(true);
@@ -410,14 +389,17 @@ function stepSack(dt) {
   // лежит или катится
   sack.vel.y -= 9.8 * dt;
   sack.pos.addScaledVector(sack.vel, dt);
-  if (sack.pos.y < 0.24) { sack.pos.y = 0.24; sack.vel.y *= -0.25; sack.vel.x *= Math.exp(-dt * 4); sack.vel.z *= Math.exp(-dt * 4); }
+  if (sack.pos.y < GROUND_Y) { sack.pos.y = GROUND_Y; sack.vel.y *= -0.25; sack.vel.x *= Math.exp(-dt * 4); sack.vel.z *= Math.exp(-dt * 4); }
   sack.pos.x = clamp(sack.pos.x, -BOUNDS.x, BOUNDS.x); sack.pos.z = clamp(sack.pos.z, -BOUNDS.z, BOUNDS.z);
   for (const k of kazans) { // с казана скатывается
     const dx = sack.pos.x - k.x, d = Math.hypot(dx, sack.pos.z);
     if (d < KAZAN_R + 0.3) { sack.pos.x = k.x + (dx / (d || 1)) * (KAZAN_R + 0.3); sack.pos.z = (sack.pos.z / (d || 1)) * (KAZAN_R + 0.3); }
   }
   sack.mesh.position.copy(sack.pos);
-  sack.mesh.rotation.set(0, sack.mesh.rotation.y, 0);
+  // в полёте кувыркается, на земле ложится на бок
+  const air = sack.pos.y > GROUND_Y + 0.05;
+  sack.mesh.rotation.x += air ? dt * 5 : (sack.lie - sack.mesh.rotation.x) * Math.min(1, dt * 10);
+  sack.mesh.rotation.z += air ? 0 : -sack.mesh.rotation.z * Math.min(1, dt * 10);
   if (state.phase !== 'play') return;
   // подбор: кто ближе всех и в досягаемости — наклоняется и хватает
   let best = null, bd = PICK_R;
@@ -458,8 +440,11 @@ function step(dt) {
     if (me && !AI_PLAYER) playerInput(dt);
     if (state.clock <= 0) { state.clock = 0; endMatch(); }
   } else if (state.phase === 'goal') {
-    for (const e of ents) { e.h.gait = 1; e.h.steer = 0; }
-    if (state.t <= 0) kickoff(false);
+    for (const e of ents) {
+      e.h.gait = e.celebrate ? 0 : 1; e.h.steer = 0;
+      if (e.celebrate && e.h.v < 1.4 && !SIM) { e.h.rear(); e.celebrate = false; } // свечка и ржание
+    }
+    if (state.t <= 0) { for (const e of ents) e.celebrate = false; kickoff(false); }
   } else if (state.phase === 'end') {
     for (const e of ents) { e.h.gait = 0; e.h.steer = 0; }
   }

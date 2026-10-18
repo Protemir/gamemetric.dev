@@ -26,7 +26,10 @@ export function initAudio() {
   windG = ctx.createGain(); windG.gain.value = 0.05; loop([filter('lowpass', 420)], windG); // ровный степной ветер
   windHi = ctx.createGain(); windHi.gain.value = 0; loop([filter('bandpass', 900, 0.5)], windHi); // свист в ушах на скорости
   riverG = ctx.createGain(); riverG.gain.value = 0; loop([filter('bandpass', 1400, 0.4), filter('lowpass', 3200)], riverG); // журчание
+  // запись настоящего ржания (BigSoundBank, CC0)
+  fetch('sounds/horse-neigh.mp3').then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).then((buf) => { neighBuf = buf; }).catch(() => {});
 }
+let neighBuf = null;
 export function toggleMute() {
   muted = !muted;
   if (master) master.gain.setTargetAtTime(muted ? 0 : 0.9, ctx.currentTime, 0.05);
@@ -101,6 +104,12 @@ export function neigh(x, z) {
   if (!ctx || muted) return;
   const { vol, pan } = place(x, z, 4);
   if (vol < 0.05) return;
+  if (neighBuf) { // живая лошадь; у каждого коня чуть свой голос
+    const s = ctx.createBufferSource(); s.buffer = neighBuf; s.playbackRate.value = 0.9 + Math.random() * 0.18;
+    const g = ctx.createGain(); g.gain.value = Math.min(1, vol * 0.9);
+    s.connect(g); g.connect(out(1, pan)); s.start();
+    return;
+  }
   const t = ctx.currentTime, L = 1.5;
   const o = ctx.createOscillator(); o.type = 'sawtooth';
   const f = o.frequency;
