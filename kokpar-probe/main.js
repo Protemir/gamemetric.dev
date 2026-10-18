@@ -4,11 +4,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
 import { FBXLoader } from './vendor/loaders/FBXLoader.js';
 import * as SkeletonUtils from './vendor/utils/SkeletonUtils.js';
+import { initAudio, toggleMute, setListener, hoof, snort, bump, ambience, stats as sound } from './audio.js?v=2';
 
 const P = new URLSearchParams(location.search);
 const Q = P.get('q') || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
 const N = Math.max(1, Math.min(12, Number(P.get('n') || 6)));
 const AUTO = P.has('auto');
+const OFF = new Set((P.get('no') || '').split(',')); // ?no=terrain,river,grass,sky — для поиска тормозов
 if (P.has('clean')) document.body.classList.add('clean');
 
 // Модели. Для купленного пака поменять file и имена клипов (null = такого клипа нет).
@@ -58,9 +60,9 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const HORIZON = new THREE.Color('#e9dcc0');
-scene.fog = new THREE.Fog(HORIZON, 60, 420);
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 1500);
+const HORIZON = new THREE.Color('#dcd8cc');
+scene.fog = new THREE.FogExp2(HORIZON, 0.0015); // дымка: даль и горы светлеют постепенно
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 4000);
 
 scene.add(new THREE.HemisphereLight('#bcd6f5', '#7a5c32', 1.05));
 // Солнце ближе к вечеру: тёплое и ниже — длинные тени, рельефнее конь.
@@ -116,7 +118,10 @@ const skyMat = new THREE.ShaderMaterial({
       #include <colorspace_fragment>
     }`,
 });
-scene.add(new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), skyMat));
+const skyMesh = new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), skyMat);
+skyMesh.renderOrder = -10; // небо рисуется первым: горы дальше его радиуса не пропадают
+skyMesh.frustumCulled = false;
+scene.add(skyMesh);
 
 // Отражения для PBR-материалов коня: окружение из того же неба.
 {
@@ -183,6 +188,51 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
+// Горы и река. Заилийский Алатау на юге (-Z): настоящий рельеф с освещением от солнца —
+// снег на вершинах, скалы на крутизне, ельник в среднем поясе, луга ниже. По остальному горизонту — холмы.
+// Из ущелья выходит горная река и течёт вдоль поля.
+const RIVER = new THREE.CatmullRomCurve3([
+  [210, -1500], [175, -900], [150, -520], [138, -260], [131, -60], [134, 120], [150, 380], [205, 800], [300, 1500],
+].map(([x, z]) => new THREE.Vector3(x, 0, z)));
+const riverPts = RIVER.getSpacedPoints(400);
+function riverDist(x, z) {
+  let m = 1e9;
+  for (const p of riverPts) { const d = (p.x - x) ** 2 + (p.z - z) ** 2; if (d < m) m = d; }
+  return Math.sqrt(m);
+}
+const noise2 = (() => { // плавный шум 2D (value noise) с хэшем по решётке
+  const h = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
+  return (x, y) => {
+    const ix = Math.floor(x), iy = Math.floor(y); let fx = x - ix, fy = y - iy;
+    fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+    const a = h(ix, iy), b = h(ix + 1, iy), c = h(ix, iy + 1), d = h(ix + 1, iy + 1);
+    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+  };
+})();
+function ridged(x, z) { // острые гребни: перевёрнутый модуль шума, октавы с весом от предыдущей
+  let v = 0, amp = 0.55, f = 1 / 650, w = 1;
+  for (let o = 0; o < 5; o++) {
+    let n = 1 - Math.abs(noise2(x * f, z * f) * 2 - 1);
+    n *= n * w; w = Math.min(1, n * 1.8);
+    v += n * amp; amp *= 0.42; f *= 2.05;
+  }
+  return v;
+}
+function terrainH(x, z) {
+  const r = Math.hypot(x, z);
+  if (r < 230) return 0;
+  const south = THREE.MathUtils.smoothstep(-z / r, -0.15, 0.55); // горы — на юге
+  // главный хребет вдали: массив (крупный шум) × гребни, без игл
+  const mass = noise2(x / 1100, z / 1100) * 0.6 + noise2(x / 520, z / 520) * 0.4;
+  const big = south * THREE.MathUtils.smoothstep(r, 700, 1800) * Math.pow(mass * 0.55 + ridged(x, z) * 0.45, 1.25) * 1050;
+  const foot = south * THREE.MathUtils.smoothstep(r, 300, 750) * (noise2(x / 220, z / 220) * 0.65 + noise2(x / 70, z / 70) * 0.35) * 150; // адыры
+  const hills = THREE.MathUtils.smoothstep(r, 230, 520) * (noise2(x / 160, z / 160) * 0.7 + noise2(x / 60, z / 60) * 0.3) * 30;
+  let hgt = big + foot + hills;
+  const rd = riverDist(x, z); // ущелье реки
+  hgt *= THREE.MathUtils.smoothstep(rd, 14, 70 + hgt * 0.9); // долина пологая, не щель
+  return hgt;
+}
+
 // Пучки ковыля: один InstancedMesh, три скрещённые плоскости.
 const GRASS = { low: 0, medium: 7000, high: 18000 }[Q] ?? 7000;
 const wind = { value: 0 }; // время для ветра в траве
@@ -216,14 +266,16 @@ if (GRASS) {
   const grass = new THREE.InstancedMesh(geo, mat, GRASS);
   const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), s4 = new THREE.Vector3(), p4 = new THREE.Vector3();
   for (let i = 0; i < GRASS; i++) {
-    p4.set((rnd() * 2 - 1) * (FIELD + 40), 0, (rnd() * 2 - 1) * (FIELD + 40));
+    do p4.set((rnd() * 2 - 1) * (FIELD + 40), 0, (rnd() * 2 - 1) * (FIELD + 40)); while (riverDist(p4.x, p4.z) < 8.5); // не в реке
     q4.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * 6.28);
     const s = 0.6 + rnd() * 0.9;
     s4.set(s, s * (0.7 + rnd() * 0.6), s);
     grass.setMatrixAt(i, m4.compose(p4, q4, s4));
+    const wet = 1 - THREE.MathUtils.smoothstep(riverDist(p4.x, p4.z), 9, 22); // у воды трава зелёная
+    grass.setColorAt(i, new THREE.Color(1, 1, 1).lerp(new THREE.Color(0.55, 0.85, 0.45), wet));
   }
   grass.receiveShadow = true;
-  scene.add(grass);
+  if (!OFF.has('grass')) scene.add(grass);
 }
 function mergeQuads(list) {
   const pos = [], uv = [], nor = [], idx = [];
@@ -244,44 +296,133 @@ function mergeQuads(list) {
   return out;
 }
 
-// Горы на горизонте (Алатау): три слоя хребтов, снег выше линии, дальние тонут в дымке.
+// Меши гор и реки (функции рельефа и кривая реки — выше, до травы).
 {
-  const ridge = (a, L) => { // высота хребта по углу, бесшовно по кругу
-    let h = 0;
-    for (const [f, amp, ph] of [[3, 0.5, L], [7, 0.28, 1.3 + L], [13, 0.16, 2.1 * L], [29, 0.07, 0.7], [57, 0.035, 2.9]]) h += amp * (0.5 + 0.5 * Math.sin(a * f + ph));
-    return Math.pow(h, 1.6);
-  };
-  const sky = new THREE.Color('#9fb6d2'), rock = new THREE.Color('#6f7f96'), snowC = new THREE.Color('#f4f6fa'), haze = HORIZON.clone();
-  for (let L = 0; L < 3; L++) {
-    const D = 520 + L * 190, HMAX = [95, 150, 210][L], SEG = 360, ROWS = 7;
-    const pos = [], col = [], idx = [];
-    for (let i = 0; i <= SEG; i++) {
-      const a = (i / SEG) * Math.PI * 2;
-      const top = ridge(a, L) * HMAX + 6;
-      const slope = ridge(a + 0.004, L) - ridge(a - 0.004, L); // склон к солнцу светлее
-      const lit = THREE.MathUtils.clamp(0.5 + slope * 60 * Math.sign(Math.cos(a - 2.3)), 0.25, 1);
-      for (let r = 0; r <= ROWS; r++) {
-        const t = r / ROWS, y = -12 + (top + 12) * t;
-        const jitter = Math.sin(a * 91 + r * 3.7) * 0.06;
-        pos.push(Math.sin(a) * D, y, -Math.cos(a) * D);
-        const c = rock.clone().lerp(sky, 0.25 + 0.2 * L).multiplyScalar(0.75 + 0.35 * lit);
-        if (y > HMAX * (0.5 + jitter) && t > 0.55) c.copy(snowC).multiplyScalar(0.82 + 0.18 * lit).lerp(sky, 0.12 * L);
-        c.lerp(haze, Math.min(1, Math.pow(1 - t, 3) * 0.9 + L * 0.12)); // у подножия дымка
-        col.push(c.r, c.g, c.b);
-      }
-    }
-    for (let i = 0; i < SEG; i++) for (let r = 0; r < ROWS; r++) {
-      const a = i * (ROWS + 1) + r, b = a + ROWS + 1;
-      idx.push(a, b, a + 1, b, b + 1, a + 1);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    g.setIndex(idx);
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide }));
-    m.renderOrder = -1 - L;
-    scene.add(m);
+  const [NA, RSTEP] = Q === 'high' ? [560, 1.022] : [340, 1.036]; // на слабом качестве сетка гор реже
+  const rs = [];
+  for (let r = 230; r < 2700; r *= RSTEP) rs.push(r);
+  const pos = [], idx = [];
+  for (let j = 0; j < rs.length; j++) for (let i = 0; i <= NA; i++) {
+    const a = (i / NA) * Math.PI * 2, x = Math.sin(a) * rs[j], z = -Math.cos(a) * rs[j];
+    pos.push(x, terrainH(x, z) - 0.6, z);
   }
+  for (let j = 0; j < rs.length - 1; j++) for (let i = 0; i < NA; i++) {
+    const a = j * (NA + 1) + i, b = a + NA + 1;
+    idx.push(a, a + 1, b, b, a + 1, b + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  // цвет по высоте и крутизне
+  const n = g.attributes.normal, col = [], c = new THREE.Color();
+  const steppe = new THREE.Color('#b29a5e'), meadow = new THREE.Color('#7d8a4a'), forest = new THREE.Color('#2f4a30'),
+    rock = new THREE.Color('#6d6458'), rockDark = new THREE.Color('#4a453f'), snow = new THREE.Color('#f3f5f8');
+  for (let k = 0; k < pos.length / 3; k++) {
+    const x = pos[k * 3], y = pos[k * 3 + 1], z = pos[k * 3 + 2], ny = n.getY(k), slope = 1 - ny;
+    const nz = noise2(x / 37, z / 37);
+    c.copy(steppe).lerp(meadow, THREE.MathUtils.smoothstep(y, 25, 120));
+    if (y > 140 && y < 470 && slope < 0.5) c.lerp(forest, THREE.MathUtils.smoothstep(nz, 0.3, 0.55) * (1 - THREE.MathUtils.smoothstep(y, 400, 470))); // ельник
+    c.lerp(nz > 0.5 ? rock : rockDark, THREE.MathUtils.smoothstep(slope, 0.28, 0.5));
+    const snowLine = 470 + nz * 90;
+    if (y > snowLine) c.lerp(snow, THREE.MathUtils.smoothstep(y, snowLine, snowLine + 40) * (1 - THREE.MathUtils.smoothstep(slope, 0.62, 0.85)));
+    col.push(c.r, c.g, c.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  mat.onBeforeCompile = (sh) => { // дымка гуще у земли: вершины видны чище, чем подножия
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vH;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvH = (modelMatrix * vec4(transformed, 1.)).y;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vH;').replace('#include <fog_fragment>', `
+      #ifdef USE_FOG
+        float fogF = (1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth)) * (0.35 + 0.65 * exp(-max(vH, 0.) / 600.));
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(fogColor, vec3(.62, .69, .78), smoothstep(400., 1600., vFogDepth)), fogF); // даль синеет
+      #endif`);
+  };
+  const m = new THREE.Mesh(g, mat);
+  m.receiveShadow = false;
+  if (!OFF.has('terrain')) scene.add(m);
+}
+
+// Река: лента вдоль кривой, вода с бегущей рябью и отражением неба; мокрый берег шире воды.
+const riverMat = new THREE.ShaderMaterial({
+  transparent: true, fog: true, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, // поверх гальки при взгляде вскользь
+  uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { time: { value: 0 }, ripple: { value: null }, sky: { value: new THREE.Color('#8fb6dc') }, deep: { value: new THREE.Color('#1d5560') }, sunDir: { value: SUN_DIR } }]),
+  vertexShader: `varying vec2 vUv; varying vec3 vW;
+    #include <fog_pars_vertex>
+    void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+    }`,
+  fragmentShader: `uniform float time; uniform sampler2D ripple; uniform vec3 sky; uniform vec3 deep; uniform vec3 sunDir; varying vec2 vUv; varying vec3 vW;
+    #include <fog_pars_fragment>
+    float rip(vec2 uv, float flow){
+      return texture2D(ripple, vec2(uv.x * .9, uv.y * 7. - flow * .5)).r * .6 + texture2D(ripple, vec2(uv.x * 2.1 + .4, uv.y * 17. - flow * 1.1)).r * .4;
+    }
+    void main(){
+      float flow = time * .6;
+      // рябь как карта высот → нормаль воды
+      float e = .004, h0 = rip(vUv, flow);
+      float hx = rip(vUv + vec2(e, 0.), flow) - h0, hy = rip(vUv + vec2(0., e * .2), flow) - h0;
+      vec3 n = normalize(vec3(-hx * 14., 1., -hy * 40.));
+      vec3 V = normalize(cameraPosition - vW);
+      vec3 R = reflect(-V, n);
+      float fres = .04 + .96 * pow(1. - max(dot(n, V), 0.), 5.);
+      vec3 refl = mix(sky * .85, sky * 1.15, clamp(R.y * 2., 0., 1.));
+      vec3 col = mix(deep * (.85 + h0 * .3), refl, clamp(fres + .25, 0., 1.));
+      col += vec3(1., .92, .75) * pow(max(dot(R, sunDir), 0.), 180.) * 2.5; // солнечные блики
+      float edge = smoothstep(0., .14, vUv.x) * smoothstep(1., .86, vUv.x);
+      col = mix(vec3(.82, .85, .84), col, smoothstep(.0, .6, edge + (h0 - .5) * .4)); // пена у берегов
+      gl_FragColor = vec4(col, .95 * smoothstep(0., .05, vUv.x) * smoothstep(1., .95, vUv.x));
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      #include <fog_fragment>
+    }`,
+});
+riverMat.uniforms.ripple.value = cloudTex;
+function ribbon(width, y, segs) {
+  const pts = RIVER.getSpacedPoints(segs), pos = [], uv = [], idx = [];
+  let len = 0;
+  for (let i = 0; i <= segs; i++) {
+    const p = pts[i], q = pts[Math.min(segs, i + 1)], o = pts[Math.max(0, i - 1)];
+    const dx = q.x - o.x, dz = q.z - o.z, l = Math.hypot(dx, dz) || 1;
+    const nx = -dz / l, nz = dx / l;
+    const w = width * (1 + 0.25 * Math.sin(i * 0.37) + 0.15 * Math.sin(i * 1.3)); // русло то шире, то уже
+    if (i) len += p.distanceTo(pts[i - 1]);
+    const yy = y + terrainH(p.x, p.z) * 0; // река лежит в ущелье на уровне долины
+    pos.push(p.x - nx * w / 2, yy, p.z - nz * w / 2, p.x + nx * w / 2, yy, p.z + nz * w / 2);
+    uv.push(0, len / 40, 1, len / 40);
+    if (i < segs) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } // лицом вверх
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+{
+  // мокрый берег: темнее к воде и сходит на нет к степи (прозрачные края)
+  const bankTex = canvasTex(256, 64, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, w, 0);
+    gr.addColorStop(0, 'rgba(96,78,48,0)'); gr.addColorStop(0.25, 'rgba(96,78,48,0.8)'); gr.addColorStop(0.5, 'rgba(70,58,38,0.95)');
+    gr.addColorStop(0.75, 'rgba(96,78,48,0.8)'); gr.addColorStop(1, 'rgba(96,78,48,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 600; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '60,50,32' : '130,112,78'},${Math.random() * 0.25})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+  });
+  bankTex.wrapT = THREE.RepeatWrapping; bankTex.repeat.set(1, 6);
+  const bank = new THREE.Mesh(ribbon(20, 0.02, 600), new THREE.MeshLambertMaterial({ map: bankTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }));
+  bank.receiveShadow = true;
+  scene.add(bank);
+  const pebbles = new THREE.Mesh(ribbon(12.5, 0.035, 600), new THREE.MeshLambertMaterial({ map: canvasTex(128, 128, (g) => {
+    g.fillStyle = '#8d8578'; g.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 500; i++) { const v = 100 + Math.random() * 110; g.fillStyle = `rgb(${v},${v - 6},${v - 14})`; g.beginPath(); g.ellipse(Math.random() * 128, Math.random() * 128, 1 + Math.random() * 3, 1 + Math.random() * 2, Math.random() * 3, 0, 6.3); g.fill(); }
+  }), polygonOffset: true, polygonOffsetFactor: -2 }));
+  pebbles.material.map.repeat.set(2, 1); pebbles.material.map.wrapS = pebbles.material.map.wrapT = THREE.RepeatWrapping;
+  pebbles.receiveShadow = true;
+  scene.add(pebbles);
+  const water = new THREE.Mesh(ribbon(9, 0.06, 600), riverMat);
+  water.renderOrder = 1;
+  if (!OFF.has('river')) scene.add(water);
 }
 
 // ---------- пыль из-под копыт ----------
@@ -767,7 +908,12 @@ class Horse {
       for (const h of this.hooves) {
         h.b.getWorldPosition(V2);
         const low = V2.y < base + 0.035;
-        if (low && !h.low) { stamp(V2, this.yaw, v > 5); if (v > 2.2) puff(V2, v, fx, fz); }
+        if (low && !h.low) {
+          stamp(V2, this.yaw, v > 5);
+          if (v > 2.2) puff(V2, v, fx, fz);
+          hoof(V2.x, V2.z, v);
+          if (h === this.hooves[0] && v > 5) snort(V2.x, V2.z, 0.6 + v * 0.05); // выдох раз за шаг галопа
+        }
         h.low = low;
       }
     } else if (this.hooves.length && this.rearClock == null) {
@@ -795,6 +941,8 @@ const keys = {};
 let player;
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
+  initAudio(); // браузер даёт включить звук только после действия игрока
+  if (e.code === 'KeyM') toggleMute();
   keys[e.code] = true;
   if (!player || AUTO) return;
   if (e.code === 'KeyW' || e.code === 'ArrowUp' || e.code === 'KeyZ') player.gait = Math.min(4, player.gait + 1);
@@ -809,6 +957,7 @@ if (matchMedia('(pointer: coarse)').matches) {
   document.body.classList.add('touch');
   document.getElementById('hint').textContent = 'Палец вверх — быстрее, вниз — медленнее, вбок — поворот';
 }
+addEventListener('pointerdown', () => initAudio());
 addEventListener('pointerdown', (e) => {
   if (e.pointerType !== 'touch' || e.target.id === 'stop') return;
   stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, g0: player ? player.gait : 0 };
@@ -901,6 +1050,7 @@ function collide() {
     const side = (h, n) => Math.sign(Math.cos(h.yaw) * n.x - Math.sin(h.yaw) * n.z) || 1;
     a.jolt += 0.05 * imp * side(a, N2) * -1; b.jolt += 0.05 * imp * side(b, N2);
     if (imp > 3) { a.pitch -= 0.04; b.pitch -= 0.04; }
+    if (imp > 1) bump((pa.x + pb.x) / 2, (pa.z + pb.z) / 2, imp);
     if (P.has('debug')) (window.__bumps ||= []).push({ t: performance.now(), imp: +imp.toFixed(2), a: i, b: j });
   }
 }
@@ -916,7 +1066,10 @@ function step(dt) {
   for (const h of horses) h.update(dt);
   collide();
   stepDust(dt);
-  wind.value += dt; skyMat.uniforms.time.value += dt;
+  wind.value += dt; skyMat.uniforms.time.value += dt; riverMat.uniforms.time.value += dt;
+  camera.getWorldDirection(V);
+  setListener(camera.position.x, camera.position.z, Math.atan2(V.x, V.z));
+  ambience(player.v, riverDist(camera.position.x, camera.position.z));
   if (!camHold) updateCamera(dt);
 }
 function frame(now) {
@@ -949,14 +1102,14 @@ try {
 }
 for (let i = 0; i < N; i++) horses.push(new Horse(i, i > 0));
 player = horses[0];
-if (AUTO) player.gait = 4;
+if (AUTO) { player.gait = 4; player.yaw = Math.PI * 0.92; } // в ролике скачем к горам
 updateCamera(0, true);
 document.getElementById('load').remove();
 requestAnimationFrame(frame);
 
 if (P.has('debug')) {
   window.__kp = {
-    horses, player, renderer, proto, GAITS, camera,
+    horses, player, renderer, proto, GAITS, camera, sound,
     side(dist = 5, h = 1.3, ang = Math.PI / 2) { camHold = true; const p = player.obj.position, a = player.yaw + ang; camera.position.set(p.x + Math.sin(a) * dist, h, p.z + Math.cos(a) * dist); camera.lookAt(p.x, 1.1, p.z); camera.fov = 50; camera.updateProjectionMatrix(); },
     freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } },
     step(n, dt) { for (let i = 0; i < n; i++) step(dt); renderer.render(scene, camera); },
