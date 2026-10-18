@@ -283,9 +283,9 @@ const kitOf = (id) => (id === 'me' ? myKit() : makeKit(byId(id).c, byId(id).sign
 const money = (n) => n.toLocaleString('ru-RU').replace(/,/g, ' ') + ' ₸';
 const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
-let onSettings = null;
-export function initCareer(el, play, settings) {
-  root = el; onPlay = play; onSettings = settings;
+let onSettings = null, onOnline = null;
+export function initCareer(el, play, settings, online) {
+  root = el; onPlay = play; onSettings = settings; onOnline = online;
   root.addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]');
     if (!b || b.disabled) return;
@@ -316,6 +316,7 @@ const ACTS = {
   season: () => { S.season++; S.cup = newCup(); save(S); showHub(); },
   quests: () => showQuests(),
   settings: () => onSettings?.(),
+  online: () => onOnline?.(),
   claim: () => {
     const d = dailyState();
     if (!d.ready) return;
@@ -363,7 +364,8 @@ export function showHub(skipDaily) {
         <div class="h-side"><img src="${flag(f.kit, 192, 120)}" alt=""><b>${esc(f.full)}</b><span class="h-stars" title="${tr('rating')}">${'★'.repeat(f.stars)}<i>${'★'.repeat(5 - f.stars)}</i></span></div>
       </div>
       <div class="h-arena">${arenaName(f.arena)}</div>
-      <button class="big-btn" data-act="play">${tr('play')}</button>`;
+      <button class="big-btn" data-act="play">${tr('play')}</button>
+      <button class="h-friend" data-act="online">${IC.crowd}<span>${L() === 'ru' ? 'С другом по сети' : 'Play a friend online'}</span></button>`;
   } else {
     const r = c.result;
     const msg = r === 'champion' ? tr('champion') : r === 'final' ? tr('runnerUp') : r === 'semi' ? tr('outSemi') : tr('outGroup');

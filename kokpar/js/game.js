@@ -7,6 +7,7 @@ import { makeKazan } from './kazan.js';
 import * as career from './career.js';
 import { makeCrowd } from './crowd.js';
 import { IC } from './icons.js';
+import { Net, cleanCode, netSupported } from './net.js';
 import { flagCanvas } from './flags.js';
 import { crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
 
@@ -515,10 +516,31 @@ addEventListener('keydown', (e) => {
   initAudio();
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyP' && !SIM) togglePause();
-  if (e.code === 'KeyE' || e.code === 'Space') { e.preventDefault(); if (me && canAim(me) && !AI_PLAYER) startAim(me); else tugTap = true; }
-  if (e.code === 'KeyR' && canRear()) me.h.rear(); // свечка — только стоя
+  if (e.code === 'KeyE' || e.code === 'Space') { e.preventDefault(); if (me && !online.role && canAim(me) && !AI_PLAYER) startAim(me); else tugTap = true; }
+  if (e.code === 'KeyR' && online.role === 'guest') online.myRear++;
+  else if (e.code === 'KeyR' && canRear()) me.h.rear(); // свечка — только стоя
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; if ((e.code === 'KeyE' || e.code === 'Space') && me) releaseAim(me); });
+function readInput() { // что сейчас жмёт этот игрок
+  const h = me.h, o = { s: 0, g: 0, w: !!(keys.ShiftLeft || keys.ShiftRight || whipHeld) };
+  if (stick) {
+    const want = cam.yaw + Math.atan2(-stick.dx, -stick.dy), mag = Math.min(1, Math.hypot(stick.dx, stick.dy));
+    if (mag > 0.2) { o.s = clamp(wrap(want - h.yaw) * 2.2, -1, 1); o.g = mag > 0.75 ? 4 : mag > 0.45 ? 3 : 2; }
+  } else {
+    o.s = (keys.KeyA || keys.ArrowLeft || keys.KeyQ ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
+    o.g = keys.KeyW || keys.ArrowUp || keys.KeyZ ? 4 : keys.KeyS || keys.ArrowDown ? 0 : o.s ? 1 : 0;
+  }
+  return o;
+}
+function applyInput(e, o, tap) { // нажатия друга по сети: то же, что у своего игрока
+  if (e.r.fallen) return;
+  e.h.steer = o.s; e.h.gait = e.h.rearClock != null ? 0 : o.g; e.wantSprint = o.w;
+  if (!tap) return;
+  if (state.tug && (state.tug.att === e || state.tug.car === e)) tugPress(e);
+  else if (sack.carrier === e && throwInfo(e).d < THROW_MAX) throwSack(e);
+  else if (sack.carrier && canTug(e, sack.carrier)) startTug(e);
+  else if (canPass(e)) giveSack(e);
+}
 function playerInput(dt) {
   const h = me.h;
   if (stick) { // телефон: куда тянешь палец относительно камеры — туда и скачет; дальше — быстрее
@@ -676,8 +698,9 @@ function step(dt) {
     state.clock -= dt;
     roleT -= dt;
     if (roleT <= 0) { assignRoles(); roleT = 0.3; }
-    for (const e of ents) if (!e.me || AI_PLAYER) think(e, dt);
+    for (const e of ents) if ((!e.me || AI_PLAYER) && !e.remote) think(e, dt);
     if (me && !AI_PLAYER && !me.r.fallen) playerInput(dt);
+    if (online.remote) { const r = online.remote; applyInput(r, online.inp, online.taps > online.tapsDone); online.tapsDone = Math.min(online.taps, online.tapsDone + 1); if (online.rear > online.rearDone) { online.rearDone = online.rear; if (r.h.v < 1.5 && !r.r.fallen && sack.carrier !== r) r.h.rear(); } }
     if (state.clock <= 0) {
       state.clock = 0;
       if (fx?.ko && !SIM && state.score[0] === state.score[1]) { if (!state.golden) { state.golden = true; banner(lang === 'ru' ? 'ЗОЛОТОЙ ГОЛ' : 'GOLDEN GOAL', ['#fff3c0', '#f0a01c'], 2.2, career.goldenText()); } }
@@ -733,6 +756,7 @@ function step(dt) {
 function endMatch() {
   state.phase = 'end';
   if (SIM) return;
+  if (online.role) { onlineEnd(); return; }
   const ev = state.events;
   const sum = career.report(state.score[0], state.score[1], {
     myGoals: ev.filter((x) => x.t === 'goal' && x.me).length, throwGoals: ev.filter((x) => x.t === 'goal' && x.team === 0 && x.landed).length,
@@ -884,7 +908,7 @@ addEventListener('pointermove', (e) => {
 const endStick = (e) => { if (stick && e.pointerId === stick.id) { stick = null; el.stick.style.display = 'none'; } };
 addEventListener('pointerup', endStick);
 addEventListener('pointercancel', endStick);
-el.btnTug.addEventListener('pointerdown', (e) => { e.preventDefault(); initAudio(); if (me && canAim(me)) startAim(me); else tugTap = true; });
+el.btnTug.addEventListener('pointerdown', (e) => { e.preventDefault(); initAudio(); if (me && !online.role && canAim(me)) startAim(me); else tugTap = true; });
 for (const ev of ['pointerup', 'pointercancel']) el.btnTug.addEventListener(ev, () => { if (me) releaseAim(me); });
 el.btnWhip.addEventListener('pointerdown', (e) => { e.preventDefault(); if (canRear()) me.h.rear(); else whipHeld = true; });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.btnWhip.addEventListener(ev, () => { whipHeld = false; });
@@ -918,8 +942,8 @@ el.pause.addEventListener('input', (e) => { // ползунки громкост
 });
 el.pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePause(); });
 el.pauseBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-addEventListener('blur', () => { if (!SIM && state.phase === 'play' && !P.has('debug')) togglePause(true); }); // ушёл со вкладки — пауза
-career.initCareer(document.getElementById('hub'), () => { initAudio(); goLandscape(); startMatch(); }, openSettings);
+addEventListener('blur', () => { if (!SIM && state.phase === 'play' && !P.has('debug') && !online.role) togglePause(true); }); // ушёл со вкладки — пауза
+career.initCareer(document.getElementById('hub'), () => { initAudio(); goLandscape(); startMatch(); }, openSettings, () => { initAudio(); onlineOpen(); });
 function showMenu() {
   state.phase = 'menu';
   applyStage(); // соперник в своих цветах уже в меню
@@ -1003,6 +1027,183 @@ function stepTut(dt) {
   const [b, s] = TUT[lang][tut.step];
   el.tut.innerHTML = `<div class="t-card"><div class="t-pic">${tutPic(tut.step)}</div><div class="t-txt"><span class="t-step">${tut.step + 1}/4</span><b>${b}</b><small>${s}</small></div><button class="t-skip">${lang === 'ru' ? 'Пропустить' : 'Skip'}</button></div>`;
 }
+// ---------- игра с другом по сети ----------
+const online = { role: null, net: null, remote: null, inp: { s: 0, g: 0, w: false }, taps: 0, tapsDone: 0, rear: 0, rearDone: 0, sendT: 0, evSent: 0, snap: null, myTaps: 0, myRear: 0, friend: null };
+const OT = {
+  ru: { title: 'С другом по сети', host: 'Создать комнату', join: 'Войти', code: 'Код комнаты', wait: 'Ждём друга… Отправь ему код или ссылку', copy: 'Скопировать ссылку', copied: 'Скопировано!', joining: 'Подключаемся…', start: 'Друг подключился!', lost: 'Связь с другом потеряна', err: 'Не получилось подключиться. Проверь код или попробуйте другую сеть.', nort: 'Этот браузер не умеет играть по сети', close: 'Закрыть', again: 'Ещё матч', menu: 'В меню', win: 'Победа', loss: 'Поражение', draw: 'Ничья', vsFriend: 'Матч с другом', note: 'Ты играешь за свой клуб, друг — за свой. Остальные всадники — боты.' },
+  en: { title: 'Play a friend online', host: 'Create a room', join: 'Join', code: 'Room code', wait: 'Waiting for your friend… Send the code or the link', copy: 'Copy link', copied: 'Copied!', joining: 'Connecting…', start: 'Your friend is here!', lost: 'Lost connection to your friend', err: 'Could not connect. Check the code or try another network.', nort: 'This browser cannot play online', close: 'Close', again: 'Rematch', menu: 'Menu', win: 'Victory', loss: 'Defeat', draw: 'Draw', vsFriend: 'Match vs friend', note: 'You ride for your club, your friend for theirs. The other riders are bots.' },
+};
+function onlineUI(stateKey, extra = '') {
+  const t = OT[lang];
+  el.pause.hidden = false;
+  let body = '';
+  if (stateKey === 'start') body = netSupported() ? `<button class="big-btn" data-o="host">${t.host}</button>
+    <div class="o-join"><input id="oCode" maxlength="6" placeholder="${t.code}" autocomplete="off"><button class="o-jb" data-o="join">${t.join}</button></div>
+    <div class="h-season">${t.note}</div>` : `<div class="h-stage big">${t.nort}</div>`;
+  else if (stateKey === 'hosting') body = `<div class="o-code disp">${extra}</div><div class="h-season">${t.wait}</div><button class="o-jb" data-o="copy">${t.copy}</button>`;
+  else if (stateKey === 'busy') body = `<div class="h-stage big">${extra || t.joining}</div>`;
+  else if (stateKey === 'error') body = `<div class="h-stage big">${extra}</div>`;
+  el.pause.innerHTML = `<div class="hub pausebox onl"><div class="s-head"><div class="h-cup disp">${t.title}</div><button class="s-x" data-o="close" aria-label="${t.close}">${IC.close}</button></div>${body}</div>`;
+}
+function onlineOpen() { onlineUI('start'); }
+function onlineReset() {
+  online.net?.close();
+  Object.assign(online, { role: null, net: null, snap: null, taps: 0, tapsDone: 0, rear: 0, rearDone: 0, evSent: 0, myTaps: 0, myRear: 0 });
+  if (online.remote) { online.remote.remote = false; online.remote = null; }
+}
+const netHandlers = {
+  open() {
+    onlineUI('busy', OT[lang].start);
+    if (online.role === 'guest') online.net.send({ k: 'hello', kit: career.myKit(), name: career.clubName('me') }, true);
+  },
+  close() { if (!online.role) return; const was = online.role; onlineReset(); el.pause.hidden = true; if (was === 'guest') { location.hash = ''; location.reload(); } else { showMenu(); banner(OT[lang].lost, null, 2.5); } },
+  message(m) {
+    if (m.k === 'hello' && online.role === 'host') { online.friend = m; onlineStartHost(); }
+    else if (m.k === 'start' && online.role === 'guest') onlineStartGuest(m);
+    else if (m.k === 'i' && online.role === 'host') { online.inp = { s: +m.s || 0, g: +m.g || 0, w: !!m.w }; online.taps = Math.max(online.taps, +m.t || 0); online.rear = Math.max(online.rear, +m.r || 0); }
+    else if (m.k === 's' && online.role === 'guest') online.snap = m;
+    else if (m.k === 'end') onlineEnd(m);
+  },
+};
+el.pause.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-o]');
+  if (!b) return;
+  const act = b.dataset.o, t = OT[lang];
+  if (act === 'close') { onlineReset(); el.pause.hidden = true; }
+  else if (act === 'host') {
+    onlineReset(); online.role = 'host'; online.net = new Net(netHandlers);
+    onlineUI('busy', '…');
+    online.net.host((code) => { online.code = code; onlineUI('hosting', code); }).catch(() => { if (online.role) onlineUI('error', t.err); });
+  } else if (act === 'join') {
+    const code = cleanCode(document.getElementById('oCode')?.value);
+    if (code.length === 6) onlineJoin(code);
+  } else if (act === 'copy') {
+    const url = location.origin + location.pathname + '#room=' + online.code;
+    try { await navigator.clipboard.writeText(url); b.textContent = t.copied; } catch { b.textContent = url; }
+  }
+});
+function onlineJoin(code) {
+  onlineReset(); online.role = 'guest'; online.net = new Net(netHandlers);
+  onlineUI('busy');
+  online.net.join(code).catch(() => { if (online.role) onlineUI('error', OT[lang].err); });
+}
+// хост: друг играет за 2-го всадника команды соперника, в своих цветах
+function onlineStartHost() {
+  const f = online.friend;
+  online.remote = ents.find((e) => e.team === 1 && ents.filter((o) => o.team === 1).indexOf(e) === 1);
+  online.remote.remote = true;
+  fx = { id: 'friend', name: String(f.name || 'Friend').slice(0, 22), ko: false, final: false, arena: 'day', kit: f.kit, diff: { pull: 0.02, react: 0.5, speed: 1 } };
+  paintTeam(0, career.myKit()); paintTeam(1, f.kit); setArena('day'); crowd?.paint(TEAMS[0].color, TEAMS[1].color);
+  el.nmR.textContent = career.clubName('me'); el.nmB.textContent = fx.name;
+  online.net.send({ k: 'start', kit: career.myKit(), name: career.clubName('me'), arena: 'day' }, true);
+  el.pause.hidden = true; el.menu.hidden = true;
+  initAudio();
+  state.score = [0, 0]; state.clock = MATCH_LEN; state.golden = false; state.events = []; online.evSent = 0; kickoff(true);
+}
+// друг: смотрит с хоста, управляет своим всадником
+function onlineStartGuest(m) {
+  const mine = ents.find((e) => e.team === 1 && ents.filter((o) => o.team === 1).indexOf(e) === 1);
+  for (const e of ents) e.me = false;
+  mine.me = true; me = mine;
+  for (const e of ents) e.ring.material.color.set(e.me ? '#ffffff' : TEAMS[e.team].css);
+  paintTeam(0, m.kit); paintTeam(1, career.myKit()); setArena(m.arena || 'day'); crowd?.paint(TEAMS[0].color, TEAMS[1].color);
+  el.nmR.textContent = String(m.name || '').slice(0, 22); el.nmB.textContent = career.clubName('me');
+  for (const e of ents) e.ring.material.color.set(e.me ? '#ffffff' : TEAMS[e.team].css);
+  el.pause.hidden = true; el.menu.hidden = true;
+  initAudio();
+  state.phase = 'countdown'; state.score = [0, 0]; state.events = [];
+  updateCamera(0, true);
+}
+// хост → друг: 20 раз в секунду всё, что видно
+function hostSend(dt) {
+  online.sendT -= dt;
+  if (online.sendT > 0 || !online.net?.open) return;
+  online.sendT = 0.05;
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const idx = (e) => (e ? ents.indexOf(e) : -1);
+  const s = sack.mesh;
+  online.net.send({
+    k: 's', ph: state.phase, t: r2(state.t), cl: r2(state.clock), sc: state.score, gd: !!state.golden,
+    e: ents.map((e) => [r2(e.h.obj.position.x), r2(e.h.obj.position.z), r2(e.h.yaw), r2(e.h.v), e.h.gait, r2(e.h.steer), e.r.fallen ? 1 : 0, r2(e.reach), e.reachSide, r2(e.dip || 0), e.dipSide || -1, r2(e.throwT ?? -1), Math.round(e.stamina), e.h.rearClock != null ? 1 : 0]),
+    sk: [r2(s.position.x), r2(s.position.y), r2(s.position.z), r2(s.quaternion.x), r2(s.quaternion.y), r2(s.quaternion.z), r2(s.quaternion.w)], c: idx(sack.carrier), fl: sack.flight ? 1 : 0,
+    tg: state.tug ? [idx(state.tug.att), idx(state.tug.car), r2(state.tug.bar)] : null,
+    ev: state.events.slice(online.evSent),
+  });
+  online.evSent = state.events.length;
+}
+// друг: свой ввод хосту, картинка — с хоста (кони шагают сами, позиция подтягивается к присланной)
+let guestSendT = 0;
+function guestStep(dt) {
+  guestSendT -= dt;
+  if (tugTap) { tugTap = false; online.myTaps++; }
+  if (guestSendT <= 0 && online.net?.open) {
+    guestSendT = 1 / 30;
+    const o = me.r.fallen ? { s: 0, g: 0, w: false } : readInput();
+    online.net.send({ k: 'i', s: Math.round(o.s * 100) / 100, g: o.g, w: o.w ? 1 : 0, t: online.myTaps, r: online.myRear });
+  }
+  const S = online.snap;
+  crowd?.update(dt);
+  if (S) {
+    const prevPhase = state.phase;
+    state.phase = S.ph; state.t = S.t; state.clock = S.cl; state.score = S.sc; state.golden = S.gd;
+    if (S.ph === 'countdown') { const n = Math.ceil(S.t - 0.2); if (n > 0 && n <= 3 && el.bigText.textContent !== String(n) && S.t < 3.2) banner(String(n)); }
+    if (prevPhase === 'countdown' && S.ph === 'play') banner(tr('go'), null, 0.9);
+    for (const ev of S.ev || []) guestEvent(ev);
+    S.ev = [];
+    S.e.forEach((a, i) => {
+      const e = ents[i], h = e.h;
+      h.gait = a[4]; h.steer = a[5];
+      if (a[13] && h.rearClock == null) h.rear();
+      if (a[6] && !e.r.fallen) e.r.fall(scene, 0, 2, 0, 1);
+      if (!a[6] && e.r.fallen) e.r.remount();
+      if (e.r.fallen) e.r.stepFall(dt, false);
+      h.update(dt);
+      const p = h.obj.position, k = 1 - Math.exp(-dt * 9);
+      if (Math.hypot(p.x - a[0], p.z - a[1]) > 5) p.set(a[0], 0, a[1]); else { p.x += (a[0] - p.x) * k; p.z += (a[1] - p.z) * k; }
+      h.yaw += wrap(a[2] - h.yaw) * k; h.v += (a[3] - h.v) * k;
+      e.reach = a[7]; e.reachSide = a[8]; e.dip = a[9]; e.dipSide = a[10]; e.throwT = a[11]; e.stamina = a[12];
+      e.r.throwT = e.throwT; e.r.dip = e.dip; e.r.dipSide = e.dipSide; e.r.carrying = S.c === i;
+      e.r.update(dt, h.v, e.reach, e.reachSide);
+      e.ring.position.x = p.x; e.ring.position.z = p.z;
+    });
+    sack.carrier = S.c >= 0 ? ents[S.c] : null; sack.flight = S.fl ? {} : null;
+    const k2 = 1 - Math.exp(-dt * 14);
+    sack.mesh.position.lerp(V.set(S.sk[0], S.sk[1], S.sk[2]), k2); sack.pos.copy(sack.mesh.position);
+    sack.mesh.quaternion.slerp(Qt.set(S.sk[3], S.sk[4], S.sk[5], S.sk[6]).normalize(), k2);
+    state.tug = S.tg ? { att: ents[S.tg[0]], car: ents[S.tg[1]], bar: S.tg[2] } : null;
+    if (prevPhase !== 'end' && S.ph === 'end') onlineEnd({ sc: S.sc });
+  }
+  tension += ((sack.carrier ? 0.3 : 0) - tension) * (1 - Math.exp(-dt * 2));
+  crowdTension(tension, ['play', 'goal', 'countdown'].includes(state.phase));
+  const bobM = Math.sin(performance.now() / 250) * 0.15, cr = sack.carrier;
+  sackMarker.visible = !sack.flight && state.phase !== 'goal';
+  if (cr) { const p = cr.h.obj.position; sackMarker.position.set(p.x, 3.35 + bobM, p.z); sackMarker.material.color.set(TEAMS[cr.team].css); }
+  else sackMarker.position.set(sack.pos.x, 2.4 + bobM, sack.pos.z);
+  stepWorld(dt);
+}
+function guestEvent(ev) { // гол, падение, тартыс — баннеры и звук как у хоста
+  if (ev.t === 'goal') { banner(tr('goal'), TEAMS[ev.team].grad, 2.4, ev.team === 0 ? el.nmR.textContent : el.nmB.textContent); cheer(ev.team === me.team); crowd?.cheer(3.5); }
+  else if (ev.t === 'fall') crowdShout('ooh');
+  else if (ev.t === 'tug') banner(tr('tug'), null, 1.1, tr('tugSub'));
+}
+// итог матча с другом
+function onlineEnd(m) {
+  if (online.role === 'host') online.net?.send({ k: 'end', sc: state.score }, true);
+  const sc = m?.sc || state.score, t = OT[lang], mine = me.team, my = sc[mine], their = sc[1 - mine];
+  const res = my > their ? 'win' : my < their ? 'loss' : 'draw';
+  state.phase = 'end'; el.tug.hidden = true;
+  el.pause.hidden = false;
+  el.pause.innerHTML = `<div class="hub pausebox onl result ${res}"><div class="h-season">${t.vsFriend}</div><div class="h-cup disp r-title">${t[res]}</div>
+    <div class="r-score"><span class="disp">${sc[0]} : ${sc[1]}</span></div>
+    ${online.role === 'host' ? `<button class="big-btn" data-o2="again">${t.again}</button>` : ''}<button class="p-quit" data-o2="menu"><span>${t.menu}</span></button></div>`;
+  if (res === 'win') cheer(true);
+}
+el.pause.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-o2]');
+  if (!b) return;
+  if (b.dataset.o2 === 'again' && online.role === 'host' && online.net?.open) { online.net.send({ k: 'start', kit: career.myKit(), name: career.clubName('me'), arena: 'day' }, true); onlineStartHost(); }
+  else if (b.dataset.o2 === 'menu') { const was = online.role; onlineReset(); el.pause.hidden = true; if (was === 'guest') { location.hash = ''; location.reload(); } else showMenu(); }
+});
 function openSettings() { setMode = 'menu'; el.pause.hidden = false; renderPause(); }
 function frame(now) {
   if (frozen) return;
@@ -1011,7 +1212,8 @@ function frame(now) {
   if (!paused) tuneRes(dt);
   if (paused) { renderAll(); requestAnimationFrame(frame); return; }
   if (state.phase === 'goal' && state.t > 2.1) dt *= 0.4; // гол — на мгновение замедленно
-  step(dt);
+  if (online.role === 'guest') guestStep(dt);
+  else { step(dt); if (online.role === 'host') hostSend(dt); }
   updateCamera(dt);
   hud(dt);
   renderAll();
@@ -1049,6 +1251,8 @@ if (SIM) {
 } else {
   window.__loadDone?.(); setTimeout(() => el.load.remove(), 250);
   if ((P.has('bots') || P.has('debug')) && !P.has('menu')) applyStage(); else showMenu();
+  const roomCode = cleanCode((location.hash.match(/room=([A-Za-z0-9]{6})/) || [])[1]);
+  if (roomCode.length === 6) onlineJoin(roomCode); // открыл ссылку друга
   updateCamera(0, true);
   el.hint.dataset.keep = '1';
   el.hint.innerHTML = touch ? tr('helpTouch') : tr('help');
