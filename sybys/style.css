@@ -558,3 +558,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .title .play { border-radius: 8px; font-family: var(--serif); letter-spacing: 0.08em; text-transform: uppercase; font-size: 20px; color: #1e140b; background: linear-gradient(180deg, #f6d27e, #c8902e); border: 1px solid #f7dc98; }
 .chip-style { border-radius: 6px; font-family: var(--serif); letter-spacing: 0.03em; background: rgba(16, 10, 6, 0.65); }
 .chip-style.on { background: linear-gradient(180deg, #f0c86a, #c8902e); }
+
+/* how to play: one line of words over the map, the steps as dots, a way out */
+.tour { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 9; width: min(720px, calc(100vw - 20px)); padding: 14px 18px 12px; border-radius: 10px; border: 1px solid var(--gold); background: linear-gradient(180deg, rgba(30, 20, 12, 0.95), rgba(14, 9, 6, 0.95)); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); text-align: center; }
+.tourline { margin: 0; font-family: var(--serif); font-size: 19px; line-height: 1.35; color: #f6e6c6; }
+.tourline.in { animation: titleIn 0.6s ease-out both; }
+.tourdots { display: flex; justify-content: center; gap: 6px; margin: 8px 0 2px; }
+.tourdots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(217, 164, 65, 0.3); }
+.tourdots i.on { background: var(--gold-hi); }
+.tour .big { height: 38px; margin-top: 6px; min-width: 140px; font-size: 15px; }
+@media (max-width: 560px), (max-height: 500px) { .tour { bottom: 72px; padding: 8px 10px; } .tourline { font-size: 14px; } .tour .big { height: 32px; } }

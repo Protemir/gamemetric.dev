@@ -230,6 +230,9 @@ function startScreen() {
   day.onclick = () => { audioInit(); mode = 'daily'; intro(store.get('sybys.tutDone', false) ? 3 : 1); };
   box.append(day);
   const row = el('div', 'titlerow');
+  const how = el('button', 'link', t.howBtn);
+  how.onclick = () => { audioInit(); tour(); };
+  row.append(how);
   const chron = el('button', 'link', t.chronicleBtn + ' · ' + t.glory(meta.glory));
   chron.onclick = () => chronicle(startScreen);
   const lng = el('button', 'link', t.langBtn);
@@ -331,6 +334,77 @@ function intro(page) {
     box.append(sk);
   }
   ui.replaceChildren(box);
+}
+
+// —— how to play: the game plays itself for forty seconds, one line of words at a time ——
+let tourState = null;
+function tour() {
+  g = S.newGame(9001);
+  g.hold = true; // no scenes, no clock: only what the tour shows
+  view.setCinema?.(false);
+  view.resetCam?.();
+  ui.classList.remove('cine');
+  ui.replaceChildren();
+  hud.hidden = false;
+  actionsEl.hidden = false;
+  paused = false;
+  speed = 1;
+  look.names = T().tribes;
+  buildHud();
+  fit();
+  hush();
+  const bar = el('div', 'tour');
+  const line = el('p', 'tourline');
+  const dots = el('div', 'tourdots');
+  const skip = el('button', 'big', T().tourSkip);
+  skip.onclick = endTour;
+  bar.append(line, dots, skip);
+  document.body.append(bar);
+  tourState = { t0: performance.now(), step: -1, bar, line, dots, target: -1 };
+  if (DEBUG || q.has('covers')) window.__sybys = { get g() { return g; }, S, view, coach, look, act: doAction, intercept: tapRider, choose: pickEvent, finish: pickEnd, step: (d) => S.step(g, d), lesson, autumn: goAutumn, tour: tourState };
+}
+function endTour() {
+  if (!tourState) return;
+  tourState.bar.remove();
+  tourState = null;
+  hud.hidden = true;
+  actionsEl.hidden = true;
+  look.hand = -1;
+  look.pulse = null;
+  mode = 'free';
+  store.set('sybys.tutDone', true);
+  intro(3);
+}
+// what the tour does at each second
+const TOUR = [
+  { at: 0, line: 0, run: () => { tourState.target = S.suggest(g); } },
+  { at: 4, line: 1, run: () => { look.hand = tourState.target; } },
+  { at: 6.5, run: () => { g.horses = 5; S.act(g, 'word', tourState.target); look.hand = -1; sfx.send(); } },
+  { at: 8.5, line: 2, run: () => { g.horses = 5; const t = S.suggest(g); S.act(g, 'word', t); } },
+  { at: 12, run: () => { const t = S.suggest(g); S.act(g, 'word', t); } },
+  { at: 15, line: 3, run: () => { const f = S.spawnPlot(g); tourState.plot = f && f.id; look.pulse = tourState.plot; } },
+  { at: 19, line: 4, run: () => { if (tourState.plot) tapRider(tourState.plot); look.pulse = null; } },
+  { at: 23, line: 5, run: () => { g.horses = 5; S.startRaid(g); sfx.drums(); } },
+  { at: 25.5, run: () => { const r = g.riders.filter((x) => x.kind === 'raider' && !(x.delay > 0)); for (const x of r.slice(0, 2)) tapRider(x.id); } },
+  { at: 28, run: () => { g.horses = 5; const r = g.riders.filter((x) => x.kind === 'raider'); for (const x of r.slice(0, 2)) tapRider(x.id); } },
+  { at: 31, line: 6, run: () => { view.zoomAt?.(view.w / 2, view.h / 2, 1.2); } },
+  { at: 36, line: 7, run: () => { view.resetCam?.(); } },
+  { at: 42, run: () => endTour() },
+];
+function tourTick(now) {
+  if (!tourState) return;
+  const sec = (now - tourState.t0) / 1000;
+  while (tourState && tourState.step + 1 < TOUR.length && sec >= TOUR[tourState.step + 1].at) {
+    const s = TOUR[++tourState.step];
+    if (s.line != null) {
+      tourState.line.textContent = T().tour[s.line];
+      tourState.line.classList.remove('in');
+      void tourState.line.offsetWidth;
+      tourState.line.classList.add('in');
+      tourState.dots.replaceChildren(...T().tour.map((_, k) => el('i', k <= s.line ? 'on' : '')));
+    }
+    s.run();
+  }
 }
 
 let mode = 'free'; // 'daily' for the steppe of the day
@@ -574,7 +648,7 @@ function markAt(px, py) {
 }
 
 function pointer(e) {
-  if (!g || g.phase !== 'map' || paused) return;
+  if (!g || g.phase !== 'map' || paused || tourState) return;
   audioInit();
   const px = e.clientX, py = e.clientY;
   const rider = view.riderAt(g, px, py);
@@ -888,7 +962,8 @@ function frame(now) {
       if (f.type === 'raid' && !g.demo) { sfx.drums(); advise('karasai', T().c.raid, 7000); }
     }
     for (const tt of g.toasts.splice(0)) showToast(tt);
-    if (!g.demo) {
+    tourTick(now);
+    if (!g.demo && !tourState) {
       lessonTick(now);
       tips(now);
       tribePulse(now);

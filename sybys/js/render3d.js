@@ -385,6 +385,10 @@ export class View3D extends View {
     this.buildLand(g);
 
     this.buildYurts(g);
+    this.buildGrass(g);
+    this.buildFolk(g);
+    this.buildFires(g);
+    this.buildBirds();
     this.buildRings(g);
     this.buildFlags(g);
     this.riderObjs = new Map();
@@ -397,14 +401,21 @@ export class View3D extends View {
   withGrass(mat) {
     const tex = this.grassTex;
     const rx = (14 * W / D).toFixed(1);
+    const clouds = this.cloudTexture();
+    this.shaderTime = this.shaderTime || { value: 0 };
+    const time = this.shaderTime;
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.grass = { value: tex };
-      sh.fragmentShader = 'uniform sampler2D grass;\n' + sh.fragmentShader.replace(
+      sh.uniforms.clouds = { value: clouds };
+      sh.uniforms.uTime = time;
+      sh.fragmentShader = 'uniform sampler2D grass;\nuniform sampler2D clouds;\nuniform float uTime;\n' + sh.fragmentShader.replace(
         '#include <map_fragment>',
-        '#include <map_fragment>\n  diffuseColor.rgb *= 0.45 + 1.25 * dot(texture2D(grass, vMapUv * vec2(' + rx + ', 14.0)).rgb, vec3(0.3, 0.59, 0.11));',
+        '#include <map_fragment>\n  diffuseColor.rgb *= 0.45 + 1.25 * dot(texture2D(grass, vMapUv * vec2(' + rx + ', 14.0)).rgb, vec3(0.3, 0.59, 0.11));' +
+        '\n  float cl = texture2D(clouds, vMapUv * vec2(1.6, 0.9) + vec2(uTime * 0.006, uTime * 0.0025)).r;' +
+        '\n  diffuseColor.rgb *= 1.0 - 0.28 * smoothstep(0.52, 0.72, cl);',
       );
     };
-    mat.customProgramCacheKey = () => 'grass-map';
+    mat.customProgramCacheKey = () => 'grass-map-clouds';
   }
 
   // the steppe beyond the map: low swells near it, mountains with snow far to the north and west,
@@ -458,6 +469,126 @@ export class View3D extends View {
     const land = new THREE.Mesh(geo, mat);
     land.receiveShadow = true;
     this.group.add(land);
+  }
+
+  // soft blobs of cloud for the shadows
+  cloudTexture() {
+    const N = 128, c = document.createElement('canvas');
+    c.width = c.height = N;
+    const x = c.getContext('2d');
+    const img = x.createImageData(N, N);
+    const a = valueNoise(rng(31), N, N, 24), b = valueNoise(rng(32), N, N, 9);
+    for (let i = 0; i < N * N; i++) {
+      const v = clamp(0.5 + a[i] * 0.42 + b[i] * 0.18, 0, 1) * 255;
+      img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+      img.data[i * 4 + 3] = 255;
+    }
+    x.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  }
+
+  // tufts of steppe grass that bend with the wind (a few thousand, one draw)
+  buildGrass(g) {
+    const n = this.mobile ? 900 : 2600;
+    const blade = new THREE.ConeGeometry(0.026, 0.22, 3, 1, true).translate(0, 0.11, 0);
+    const parts = [0, 2.1, 4.2].map((a, k) => blade.clone().rotateZ((k - 1) * 0.35).rotateY(a).translate(Math.cos(a) * 0.02, 0, Math.sin(a) * 0.02));
+    const geo = parts.reduce((acc, p) => {
+      const pos = [...acc.attributes.position.array, ...p.attributes.position.array];
+      const out = new THREE.BufferGeometry();
+      out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      return out;
+    });
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, side: THREE.DoubleSide });
+    const time = this.shaderTime;
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = time;
+      sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+  vec4 wp = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  float sway = sin(uTime * 1.7 + wp.x * 0.9 + wp.z * 0.6) * 0.5 + sin(uTime * 3.1 + wp.x * 2.3) * 0.2;
+  transformed.x += sway * 0.06 * max(0.0, position.y) * 6.0;
+  transformed.z += sway * 0.03 * max(0.0, position.y) * 6.0;`,
+      );
+    };
+    mat.customProgramCacheKey = () => 'grass-tufts';
+    const im = new THREE.InstancedMesh(geo, mat, n);
+    const rand = rng(g.seed * 5 + 9);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+    const pal = { summer: ['#a2a85a', '#c2b86a'], autumn: ['#c99a48', '#dcb45a'], winter: ['#c9c2a8', '#a9a28a'] }[this.style] || ['#7a8a3a', '#9a9a48'];
+    let k = 0;
+    for (let tries = 0; tries < n * 4 && k < n; tries++) {
+      const x = rand() * GW, y = rand() * GH, i = Math.floor(y) * GW + Math.floor(x);
+      if (g.map.river[i] || this.height(x, y) < WATER + 0.08) continue;
+      p.set(toWorldX(x), this.height(x, y) - 0.01, toWorldZ(y));
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * 6.28);
+      const s = 0.7 + rand() * 0.9;
+      sc.set(s, s * (0.8 + rand() * 0.6), s);
+      m4.compose(p, q, sc);
+      im.setMatrixAt(k, m4);
+      col.set(pal[rand() < 0.5 ? 0 : 1]).multiplyScalar(0.85 + rand() * 0.3);
+      im.setColorAt(k, col);
+      k++;
+    }
+    im.count = k;
+    im.receiveShadow = true;
+    this.group.add(im);
+  }
+
+  // people about the auls: a coat, a head, walking slowly round their yurts
+  buildFolk(g) {
+    const rand = rng(g.seed * 11 + 3);
+    const coatG = new THREE.CylinderGeometry(0.018, 0.03, 0.08, 6).translate(0, 0.04, 0);
+    const headG = new THREE.SphereGeometry(0.016, 6, 5).translate(0, 0.095, 0);
+    const coats = ['#7a2a2a', '#2f4a6a', '#5a4a2a', '#3a5a3a', '#6a4a6a', '#8a6a3a'];
+    this.folk = [];
+    for (const r of g.map.regions) {
+      const many = r.id === 0 ? 6 : g.map.capitals.includes(r.id) ? 4 : rand() < 0.6 ? 2 : 0;
+      for (let k = 0; k < many; k++) {
+        const grp = new THREE.Group();
+        const coat = new THREE.Mesh(coatG, new THREE.MeshStandardMaterial({ color: coats[Math.floor(rand() * coats.length)], roughness: 1 }));
+        const head = new THREE.Mesh(headG, new THREE.MeshStandardMaterial({ color: '#d9a882', roughness: 0.8 }));
+        coat.castShadow = true;
+        grp.add(coat, head);
+        grp.scale.setScalar(1.6);
+        this.group.add(grp);
+        this.folk.push({ grp, cx: r.x, cy: r.y, rad: (2.6 + rand() * 3) * K, a: rand() * 6.28, v: (rand() < 0.5 ? -1 : 1) * (0.05 + rand() * 0.08) });
+      }
+    }
+  }
+
+  // campfires at the Orda and the great auls: a flickering flame you can see from afar
+  buildFires(g) {
+    this.fires = [];
+    const tex = this.puffTexture();
+    for (const id of [0, ...g.map.capitals]) {
+      const r = g.map.regions[id];
+      const x = r.x + 2.5 * K, y = r.y + 2.2 * K;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: '#ffae4a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      sp.position.set(toWorldX(x), this.height(x, y) + 0.08, toWorldZ(y));
+      sp.scale.setScalar(0.3);
+      const logs = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.03, 7), new THREE.MeshStandardMaterial({ color: '#2a1a10' }));
+      logs.position.set(sp.position.x, sp.position.y - 0.07, sp.position.z);
+      this.group.add(sp, logs);
+      this.fires.push(sp);
+    }
+  }
+
+  // a pair of eagles circling high over the steppe; their shadows slide over the ground
+  buildBirds() {
+    this.birds = [];
+    const wing = new THREE.BufferGeometry();
+    wing.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.12, -0.42, 0, -0.06, 0, 0, -0.08, 0, 0, 0.12, 0.42, 0, -0.06, 0, 0, -0.08], 3));
+    wing.computeVertexNormals();
+    for (let k = 0; k < 3; k++) {
+      const b = new THREE.Mesh(wing, new THREE.MeshStandardMaterial({ color: '#2a1e14', side: THREE.DoubleSide }));
+      b.castShadow = true;
+      this.group.add(b);
+      this.birds.push({ b, r: 4 + k * 3, h: 6 + k * 1.2, a: k * 2.1, v: 0.12 + k * 0.03, cx: (k - 1) * 6, cz: (k - 1) * 2 });
+    }
   }
 
   grainTexture() {
@@ -904,6 +1035,31 @@ export class View3D extends View {
     for (const r of g.map.regions) this.rings[r.id].visible = !this.cinema && r.tribe >= 0 && g.t[r.id] >= 0.55;
     this.syncRiders(g, now, dt);
     this.stepSmoke(g, dt);
+    this.shaderTime.value = now / 1000;
+    for (const f of this.folk || []) {
+      f.a += f.v * dt;
+      const x = f.cx + Math.cos(f.a) * f.rad, y = f.cy + Math.sin(f.a) * f.rad * 0.7;
+      f.grp.position.set(toWorldX(x), this.height(x, y) + Math.abs(Math.sin(now / 160 + f.a * 9)) * 0.01, toWorldZ(y));
+      f.grp.rotation.y = -f.a + (f.v > 0 ? 0 : Math.PI);
+    }
+    for (const [k, f] of (this.fires || []).entries()) {
+      const fl = 0.26 + Math.sin(now / 70 + k) * 0.03 + Math.sin(now / 37 + k * 3) * 0.025;
+      f.scale.set(fl, fl * 1.35, fl);
+      f.material.opacity = 0.8 + Math.sin(now / 53 + k) * 0.15;
+    }
+    for (const b of this.birds || []) {
+      b.a += b.v * dt;
+      b.b.position.set(b.cx + Math.cos(b.a) * b.r, b.h, b.cz + Math.sin(b.a) * b.r * 0.6);
+      b.b.rotation.set(0, -b.a, Math.sin(now / 300 + b.r) * 0.25);
+      b.b.scale.set(1, 1, 1 + Math.sin(now / 120 + b.r) * 0.15);
+    }
+    // the sun crosses the sky over a season: a cool morning, a white noon, a golden evening
+    if (!this.cinema && !g.night) {
+      const day = clamp(g.clock / 330, 0, 1);
+      const ang = -0.9 + day * 1.8;
+      this.sun.position.set(Math.sin(ang) * 24, 10 + Math.cos(ang) * 10, -8);
+      this.sun.color.setRGB(1, 0.86 + 0.1 * Math.cos(ang), 0.7 + 0.25 * Math.cos(ang));
+    }
     // night falls on the world itself
     const dark = g.night ? Math.min(1, (g.time - g.night.at) / 1.5) * (g.night.until ? Math.max(0, (g.night.until - g.time) / 2.5) : 1) : 0;
     if (!this.cinema) {

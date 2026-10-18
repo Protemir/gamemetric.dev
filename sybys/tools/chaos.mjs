@@ -33,7 +33,7 @@ const probe = () => B.js(`(() => {
   const ui = document.getElementById('ui');
   const vis = (el) => el && !el.hidden && getComputedStyle(el).display !== 'none';
   const bad = [];
-  if (g) {
+  if (g && !g.demo) {
     for (let i = 0; i < g.R; i++) if (!Number.isFinite(g.t[i]) || !Number.isFinite(g.m[i]) || !Number.isFinite(g.n[i])) { bad.push('NaN at pasture ' + i); break; }
     if (!Number.isFinite(g.horses) || g.horses < 0) bad.push('horses ' + g.horses);
     if (g.riders.length > 60) bad.push('riders ' + g.riders.length);
@@ -96,6 +96,8 @@ async function campaign(w, h, label) {
       await wait(80);
       continue;
     }
+    // the how-to-play tour: watch a moment, then press its Play
+    if (await B.js(`!!document.querySelector('.tour')`)) { await wait(800); await B.js(`document.querySelector('.tour .big').click()`); continue; }
     // play: a burst of input, then let time run fast (the clock jumps 6–15 s)
     if (await B.js(`!!document.querySelector('#ui .pause, #ui .journal')`)) {
       await B.js(`[...document.querySelectorAll('#ui button')].pop().click()`);
