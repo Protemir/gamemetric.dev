@@ -11,7 +11,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const hash = (f) => crypto.createHash('sha1').update(fs.readFileSync(path.join(root, f))).digest('hex').slice(0, 8);
 const js = fs.readdirSync(path.join(root, 'js')).filter((f) => f.endsWith('.js')).sort();
 const map = Object.fromEntries(js.map((f) => [`./js/${f}`, `./js/${f}?v=${hash('js/' + f)}`]));
-const block = `<script type="importmap">${JSON.stringify({ imports: map })}</script>`;
+// three.js lives in vendor/ under its own version and is not stamped
+const block = `<script type="importmap">${JSON.stringify({ imports: { three: './vendor/three/three.module.min.js', ...map } })}</script>`;
 
 const file = path.join(root, 'index.html');
 let html = fs.readFileSync(file, 'utf8');

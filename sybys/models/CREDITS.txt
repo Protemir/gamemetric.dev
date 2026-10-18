@@ -1,0 +1,7 @@
+Модели / Models — CC0 1.0 (public domain), автор / author: Quaternius (quaternius.com), via poly.pizza
+horse.glb  — "Horse"        https://poly.pizza/m/qvTrSG9pZF
+sheep.glb  — "Sheep"        https://poly.pizza/m/C39AUXUUes
+birch.glb  — "Birch Tree"   https://poly.pizza/m/k6cozoNfLH
+bush.glb   — "Bush"         https://poly.pizza/m/ooG6CkLyE8
+rock.glb   — "Rock"         https://poly.pizza/m/RtLRqYjfMs
+three.js (vendor/three) — MIT License, see vendor/three/LICENSE

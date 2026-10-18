@@ -28,7 +28,8 @@ html, body {
   touch-action: none;
 }
 
-canvas#game { position: fixed; inset: 0; display: block; }
+canvas#game, canvas#world { position: fixed; inset: 0; display: block; }
+canvas#world { pointer-events: none; }
 button { font: inherit; color: inherit; cursor: pointer; }
 
 /* top bar */

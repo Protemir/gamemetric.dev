@@ -147,6 +147,11 @@ try {
     await B.shot(path.join(out, `layout-${w}x${h}.png`));
   }
 
+  // 8. the 3D steppe is on and its models arrived; ?2d still gives the painted map
+  await B.open(page('&lang=en&play'), 1280, 720);
+  check('the 3D steppe with its models', await (async () => { for (let k = 0; k < 50; k++) { if (await B.js(`!!document.getElementById('world') && ${A}.view.is3d && ${A}.view.modelsLoaded && ${A}.view.populated === ${A}.g.map`)) return true; await wait(100); } return false; })());
+  await B.open(page('&lang=en&play&2d'), 1280, 720);
+  check('?2d gives the painted map', !(await B.js(`!!document.getElementById('world')`)) && !(await B.js(`${A}.view.is3d`)));
   check('no errors in the console', B.errors.length === 0, B.errors.slice(0, 3).join(' | '));
 } catch (e) {
   check('ran to the end', false, e.message);

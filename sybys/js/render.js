@@ -6,8 +6,8 @@ import { GW, GH, K } from './map.js';
 import { riderPos } from './sim.js';
 import { clamp, rng, valueNoise } from './util.js';
 
-export const TRIBE_RGB = [[64, 106, 196], [84, 150, 70], [200, 96, 56]];
-export const GOLD = [236, 186, 72];
+export const TRIBE_RGB = [[56, 104, 210], [84, 150, 70], [200, 96, 56]];
+export const GOLD = [242, 178, 44];
 const LIE = [70, 36, 86];
 const css = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 
@@ -28,6 +28,7 @@ export class View {
     this.map = null;
     this.lastNow = 0;
     this.frameNo = 0;
+    this.tintMix = 0.62;
   }
 
   resize() {
@@ -181,7 +182,7 @@ export class View {
       const base = TRIBE_RGB[r.tribe];
       // gold creeps in with trust and takes over once the aul is the khan's
       const t = g.t[r.id];
-      const k = t < 0.55 ? Math.pow(t / 0.55, 2) * 0.45 : 0.7 + (t - 0.55) * 0.66;
+      const k = t < 0.55 ? Math.pow(t / 0.55, 3) * 0.3 : 0.72 + (t - 0.55) * 0.62;
       let c = [base[0] + (GOLD[0] - base[0]) * k, base[1] + (GOLD[1] - base[1]) * k, base[2] + (GOLD[2] - base[2]) * k];
       const lie = clamp(g.n[r.id] * 0.3, 0, 0.5);
       if (lie) c = c.map((v, j) => v + (LIE[j] - v) * lie);
@@ -196,7 +197,7 @@ export class View {
       }
       const id = cell[i], c = tint[id];
       const L = lum[i] * 1.12;
-      const a = id === this.hover ? 0.72 : 0.62;
+      const a = (id === this.hover ? 0.1 : 0) + this.tintMix;
       let R = ter[t3] + (c[0] * L - ter[t3]) * a;
       let G = ter[t3 + 1] + (c[1] * L - ter[t3 + 1]) * a;
       let B = ter[t3 + 2] + (c[2] * L - ter[t3 + 2]) * a;

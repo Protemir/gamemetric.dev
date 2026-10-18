@@ -1,5 +1,6 @@
 import * as S from './sim.js';
 import { View, TRIBE_RGB } from './render.js';
+import { View3D, webglOK } from './render3d.js';
 import { el, store } from './util.js';
 import { T, lang, setLang } from './text.js';
 import { sfx, audioInit, sound, setSound } from './sfx.js';
@@ -10,7 +11,8 @@ const DEBUG = q.has('debug');
 const SPEEDS = DEBUG ? [1, 2, 8] : [1, 2];
 
 const cv = document.getElementById('game');
-const view = new View(cv);
+// the 3D steppe where the browser can, the painted 2D map where it cannot (or with ?2d)
+const view = webglOK() && !q.has('2d') ? new View3D(cv) : new View(cv);
 const $ = (id) => document.getElementById(id);
 const hud = $('hud'), ui = $('ui'), hintEl = $('hint'), actionsEl = $('actions'), toastsEl = $('toasts'), coachEl = $('coach');
 
