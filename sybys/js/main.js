@@ -543,6 +543,8 @@ function updateHud() {
   if (!g || g.demo) return;
   const t = T();
   $('horses').textContent = `${g.horses}/${S.HORSE_MAX}`;
+  if (g.horses > lastHorses && lastHorses >= 0) { const hc = $('horsesChip'); hc.classList.remove('gain'); void hc.offsetWidth; hc.classList.add('gain'); }
+  lastHorses = g.horses;
   $('regen').style.width = g.horses >= S.HORSE_MAX ? '100%' : `${(g.horseT / S.HORSE_EVERY) * 100}%`;
   $('seasonBar').style.width = `${Math.min(100, (g.clock / S.SEASON) * 100)}%`;
   const left = Math.max(0, Math.ceil(S.SEASON - g.clock));
@@ -701,6 +703,7 @@ function doAction(kind, id) {
 
 function tapRider(id) {
   const res = S.intercept(g, id);
+  if (res === 'caught' || res === 'killer' || res === 'repelled') { hitStop = performance.now() + 140; view.flashAt = performance.now(); }
   if (res === 'caught') { sfx.caught(); if (!coach.step) say(T().caught, 1800); if (look.pulse === id) look.pulse = null; }
   if (res === 'insult') { sfx.bad(); say(T().insulted, 2200); }
   if (res === 'repelled') sfx.clash();
@@ -948,6 +951,8 @@ function showEnd(rec) {
 // —— the loop ——
 
 let shownPhase = null;
+let hitStop = 0;
+let lastHorses = -1;
 let lastMusic = -1;
 let lastMood = '';
 function frame(now) {
@@ -961,7 +966,8 @@ function frame(now) {
     // and the whole night run slower too, so a person can react
     const slow = coach.step === 'false' ? 0.4 : g.night && !g.night.until ? 0.55 : g.raid && g.time - g.raid.at < 2.5 ? 0.5 : 1;
     if (g.night && !g.night.told) { g.night.told = true; sfx.night(); advise('aria', T().c.night, 6000); }
-    for (let k = 0; k < speed; k++) S.step(g, dt * slow);
+    // a catch freezes the world for a blink: you feel it
+    if (performance.now() > hitStop) for (let k = 0; k < speed; k++) S.step(g, dt * slow);
   }
   if (g) {
     for (const f of g.fx.splice(0)) {
@@ -975,6 +981,7 @@ function frame(now) {
       if (f.type === 'clue') sfx.clue();
       if (f.type === 'trade') sfx.word();
       if (f.type === 'clash') sfx.clash();
+      if (f.type === 'dust' && !g.demo) sfx.distant();
       if (f.type === 'fire') sfx.fire();
       if (f.type === 'raid' && !g.demo) { sfx.drums(); advise('karasai', T().c.raid, 7000); }
     }

@@ -574,3 +574,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* the one-line hint (no horses, Aria busy…) must stand out over the map */
 .hint { color: #fff1d0; border-color: var(--gold); font-weight: 700; text-shadow: 0 1px 2px #000; }
+
+/* every press answers: a small spring */
+button { transition: transform 0.08s ease-out, filter 0.15s, box-shadow 0.15s, border-color 0.15s; }
+button:active:not(:disabled) { transform: scale(0.95); }
+.act.sel:active { transform: translateY(-1px) scale(0.96); }
+/* a horse came back */
+#horsesChip.gain { animation: gain 0.6s ease-out; }
+@keyframes gain { 30% { box-shadow: 0 0 0 2px var(--gold-hi), 0 0 18px rgba(243, 207, 122, 0.6); transform: scale(1.06); } }

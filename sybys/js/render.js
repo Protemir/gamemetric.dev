@@ -765,6 +765,20 @@ export class View {
       if (Math.random() < dt * 30 * (1 - age / 30)) this.parts.push({ kind: 'flame', x: x + (Math.random() - 0.5) * u * 3, y: y - u * 0.5, vx: (Math.random() - 0.5) * 8, vy: -24 - Math.random() * 20, life: 0.7, age: 0, layer: 'over' });
       if (Math.random() < dt * 10) this.parts.push({ kind: 'soot', x: x + (Math.random() - 0.5) * u * 2, y: y - u * 2, vx: 6 + Math.random() * 6, vy: -14, life: 3, age: 0, layer: 'over' });
     }
+    if (g.raidWarn) {
+      // a wall of dust on the side the horde will come from
+      const k = Math.min(1, (g.time - g.raidWarn.at) / 3);
+      const W = this.w, H = this.h, side = g.raidWarn.side;
+      const gr = side === 0 ? ctx.createLinearGradient(0, 0, W * 0.3, 0) : side === 1 ? ctx.createLinearGradient(W, 0, W * 0.7, 0) : side === 2 ? ctx.createLinearGradient(0, 0, 0, H * 0.3) : ctx.createLinearGradient(0, H, 0, H * 0.7);
+      gr.addColorStop(0, `rgba(190,150,100,${0.55 * k})`);
+      gr.addColorStop(1, 'rgba(190,150,100,0)');
+      ctx.fillStyle = gr;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (this.flashAt && now - this.flashAt < 220) {
+      ctx.fillStyle = `rgba(255,250,230,${0.35 * (1 - (now - this.flashAt) / 220)})`;
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
     if (g.raid) {
       const a = 0.16 + Math.sin(now / 260) * 0.06;
       const vg = ctx.createRadialGradient(this.w / 2, this.h / 2, Math.min(this.w, this.h) * 0.35, this.w / 2, this.h / 2, Math.max(this.w, this.h) * 0.75);

@@ -19,6 +19,7 @@ const problems = [];
 const note = (what, shot) => {
   problems.push(what);
   console.log('PROBLEM', what);
+  fs.appendFileSync(path.join(out, 'problems.txt'), what + '\n');
   if (shot) return B.shot(path.join(out, `p${problems.length}.png`));
 };
 const wait = (ms) => B.js(`new Promise((r) => setTimeout(r, ${ms}))`);

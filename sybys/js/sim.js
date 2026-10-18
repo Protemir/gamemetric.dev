@@ -520,7 +520,13 @@ export function step(g, dt) {
 
   if (!g.hold) g.clock += dt;
   const raids = RAIDS[g.season] || [];
-  if (!g.hold && g.raidIdx < raids.length && g.clock >= raids[g.raidIdx] && !g.raid && !g.night) { g.raidIdx++; startRaid(g); }
+  if (!g.hold && g.raidIdx < raids.length && g.clock >= raids[g.raidIdx] - 5 && !g.raidWarn && !g.raid) {
+    // dust rises on the horizon where they will come from
+    g.raidWarn = { side: Math.floor(g.rand() * 4), at: g.time };
+    toast(g, 'zaltyr', 'tDust', -1);
+    g.fx.push({ type: 'dust' });
+  }
+  if (!g.hold && g.raidIdx < raids.length && g.clock >= raids[g.raidIdx] && !g.raid && !g.night) { g.raidIdx++; startRaid(g, g.raidWarn?.side); g.raidWarn = null; }
   if (!g.hold && !g.nightDone && NIGHT_AT[g.season] && g.clock >= NIGHT_AT[g.season] && !g.raid) startNight(g);
   if (g.night && g.night.until && g.time > g.night.until) { g.night = null; }
   else if (g.night && !g.night.until && !g.riders.some((r) => r.kind === 'envoy')) g.night.until = g.time + 1;
@@ -534,9 +540,9 @@ export function step(g, dt) {
 }
 
 // a band of the horde rides in from one edge of the steppe at the auls nearest to it
-export function startRaid(g) {
+export function startRaid(g, from = null) {
   const { regions } = g.map;
-  const side = Math.floor(g.rand() * 4);
+  const side = from ?? Math.floor(g.rand() * 4);
   const edge = (r) => [r.x, GW - r.x, r.y, g.map.GH - r.y][side];
   const land = regions.filter((r) => r.tribe >= 0).sort((a, b) => edge(a) - edge(b));
   const entry = land[0];
