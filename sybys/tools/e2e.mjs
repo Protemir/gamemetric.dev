@@ -48,39 +48,71 @@ try {
   check('start screen in English', t.includes('Sybys') && t.includes('Play'), t.slice(0, 30).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'start-en.png'));
 
-  // 2. play: a click on the hinted pasture sends the word
+  // 2. the opening: a story card, the advisors, the goal
   await clickText('Play');
-  await wait(300);
-  const target = await B.js(`(() => { const s = ${A}; const nb = s.g.map.regions[0].nb.map((e) => e.to).filter((i) => s.g.map.regions[i].tribe >= 0); const r = s.g.map.regions[nb[0]]; return { id: r.id, xy: s.view.toScreen(r.x, r.y) }; })()`);
-  await click(target.xy[0], target.xy[1]);
+  await wait(150);
+  t = await uiText();
+  check('the story card', t.includes('without its rider') && t.includes('Next'), t.slice(0, 40).replace(/\n/g, ' '));
+  await clickText('Next');
   await wait(100);
-  let st = await B.js(`JSON.stringify({ riders: ${A}.g.riders.filter((r) => r.kind === 'word').map((r) => r.to), horses: ${A}.g.horses })`).then(JSON.parse);
-  check('a click sends a word rider', st.riders.includes(target.id) && st.horses === 2, JSON.stringify(st));
-  await B.js(`(() => { for (let k = 0; k < 80; k++) ${A}.step(0.1); })()`);
-  const tr = await B.js(`${A}.g.t[${target.id}]`);
-  check('the word raised trust there', tr > 0.5, tr.toFixed(2));
-  await wait(200);
+  t = await uiText();
+  check('Aria and Karasai speak', t.includes('Aria') && t.includes('Karasai'));
+  await B.shot(path.join(out, 'intro-2.png'));
+  await clickText('Next');
+  await wait(100);
+  t = await uiText();
+  check('the goal: 2 clans of 3', t.includes('2 clans of 3') && t.includes('Kokzhal'));
+  await B.shot(path.join(out, 'intro-goal.png'));
+  await clickText('To the steppe');
+  await wait(300);
+
+  // 3. the lesson: each step waits for the player; the season clock stands still meanwhile
+  const poll = async (expr, ms = 12000) => {
+    for (let k = 0; k < ms / 100; k++) {
+      if (await B.js(expr)) return true;
+      await wait(100);
+    }
+    return false;
+  };
+  const handXY = () => B.js(`(() => { const s = ${A}; const r = s.g.map.regions[s.look.hand]; return r ? s.view.toScreen(r.x, r.y) : null; })()`);
+  let st = await B.js(`JSON.stringify({ step: ${A}.coach.step, hold: ${A}.g.hold, said: document.getElementById('coach').innerText })`).then(JSON.parse);
+  check('lesson 1: Aria points at a pasture', st.step === 'send' && st.hold && st.said.includes('Tap the pasture'), st.step);
+  let xy = await handXY();
+  await click(xy[0], xy[1]);
+  await wait(100);
+  st = await B.js(`JSON.stringify({ riders: ${A}.g.riders.filter((r) => r.kind === 'word').length, horses: ${A}.g.horses, step: ${A}.coach.step })`).then(JSON.parse);
+  check('a click on the hand sends a word rider', st.riders === 1 && st.horses === 2 && st.step === 'watch', JSON.stringify(st));
+  await wait(700);
   await B.shot(path.join(out, 'word.png'));
+  check('lesson 2 → 3 after the word arrives', await poll(`${A}.coach.step === 'more'`));
+  for (let k = 0; k < 2; k++) {
+    await poll(`${A}.g.horses >= 1`);
+    xy = await handXY();
+    await click(xy[0], xy[1]);
+    await wait(150);
+  }
+  check('lesson 4: a false rider comes', await poll(`${A}.coach.step === 'false'`, 3000));
+  await wait(1500);
+  const fr = await B.js(`(() => { const s = ${A}; const r = s.g.riders.find((r) => r.kind === 'false'); if (!r) return null; const p = s.S.riderPos(s.g, r); return { id: r.id, xy: s.view.toScreen(p.x, p.y) }; })()`);
+  await B.shot(path.join(out, 'false-rider.png'));
+  if (fr) {
+    await click(fr.xy[0], fr.xy[1] - 4);
+    await wait(150);
+    const cl = await B.js(`JSON.stringify({ gone: !${A}.g.riders.some((r) => r.id === ${fr.id}), clues: ${A}.g.clues.map((c) => c.kind) })`).then(JSON.parse);
+    check('a click catches the false order', cl.gone && cl.clues.includes('forged'), JSON.stringify(cl));
+  } else check('a click catches the false order', false, 'no false rider');
+  check('the lesson ends and the season starts', await poll(`!${A}.coach.step && !${A}.g.hold`, 20000));
+  check('the clock stood still during the lesson', (await B.js(`${A}.g.clock`)) < 2);
 
   // 3. the first situation appears and a choice closes it
   await B.js(`(() => { while (${A}.g.phase === 'map') ${A}.step(0.1); })()`);
   await wait(300);
   t = await uiText();
-  check('the horse without its rider', t.includes('without its rider') && t.includes('Call the clans'), t.slice(0, 40).replace(/\n/g, ' '));
+  check('the first decision', t.includes('first decision') && t.includes('Call the clans'), t.slice(0, 40).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'event.png'));
   await clickText('Call the clans');
   await wait(100);
   check('the choice closes the scene', (await B.js(`${A}.g.phase`)) === 'map' && (await uiText()) === '');
-
-  // 4. a forged rider is caught by a click on it
-  const fr = await B.js(`(() => { const s = ${A}; let n = 0; while (!s.g.riders.some((r) => r.kind === 'false' && r.seg + r.p > 0.4) && n++ < 3000 && s.g.phase === 'map') s.step(0.1); const r = s.g.riders.find((r) => r.kind === 'false'); if (!r) return null; const p = s.S.riderPos(s.g, r); return { id: r.id, xy: s.view.toScreen(p.x, p.y) }; })()`);
-  if (fr) {
-    await wait(50);
-    await click(fr.xy[0], fr.xy[1]);
-    await wait(100);
-    const cl = await B.js(`JSON.stringify({ gone: !${A}.g.riders.some((r) => r.id === ${fr.id}), clues: ${A}.g.clues.map((c) => c.kind) })`).then(JSON.parse);
-    check('a click catches a forged order', cl.gone && cl.clues.includes('forged'), JSON.stringify(cl));
-  } else check('a click catches a forged order', false, 'no forged rider came');
 
   // 5. Aria and Karasai by their buttons and a click on the map
   const far = await B.js(`(() => { const s = ${A}; if (s.g.phase !== 'map') return null; const r = s.g.map.regions.filter((r) => r.tribe >= 0).sort((a, b) => s.g.t[a.id] - s.g.t[b.id])[0]; s.g.horses = 5; return { id: r.id, xy: s.view.toScreen(r.x, r.y) }; })()`);
@@ -108,7 +140,7 @@ try {
 
   // 7. layouts: nothing of the HUD falls off, the map is on screen
   for (const [w, h] of [[390, 844], [844, 390], [800, 450], [907, 510], [1280, 720], [1920, 1080]]) {
-    await B.open(page('&lang=ru&play'), w, h);
+    await B.open(page('&lang=ru&play&tutorial'), w, h);
     await wait(200);
     const L = await B.js(`(() => { const out = []; for (const e of document.querySelectorAll('.hud > *, .actions > *')) { const r = e.getBoundingClientRect(); if (r.width && (r.right > innerWidth + 1 || r.left < -1 || r.bottom > innerHeight + 1)) out.push(e.className || e.id); } const v = ${A}.view; return { out, map: v.s > 0 && v.ox >= 0 && v.oy >= 0 }; })()`);
     check(`layout ${w}×${h}`, !L.out.length && L.map, L.out.join(', '));

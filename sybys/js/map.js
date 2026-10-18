@@ -3,20 +3,22 @@
 // Pastures that touch are linked by a road; a rider needs longer across the river and in the hills.
 import { rng, valueNoise, clamp } from './util.js';
 
-export const GW = 192, GH = 108;
+// K: cells per old cell; the map is drawn finer, the rules do not change
+export const K = 2;
+export const GW = 192 * K, GH = 108 * K;
 export const REGIONS = 23;
-export const RIDER_SPEED = 15; // cells per second
+export const RIDER_SPEED = 15 * K; // cells per second
 
 export function makeMap(seed) {
   const rand = rng(seed);
   const n = GW * GH;
 
   // pasture centres: the Orda in the middle, the rest spread out (best of a few random tries)
-  const pts = [[GW / 2 + (rand() - 0.5) * 10, GH / 2 + (rand() - 0.5) * 6]];
+  const pts = [[GW / 2 + (rand() - 0.5) * 10 * K, GH / 2 + (rand() - 0.5) * 6 * K]];
   while (pts.length < REGIONS) {
     let best = null, bd = -1;
     for (let k = 0; k < 14; k++) {
-      const p = [7 + rand() * (GW - 14), 6 + rand() * (GH - 12)];
+      const p = [7 * K + rand() * (GW - 14 * K), 6 * K + rand() * (GH - 12 * K)];
       let d = Infinity;
       for (const q of pts) d = Math.min(d, (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2);
       if (d > bd) { bd = d; best = p; }
@@ -25,13 +27,13 @@ export function makeMap(seed) {
   }
 
   // borders wobble like real ones: the distance is measured from a warped point
-  const wx = valueNoise(rand, GW, GH, 14), wy = valueNoise(rand, GW, GH, 14);
-  const fine = valueNoise(rand, GW, GH, 5);
+  const wx = valueNoise(rand, GW, GH, 14 * K), wy = valueNoise(rand, GW, GH, 14 * K);
+  const fine = valueNoise(rand, GW, GH, 5 * K);
   const cell = new Int16Array(n);
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
       const i = y * GW + x;
-      const px = x + wx[i] * 7 + fine[i] * 1.6, py = y + wy[i] * 7 + fine[i] * 1.6;
+      const px = x + (wx[i] * 7 + fine[i] * 1.6) * K, py = y + (wy[i] * 7 + fine[i] * 1.6) * K;
       let best = 0, bd = Infinity;
       for (let r = 0; r < pts.length; r++) {
         const d = (px - pts[r][0]) ** 2 + (py - pts[r][1]) ** 2;
@@ -42,7 +44,7 @@ export function makeMap(seed) {
   }
 
   // ground height: hills in the north, gentle swells elsewhere
-  const big = valueNoise(rand, GW, GH, 22), small = valueNoise(rand, GW, GH, 7);
+  const big = valueNoise(rand, GW, GH, 22 * K), small = valueNoise(rand, GW, GH, 7 * K);
   const elev = new Float32Array(n);
   for (let y = 0; y < GH; y++) {
     for (let x = 0; x < GW; x++) {
@@ -55,12 +57,12 @@ export function makeMap(seed) {
   const river = new Uint8Array(n);
   const ph = rand() * 6.28, ph2 = rand() * 6.28, base = GH * (0.66 + rand() * 0.08);
   const riverLine = [];
-  for (let x = -2; x <= GW + 2; x += 2) riverLine.push([x, base + Math.sin(x * 0.045 + ph) * 9 + Math.sin(x * 0.12 + ph2) * 3]);
-  const riverY = (x) => base + Math.sin(x * 0.045 + ph) * 9 + Math.sin(x * 0.12 + ph2) * 3;
+  const riverY = (x) => base + (Math.sin((x / K) * 0.045 + ph) * 9 + Math.sin((x / K) * 0.12 + ph2) * 3) * K;
+  for (let x = -2 * K; x <= GW + 2 * K; x += K) riverLine.push([x, riverY(x)]);
   for (let x = 0; x < GW; x++) {
     const ry = riverY(x);
-    for (let y = Math.floor(ry - 2); y <= Math.ceil(ry + 2); y++) {
-      if (y >= 0 && y < GH && Math.abs(y - ry) < 1.3) river[y * GW + x] = 1;
+    for (let y = Math.floor(ry - 2 * K); y <= Math.ceil(ry + 2 * K); y++) {
+      if (y >= 0 && y < GH && Math.abs(y - ry) < 1.3 * K) river[y * GW + x] = 1;
     }
   }
 
@@ -111,7 +113,7 @@ export function makeMap(seed) {
     return false;
   };
   for (const [key, count] of touch) {
-    if (count < 3) continue;
+    if (count < 3 * K) continue;
     const a = regions[Math.floor(key / 100)], b = regions[key % 100];
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     const ford = crosses(a, b);

@@ -46,7 +46,9 @@ export function newGame(seed = 1) {
   const lair = far[Math.floor(rand() * 6)].id;
   return {
     seed, rand, map, R, tribes, t, m, n,
-    time: 0,
+    time: 0, // everything that moves
+    clock: 0, // the season: stands still while the advisors teach (g.hold)
+    hold: false,
     horses: 3, horseT: 0,
     karasai: 0, karasaiCD: 0,
     aria: { trust: 0.6, at: -1, busy: 0, riding: false, distrust: 0 },
@@ -285,9 +287,15 @@ function stepTribes(g, dt) {
 }
 
 function stepPlot(g, dt) {
+  if (g.hold) return;
   g.plotT -= dt;
   if (g.plotT > 0) return;
   g.plotT = g.plotEvery * (0.8 + g.rand() * 0.4);
+  spawnPlot(g);
+}
+
+// one forged order on its way (the lesson calls it on purpose)
+export function spawnPlot(g) {
   const { regions } = g.map;
   // forged orders start at the hideout or next to it and go where the khan is trusted most
   const starts = [g.lair, ...regions[g.lair].nb.map((e) => e.to)].filter((id) => regions[id].tribe >= 0);
@@ -295,7 +303,7 @@ function stepPlot(g, dt) {
   const fromTribe = regions[from].tribe;
   const targets = regions.filter((r) => r.tribe >= 0 && r.tribe !== fromTribe).sort((a, b) => g.t[b.id] - g.t[a.id]).slice(0, 6);
   const to = targets[Math.floor(g.rand() * targets.length)];
-  if (to) spawnRider(g, 'false', from, to.id);
+  return to ? spawnRider(g, 'false', from, to.id) : null;
 }
 
 function stepPending(g) {
@@ -368,8 +376,9 @@ export function step(g, dt) {
   stepPlot(g, dt);
   stepPending(g);
 
-  if (g.evIdx < EVENTS.length && g.time >= EVENTS[g.evIdx][1]) openEvent(g, EVENTS[g.evIdx++][0]);
-  else if (g.time >= SEASON) { g.phase = 'kurultai'; g.riders = []; g.vote = kurultai(g); }
+  if (!g.hold) g.clock += dt;
+  if (g.evIdx < EVENTS.length && g.clock >= EVENTS[g.evIdx][1]) openEvent(g, EVENTS[g.evIdx++][0]);
+  else if (g.clock >= SEASON) { g.phase = 'kurultai'; g.riders = []; g.vote = kurultai(g); }
 }
 
 // —— the four situations of the first season (from «Хан: когда молчит степь») ——
@@ -523,6 +532,24 @@ export function finish(g, choice) {
   g.phase = 'end';
   return g.result;
 }
+
+// where a word helps most now: an undecided pasture willing to listen, near others who will hear it next
+export function suggest(g) {
+  let best = -1, bs = -Infinity;
+  const coming = new Set(g.riders.filter((x) => x.kind === 'word').map((x) => x.to));
+  for (const r of g.map.regions) {
+    if (r.tribe < 0 || coming.has(r.id)) continue;
+    const rec = receptivity(g, r.id);
+    let s = (1 - g.t[r.id]) * (0.5 + rec) - g.m[r.id] * 0.8;
+    for (const e of r.nb) if (g.map.regions[e.to].tribe >= 0) s += (1 - g.t[e.to]) * 0.15 * receptivity(g, e.to);
+    // the tribe closest to turning is worth more
+    const tt = tribeAvg(g, r.tribe);
+    if (tt < VOTE_AT) s += 0.4 * (1 - (VOTE_AT - tt) * 4);
+    if (s > bs) { bs = s; best = r.id; }
+  }
+  return best;
+}
+export const forMe = (g) => kurultai(g).yes;
 
 export const choicesAtKurultai = (g) => [
   { key: 'council', ok: true },

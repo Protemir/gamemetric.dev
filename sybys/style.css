@@ -65,12 +65,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .regen { position: absolute; left: 8px; right: 8px; bottom: 5px; height: 3px; background: var(--felt-2); border-radius: 2px; overflow: hidden; }
 .regen i { display: block; height: 100%; width: 0; background: var(--gold); }
 .season { flex: 1 1 120px; min-width: 70px; flex-direction: column; align-items: stretch; justify-content: center; gap: 4px; }
-.season small { font-size: 11px; color: var(--muted); font-weight: 700; }
+.season small { font-size: 12px; color: var(--ink); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.season.win .bar i { background: #6aa84f; }
 .bar { height: 6px; border-radius: 3px; background: var(--felt-2); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--gold); transition: width 0.3s; }
 .tribes { display: flex; gap: 5px; }
 .tribe {
-  width: 86px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 118px;
   height: 44px;
   padding: 5px 7px;
   border-radius: 10px;
@@ -80,6 +84,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-left: 5px solid var(--c);
   position: relative;
 }
+.tribe .ava { width: 32px; height: 32px; flex: none; }
+.tribe .tb { flex: 1; min-width: 0; }
+.tribe .tick { position: absolute; right: -6px; bottom: -6px; width: 20px; height: 20px; border-radius: 50%; background: #6aa84f; color: #fff; font-size: 12px; font-weight: 900; display: none; place-items: center; box-shadow: var(--shadow); }
+.tribe.ok .tick { display: grid; }
 .tribe .tn { display: block; font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tribe .bar { margin-top: 5px; position: relative; }
 .tribe .bar::after { content: ""; position: absolute; left: 55%; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: 0.5; }
@@ -125,7 +133,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: var(--shadow);
   text-align: left;
 }
-.act .ai { grid-row: span 2; font-size: 28px; }
+.act .ai { grid-row: span 2; width: 44px; height: 44px; }
+.ava svg, .ai svg { display: block; width: 100%; height: 100%; }
+.act.glow { animation: glow 0.9s ease-in-out infinite alternate; }
+@keyframes glow { from { box-shadow: var(--shadow), 0 0 0 0 rgba(255, 220, 120, 0.9); } to { box-shadow: var(--shadow), 0 0 0 8px rgba(255, 220, 120, 0); } }
 .act .an { font-weight: 800; font-size: 16px; }
 .act .ac { font-size: 11px; }
 .act.sel { border-color: var(--gold); background: #fff6dc; transform: translateY(-3px); }
@@ -164,9 +175,39 @@ button { font: inherit; color: inherit; cursor: pointer; }
   animation: in 0.3s ease-out;
   transition: opacity 0.5s;
 }
+.toast { display: flex; gap: 8px; align-items: center; }
+.toast .ava { width: 36px; height: 36px; flex: none; }
 .toast b { display: block; font-size: 12px; color: var(--muted); }
 .toast.out { opacity: 0; }
 @keyframes in { from { transform: translateX(30px); opacity: 0; } }
+
+/* the advisor speaking */
+.coach {
+  position: fixed;
+  left: 12px;
+  bottom: 96px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: min(460px, calc(100vw - 24px));
+  z-index: 7;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+}
+.coach.on { opacity: 1; transform: none; }
+.coach .ava { width: 72px; height: 72px; flex: none; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5)); }
+.coach .said {
+  position: relative;
+  padding: 10px 14px;
+  border-radius: 14px 14px 14px 4px;
+  background: var(--felt);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.coach .said b { display: block; font-size: 12px; color: var(--muted); }
+.coach .said p { margin: 2px 0 0; font-size: 15px; font-weight: 600; line-height: 1.35; }
 
 /* screens */
 #ui:empty { display: none; }
@@ -245,6 +286,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .seat.no { opacity: 0.75; }
 .seat.no em { color: var(--red); }
 .warn { color: var(--red); font-weight: 800; }
+.pic svg { display: block; width: 100%; height: auto; border-radius: 12px; margin-bottom: 12px; }
+.speaker { display: flex; gap: 12px; align-items: center; margin: 10px 0; text-align: left; }
+.speaker .ava { width: 76px; height: 76px; flex: none; }
+.speaker b { color: var(--muted); font-size: 13px; }
+.speaker p { margin: 2px 0 0; font-size: 16px; line-height: 1.4; }
+.goalbars { display: grid; gap: 8px; margin: 12px 0; }
+.gb { display: grid; grid-template-columns: 40px 90px 1fr 22px; align-items: center; gap: 8px; text-align: left; font-weight: 800; }
+.gb .ava { width: 40px; height: 40px; }
+.gb .bar { height: 10px; position: relative; overflow: visible; }
+.gb .bar i { background: var(--c); border-radius: 3px; }
+.gb.ok .bar i { background: var(--gold); }
+.gb .bar::after { content: ""; position: absolute; left: 55%; top: -4px; bottom: -4px; width: 3px; background: var(--ink); }
+.gb em { font-style: normal; color: #4a8a32; }
+.faces { display: flex; justify-content: center; gap: 10px; margin-bottom: 8px; }
+.faces .ava { width: 64px; height: 64px; }
+.seat .ava { width: 48px; height: 48px; }
 
 @media (max-width: 760px), (max-height: 520px) {
   .chip { height: 38px; font-size: 13px; padding: 0 7px; }
@@ -255,11 +312,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .act .ai { font-size: 22px; }
   .act .an { font-size: 14px; }
   .hint { bottom: 72px; font-size: 13px; }
+  .coach { bottom: 70px; }
+  .coach .ava { width: 52px; height: 52px; }
+  .coach .said p { font-size: 13px; }
+  .tribe { width: 96px; }
+  .tribe .ava { width: 26px; height: 26px; }
+  .act .ai { width: 34px; height: 34px; }
   .toasts { top: 54px; }
   .screen h1 { font-size: 40px; }
 }
 @media (max-width: 560px) {
-  .season { display: none; }
+  #unityChip { display: none; }
+  .season { order: 8; flex: 1 0 100%; height: 34px; }
   .hud { justify-content: space-between; }
   .tribes { order: 9; flex: 1 0 100%; }
   .tribe { flex: 1; width: auto; }
