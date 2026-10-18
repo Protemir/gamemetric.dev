@@ -225,6 +225,8 @@ export class View {
       let R = ter[t3] + (c[0] * L - ter[t3]) * a;
       let G = ter[t3 + 1] + (c[1] * L - ter[t3 + 1]) * a;
       let B = ter[t3 + 2] + (c[2] * L - ter[t3 + 2]) * a;
+      const burnt = g.burn && g.burn[id] != null ? Math.max(0, 1 - (g.time - g.burn[id]) / 45) * 0.55 : 0;
+      if (burnt) { R += (40 - R) * burnt; G += (30 - G) * burnt; B += (22 - B) * burnt; }
       const gl = glow[id];
       if (gl) { R += (255 - R) * gl; G += (236 - G) * gl; B += (180 - B) * gl; }
       const b = border[i];
@@ -278,6 +280,7 @@ export class View {
     this.drawParts(g, dt, 'over');
     this.drawSeen(g, now);
     this.drawClouds(dt);
+    this.drawDrama(g, now, dt);
     this.drawHoverTag(g, look);
     this.drawHand(g, now, look);
     this.drawFx(g, now);
@@ -611,9 +614,9 @@ export class View {
     for (const { r, x, y, face } of list) {
       // dust behind the hooves
       if (Math.random() < dt * 14) this.parts.push({ kind: 'dust', x: x - face * u * 1.4, y: y + u * 1.1, vx: -face * 6, vy: -4, life: 0.8, age: 0, layer: 'under' });
-      const flag = r.kind === 'tribe' ? css(TRIBE_RGB[r.tribe]) : r.kind === 'karasai' ? '#c43a2c' : r.kind === 'aria' || r.kind === 'caravan' || r.kind === 'zaltyr' ? null : css(GOLD);
-      const coat = r.kind === 'aria' ? '#efe8dc' : r.kind === 'karasai' ? '#2b1d14' : r.kind === 'false' ? '#5a3a22' : r.kind === 'caravan' ? '#b08a5a' : '#8a5a32';
-      const cloth = r.kind === 'aria' ? '#8a5cd6' : r.kind === 'karasai' ? '#7a1f18' : r.kind === 'tribe' ? css(TRIBE_RGB[r.tribe].map((v) => v * 0.7)) : r.kind === 'caravan' ? '#6a4a2a' : r.kind === 'zaltyr' ? '#2c3622' : '#2f5a7a';
+      const flag = r.kind === 'tribe' || r.kind === 'envoy' ? css(TRIBE_RGB[r.tribe]) : r.kind === 'raider' ? '#9a1410' : r.kind === 'karasai' ? '#c43a2c' : r.kind === 'aria' || r.kind === 'caravan' || r.kind === 'zaltyr' ? null : css(GOLD);
+      const coat = r.kind === 'raider' ? '#17100c' : r.kind === 'aria' ? '#efe8dc' : r.kind === 'karasai' ? '#2b1d14' : r.kind === 'false' ? '#5a3a22' : r.kind === 'caravan' ? '#b08a5a' : '#8a5a32';
+      const cloth = r.kind === 'raider' ? '#3a0e0a' : r.kind === 'aria' ? '#8a5cd6' : r.kind === 'karasai' ? '#7a1f18' : r.kind === 'tribe' || r.kind === 'envoy' ? css(TRIBE_RGB[r.tribe].map((v) => v * 0.7)) : r.kind === 'caravan' ? '#6a4a2a' : r.kind === 'zaltyr' ? '#2c3622' : '#2f5a7a';
       this.horse(x, y, face, now + r.id * 137, coat, cloth, flag, r.kind === 'karasai');
       if (look.pulse === r.id) {
         const k = (now % 900) / 900;
@@ -658,6 +661,22 @@ export class View {
         p.x += p.vx * dt; p.y += p.vy * dt;
         ctx.fillStyle = `rgba(80,40,100,${0.35 * Math.sin(t * Math.PI)})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, u * (0.8 + t * 1.6), 0, Math.PI * 2); ctx.fill();
+      } else if (p.kind === 'flame') {
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        // a tongue of flame: hot white at the root, orange, gone to nothing; added light, so fires glow
+        const fr = u * (0.75 - t * 0.45);
+        const fg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y - fr * 0.6, fr * 1.4);
+        fg.addColorStop(0, `rgba(255,240,180,${0.9 * (1 - t)})`);
+        fg.addColorStop(0.4, `rgba(255,140,40,${0.7 * (1 - t)})`);
+        fg.addColorStop(1, 'rgba(160,30,0,0)');
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = fg;
+        ctx.beginPath(); ctx.ellipse(p.x, p.y - fr * 0.6, fr * 0.6, fr * 1.4, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+      } else if (p.kind === 'soot') {
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        ctx.fillStyle = `rgba(25,18,14,${0.4 * Math.sin(t * Math.PI)})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, u * (0.9 + t * 2.2), 0, Math.PI * 2); ctx.fill();
       } else if (p.kind === 'dust') {
         p.x += p.vx * dt; p.y += p.vy * dt;
         ctx.fillStyle = `rgba(200,175,130,${0.5 * (1 - t)})`;
@@ -722,7 +741,7 @@ export class View {
         ctx.lineWidth = 6 * (1 - age) + 1;
         ctx.beginPath(); ctx.ellipse(x, y, u * (1.5 + age * 11), u * (1 + age * 6), 0, 0, Math.PI * 2); ctx.stroke();
       }
-      ctx.font = `800 ${Math.round(Math.max(18, u * 2.6))}px system-ui, sans-serif`;
+      ctx.font = `800 ${Math.round(Math.max(18, u * (f.big ? 3.6 : 2.6)))}px Georgia, serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = f.color;
@@ -731,6 +750,54 @@ export class View {
       ctx.strokeText(f.text, x, y - u * 3 - age * u * 4);
       ctx.fillText(f.text, x, y - u * 3 - age * u * 4);
       ctx.globalAlpha = 1;
+    }
+  }
+
+  // the dramatic layer: fire over burned auls, a red alarm while the horde rides, the night with its lanterns
+  drawDrama(g, now, dt) {
+    const { ctx, u } = this;
+    const R = g.map.regions;
+    for (const k in g.burn || {}) {
+      const age = g.time - g.burn[k];
+      if (age > 30) continue;
+      const r = R[k];
+      const [x, y] = this.toScreen(r.x, r.y);
+      if (Math.random() < dt * 30 * (1 - age / 30)) this.parts.push({ kind: 'flame', x: x + (Math.random() - 0.5) * u * 3, y: y - u * 0.5, vx: (Math.random() - 0.5) * 8, vy: -24 - Math.random() * 20, life: 0.7, age: 0, layer: 'over' });
+      if (Math.random() < dt * 10) this.parts.push({ kind: 'soot', x: x + (Math.random() - 0.5) * u * 2, y: y - u * 2, vx: 6 + Math.random() * 6, vy: -14, life: 3, age: 0, layer: 'over' });
+    }
+    if (g.raid) {
+      const a = 0.16 + Math.sin(now / 260) * 0.06;
+      const vg = ctx.createRadialGradient(this.w / 2, this.h / 2, Math.min(this.w, this.h) * 0.35, this.w / 2, this.h / 2, Math.max(this.w, this.h) * 0.75);
+      vg.addColorStop(0, 'rgba(160,20,10,0)');
+      vg.addColorStop(1, `rgba(160,20,10,${a})`);
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
+    if (g.night) {
+      const k = Math.min(1, (g.time - g.night.at) / 1.5) * (g.night.until ? Math.max(0, (g.night.until - g.time) / 2.5) : 1);
+      ctx.fillStyle = `rgba(6,10,28,${0.62 * k})`;
+      ctx.fillRect(0, 0, this.w, this.h);
+      // lanterns of the honest riders, and the Orda's fire
+      ctx.globalCompositeOperation = 'lighter';
+      const glowAt = (x, y, rad, c) => {
+        const gr = ctx.createRadialGradient(x, y, 0, x, y, rad);
+        gr.addColorStop(0, c);
+        gr.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+      };
+      const o = this.toScreen(R[0].x, R[0].y);
+      glowAt(o[0], o[1], u * 7, `rgba(255,170,70,${0.55 * k})`);
+      for (const rd of g.riders) {
+        if (rd.kind !== 'envoy') continue;
+        // the moon shows every rider faintly; only the honest ones carry a warm light
+        { const p = riderPos(g, rd); const [mx, my] = this.toScreen(p.x, p.y); glowAt(mx, my - u * 0.8, u * 2.6, `rgba(150,170,220,${0.28 * k})`); }
+        if (rd.killer) continue;
+        const p = riderPos(g, rd);
+        const [x, y] = this.toScreen(p.x, p.y);
+        glowAt(x, y - u * 1.5, u * 3.2 * (1 + Math.sin(now / 90 + rd.id) * 0.08), `rgba(255,200,110,${0.8 * k})`);
+      }
+      ctx.globalCompositeOperation = 'source-over';
     }
   }
 
@@ -786,7 +853,8 @@ export class View {
 
   pushFx(f, now) {
     if (f.type === 'word' || f.type === 'force') this.flash.set(f.region, now);
-    const look = { trade: ['+1', '#ffe7a0', false], word: ['+', '#ffe7a0', true], lie: ['−', '#e0b0ff', true], force: ['⚔', '#ff8f7a', true], clue: ['✦', '#ffe7a0', false], caught: ['✓', '#fff', true], aria: ['◉', '#d9c4ff', false] }[f.type];
+    if (f.type === 'word' && f.chain >= 2) { this.fx.push({ region: f.region, text: '×' + f.chain, color: '#ffd76a', ring: true, t0: now, big: true }); return; }
+    const look = { clash: ['⚔', '#ffb08a', true], fire: ['', '#ff7a3a', true], raid: ['', '#ff4a3a', true], trade: ['+1', '#ffe7a0', false], word: ['+', '#ffe7a0', true], lie: ['−', '#e0b0ff', true], force: ['⚔', '#ff8f7a', true], clue: ['✦', '#ffe7a0', false], caught: ['✓', '#fff', true], aria: ['◉', '#d9c4ff', false] }[f.type];
     if (look) this.fx.push({ region: f.region, text: look[0], color: look[1], ring: look[2], t0: now });
   }
 }

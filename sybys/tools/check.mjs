@@ -72,6 +72,11 @@ for (const [name, P] of Object.entries(PLAYERS)) {
       }
       S.step(g, DT);
       // a person notices a forged order on the road now and then
+      // raiders and the night riders: a person reacts to these, more or less quickly
+      for (const r of [...g.riders]) {
+        if (r.kind === 'raider' && !seen.has(r.id) && r.seg + r.p > 0.3) { seen.add(r.id); if (g.rand() < P.catch * 1.2) S.intercept(g, r.id); }
+        if (r.kind === 'envoy' && r.killer && !seen.has(r.id) && r.seg + r.p > 0.4) { seen.add(r.id); if (g.rand() < P.catch + 0.3) S.intercept(g, r.id); }
+      }
       for (const r of [...g.riders]) {
         if (r.kind !== 'false' || seen.has(r.id) || r.seg + r.p < 0.6) continue;
         seen.add(r.id);

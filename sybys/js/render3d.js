@@ -777,12 +777,19 @@ export class View3D extends View {
       seen.add(r.id);
       let o = this.riderObjs.get(r.id);
       if (!o) {
-        const flag = r.kind === 'tribe' ? `rgb(${TRIBE_RGB[r.tribe].join(',')})` : r.kind === 'karasai' ? '#c43a2c' : r.kind === 'aria' || r.kind === 'caravan' || r.kind === 'zaltyr' ? null : `rgb(${GOLD.join(',')})`;
-        const coat = r.kind === 'aria' ? '#efe8dc' : r.kind === 'karasai' ? '#22160e' : r.kind === 'false' ? '#4a3020' : r.kind === 'caravan' ? '#b08a5a' : r.kind === 'zaltyr' ? '#3a3a30' : '#7a4a2a';
-        const cloth = r.kind === 'aria' ? '#8a5cd6' : r.kind === 'karasai' ? '#7a1f18' : r.kind === 'tribe' ? `rgb(${TRIBE_RGB[r.tribe].map((v) => (v * 0.7) | 0).join(',')})` : r.kind === 'caravan' ? '#6a4a2a' : r.kind === 'zaltyr' ? '#2c3622' : '#2f5a7a';
+        const flag = r.kind === 'tribe' || r.kind === 'envoy' ? `rgb(${TRIBE_RGB[r.tribe].join(',')})` : r.kind === 'raider' ? '#9a1410' : r.kind === 'karasai' ? '#c43a2c' : r.kind === 'aria' || r.kind === 'caravan' || r.kind === 'zaltyr' ? null : `rgb(${GOLD.join(',')})`;
+        const coat = r.kind === 'raider' ? '#140d0a' : r.kind === 'aria' ? '#efe8dc' : r.kind === 'karasai' ? '#22160e' : r.kind === 'false' ? '#4a3020' : r.kind === 'caravan' ? '#b08a5a' : r.kind === 'zaltyr' ? '#3a3a30' : '#7a4a2a';
+        const cloth = r.kind === 'raider' ? '#3a0e0a' : r.kind === 'aria' ? '#8a5cd6' : r.kind === 'karasai' ? '#7a1f18' : r.kind === 'tribe' || r.kind === 'envoy' ? `rgb(${TRIBE_RGB[r.tribe].map((v) => (v * 0.7) | 0).join(',')})` : r.kind === 'caravan' ? '#6a4a2a' : r.kind === 'zaltyr' ? '#2c3622' : '#2f5a7a';
         o = this.makeHorse(coat);
         o.play(r.kind === 'caravan' ? 'Walk' : 'Gallop', Math.random());
         o.rider = this.makeRider(cloth, flag);
+        if (r.kind === 'envoy' && !r.killer) {
+          // an honest rider carries a lantern
+          const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffd27a' }));
+          lamp.position.set(0.08, 0.14, 0.04);
+          o.rider.add(lamp);
+        }
+        if (r.kind === 'raider') o.root.scale.multiplyScalar(1.1);
         if (r.kind === 'caravan') {
           // a caravan horse carries packs, not a banner
           const pack = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.2), new THREE.MeshStandardMaterial({ color: '#8a5a2a', roughness: 1 }));
@@ -897,6 +904,12 @@ export class View3D extends View {
     for (const r of g.map.regions) this.rings[r.id].visible = !this.cinema && r.tribe >= 0 && g.t[r.id] >= 0.55;
     this.syncRiders(g, now, dt);
     this.stepSmoke(g, dt);
+    // night falls on the world itself
+    const dark = g.night ? Math.min(1, (g.time - g.night.at) / 1.5) * (g.night.until ? Math.max(0, (g.night.until - g.time) / 2.5) : 1) : 0;
+    if (!this.cinema) {
+      this.sun.intensity = 3.0 * (1 - dark * 0.85);
+      this.scene.children.forEach((o) => { if (o.isHemisphereLight) o.intensity = 0.95 * (1 - dark * 0.7); });
+    }
     if (this.cinema) {
       this.cinemaCam(g, dt);
       this.renderer.render(this.scene, this.camera);
@@ -917,6 +930,7 @@ export class View3D extends View {
     }
     this.drawPulse(g, now, look);
     this.drawSeen(g, now);
+    this.drawDrama(g, now, dt);
     this.drawHoverTag(g, look);
     this.drawHand(g, now, look);
     this.drawFx(g, now);

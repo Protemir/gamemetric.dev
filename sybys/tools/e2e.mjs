@@ -130,6 +130,17 @@ try {
   await wait(100);
   check('a tap on ✕ sends Aria', await B.js(`${A}.g.riders.some((r) => r.kind === 'aria' && r.to === ${mk.id})`), await B.js(`JSON.stringify({ aria: ${A}.g.aria, phase: ${A}.g.phase, riders: ${A}.g.riders.map((r) => r.kind) })`));
 
+  // 5b2. a raid: a tap on a raider sends batyrs; the night: a tap on the rider without a lantern takes the killer
+  const raid = await B.js(`(() => { const s = ${A}; s.g.horses = 5; s.S.startRaid(s.g); s.step(1.5); const r = s.g.riders.find((r) => r.kind === 'raider' && !(r.delay > 0)); if (!r) return 'no raider'; const p = s.S.riderPos(s.g, r); const xy = s.view.toScreen(p.x, p.y); return { id: r.id, xy }; })()`);
+  if (raid.id) { await click(raid.xy[0], raid.xy[1] - 4); await wait(100); }
+  check('a tap on a raider sends batyrs', raid.id && (await B.js(`!${A}.g.riders.some((r) => r.id === ${raid.id})`)) && (await B.js(`${A}.g.repelled`)) > 0, JSON.stringify(raid).slice(0, 60));
+  await B.js(`(() => { const s = ${A}; s.g.riders = s.g.riders.filter((r) => r.kind !== 'raider'); s.g.raid = null; s.S.startNight(s.g); s.step(1); })()`);
+  const nk = await B.js(`(() => { const s = ${A}; const r = s.g.riders.find((r) => r.kind === 'envoy' && r.killer); const p = s.S.riderPos(s.g, r); return s.view.toScreen(p.x, p.y); })()`);
+  await click(nk[0], nk[1] - 4);
+  await wait(100);
+  check('a tap on the killer at night', (await B.js(`${A}.g.night && ${A}.g.night.result`)) === 'caught');
+  await B.js(`(() => { const s = ${A}; for (let k = 0; k < 40; k++) s.step(0.1); })()`);
+
   // 5c. the camera: a drag moves the map and sends nobody, the wheel zooms, ⤢ shows the whole map again
   const before = await B.js(`JSON.stringify({ h: ${A}.g.horses, n: ${A}.g.riders.filter((r) => r.kind === 'word').length })`).then(JSON.parse);
   await B.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 360, deltaX: 0, deltaY: -600 });

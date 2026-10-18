@@ -34,8 +34,13 @@ export const TUNE = {
   wordGain: 0.38, lieBite: 0.42,
   pride: 0.42, prideRate: 0.028, follow: 0.015, settle: 0.02, // a tribe left alone drifts back to its own pride, not to the khan
   word: 1.15, lie: 1.35,
+  chain: 0.1, goldNear: 0.08, // a word next to the last one, or next to a pasture already the khan's, goes a little further
 };
-export const CLUES = { forged: true, stones: true, lair: true, scouts: true, letter: true, zaltyr: true, informant: false, arrest: false, zaltyrFalse: false };
+export const CLUES = { assassin: true, forged: true, stones: true, lair: true, scouts: true, letter: true, zaltyr: true, informant: false, arrest: false, zaltyrFalse: false };
+
+// raids of the horde from beyond the steppe, and one night when someone comes for the khan
+export const RAIDS = { 1: [125], 2: [60, 215] };
+export const NIGHT_AT = { 2: 140 };
 
 // who is really behind the forged orders: a different one each campaign; true clues hint at him
 export const SUSPECTS = ['karasai', 'sarman', 'zaltyr', 'orazbai'];
@@ -82,6 +87,9 @@ export function newGame(seed = 1, opts = {}) {
     result: null,
     culprit, mod, daily: !!opts.daily,
     forceRides: 0,
+    raidIdx: 0, raid: null, burn: {}, night: null, nightDone: false,
+    chain: 0, lastWord: { at: -99, region: -1 },
+    repelled: 0, burned: 0,
   };
   // the day's condition
   if (mod === 'drought') {
@@ -137,7 +145,7 @@ function later(g, delay, kind, args = {}) {
 function spawnRider(g, kind, from, to, extra = {}) {
   const rt = route(g.map, from, to);
   if (!rt) return null;
-  const speed = kind === 'karasai' ? 1.5 : kind === 'aria' ? 0.85 : kind === 'false' ? 1.05 : kind === 'zaltyr' ? 1.3 : kind === 'caravan' ? 0.55 : 1;
+  const speed = kind === 'raider' ? 0.9 : kind === 'envoy' ? 0.75 : kind === 'karasai' ? 1.5 : kind === 'aria' ? 0.85 : kind === 'false' ? 1.05 : kind === 'zaltyr' ? 1.3 : kind === 'caravan' ? 0.55 : 1;
   const rider = { id: g.uid++, kind, from, to, path: rt.path, seg: 0, p: 0, speed, ...extra };
   if (rt.path.length === 1) rider.seg = 0;
   g.riders.push(rider);
@@ -191,6 +199,37 @@ export function intercept(g, id) {
     g.fx.push({ type: 'caught', region: riderRegion(g, rider) });
     return 'caught';
   }
+  if (rider.kind === 'raider') {
+    // the khan's batyrs ride out: one horse, one raider less
+    if (g.horses < 1) return 'nohorse';
+    g.horses--;
+    g.riders.splice(k, 1);
+    g.repelled++;
+    const at = riderRegion(g, rider);
+    const tr = g.map.regions[at].tribe;
+    if (tr >= 0) g.tribes[tr].mood = clamp(g.tribes[tr].mood + 0.02, 0, 1);
+    g.fx.push({ type: 'clash', region: at });
+    endRaidIfDone(g);
+    return 'repelled';
+  }
+  if (rider.kind === 'envoy') {
+    g.riders.splice(k, 1);
+    if (rider.killer) {
+      // the man without a lantern: the assassin taken alive, a clue that speaks loudly
+      g.night.result = 'caught';
+      g.riders = g.riders.filter((r) => r.kind !== 'envoy');
+      addClue(g, 'assassin', 0);
+      for (const t of g.tribes) t.mood = clamp(t.mood + 0.05, 0, 1);
+      toast(g, 'aria', 'tKillerCaught', 0);
+      g.fx.push({ type: 'caught', region: riderRegion(g, rider) });
+      g.night.until = g.time + 2.5;
+      return 'killer';
+    }
+    const tr = g.tribes[rider.tribe];
+    tr.mood = clamp(tr.mood - 0.08, 0, 1);
+    toast(g, rider.tribe, 'tEnvoyInsulted', 0, { tribe: rider.tribe });
+    return 'insult';
+  }
   if (rider.kind === 'tribe') {
     g.riders.splice(k, 1);
     g.wrongCatch++;
@@ -216,8 +255,12 @@ export function riderPos(g, rider) {
 function arrive(g, rider) {
   const i = rider.to, r = g.map.regions[i];
   if (rider.kind === 'word') {
-    g.m[i] = Math.min(2, g.m[i] + TUNE.word);
-    g.fx.push({ type: 'word', region: i });
+    const near = g.lastWord.region >= 0 && g.time - g.lastWord.at < 9 && (g.lastWord.region === i || r.nb.some((e) => e.to === g.lastWord.region));
+    g.chain = near ? g.chain + 1 : 1;
+    g.lastWord = { at: g.time, region: i };
+    const gold = r.nb.some((e) => g.map.regions[e.to].tribe >= 0 && g.t[e.to] >= 0.55) ? TUNE.goldNear : 0;
+    g.m[i] = Math.min(2, g.m[i] + TUNE.word * (1 + TUNE.chain * Math.min(3, g.chain - 1)) + gold);
+    g.fx.push({ type: 'word', region: i, chain: g.chain });
   } else if (rider.kind === 'karasai') {
     const tr = g.tribes[r.tribe];
     g.t[i] = Math.max(g.t[i], 0.88);
@@ -240,6 +283,37 @@ function arrive(g, rider) {
   } else if (rider.kind === 'tribe') {
     if (rider.load > 0) g.m[i] = Math.min(2, g.m[i] + rider.load);
     else if (rider.load < 0) g.n[i] = Math.min(2, g.n[i] - rider.load);
+  } else if (rider.kind === 'raider') {
+    const tr = r.tribe >= 0 ? g.tribes[r.tribe] : null;
+    if (tr && g.t[i] >= 0.55 && g.rand() < 0.7) {
+      // a loyal aul puts up its own batyrs
+      g.t[i] = Math.min(1, g.t[i] + 0.03);
+      g.repelled++;
+      g.fx.push({ type: 'clash', region: i });
+      if (!g.flags['defended' + r.tribe]) { g.flags['defended' + r.tribe] = true; toast(g, r.tribe, 'tClanDefends', i, { tribe: r.tribe }); }
+    } else if (r.tribe >= 0) {
+      g.t[i] = Math.max(0, g.t[i] - 0.25);
+      tr.mood = clamp(tr.mood - 0.05, 0, 1);
+      g.burn[i] = g.time;
+      g.burned++;
+      g.fx.push({ type: 'fire', region: i });
+      toast(g, r.tribe, 'tBurned', i, { tribe: r.tribe });
+    }
+    endRaidIfDone(g);
+  } else if (rider.kind === 'envoy') {
+    if (rider.killer) {
+      // the knife reached the khan: he lives, but the steppe sees him weak
+      g.night.result = 'wounded';
+      for (const x of g.riders) if (x.kind === 'envoy') x.gone = true; // removed after this step's loop over the riders
+      g.horses = 0;
+      g.karasai++;
+      for (const t of g.tribes) t.mood = clamp(t.mood - 0.05, 0, 1);
+      toast(g, 'karasai', 'tWounded', 0);
+      g.fx.push({ type: 'fire', region: 0 });
+      g.night.until = g.time + 2.5;
+    } else {
+      g.tribes[rider.tribe].mood = clamp(g.tribes[rider.tribe].mood + 0.02, 0, 1);
+    }
   } else if (rider.kind === 'zaltyr') {
     g.zaltyr.riding = false;
     g.zaltyr.at = i;
@@ -420,8 +494,10 @@ export function step(g, dt) {
 
   for (let k = g.riders.length - 1; k >= 0; k--) {
     const rider = g.riders[k];
+    if (!rider || rider.gone) continue;
     const P = rider.path;
     if (P.length < 2) { g.riders.splice(k, 1); arrive(g, rider); continue; }
+    if (rider.delay > 0) { rider.delay -= dt; continue; }
     const e = g.map.regions[P[rider.seg]].nb.find((x) => x.to === P[rider.seg + 1]);
     rider.p += (dt * rider.speed) / e.time;
     if (rider.p >= 1) {
@@ -430,6 +506,7 @@ export function step(g, dt) {
       if (rider.seg >= P.length - 1) { g.riders.splice(k, 1); arrive(g, rider); }
     }
   }
+  if (g.riders.some((r) => r.gone)) g.riders = g.riders.filter((r) => !r.gone);
   if (g.aria.busy > 0 && (g.aria.busy -= dt) <= 0) { g.aria.busy = 0; ariaDone(g); }
   stepWatch(g, dt);
   stepCaravan(g);
@@ -442,6 +519,11 @@ export function step(g, dt) {
   stepPending(g);
 
   if (!g.hold) g.clock += dt;
+  const raids = RAIDS[g.season] || [];
+  if (!g.hold && g.raidIdx < raids.length && g.clock >= raids[g.raidIdx] && !g.raid && !g.night) { g.raidIdx++; startRaid(g); }
+  if (!g.hold && !g.nightDone && NIGHT_AT[g.season] && g.clock >= NIGHT_AT[g.season] && !g.raid) startNight(g);
+  if (g.night && g.night.until && g.time > g.night.until) { g.night = null; }
+  else if (g.night && !g.night.until && !g.riders.some((r) => r.kind === 'envoy')) g.night.until = g.time + 1;
   const evs = SEASONS[g.season];
   if (g.evIdx < evs.length && g.clock >= evs[g.evIdx][1]) openEvent(g, evs[g.evIdx++][0]);
   else if (g.clock >= SEASON) {
@@ -449,6 +531,39 @@ export function step(g, dt) {
     g.vote = kurultai(g);
     g.phase = g.season === 1 ? 'council' : 'kurultai';
   }
+}
+
+// a band of the horde rides in from one edge of the steppe at the auls nearest to it
+export function startRaid(g) {
+  const { regions } = g.map;
+  const side = Math.floor(g.rand() * 4);
+  const edge = (r) => [r.x, GW - r.x, r.y, g.map.GH - r.y][side];
+  const land = regions.filter((r) => r.tribe >= 0).sort((a, b) => edge(a) - edge(b));
+  const entry = land[0];
+  const n = g.season === 1 ? 4 : 6;
+  const targets = land.slice(0, n + 2).sort(() => g.rand() - 0.5).slice(0, n);
+  g.raid = { side, until: Infinity, at: g.time };
+  targets.forEach((t, k) => {
+    const rd = spawnRider(g, 'raider', entry.id, t.id);
+    if (rd) { rd.p = -0.15 * k; rd.p = Math.max(0, rd.p); rd.delay = k * 0.8; }
+  });
+  toast(g, 'karasai', 'tRaid', entry.id);
+  g.fx.push({ type: 'raid', region: entry.id });
+}
+function endRaidIfDone(g) {
+  if (g.raid && !g.riders.some((r) => r.kind === 'raider')) g.raid = null;
+}
+
+// night: three riders come to the Orda with lanterns; one comes without
+export function startNight(g) {
+  g.nightDone = true;
+  const { regions } = g.map;
+  const far = regions.filter((r) => r.tribe >= 0).sort((a, b) => route(g.map, b.id, 0).time - route(g.map, a.id, 0).time);
+  const picks = [0, 1, 2].map((k) => far.filter((r) => r.tribe === k)[0]).filter(Boolean);
+  const killer = Math.floor(g.rand() * picks.length);
+  g.night = { at: g.time, until: 0, result: null };
+  picks.forEach((r, k) => spawnRider(g, 'envoy', r.id, 0, { tribe: r.tribe, killer: k === killer }));
+  toast(g, 'aria', 'tNight', 0);
 }
 
 // Zaltyr watches the roads round his pasture: forged riders there get his mark and slow down;
@@ -490,9 +605,10 @@ export function nextSeason(g) {
   g.season = 2;
   g.clock = 0;
   g.evIdx = 0;
+  g.raidIdx = 0;
   g.event = null;
   g.horses = HORSE_MAX;
-  g.plotEvery *= 0.9;
+  g.plotEvery *= 0.78; // autumn: the plotters hurry before the kurultai
   g.plotT = 18;
   g.aria.busy = 0;
   g.aria.riding = false;

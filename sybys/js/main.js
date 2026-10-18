@@ -578,7 +578,7 @@ function pointer(e) {
   audioInit();
   const px = e.clientX, py = e.clientY;
   const rider = view.riderAt(g, px, py);
-  if (rider && (rider.kind === 'false' || rider.kind === 'tribe')) { tapRider(rider.id); return; }
+  if (rider && ['false', 'tribe', 'raider', 'envoy'].includes(rider.kind)) { tapRider(rider.id); return; }
   const mark = coach.step === 'false' ? -1 : markAt(px, py);
   if (mark >= 0 && (action === 'aria' || S.canAct(g, 'aria') || coach.step === 'aria')) { doAction('aria', mark); return; }
   const id = view.regionAt(g, px, py);
@@ -613,6 +613,9 @@ function tapRider(id) {
   const res = S.intercept(g, id);
   if (res === 'caught') { sfx.caught(); if (!coach.step) say(T().caught, 1800); if (look.pulse === id) look.pulse = null; }
   if (res === 'insult') { sfx.bad(); say(T().insulted, 2200); }
+  if (res === 'repelled') sfx.clash();
+  if (res === 'nohorse') { sfx.no(); say(T().hintNoHorse, 1500); }
+  if (res === 'killer') { sfx.caught(); sfx.clue(); }
   return res;
 }
 
@@ -863,8 +866,10 @@ function frame(now) {
   last = now;
   if (g && g.demo) S.step(g, dt * 0.6);
   else if (g && !paused && g.phase === 'map') {
-    // the false rider of the lesson comes slowly, so there is time to see him
-    const slow = coach.step === 'false' ? 0.4 : 1;
+    // the false rider of the lesson comes slowly, so there is time to see him; the first seconds of a raid
+    // and the whole night run slower too, so a person can react
+    const slow = coach.step === 'false' ? 0.4 : g.night && !g.night.until ? 0.55 : g.raid && g.time - g.raid.at < 2.5 ? 0.5 : 1;
+    if (g.night && !g.night.told) { g.night.told = true; sfx.night(); advise('aria', T().c.night, 6000); }
     for (let k = 0; k < speed; k++) S.step(g, dt * slow);
   }
   if (g) {
@@ -878,6 +883,9 @@ function frame(now) {
       if (f.type === 'force') sfx.force();
       if (f.type === 'clue') sfx.clue();
       if (f.type === 'trade') sfx.word();
+      if (f.type === 'clash') sfx.clash();
+      if (f.type === 'fire') sfx.fire();
+      if (f.type === 'raid' && !g.demo) { sfx.drums(); advise('karasai', T().c.raid, 7000); }
     }
     for (const tt of g.toasts.splice(0)) showToast(tt);
     if (!g.demo) {
@@ -912,6 +920,14 @@ function frame(now) {
 
 function showToast(tt) {
   const t = T();
+  // the same news again: count it on the card already shown
+  const sig = tt.key + '|' + (tt.args?.tribe ?? '') + '|' + (tt.text || '');
+  const same = [...toastsEl.children].find((n) => n.dataset.sig === sig && !n.classList.contains('out'));
+  if (same) {
+    same.dataset.n = +(same.dataset.n || 1) + 1;
+    same.querySelector('b').textContent = same.dataset.who + ' ×' + same.dataset.n;
+    return;
+  }
   const who = typeof tt.who === 'number' ? tribeName(tt.who) : t.who[tt.who] || '';
   const text = tt.text || fmt(t.toast[tt.key], tribeName(tt.args?.tribe ?? 0));
   const n = el('div', 'toast');
@@ -921,6 +937,8 @@ function showToast(tt) {
   const said = el('div');
   said.append(el('b', null, who), el('span', null, text));
   n.append(ava, said);
+  n.dataset.sig = sig;
+  n.dataset.who = who;
   toastsEl.append(n);
   // never a wall of news: the oldest goes when there are too many
   const max = window.innerWidth < 700 || window.innerHeight < 500 ? 2 : 3;

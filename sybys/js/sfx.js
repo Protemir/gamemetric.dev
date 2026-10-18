@@ -240,4 +240,9 @@ export const sfx = {
   // the kurultai: the crack of a raised whip, then a low or high note
   whip(yes) { noiseHit(0, 0.04, 3500, 2, 0.6, 'highpass'); noiseHit(0.02, 0.12, 1800, 1.5, 0.2); tone(yes ? 440 : 147, 0.4, 'triangle', 0.07, 0.05, yes ? 1.2 : 0.8); },
   no() { tone(150, 0.12, 'square', 0.05); },
+  // the horde's drums: a heavy beat that quickens
+  drums() { [0, 0.42, 0.78, 1.08, 1.32, 1.52, 1.7, 1.86].forEach((t, k) => { tone(70 - k * 2, 0.35, 'sine', 0.22, t, 0.5); noiseHit(t, 0.12, 180, 1, 0.25, 'lowpass'); }); },
+  clash() { noiseHit(0, 0.18, 3200, 6, 0.4, 'bandpass'); tone(1900, 0.25, 'square', 0.03, 0, 1.3); tone(2600, 0.2, 'triangle', 0.04, 0.02, 0.8); },
+  fire() { noiseHit(0, 0.9, 500, 0.6, 0.3, 'lowpass'); noiseHit(0.1, 0.6, 1400, 1, 0.08); },
+  night() { tone(220, 1.6, 'sine', 0.05, 0, 0.75); tone(330, 1.6, 'sine', 0.035, 0.3, 0.75); },
 };
