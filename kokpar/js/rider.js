@@ -224,6 +224,17 @@ export class Rider {
     this.turn('Neck', AX, -this.lean * 0.7); // голова смотрит вперёд, а не в землю
     this.turn('Spine1', AZ, this.reach * 0.35 * -this.side); // корпус клонится к боку
     if (!this.fallen && dt > 0) this.sway(dt);
+    const dip = this.fallen ? 0 : this.dip || 0;
+    if (!this.fallen) { // крен всего всадника в седле (вокруг продольной оси)
+      this.root.quaternion.copy(this.home.quat).multiply(Qr.setFromAxisAngle(AZ, dip * 0.3 * (this.dipSide || -1))); // таз почти на месте — наклоняется корпус
+    }
+    if (dip > 0.01) {
+      const sd = this.dipSide || -1, arm = sd < 0 ? 'Right' : 'Left', sa = sd < 0 ? -1 : 1;
+      this.turn('Spine1', AZ, dip * 1.0 * sd); this.turn('Spine2', AZ, dip * 0.65 * sd);
+      this.turn('Spine1', AX, dip * 0.35);
+      this.turn('Neck', AX, dip * 0.35);
+      this.turn(arm + 'Arm', AZ, -dip * sa); // рука свисает к земле
+    }
     // рука тянется вниз и вбок: правая (side −1) или левая (+1)
     const arm = this.side < 0 ? 'Right' : 'Left', s = this.side < 0 ? 1 : -1;
     this.turn(arm + 'Arm', AZ, this.reach * 0.5 * s);

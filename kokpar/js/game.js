@@ -30,7 +30,7 @@ const TEXT = {
     fumble: 'Выронил серке!', win: 'Победа', lose: 'Поражение', draw: 'Ничья', again: 'Ещё раз', stamina: 'Сила коня',
     btnTug: 'ВЫРВАТЬ', btnWhip: 'КАМЧА', btnRear: 'СВЕЧКА', mashKey: 'Жми E быстрее!', mashTap: 'Жми ВЫРВАТЬ быстрее!', canTug: '<kbd>E</kbd> — вырвать серке',
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
-    canPass: '<kbd>E</kbd> — взять серке у своего', passMe: 'Пас!',
+    canPass: '<kbd>E</kbd> — взять серке у своего', passMe: 'Пас!', ram: 'Таран!',
     helpTouch: 'Палец слева — куда скакать · ВЫРВАТЬ — отнять серке · КАМЧА — рывок',
     home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!',
     league: 'Лига аулов Жетысу', vs: 'Соперник', play: 'В седло!', next: 'Дальше', retry: 'Ещё раз', champion: 'Чемпион Жетысу!',
@@ -42,7 +42,7 @@ const TEXT = {
     fumble: 'Fumble!', win: 'Victory', lose: 'Defeat', draw: 'Draw', again: 'Play again', stamina: 'Horse stamina',
     btnTug: 'GRAB', btnWhip: 'WHIP', btnRear: 'REAR UP', mashKey: 'Mash E!', mashTap: 'Tap GRAB fast!', canTug: '<kbd>E</kbd> — grab the serke',
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
-    canPass: '<kbd>E</kbd> — take the serke from a teammate', passMe: 'Pass!',
+    canPass: '<kbd>E</kbd> — take the serke from a teammate', passMe: 'Pass!', ram: 'Ram!',
     helpTouch: 'Left thumb — where to ride · GRAB — take the serke · WHIP — burst',
     home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!',
     league: 'Zhetysu village league', vs: 'Opponent', play: 'Ride!', next: 'Next', retry: 'Try again', champion: 'Zhetysu champion!',
@@ -607,7 +607,11 @@ function stepSack(dt) {
   for (const e of ents) {
     if (e.pickCD > 0 || e.stun > 0) continue;
     const d = Math.hypot(e.h.obj.position.x - sack.pos.x, e.h.obj.position.z - sack.pos.z);
-    if (d < 4) { e.reach = Math.max(e.reach, 1 - d / 4); }
+    if (d < 5 && sack.pos.y < 1 && !e.r.fallen) {
+      e.dip = Math.max(e.dip || 0, Math.min(1, 1.25 - d / 4));
+      V.set(sack.pos.x - e.h.obj.position.x, 0, sack.pos.z - e.h.obj.position.z);
+      e.dipSide = Math.sign(Math.cos(e.h.yaw) * V.x - Math.sin(e.h.yaw) * V.z) || 1;
+    }
     if (d < bd && sack.pos.y < 1) { bd = d; best = e; }
   }
   if (best) giveSack(best);
@@ -618,14 +622,17 @@ function onHit(a, b, imp, nx, nz) {
     if (ea && eb && ea.team !== eb.team && imp > 6.2) {
       const va = a.v * (Math.sin(a.yaw) * nx + Math.cos(a.yaw) * nz), vb = b.v * (Math.sin(b.yaw) * nx + Math.cos(b.yaw) * nz);
       const victim = va > -vb ? eb : ea, s = victim === eb ? 1 : -1;
-      if (rnd() < (sack.carrier === victim ? 0.35 : 0.14)) fallRider(victim, nx * s, nz * s);
+      const ram = (victim === eb ? ea : eb).sprint > 0; // таран на камче
+      if (rnd() < (sack.carrier === victim ? 0.35 : 0.14) * (ram ? 1.6 : 1)) fallRider(victim, nx * s, nz * s);
     }
   }
   // сильный толчок в несущего — может выронить мешок
   for (const [hit, by] of [[a, b], [b, a]]) {
     const e = ents.find((x) => x.h === hit), o = ents.find((x) => x.h === by);
     if (!e || !o || sack.carrier !== e || o.team === e.team || imp < 5) continue;
-    if (rnd() < 0.35) {
+    const ram = o.sprint > 0;
+    if (rnd() < (ram ? 0.6 : 0.35)) {
+      if (ram && !SIM && o.me) banner(tr('ram'), null, 0.9);
       const s = hit === a ? -1 : 1;
       dropSack(sack.pos.clone(), new THREE.Vector3(nx * s * 3 + Math.sin(e.h.yaw) * e.h.v * 0.4, 2.5, nz * s * 3 + Math.cos(e.h.yaw) * e.h.v * 0.4));
       e.pickCD = 1.2;
@@ -663,7 +670,7 @@ function step(dt) {
     for (const e of ents) { e.h.gait = 0; e.h.steer = 0; }
   }
   for (const e of ents) {
-    e.reach *= Math.exp(-dt * 4); stepFallen(e, dt); stepEnt(e, dt);
+    e.reach *= Math.exp(-dt * 4); e.dip = (e.dip || 0) * Math.exp(-dt * 3.5); stepFallen(e, dt); stepEnt(e, dt);
     if (e.throw) e.throw.t = e.throw.aiming ? Math.min(WIND * 0.95, e.throw.t + dt) : e.throw.t + dt;
     e.throwT = e.throw ? e.throw.t : e.throwT >= 0 && e.throwT < 0.8 ? e.throwT + dt : -1; // для позы: замах и доводка рук
   }
@@ -680,6 +687,7 @@ function step(dt) {
   }
   for (const e of ents) {
     e.r.throwT = e.throwT ?? -1; e.r.carrying = sack.carrier === e;
+    e.r.dip = e.dip || 0; e.r.dipSide = e.dipSide || -1;
     e.r.update(dt, e.h.v, e.reach, e.reachSide);
     e.ring.position.x = e.h.obj.position.x; e.ring.position.z = e.h.obj.position.z;
   }
