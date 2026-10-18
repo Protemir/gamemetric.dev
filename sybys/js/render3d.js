@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/three/loaders/GLTFLoader.js';
 import * as SkeletonUtils from '../vendor/three/utils/SkeletonUtils.js';
+import { mergeGeometries } from '../vendor/three/utils/BufferGeometryUtils.js';
 import { EffectComposer } from '../vendor/three/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/three/postprocessing/RenderPass.js';
 import { OutputPass } from '../vendor/three/postprocessing/OutputPass.js';
@@ -62,6 +63,132 @@ import { View, TRIBE_RGB, GOLD, tamga } from './render.js';
 import { clamp, rng, valueNoise } from './util.js';
 
 const W = 38.4, D = 21.6; // world size of the map
+
+// felt: a soft mottle, never flat
+function mottle(x, w, h, n, a) {
+  for (let i = 0; i < n; i++) {
+    x.fillStyle = Math.random() < 0.5 ? `rgba(255,255,255,${a})` : `rgba(90,70,50,${a})`;
+    x.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 1 + Math.random() * 3);
+  }
+}
+// the wall: white felt over the lattice above, a patterned reed mat (shi) round the foot, dust at the ground
+function drawWall(x, w, h) {
+  x.fillStyle = '#ece4d2';
+  x.fillRect(0, 0, w, h);
+  mottle(x, w, h, 900, 0.08);
+  x.strokeStyle = 'rgba(120,90,60,0.07)';
+  x.lineWidth = 2;
+  for (let i = -h; i < w + h; i += 18) {
+    x.beginPath(); x.moveTo(i, 0); x.lineTo(i + h * 0.6, h * 0.62); x.stroke();
+    x.beginPath(); x.moveTo(i, h * 0.62); x.lineTo(i + h * 0.6, 0); x.stroke();
+  }
+  const top = Math.round(h * 0.62);
+  x.fillStyle = '#d6c193';
+  x.fillRect(0, top, w, h - top);
+  x.strokeStyle = 'rgba(110,80,40,0.28)';
+  x.lineWidth = 1;
+  for (let i = 0; i < w; i += 3) { x.beginPath(); x.moveTo(i + 0.5, top); x.lineTo(i + 0.5, h); x.stroke(); }
+  // the shi pattern: stepped diamonds in madder red and indigo
+  const mid = top + (h - top) * 0.45, r = (h - top) * 0.32;
+  for (let i = 0; i < w; i += r * 2.4) {
+    for (const [c, k] of [['#8e3a22', 1], ['#2f4a5e', 0.55]]) {
+      x.fillStyle = c;
+      x.beginPath(); x.moveTo(i, mid - r * k); x.lineTo(i + r * k, mid); x.lineTo(i, mid + r * k); x.lineTo(i - r * k, mid); x.closePath(); x.fill();
+    }
+  }
+  x.fillStyle = '#8e3a22';
+  x.fillRect(0, top, w, 3);
+  const dust = x.createLinearGradient(0, h - 14, 0, h);
+  dust.addColorStop(0, 'rgba(80,60,40,0)');
+  dust.addColorStop(1, 'rgba(80,60,40,0.5)');
+  x.fillStyle = dust;
+  x.fillRect(0, h - 14, w, 14);
+}
+// the roof: felt panels, ropes tied over them crosswise, soot near the crown, a shadow under the eave
+function drawRoof(x, w, h) {
+  x.fillStyle = '#e6dcc6';
+  x.fillRect(0, 0, w, h);
+  mottle(x, w, h, 1400, 0.07);
+  x.strokeStyle = 'rgba(140,120,90,0.3)';
+  x.lineWidth = 2;
+  for (let i = 0; i < w; i += w / 8) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); }
+  x.strokeStyle = 'rgba(95,65,40,0.6)';
+  x.lineWidth = 3;
+  for (let i = -w; i < w * 2; i += w / 6) {
+    x.beginPath(); x.moveTo(i, h); x.lineTo(i + w / 4, 0); x.stroke();
+    x.beginPath(); x.moveTo(i, 0); x.lineTo(i + w / 4, h); x.stroke();
+  }
+  const soot = x.createLinearGradient(0, 0, 0, h * 0.3);
+  soot.addColorStop(0, 'rgba(50,40,32,0.55)');
+  soot.addColorStop(1, 'rgba(50,40,32,0)');
+  x.fillStyle = soot;
+  x.fillRect(0, 0, w, h * 0.3);
+  const eave = x.createLinearGradient(0, h * 0.9, 0, h);
+  eave.addColorStop(0, 'rgba(60,45,30,0)');
+  eave.addColorStop(1, 'rgba(60,45,30,0.35)');
+  x.fillStyle = eave;
+  x.fillRect(0, h * 0.9, w, h * 0.1);
+}
+// the crown seen from above: the smoke hole, the crossed arches, the wooden ring
+function drawCrown(x, w, h) {
+  x.fillStyle = '#18110c';
+  x.fillRect(0, 0, w, h);
+  x.strokeStyle = '#9a7650';
+  x.lineWidth = 7;
+  for (const o of [-22, 0, 22]) {
+    x.beginPath(); x.moveTo(w / 2 + o, 6); x.lineTo(w / 2 + o, h - 6); x.stroke();
+    x.beginPath(); x.moveTo(6, h / 2 + o); x.lineTo(w - 6, h / 2 + o); x.stroke();
+  }
+  x.strokeStyle = '#5a3c22';
+  x.lineWidth = 10;
+  x.beginPath(); x.arc(w / 2, h / 2, w / 2 - 6, 0, Math.PI * 2); x.stroke();
+}
+// the door: a carved wooden leaf in red with a gold pattern, in a dark frame
+function drawDoor(x, w, h) {
+  x.fillStyle = '#3e2816';
+  x.fillRect(0, 0, w, h);
+  x.fillStyle = '#b4502a';
+  x.fillRect(6, 6, w - 12, h - 12);
+  x.strokeStyle = '#e2b452';
+  x.lineWidth = 2;
+  x.strokeRect(10, 10, w - 20, h / 2 - 14);
+  x.strokeRect(10, h / 2 + 4, w - 20, h / 2 - 14);
+  for (const cy of [h / 4 + 2, (h * 3) / 4 - 2]) {
+    x.beginPath(); x.moveTo(w / 2, cy - 9); x.lineTo(w / 2 + 9, cy); x.lineTo(w / 2, cy + 9); x.lineTo(w / 2 - 9, cy); x.closePath(); x.stroke();
+  }
+}
+// the band (baskur): ram's-horn curls in light on the clan's colour
+function drawBand(x, w, h) {
+  x.fillStyle = 'rgb(150,150,150)';
+  x.fillRect(0, 0, w, h);
+  x.strokeStyle = '#ffffff';
+  x.lineWidth = 2.5;
+  for (let i = 0; i < w; i += 32) {
+    x.beginPath(); x.arc(i + 10, h / 2, 6, Math.PI * 0.2, Math.PI * 1.6); x.stroke();
+    x.beginPath(); x.arc(i + 22, h / 2, 6, Math.PI * 1.2, Math.PI * 2.6); x.stroke();
+  }
+  x.fillStyle = 'rgba(255,255,255,0.9)';
+  x.fillRect(0, 1, w, 2);
+  x.fillRect(0, h - 3, w, 2);
+}
+// a person: a long coat (chapan), a face, a felt kalpak; standing or sitting on the ground
+function personParts(sit) {
+  const paint = (geo, hex) => {
+    const c = new THREE.Color(hex), n = geo.attributes.position.count, a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+    geo.setAttribute('color', new THREE.BufferAttribute(a, 3));
+    return geo;
+  };
+  const lift = sit ? -0.035 : 0;
+  const coat = sit ? new THREE.CylinderGeometry(0.02, 0.038, 0.05, 7).translate(0, 0.025, 0) : new THREE.CylinderGeometry(0.016, 0.032, 0.085, 7).translate(0, 0.0425, 0);
+  const head = mergeGeometries([
+    paint(new THREE.SphereGeometry(0.016, 7, 5).translate(0, 0.097 + lift, 0), '#c49572').toNonIndexed(),
+    paint(new THREE.CylinderGeometry(0.02, 0.02, 0.006, 8).translate(0, 0.108 + lift, 0), '#2a2018').toNonIndexed(),
+    paint(new THREE.CylinderGeometry(0.006, 0.018, 0.03, 7).translate(0, 0.124 + lift, 0), '#ece6d6').toNonIndexed(),
+  ]);
+  return { coat, head };
+}
+const COATS = ['#7a2a2a', '#2f4a6a', '#5a4a2a', '#3a5a3a', '#6a4a6a', '#8a6a3a', '#4a3a30', '#6a2a1e'];
 const WATER = 0.34;
 const LIE = [70, 36, 86];
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -249,7 +376,7 @@ export class View3D extends View {
     this.veil();
     if (this.lite === 1) {
       if (this.grassMesh) this.grassMesh.visible = false;
-      for (const f of this.folk || []) f.grp.visible = false;
+      for (const m of this.folkMeshes || []) m.visible = false;
       for (const s of this.sheep || []) s.traverse((m) => { if (m.isMesh) m.castShadow = false; });
       this.sharp = Math.min(this.sharp || 2, 1.5);
     } else {
@@ -807,42 +934,93 @@ export class View3D extends View {
   // people about the auls: a coat, a head, walking slowly round their yurts
   buildFolk(g) {
     const rand = rng(g.seed * 11 + 3);
-    const coatG = new THREE.CylinderGeometry(0.018, 0.03, 0.08, 6).translate(0, 0.04, 0);
-    const headG = new THREE.SphereGeometry(0.016, 6, 5).translate(0, 0.095, 0);
-    const coats = ['#7a2a2a', '#2f4a6a', '#5a4a2a', '#3a5a3a', '#6a4a6a', '#8a6a3a'];
     this.folk = [];
     for (const r of g.map.regions) {
       const many = r.id === 0 ? 6 : g.map.capitals.includes(r.id) ? 4 : rand() < 0.6 ? 2 : 0;
-      for (let k = 0; k < many; k++) {
-        const grp = new THREE.Group();
-        const coat = new THREE.Mesh(coatG, new THREE.MeshStandardMaterial({ color: coats[Math.floor(rand() * coats.length)], roughness: 1 }));
-        const head = new THREE.Mesh(headG, new THREE.MeshStandardMaterial({ color: '#d9a882', roughness: 0.8 }));
-        coat.castShadow = true;
-        grp.add(coat, head);
-        grp.scale.setScalar(1.6);
-        this.group.add(grp);
-        this.folk.push({ grp, cx: r.x, cy: r.y, rad: (2.6 + rand() * 3) * K, a: rand() * 6.28, v: (rand() < 0.5 ? -1 : 1) * (0.05 + rand() * 0.08) });
-      }
+      for (let k = 0; k < many; k++) this.folk.push({ cx: r.x, cy: r.y, rad: (2.6 + rand() * 3) * K, a: rand() * 6.28, v: (rand() < 0.5 ? -1 : 1) * (0.05 + rand() * 0.08), coat: COATS[Math.floor(rand() * COATS.length)] });
     }
+    const { coat, head } = personParts(false);
+    const coats = new THREE.InstancedMesh(coat, new THREE.MeshStandardMaterial({ roughness: 1 }), this.folk.length);
+    const heads = new THREE.InstancedMesh(head, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), this.folk.length);
+    const c = new THREE.Color();
+    this.folk.forEach((f, k) => coats.setColorAt(k, c.set(f.coat)));
+    for (const m of [coats, heads]) { m.castShadow = true; m.frustumCulled = false; this.group.add(m); }
+    this.folkMeshes = [coats, heads];
+    if (this.lite) for (const m of this.folkMeshes) m.visible = false;
   }
-
   // campfires at the Orda and the great auls: a flickering flame you can see from afar
   buildFires(g) {
     this.fires = [];
+    this.fireGlows = [];
     const tex = this.puffTexture();
-    for (const id of [0, ...g.map.capitals]) {
-      const r = g.map.regions[id];
-      const x = r.x + 2.5 * K, y = r.y + 2.2 * K;
+    const glowTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,170,80,0.85)');
+      gr.addColorStop(0.4, 'rgba(255,120,40,0.3)');
+      gr.addColorStop(1, 'rgba(255,100,30,0)');
+      x.fillStyle = gr;
+      x.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(c);
+    })();
+    this.hearths = [];
+    const sites = [0, ...g.map.capitals].map((id) => {
+      const at = this.freeSpot(g, g.map.regions[id], 2.6, 'fire');
+      if (at) this.hearths.push(at);
+      return at;
+    }).filter(Boolean);
+    const per = 4;
+    const { coat, head } = personParts(true);
+    const coats = new THREE.InstancedMesh(coat, new THREE.MeshStandardMaterial({ roughness: 1 }), sites.length * per);
+    const heads = new THREE.InstancedMesh(head, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), sites.length * per);
+    const stones = new THREE.InstancedMesh(new THREE.TorusGeometry(0.075, 0.02, 5, 10).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#6c665c', roughness: 1 }), sites.length);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(1.6, 1.6, 1.6), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
+    sites.forEach(([x, y], i) => {
+      const X = toWorldX(x), Z = toWorldZ(y), H = this.height(x, y);
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: '#ffae4a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-      sp.position.set(toWorldX(x), this.height(x, y) + 0.08, toWorldZ(y));
+      sp.position.set(X, H + 0.08, Z);
       sp.scale.setScalar(0.3);
       const logs = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.03, 7), new THREE.MeshStandardMaterial({ color: '#2a1a10' }));
-      logs.position.set(sp.position.x, sp.position.y - 0.07, sp.position.z);
-      this.group.add(sp, logs);
+      logs.position.set(X, H + 0.01, Z);
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6 }));
+      glow.position.set(X, H + 0.015, Z);
+      this.group.add(sp, logs, glow);
       this.fires.push(sp);
-    }
+      this.fireGlows.push(glow);
+      m4.compose(p.set(X, H + 0.005, Z), q.identity(), new THREE.Vector3(1, 1, 1));
+      stones.setMatrixAt(i, m4);
+      for (let k = 0; k < per; k++) {
+        const a = (k / per) * Math.PI * 2 + i;
+        p.set(X + Math.cos(a) * 0.2, H, Z + Math.sin(a) * 0.2);
+        q.setFromAxisAngle(up, -a - Math.PI / 2);
+        m4.compose(p, q, s);
+        coats.setMatrixAt(i * per + k, m4);
+        heads.setMatrixAt(i * per + k, m4);
+        coats.setColorAt(i * per + k, c.set(COATS[(i * 3 + k) % COATS.length]));
+      }
+    });
+    for (const m of [coats, heads, stones]) { m.castShadow = true; m.receiveShadow = true; this.group.add(m); }
   }
 
+  // a free place near an aul's middle: not on a yurt, the river or a hearth already there
+  freeSpot(g, r, dist, kind) {
+    const yurts = this.deco[r.id].yurts;
+    const taken = [...(this.hearths || [])];
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2 + (kind === 'post' ? 1.3 : 0.4);
+      for (const dd of [dist, dist + 1.2, dist + 2.4]) {
+        const x = r.x + Math.cos(a) * dd * K * 1.2, y = r.y + Math.sin(a) * dd * K;
+        if (x < 2 || y < 2 || x > GW - 2 || y > GH - 2) continue;
+        const i = Math.round(y) * GW + Math.round(x);
+        if (g.map.river[i] || g.map.cell[i] !== r.id || this.height(x, y) < WATER + 0.1) continue;
+        if (yurts.some((u) => Math.hypot(u.x - x, u.y - y) < (u.big ? 4.2 : u.cap ? 3.4 : 2.6) * K)) continue;
+        if (taken.some(([tx, ty]) => Math.hypot(tx - x, ty - y) < 2.2 * K)) continue;
+        return [x, y];
+      }
+    }
+    return null;
+  }
   // a pair of eagles circling high over the steppe; their shadows slide over the ground
   buildBirds() {
     this.birds = [];
@@ -904,66 +1082,57 @@ export class View3D extends View {
     // two yurts to a pasture, more at the great auls: the map reads better with less
     for (const r of g.map.regions) this.deco[r.id].yurts.forEach((y, k) => { if (k < 2 || r.id === 0 || g.map.capitals.includes(r.id)) list.push({ ...y, r }); });
     this.yurtList = list;
-    const wallG = new THREE.CylinderGeometry(1, 1, 0.7, 18, 1, true).translate(0, 0.35, 0);
-    const roofG = new THREE.LatheGeometry([new THREE.Vector2(1.06, 0.68), new THREE.Vector2(0.75, 1.02), new THREE.Vector2(0.3, 1.3), new THREE.Vector2(0.2, 1.34), new THREE.Vector2(0.0, 1.34)], 18);
-    const doorG = new THREE.BoxGeometry(0.42, 0.56, 0.1).translate(0, 0.28, 0.98);
-    const bandG = new THREE.CylinderGeometry(1.012, 1.012, 0.12, 18, 1, true).translate(0, 0.5, 0);
-    const mk = (geo, mat) => {
+    const seg = this.mobile ? 20 : 28;
+    const wallG = new THREE.CylinderGeometry(1, 1, 0.62, seg, 1, true).translate(0, 0.31, 0);
+    const roofG = new THREE.LatheGeometry([[1.05, 0.6], [0.98, 0.68], [0.84, 0.82], [0.66, 0.96], [0.46, 1.08], [0.27, 1.16], [0.25, 1.17]].map(([a, b]) => new THREE.Vector2(a, b)), seg);
+    const crownG = new THREE.CircleGeometry(0.255, 20).rotateX(-Math.PI / 2).translate(0, 1.172, 0);
+    const ringG = new THREE.TorusGeometry(0.255, 0.03, 5, 20).rotateX(Math.PI / 2).translate(0, 1.18, 0);
+    const doorG = new THREE.BoxGeometry(0.36, 0.5, 0.06).translate(0, 0.25, 0.99);
+    const bandG = new THREE.CylinderGeometry(1.012, 1.012, 0.09, seg, 1, true).translate(0, 0.54, 0);
+    const mk = (geo, mat, shadow = true) => {
       const m = new THREE.InstancedMesh(geo, mat, list.length);
-      m.castShadow = true;
+      m.castShadow = shadow;
       m.receiveShadow = true;
       this.group.add(m);
       return m;
     };
-    const walls = mk(wallG, new THREE.MeshStandardMaterial({ map: this.feltTexture(), roughness: 1, side: THREE.DoubleSide }));
-    const roofs = mk(roofG, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95 }));
-    const doors = mk(doorG, new THREE.MeshStandardMaterial({ color: '#8a3b22', roughness: 0.8 }));
-    const bands = mk(bandG, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, side: THREE.DoubleSide }));
+    const tex = (draw, w, h, rx = 1) => {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      draw(c.getContext('2d'), w, h);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.wrapS = THREE.RepeatWrapping;
+      t.repeat.set(rx, 1);
+      t.anisotropy = 4;
+      return t;
+    };
+    const walls = mk(wallG, new THREE.MeshStandardMaterial({ map: tex(drawWall, 512, 128, 3), roughness: 1, side: THREE.DoubleSide }));
+    const roofs = mk(roofG, new THREE.MeshStandardMaterial({ map: tex(drawRoof, 512, 256, 1), roughness: 0.95, side: THREE.DoubleSide }));
+    const crowns = mk(crownG, new THREE.MeshStandardMaterial({ map: tex(drawCrown, 128, 128), roughness: 0.9 }), false);
+    const rings = mk(ringG, new THREE.MeshStandardMaterial({ color: '#4a3220', roughness: 0.8 }));
+    const doors = mk(doorG, new THREE.MeshStandardMaterial({ map: tex(drawDoor, 64, 96), roughness: 0.75 }));
+    const bands = mk(bandG, new THREE.MeshStandardMaterial({ map: tex(drawBand, 256, 32, 4), roughness: 0.9, side: THREE.DoubleSide }), false);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
     list.forEach((y, k) => {
       const size = y.big ? 0.62 : y.cap ? 0.44 : 0.3;
       p.set(toWorldX(y.x), this.height(y.x, y.y) - 0.02, toWorldZ(y.y));
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), (Math.sin(k * 12.9) * 0.6));
+      // doors face south, more or less, as they do in the steppe
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.sin(k * 12.9) * 0.6);
       s.set(size, size, size);
       m4.compose(p, q, s);
-      walls.setMatrixAt(k, m4);
-      roofs.setMatrixAt(k, m4);
-      doors.setMatrixAt(k, m4);
-      bands.setMatrixAt(k, m4);
+      for (const m of [walls, roofs, crowns, rings, doors, bands]) m.setMatrixAt(k, m4);
+      // felt goes from new white to smoke-grey; the khan's own yurt is white
+      const age = y.big ? 0 : (Math.sin(k * 7.31) * 0.5 + 0.5) * 0.16;
       const rgb = y.r.tribe < 0 ? GOLD : TRIBE_RGB[y.r.tribe];
-      const felt = [0.9, 0.85, 0.76];
-      const dome = y.big ? [0.86, 0.62, 0.18] : felt.map((v, j) => v * 0.55 + (rgb[j] / 255) * 0.45);
-      col.setRGB(...dome, THREE.SRGBColorSpace);
+      col.setRGB(...[0, 1, 2].map((j) => (1 - age) * (0.92 + (rgb[j] / 255) * 0.08)), THREE.SRGBColorSpace);
       roofs.setColorAt(k, col);
+      walls.setColorAt(k, col);
+      // the band under the roof carries the clan's colour (gold for the Orda)
       col.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, THREE.SRGBColorSpace);
       bands.setColorAt(k, col);
     });
     this.yurtRoofs = roofs;
-  }
-
-  // the felt wall: cream felt over a wooden lattice, a patterned band at the top
-  feltTexture() {
-    const c = document.createElement('canvas');
-    c.width = 256;
-    c.height = 64;
-    const x = c.getContext('2d');
-    x.fillStyle = '#ece1c8';
-    x.fillRect(0, 0, 256, 64);
-    x.strokeStyle = 'rgba(120,80,40,0.35)';
-    x.lineWidth = 2;
-    for (let i = -64; i < 320; i += 16) {
-      x.beginPath(); x.moveTo(i, 64); x.lineTo(i + 40, 0); x.stroke();
-      x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 40, 64); x.stroke();
-    }
-    x.fillStyle = '#8a3b22';
-    x.fillRect(0, 0, 256, 7);
-    x.fillStyle = '#d8b04a';
-    for (let i = 0; i < 256; i += 16) x.fillRect(i + 4, 2, 8, 3);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.wrapS = THREE.RepeatWrapping;
-    t.repeat.set(3, 1);
-    return t;
   }
 
   // a ring of gold on the ground round an aul that is the khan's
@@ -1137,6 +1306,33 @@ export class View3D extends View {
         }
       }
     }
+    // a hitching post at the Orda and each great aul, two horses tied to it, heads low
+    const postG = new THREE.CylinderGeometry(0.012, 0.014, 0.17, 6).translate(0, 0.085, 0);
+    const railG = new THREE.CylinderGeometry(0.009, 0.009, 0.42, 6).rotateZ(Math.PI / 2).translate(0, 0.15, 0);
+    const posts = [0, ...map.capitals].map((id) => this.freeSpot(g, map.regions[id], 3.4, 'post')).filter(Boolean);
+    const wood = new THREE.MeshStandardMaterial({ color: '#5a3e26', roughness: 0.9 });
+    const pm = new THREE.InstancedMesh(postG, wood, posts.length * 2), rm = new THREE.InstancedMesh(railG, wood, posts.length);
+    const m4p = new THREE.Matrix4(), qp = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
+    posts.forEach(([x, y], i) => {
+      const X = toWorldX(x), Z = toWorldZ(y), H = this.height(x, y), yaw = rand() * 6.28;
+      qp.setFromAxisAngle(up, yaw);
+      const ax = Math.cos(yaw), az = -Math.sin(yaw);
+      for (const sgn of [-1, 1]) pm.setMatrixAt(i * 2 + (sgn > 0 ? 1 : 0), m4p.compose(new THREE.Vector3(X + ax * 0.2 * sgn, H, Z + az * 0.2 * sgn), qp, one));
+      rm.setMatrixAt(i, m4p.compose(new THREE.Vector3(X, H, Z), qp, one));
+      if (!MODELS.horse) return;
+      for (let k = 0; k < (this.mobile ? 1 : 2); k++) {
+        const o = this.makeHorse(['#7a4a2a', '#3a2418', '#c9a06a', '#efe8dc'][Math.floor(rand() * 4)]);
+        const off = (k - 0.5) * 0.24;
+        // standing square to the rail, nose to it
+        o.root.position.set(X + ax * off + az * 0.2, H, Z + az * off - ax * 0.2);
+        o.root.rotation.y = yaw + Math.PI;
+        o.root.scale.multiplyScalar(1.3);
+        o.play(rand() < 0.5 ? 'Eating' : 'Idle_Headlow', rand());
+        this.group.add(o.root);
+        this.mixers.push(o.mixer);
+      }
+    });
+    for (const m of [pm, rm]) { m.castShadow = true; m.receiveShadow = true; this.group.add(m); }
   }
 
   makeHorse(coat) {
@@ -1289,7 +1485,7 @@ export class View3D extends View {
       const d = sp.userData;
       d.t = (d.t + dt / 3.2) % 1;
       const size = d.y.big ? 0.62 : d.y.cap ? 0.44 : 0.3;
-      sp.position.set(toWorldX(d.y.x) + d.t * 0.35, this.height(d.y.x, d.y.y) + size * 1.35 + d.t * 0.9, toWorldZ(d.y.y) - d.t * 0.1);
+      sp.position.set(toWorldX(d.y.x) + d.t * 0.35, this.height(d.y.x, d.y.y) + size * 1.2 + d.t * 0.9, toWorldZ(d.y.y) - d.t * 0.1);
       sp.scale.setScalar(0.12 + d.t * 0.35);
       sp.material.opacity = 0.45 * Math.sin(d.t * Math.PI);
     }
@@ -1336,16 +1532,23 @@ export class View3D extends View {
     this.syncRiders(g, now, dt);
     this.stepSmoke(g, dt);
     this.shaderTime.value = now / 1000;
-    for (const f of this.folk || []) {
-      f.a += f.v * dt;
-      const x = f.cx + Math.cos(f.a) * f.rad, y = f.cy + Math.sin(f.a) * f.rad * 0.7;
-      f.grp.position.set(toWorldX(x), this.height(x, y) + Math.abs(Math.sin(now / 160 + f.a * 9)) * 0.01, toWorldZ(y));
-      f.grp.rotation.y = -f.a + (f.v > 0 ? 0 : Math.PI);
+    if (this.folkMeshes && this.folkMeshes[0].visible) {
+      const m4 = this.tmpM4 || (this.tmpM4 = new THREE.Matrix4()), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(1.6, 1.6, 1.6), up = new THREE.Vector3(0, 1, 0);
+      this.folk.forEach((f, k) => {
+        f.a += f.v * dt;
+        const x = f.cx + Math.cos(f.a) * f.rad, y = f.cy + Math.sin(f.a) * f.rad * 0.7;
+        p.set(toWorldX(x), this.height(x, y) + Math.abs(Math.sin(now / 160 + f.a * 9)) * 0.01, toWorldZ(y));
+        q.setFromAxisAngle(up, -f.a + (f.v > 0 ? 0 : Math.PI));
+        m4.compose(p, q, s);
+        for (const m of this.folkMeshes) m.setMatrixAt(k, m4);
+      });
+      for (const m of this.folkMeshes) m.instanceMatrix.needsUpdate = true;
     }
     for (const [k, f] of (this.fires || []).entries()) {
       const fl = 0.26 + Math.sin(now / 70 + k) * 0.03 + Math.sin(now / 37 + k * 3) * 0.025;
       f.scale.set(fl, fl * 1.35, fl);
       f.material.opacity = 0.8 + Math.sin(now / 53 + k) * 0.15;
+      if (this.fireGlows?.[k]) this.fireGlows[k].material.opacity = 0.5 + Math.sin(now / 61 + k * 2) * 0.12 + Math.sin(now / 23 + k) * 0.06;
     }
     for (const b of this.birds || []) {
       b.a += b.v * dt;
