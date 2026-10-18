@@ -69,10 +69,10 @@ export function record(g) {
   const earned = {
     first: true,
     uniter: r.end === 'uniter',
-    friend: r.yes >= 3,
+    friend: r.yes >= 3 && r.end !== 'vanish',
     sleuth: r.nailed,
     liecatcher: g.caught >= 10,
-    noSabres: g.forceRides === 0 && r.yes >= 2,
+    noSabres: g.forceRides === 0 && r.yes >= 2 && (r.end === 'uniter' || r.end === 'mediator'),
     iron: r.end === 'ironHorde',
     streak3: m.streak >= 3,
     allEnds: m.ends.length >= 6,

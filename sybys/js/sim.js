@@ -557,7 +557,8 @@ export function startRaid(g, from = null) {
   const land = regions.filter((r) => r.tribe >= 0).sort((a, b) => edge(a) - edge(b));
   const entry = land[0];
   const n = g.season === 1 ? 4 : 6;
-  const targets = land.slice(0, n + 2).sort(() => g.rand() - 0.5).slice(0, n);
+  // the entry pasture is where they ride in from, not a target: it would burn in the first instant
+  const targets = land.slice(1, n + 3).sort(() => g.rand() - 0.5).slice(0, n);
   g.raid = { side, until: Infinity, at: g.time };
   targets.forEach((t, k) => {
     const rd = spawnRider(g, 'raider', entry.id, t.id);

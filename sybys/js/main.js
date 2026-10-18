@@ -32,7 +32,7 @@ function watchSpeed(dt) {
   if (perf.t < 4) return;
   perf.done = true;
   const fps = perf.k / perf.t;
-  if (fps < 20 || q.has('forceLite')) downgrade(fps);
+  if ((perf.lighter && fps < 14) || q.has('forceLite')) downgrade(fps);
   else if (fps < 40 && !perf.lighter && view.lighter) {
     // one more look after making it lighter
     perf.lighter = true;
@@ -164,6 +164,7 @@ function tips(now) {
   }
   coach.votes = v;
   // a lie left a mark: Aria offers to look
+  if (coach.until && now < coach.until) return; // someone is speaking: let them finish
   if (!coach.markTold && g.marks.size && S.canAct(g, 'aria') && [...g.marks].some((i) => !g.found.has(i))) {
     coach.markTold = true;
     look.hand = [...g.marks].find((i) => !g.found.has(i));
@@ -244,7 +245,9 @@ function startScreen() {
   chron.onclick = () => chronicle(startScreen);
   const lng = el('button', 'link', t.langBtn);
   lng.onclick = () => { setLang(lang === 'ru' ? 'en' : 'ru'); document.documentElement.lang = lang; startScreen(); };
-  row.append(chron, lng);
+  const gfx = el('button', 'link', view.is3d ? t.gfx2d : t.gfx3d);
+  gfx.onclick = () => { store.set('sybys.lite', view.is3d); location.search = view.is3d ? '?2d' : '?3d'; };
+  row.append(chron, gfx, lng);
   box.append(row);
   // the look of the steppe: opened by glory
   const chips = el('div', 'styles');
@@ -256,6 +259,10 @@ function startScreen() {
     chips.append(c);
   }
   box.append(chips);
+  const rot = el('p', 'rotate');
+  rot.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>';
+  rot.append(t.rotate);
+  box.append(rot);
   ui.classList.toggle('cine', live);
   ui.replaceChildren(box);
 }
@@ -302,53 +309,6 @@ function chronicle(back) {
 // a ram's-horn ornament (qoshqar müiz) under the title
 const ORNAMENT = '<svg viewBox="0 0 240 28" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M120 22c-8 0-12-6-12-10s4-8 8-6-2 6-4 4"/><path d="M120 22c8 0 12-6 12-10s-4-8-8-6 2 6 4 4"/><path d="M104 14H20M136 14h84"/><path d="M20 14c-6 0-8-6-4-8s6 2 4 4M220 14c6 0 8-6 4-8s-6 2-4 4"/><circle cx="120" cy="5" r="2.2" fill="currentColor"/></g></svg>';
 
-// three short cards: what happened, who is with you, what to do
-function intro(page) {
-  const t = T();
-  backdrop();
-  const box = el('div', 'screen intro');
-  const go = el('button', 'big', page < 3 ? t.next : t.begin);
-  go.onclick = () => (page < 3 ? intro(page + 1) : start());
-  if (page === 1) {
-    if (!view.setCinema) {
-      const pic = el('div', 'pic');
-      pic.innerHTML = LONE_HORSE;
-      box.append(pic);
-    }
-    box.append(el('p', 'line', t.intro1));
-  }
-  if (page === 2) {
-    for (const [who, line] of [['aria', t.intro2], ['karasai', t.intro3]]) {
-      const row = el('div', 'speaker');
-      const ava = el('div', 'ava');
-      ava.innerHTML = face(who);
-      const said = el('div', 'said');
-      said.append(el('b', null, t.who[who]), el('p', null, line));
-      row.append(ava, said);
-      box.append(row);
-    }
-  }
-  if (page === 3) {
-    box.append(el('h2', null, t.goalTitle), el('p', 'line', t.goalText));
-    const bars = el('div', 'goalbars');
-    [0.62, 0.4, 0.58].forEach((v, k) => {
-      const b = el('div', 'gb' + (v >= S.VOTE_AT ? ' ok' : ''));
-      b.style.setProperty('--c', `rgb(${TRIBE_RGB[k].join(',')})`);
-      const ava = el('div', 'ava');
-      ava.innerHTML = face(k);
-      b.append(ava, el('span', null, tribeName(k)), Object.assign(el('div', 'bar'), { innerHTML: `<i style="width:${v * 100}%"></i>` }), el('em', null, v >= S.VOTE_AT ? '✓' : '…'));
-      bars.append(b);
-    });
-    box.append(bars, el('p', 'small', t.goalHow));
-  }
-  box.append(go);
-  if (page < 3) {
-    const sk = el('button', 'link', t.skip);
-    sk.onclick = () => intro(3);
-    box.append(sk);
-  }
-  ui.replaceChildren(box);
-}
 
 // —— how to play: the game plays itself for forty seconds, one line of words at a time ——
 let tourState = null;
@@ -459,6 +419,13 @@ function bestFirstTarget() {
   return nb.sort((a, b) => g.t[a] - g.t[b])[0] ?? -1;
 }
 
+// small drawn marks on a clan's chip: a grudge (a torn flag), fear (a blade), whispers (two mouths)
+const MARKS = {
+  g: '<svg viewBox="0 0 12 12"><path d="M3 11V1.5h6l-1.5 2.2L9 6H3" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>',
+  f: '<svg viewBox="0 0 12 12"><path d="M2 10 9.5 2.5M8 1.5l2.5 2.5M3 8.5l1.5 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  t: '<svg viewBox="0 0 12 12"><path d="M1.5 4.5a2.5 2 0 0 1 5 0 2.5 2 0 0 1-3 2l-1.5 1V6M6.5 7.5a2.5 2 0 0 0 4-1.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+};
+
 // —— HUD ——
 
 function buildHud() {
@@ -554,30 +521,37 @@ function togglePause(force) {
 function updateHud() {
   if (!g || g.demo) return;
   const t = T();
-  $('horses').textContent = `${g.horses}/${S.HORSE_MAX}`;
+  $('horses').textContent = g.horses > S.HORSE_MAX ? `${S.HORSE_MAX}+${g.horses - S.HORSE_MAX}` : `${g.horses}/${S.HORSE_MAX}`;
   if (g.horses > lastHorses && lastHorses >= 0) { const hc = $('horsesChip'); hc.classList.remove('gain'); void hc.offsetWidth; hc.classList.add('gain'); }
   lastHorses = g.horses;
   $('regen').style.width = g.horses >= S.HORSE_MAX ? '100%' : `${(g.horseT / S.HORSE_EVERY) * 100}%`;
   $('seasonBar').style.width = `${Math.min(100, (g.clock / S.SEASON) * 100)}%`;
   const left = Math.max(0, Math.ceil(S.SEASON - g.clock));
   const v = S.kurultai(g);
-  $('seasonLbl').textContent = g.hold ? t.clockHold : (g.season > 1 ? t.season2 + ' · ' : '') + t.clock(`${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`, v.yes);
+  const mm = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  $('seasonLbl').textContent = g.hold ? t.clockHold : window.innerWidth < 900 ? t.clockShort(mm, v.yes) : (g.season > 1 ? t.season2 + ' · ' : '') + t.clock(mm, v.yes);
   $('seasonChip').classList.toggle('win', v.yes >= 2);
   const chips = $('tribes').children;
   for (let k = 0; k < 3; k++) {
     chips[k].querySelector('i').style.width = `${v.votes[k].trust * 100}%`;
     chips[k].classList.toggle('ok', v.votes[k].yes);
     const tr = g.tribes[k];
-    chips[k].querySelector('.fear').textContent = (tr.grievance ? '⚑' : '') + (tr.fear > 0.25 ? '⚔' : '') + (tr.talks ? '☍' : '');
+    const marks = (tr.grievance ? 'g' : '') + (tr.fear > 0.25 ? 'f' : '') + (tr.talks ? 't' : '');
+    const fe = chips[k].querySelector('.fear');
+    if (fe.dataset.m !== marks) { fe.dataset.m = marks; fe.innerHTML = [...marks].map((ch) => MARKS[ch]).join(''); }
   }
   for (const b of actionsEl.children) {
     b.classList.toggle('sel', b.dataset.key === action);
     b.classList.toggle('off', !S.canAct(g, b.dataset.key));
+    const wait = b.dataset.key === 'karasai' ? g.karasaiCD : b.dataset.key === 'aria' ? g.aria.busy : b.dataset.key === 'zaltyr' ? g.zaltyr.busy : 0;
+    let cd = b.querySelector('.cdn');
+    if (wait > 0.5) { if (!cd) { cd = el('span', 'cdn'); b.append(cd); } cd.textContent = Math.ceil(wait) + (lang === 'ru' ? 'с' : 's'); } else if (cd) cd.remove();
     // Zaltyr rides with the khan from autumn on
     if (b.dataset.key === 'zaltyr') b.hidden = g.season < 2 || !!g.flags.noScout;
   }
   look.actIcon = '· ' + T()[action];
   look.ordaName = T().hintOrda;
+  look.trustTag = T().trustTag;
   $('speedBtn').textContent = '×' + speed;
   const pi = paused ? 'play' : 'pause', si = sound.on ? 'soundOn' : 'soundOff';
   if ($('pauseBtn').dataset.i !== pi) { $('pauseBtn').dataset.i = pi; $('pauseBtn').innerHTML = ICONS[pi]; }
@@ -681,8 +655,9 @@ function pointer(e) {
   if (!g || g.phase !== 'map' || paused || tourState) return;
   audioInit();
   const px = e.clientX, py = e.clientY;
-  const rider = view.riderAt(g, px, py);
-  if (rider && ['false', 'tribe', 'raider', 'envoy'].includes(rider.kind)) { tapRider(rider.id); return; }
+  // the riders worth tapping are found generously; an honest messenger only when the tap is right on him
+  const rider = view.riderAt(g, px, py, ['false', 'raider', 'envoy']) || view.riderAt(g, px, py, ['tribe'], 16);
+  if (rider) { tapRider(rider.id); return; }
   const mark = coach.step === 'false' ? -1 : markAt(px, py);
   if (mark >= 0 && (action === 'aria' || S.canAct(g, 'aria') || coach.step === 'aria')) { doAction('aria', mark); return; }
   const id = view.regionAt(g, px, py);
@@ -756,6 +731,11 @@ function showEvent() {
     b.disabled = !c.ok;
     b.append(el('b', null, label), el('small', null, fmt(note, ...names)));
     if (c.cost) { const cs = el('span', 'cost'); cs.innerHTML = ICONS.horse + ' ' + c.cost; b.append(cs); }
+    if (!c.ok) {
+      const why = g.horses < c.cost ? t.whyOff.horses(c.cost) : t.whyOff.aria;
+      b.title = why;
+      b.append(el('small', 'why', why));
+    }
     b.onclick = () => pickEvent(c.key);
     row.append(b);
   }
@@ -821,7 +801,7 @@ function showKurultai(council = false) {
     if (k < seats.length) {
       const yes = v.votes[k].yes;
       seats[k].classList.add(yes ? 'yes' : 'no');
-      seats[k].querySelector('.whip').textContent = yes ? '⬆' : '⬇';
+      seats[k].querySelector('.whip').textContent = yes ? '▲\uFE0E' : '▼\uFE0E';
       seats[k].append(el('em', null, yes ? t.kYes : t.kNo));
       if (!yes) {
         const tr = g.tribes[v.votes[k].tribe];
@@ -996,7 +976,7 @@ function frame(now) {
       if (f.type === 'clash') sfx.clash();
       if (f.type === 'dust' && !g.demo) sfx.distant();
       if (f.type === 'fire') sfx.fire();
-      if (f.type === 'raid' && !g.demo) { sfx.drums(); advise('karasai', T().c.raid, 7000); }
+      if (f.type === 'raid' && !g.demo) { sfx.drums(); if (!tourState) advise('karasai', T().c.raid, 7000); }
     }
     for (const tt of g.toasts.splice(0)) showToast(tt);
     tourTick(now);
@@ -1015,6 +995,8 @@ function frame(now) {
         hintEl.classList.remove('on');
         toastsEl.replaceChildren();
         hush();
+        look.hand = -1;
+        look.pulse = null;
         showKurultai(g.phase === 'council');
       }
     }
@@ -1077,7 +1059,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === '2') action = 'aria';
   if (e.key === '3' && g.season > 1) action = 'zaltyr';
   if (e.key === (g.season > 1 ? '4' : '3')) action = 'karasai';
-  if (e.key === ' ') togglePause();
+  if (e.key === ' ') { e.preventDefault(); document.activeElement?.blur?.(); togglePause(); }
   updateHud();
 });
 

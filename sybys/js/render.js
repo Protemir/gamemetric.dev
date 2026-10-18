@@ -11,6 +11,37 @@ export const GOLD = [242, 178, 44];
 const LIE = [70, 36, 86];
 const css = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 
+// the tamgas: the Orda's shanyrak, Kokzhal's wolf fangs, Kyran's eagle wings, Arkar's ram horns
+// k = -1 for the Orda, 0..2 for the clans; drawn in strokes centred at (x, y), s = half the size
+export function tamga(ctx, k, x, y, s, color = '#fff4d8') {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(1.5, s * 0.22);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  if (k < 0) {
+    ctx.arc(x, y, s * 0.8, 0, Math.PI * 2);
+    ctx.moveTo(x - s * 0.8, y); ctx.quadraticCurveTo(x, y - s * 0.45, x + s * 0.8, y);
+    ctx.moveTo(x - s * 0.8, y); ctx.quadraticCurveTo(x, y + s * 0.45, x + s * 0.8, y);
+    ctx.moveTo(x, y - s * 0.8); ctx.quadraticCurveTo(x - s * 0.45, y, x, y + s * 0.8);
+    ctx.moveTo(x, y - s * 0.8); ctx.quadraticCurveTo(x + s * 0.45, y, x, y + s * 0.8);
+  } else if (k === 0) {
+    ctx.moveTo(x - s * 0.9, y - s * 0.55); ctx.lineTo(x - s * 0.45, y + s * 0.7); ctx.lineTo(x, y - s * 0.3); ctx.lineTo(x + s * 0.45, y + s * 0.7); ctx.lineTo(x + s * 0.9, y - s * 0.55);
+  } else if (k === 1) {
+    ctx.moveTo(x - s * 0.95, y - s * 0.35); ctx.quadraticCurveTo(x - s * 0.4, y - s * 0.05, x, y + s * 0.35); ctx.quadraticCurveTo(x + s * 0.4, y - s * 0.05, x + s * 0.95, y - s * 0.35);
+    ctx.moveTo(x, y + s * 0.35); ctx.lineTo(x, y - s * 0.65);
+    ctx.moveTo(x + s * 0.12, y - s * 0.8); ctx.arc(x, y - s * 0.8, s * 0.12, 0, Math.PI * 2);
+  } else {
+    ctx.moveTo(x, y + s * 0.8); ctx.lineTo(x, y - s * 0.1);
+    ctx.moveTo(x, y - s * 0.1); ctx.bezierCurveTo(x - s * 0.2, y - s * 0.9, x - s * 1.0, y - s * 0.6, x - s * 0.75, y - s * 0.05); ctx.quadraticCurveTo(x - s * 0.55, y + s * 0.25, x - s * 0.35, y);
+    ctx.moveTo(x, y - s * 0.1); ctx.bezierCurveTo(x + s * 0.2, y - s * 0.9, x + s * 1.0, y - s * 0.6, x + s * 0.75, y - s * 0.05); ctx.quadraticCurveTo(x + s * 0.55, y + s * 0.25, x + s * 0.35, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 export const PALETTES = {
   summer: { base: [196, 178, 112], slope: [20, 34, 30], wet: [118, 150, 82], hill: [150, 128, 104] },
   autumn: { base: [214, 168, 88], slope: [16, 30, 24], wet: [168, 150, 70], hill: [156, 118, 82] },
@@ -82,9 +113,10 @@ export class View {
     return g.map.cell[y * GW + x];
   }
 
-  riderAt(g, px, py) {
-    let best = null, bd = Math.max(28, this.u * 4) ** 2;
+  riderAt(g, px, py, kinds = null, radius = null) {
+    let best = null, bd = (radius ?? Math.max(28, this.u * 4)) ** 2;
     for (const r of g.riders) {
+      if (kinds && !kinds.includes(r.kind)) continue;
       const p = riderPos(g, r);
       const [sx, sy] = this.toScreen(p.x, p.y);
       const d = (sx - px) ** 2 + (sy - py - this.u) ** 2;
@@ -225,7 +257,7 @@ export class View {
       let R = ter[t3] + (c[0] * L - ter[t3]) * a;
       let G = ter[t3 + 1] + (c[1] * L - ter[t3 + 1]) * a;
       let B = ter[t3 + 2] + (c[2] * L - ter[t3 + 2]) * a;
-      const burnt = g.burn && g.burn[id] != null ? Math.max(0, 1 - (g.time - g.burn[id]) / 45) * 0.55 : 0;
+      const burnt = g.burn && g.burn[id] != null ? Math.max(0, 1 - (g.time - g.burn[id]) / 40) * 0.28 : 0;
       if (burnt) { R += (40 - R) * burnt; G += (30 - G) * burnt; B += (22 - B) * burnt; }
       const gl = glow[id];
       if (gl) { R += (255 - R) * gl; G += (236 - G) * gl; B += (180 - B) * gl; }
@@ -422,7 +454,7 @@ export class View {
         this.yurt(sx, sy, u * (yt.big ? 1.8 : yt.cap ? 1.35 : 0.95), yt.big ? '#d9a53a' : dome, now, yt.smoke);
       }
       const cap = g.map.capitals.includes(r.id);
-      if (r.id === 0 || cap) this.banner(x + u * (r.id === 0 ? 2.4 : 1.6), y, r.id === 0 ? GOLD : TRIBE_RGB[r.tribe], r.id === 0 ? '♛' : ['Ψ', 'Λ', 'Ш'][r.tribe], now, r.id === 0 ? 1.3 : 1);
+      if (r.id === 0 || cap) this.banner(x + u * (r.id === 0 ? 2.4 : 1.6), y, r.id === 0 ? GOLD : TRIBE_RGB[r.tribe], r.id === 0 ? -1 : r.tribe, now, r.id === 0 ? 1.3 : 1);
       if (cap && look.names) this.label(look.names[r.tribe], x, y + u * 1.4, Math.max(12, u * 1.7));
       if (look.numbers && r.tribe >= 0) this.label(String(Math.round(g.t[r.id] * 100)), x, y + u * 3.4, Math.max(10, u * 1.3));
     }
@@ -466,24 +498,37 @@ export class View {
     ctx.font = `800 ${Math.round(w * 0.5)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(sign, x + w * 0.45, y - h + w * 0.36);
+    tamga(ctx, sign, x + w * 0.45, y - h + w * 0.36, w * 0.26);
+  }
+
+  // where an aul's lie badge sits
+  markAt(r) {
+    const [x, y] = this.toScreen(r.x, r.y);
+    return [x - this.u * 2.4, y - this.u * 2.2, clamp(this.u * 0.85, 7, 13)];
   }
 
   drawMarks(g, now) {
     const { ctx, u } = this;
     const R = g.map.regions;
+    // a lie's trail is a small drawn badge: a cross while it is open, a tick once Aria has read it
     for (const i of g.marks) {
-      const r = R[i];
-      const [x, y] = this.toScreen(r.x, r.y);
-      const px = x - u * 2.6, py = y - u * 2.2;
-      ctx.font = `900 ${Math.round(u * 2.2)}px system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = g.found.has(i) ? '#24401a' : '#f1dcff';
-      ctx.fillStyle = g.found.has(i) ? '#cfffb0' : '#4a1d5e';
-      ctx.strokeText(g.found.has(i) ? '✓' : '✕', px, py);
-      ctx.fillText(g.found.has(i) ? '✓' : '✕', px, py);
+      const [px, py, s] = this.markAt(R[i]);
+      const ok = g.found.has(i);
+      ctx.beginPath();
+      ctx.arc(px, py, s, 0, Math.PI * 2);
+      ctx.fillStyle = ok ? '#3d6b2a' : '#5b2475';
+      ctx.fill();
+      ctx.lineWidth = Math.max(1.5, s * 0.18);
+      ctx.strokeStyle = ok ? '#cfffb0' : '#f1dcff';
+      ctx.stroke();
+      ctx.beginPath();
+      const k = s * 0.42;
+      if (ok) { ctx.moveTo(px - k, py); ctx.lineTo(px - k * 0.2, py + k * 0.8); ctx.lineTo(px + k, py - k * 0.7); } else { ctx.moveTo(px - k, py - k); ctx.lineTo(px + k, py + k); ctx.moveTo(px + k, py - k); ctx.lineTo(px - k, py + k); }
+      ctx.lineWidth = Math.max(2, s * 0.26);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      ctx.lineCap = 'butt';
     }
     if (g.lairKnown) {
       const r = R[g.lairShown ?? g.lair];
@@ -664,7 +709,7 @@ export class View {
       } else if (p.kind === 'flame') {
         p.x += p.vx * dt; p.y += p.vy * dt;
         // a tongue of flame: hot white at the root, orange, gone to nothing; added light, so fires glow
-        const fr = u * (0.75 - t * 0.45);
+        const fr = u * (0.95 - t * 0.55);
         const fg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y - fr * 0.6, fr * 1.4);
         fg.addColorStop(0, `rgba(255,240,180,${0.9 * (1 - t)})`);
         fg.addColorStop(0.4, `rgba(255,140,40,${0.7 * (1 - t)})`);
@@ -675,8 +720,8 @@ export class View {
         ctx.globalCompositeOperation = 'source-over';
       } else if (p.kind === 'soot') {
         p.x += p.vx * dt; p.y += p.vy * dt;
-        ctx.fillStyle = `rgba(25,18,14,${0.4 * Math.sin(t * Math.PI)})`;
-        ctx.beginPath(); ctx.arc(p.x, p.y, u * (0.9 + t * 2.2), 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `rgba(70,62,58,${0.22 * Math.sin(t * Math.PI)})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, u * (0.45 + t * 1.1), 0, Math.PI * 2); ctx.fill();
       } else if (p.kind === 'dust') {
         p.x += p.vx * dt; p.y += p.vy * dt;
         ctx.fillStyle = `rgba(200,175,130,${0.5 * (1 - t)})`;
@@ -762,8 +807,9 @@ export class View {
       if (age > 30) continue;
       const r = R[k];
       const [x, y] = this.toScreen(r.x, r.y);
-      if (Math.random() < dt * 30 * (1 - age / 30)) this.parts.push({ kind: 'flame', x: x + (Math.random() - 0.5) * u * 3, y: y - u * 0.5, vx: (Math.random() - 0.5) * 8, vy: -24 - Math.random() * 20, life: 0.7, age: 0, layer: 'over' });
-      if (Math.random() < dt * 10) this.parts.push({ kind: 'soot', x: x + (Math.random() - 0.5) * u * 2, y: y - u * 2, vx: 6 + Math.random() * 6, vy: -14, life: 3, age: 0, layer: 'over' });
+      if (Math.random() < dt * 40 * (1 - age / 30)) this.parts.push({ kind: 'flame', x: x + (Math.random() - 0.5) * u * 2.4, y: y - u * 0.4, vx: (Math.random() - 0.5) * 6, vy: -30 - Math.random() * 24, life: 0.8, age: 0, layer: 'over' });
+      // thin grey smoke above the fire, never a black blot bigger than the flames
+      if (Math.random() < dt * 4 * (1 - age / 30)) this.parts.push({ kind: 'soot', x: x + (Math.random() - 0.5) * u * 1.4, y: y - u * 2.6, vx: 5 + Math.random() * 5, vy: -16, life: 2.4, age: 0, layer: 'over' });
     }
     if (g.raidWarn) {
       // a wall of dust on the side the horde will come from
@@ -823,7 +869,7 @@ export class View {
     const { ctx } = this;
     const name = r.tribe < 0 ? look.ordaName : look.names?.[r.tribe];
     if (!name) return;
-    const text = r.tribe < 0 ? name : `${name} · ${Math.round(g.t[id] * 100)}% ${look.actIcon || ''}`;
+    const text = r.tribe < 0 ? name : look.trustTag ? look.trustTag(name, Math.round(g.t[id] * 100)) : `${name} · ${Math.round(g.t[id] * 100)}%`;
     ctx.font = '700 13px system-ui, sans-serif';
     const w = ctx.measureText(text).width + 18;
     let x = look.mouse[0] + 16, y = look.mouse[1] + 18;

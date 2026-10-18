@@ -29,7 +29,7 @@ const GRADE = {
 };
 import { GW, GH, K } from './map.js';
 import { riderPos } from './sim.js';
-import { View, TRIBE_RGB, GOLD } from './render.js';
+import { View, TRIBE_RGB, GOLD, tamga } from './render.js';
 import { clamp, rng, valueNoise } from './util.js';
 
 const W = 38.4, D = 21.6; // world size of the map
@@ -368,7 +368,21 @@ export class View3D extends View {
   prepare(g) {
     super.prepare(g); // the 2D view's ground colours and decorations are reused
     const map = g.map;
-    if (this.group) { this.scene.remove(this.group); this.group.traverse((o) => { o.geometry?.dispose(); }); }
+    if (this.group) {
+      this.scene.remove(this.group);
+      const keep = new Set([this.grassTex, this.puffTex].filter(Boolean));
+      this.group.traverse((o) => {
+        o.geometry?.dispose();
+        const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        for (const m of mats) {
+          for (const k of ['map', 'normalMap']) if (m[k] && !keep.has(m[k])) m[k].dispose();
+          m.dispose();
+        }
+      });
+      this.tex?.dispose();
+      this.riderObjs?.clear();
+      this.loneHorse = null;
+    }
     this.group = new THREE.Group();
     this.scene.add(this.group);
     const { elev, river } = map;
@@ -638,7 +652,8 @@ export class View3D extends View {
     wing.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.12, -0.42, 0, -0.06, 0, 0, -0.08, 0, 0, 0.12, 0.42, 0, -0.06, 0, 0, -0.08], 3));
     wing.computeVertexNormals();
     for (let k = 0; k < 3; k++) {
-      const b = new THREE.Mesh(wing, new THREE.MeshStandardMaterial({ color: '#2a1e14', side: THREE.DoubleSide }));
+      const b = new THREE.Mesh(wing, new THREE.MeshStandardMaterial({ color: '#6a4a2c', side: THREE.DoubleSide }));
+      b.scale.setScalar(0.55);
       b.castShadow = true;
       this.group.add(b);
       this.birds.push({ b, r: 4 + k * 3, h: 6 + k * 1.2, a: k * 2.1, v: 0.12 + k * 0.03, cx: (k - 1) * 6, cz: (k - 1) * 2 });
@@ -787,7 +802,7 @@ export class View3D extends View {
       x.font = '800 52px system-ui, sans-serif';
       x.textAlign = 'center';
       x.textBaseline = 'middle';
-      x.fillText(id === 0 ? '♛' : ['Ψ', 'Λ', 'Ш'][r.tribe], 60, 38);
+      tamga(x, id === 0 ? -1 : r.tribe, 60, 37, 22, 'rgba(255,240,210,0.95)');
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
       const big = id === 0 ? 1.5 : 1.3;
@@ -1105,7 +1120,7 @@ export class View3D extends View {
       b.a += b.v * dt;
       b.b.position.set(b.cx + Math.cos(b.a) * b.r, b.h, b.cz + Math.sin(b.a) * b.r * 0.6);
       b.b.rotation.set(0, -b.a, Math.sin(now / 300 + b.r) * 0.25);
-      b.b.scale.set(1, 1, 1 + Math.sin(now / 120 + b.r) * 0.15);
+      b.b.scale.set(0.55, 0.55, 0.55 * (1 + Math.sin(now / 120 + b.r) * 0.15));
     }
     // the sun crosses the sky over a season: a cool morning, a white noon, a golden evening
     if (!this.cinema && !g.night) {
@@ -1129,10 +1144,10 @@ export class View3D extends View {
 
     // what the player reads, on top
     this.drawRoutes(g, now);
-    this.drawMarks(g, now);
     this.drawParts(g, dt, 'under');
     this.drawParts(g, dt, 'over');
     this.drawTrust(g);
+    this.drawMarks(g, now);
     for (const r of g.map.regions) {
       const [x, y] = this.toScreen(r.x, r.y);
       if (g.map.capitals.includes(r.id) && look.names) this.label(look.names[r.tribe], x, y + this.u * 0.8, Math.max(13, this.u * 1.5));
@@ -1144,6 +1159,12 @@ export class View3D extends View {
     this.drawHoverTag(g, look);
     this.drawHand(g, now, look);
     this.drawFx(g, now);
+  }
+
+  markAt(r) {
+    const [x, y] = this.toScreen(r.x, r.y);
+    const rad = clamp(this.u * 1.05, 10, 19);
+    return [x - rad * 1.1, y - this.u * 2.4 - rad * 0.85, rad * 0.66];
   }
 
   drawTrust(g) {
@@ -1164,11 +1185,8 @@ export class View3D extends View {
       ctx.strokeStyle = won ? '#fff6d0' : `rgb(${TRIBE_RGB[r.tribe].map((v) => Math.min(255, v + 60)).join(',')})`;
       ctx.beginPath(); ctx.arc(x, y, rad * 0.72, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * t); ctx.stroke();
       if (won) {
-        ctx.fillStyle = '#6a4a08';
-        ctx.font = `900 ${Math.round(rad * 1.1)}px system-ui, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('♛', x, y + 1);
+        // the khan's shanyrak marks a pasture that is his
+        tamga(ctx, -1, x, y, rad * 0.62, '#6a4a08');
       } else {
         // the line the kurultai needs
         const a = -Math.PI / 2 + Math.PI * 2 * 0.55;
