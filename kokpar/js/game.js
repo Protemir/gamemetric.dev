@@ -6,6 +6,7 @@ import { makeSerke } from './serke.js';
 import { initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
+if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
 const OFF_RIDERS = (P.get('no') || '').includes('riders'), NO_SHADOW_RIDERS = (P.get('no') || '').includes('rshadow');
 const MATCH_LEN = Number(P.get('len') || 180); // с
 const GOAL_X = 52, KAZAN_R = 3.0, SCORE_R = KAZAN_R + 1.5; // к казану надо подъехать вплотную
