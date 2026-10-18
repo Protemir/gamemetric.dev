@@ -62,7 +62,7 @@ export function audioInit() {
   try {
     const c = new (window.AudioContext || window.webkitAudioContext)();
     const out = c.createGain();
-    out.gain.value = sound.on && !sound.held ? 0.7 : 0;
+    out.gain.value = sound.on && !sound.held ? 0.55 : 0;
     const comp = c.createDynamicsCompressor();
     comp.threshold.value = -14;
     comp.ratio.value = 4;
@@ -82,13 +82,13 @@ export function setSound(on) {
   sound.on = on;
   store.set('sybys.sound', on);
   if (on) audioInit();
-  if (sound.ctx) sound.out.gain.setTargetAtTime(on && !sound.held ? 0.7 : 0, sound.ctx.currentTime, 0.05);
+  if (sound.ctx) sound.out.gain.setTargetAtTime(on && !sound.held ? 0.55 : 0, sound.ctx.currentTime, 0.05);
 }
 
 // a portal's own mute wins over the in-game button
 export function holdAudio(on) {
   sound.held = on;
-  if (sound.ctx) sound.out.gain.setTargetAtTime(sound.on && !on ? 0.7 : 0, sound.ctx.currentTime, 0.05);
+  if (sound.ctx) sound.out.gain.setTargetAtTime(sound.on && !on ? 0.55 : 0, sound.ctx.currentTime, 0.05);
 }
 
 const ready = () => sound.on && !sound.held && sound.ctx && sound.ctx.state === 'running';
@@ -145,10 +145,12 @@ function pluck(freq, when, vol) {
   const src = c.createBufferSource();
   src.buffer = stringBuffer(freq);
   const g = c.createGain();
-  g.gain.value = vol;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.linearRampToValueAtTime(vol, when + 0.025);
   const lp = c.createBiquadFilter();
   lp.type = 'lowpass';
-  lp.frequency.value = 2600;
+  lp.frequency.value = 1150 + Math.random() * 350;
+  lp.Q.value = 0.4;
   src.connect(lp).connect(g).connect(sound.music.bus);
   src.start(when);
 }
@@ -158,27 +160,60 @@ function pluck(freq, when, vol) {
 // «Дала» (the wide steppe) on the title and at the councils, «Жорға» (the ambler) and «Кербез» (the proud one)
 // take turns during play, «Шабуыл» (the raid) when the horde comes, «Түн» (the night) when the knife is near.
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
-const MODES = { dorian: [0, 2, 3, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], mixo: [0, 2, 4, 5, 7, 9, 10] };
+const MODES = { dorian: [0, 2, 3, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], mixo: [0, 2, 4, 5, 7, 9, 10], hijaz: [0, 1, 4, 5, 7, 8, 10] };
 // a motif is one bar: [scale degree, length in eighths]
 const PIECES = {
-  dala: { bpm: 84, root: 62, mode: 'dorian', drone: [38, 45], strum: 'X..x..x.', form: 'AABACADA', vol: 0.3,
+  dala: { bpm: 70, root: 62, mode: 'dorian', drone: [38, 45], strum: 'X.......', form: 'AABACADA', vol: 0.2, rest: 0.18,
     m: { A: [[7, 2], [6, 1], [7, 1], [5, 2], [4, 2]], B: [[4, 1], [5, 1], [4, 1], [3, 1], [2, 2], [0, 2]], C: [[9, 2], [8, 1], [7, 1], [8, 2], [7, 2]], D: [[2, 1], [3, 1], [4, 2], [3, 1], [2, 1], [0, 2]] } },
-  jorga: { bpm: 118, root: 62, mode: 'aeolian', drone: [38, 45], strum: 'X.xX.xX.', form: 'AABACCDA', vol: 0.28,
+  jorga: { bpm: 92, root: 62, mode: 'aeolian', drone: [38, 45], strum: 'X...x...', form: 'AABACCDA', vol: 0.18, rest: 0.22,
     m: { A: [[4, 1], [4, 1], [5, 1], [4, 1], [3, 1], [2, 1], [3, 2]], B: [[2, 1], [2, 1], [3, 1], [2, 1], [1, 1], [0, 1], [1, 2]], C: [[7, 1], [6, 1], [5, 1], [4, 1], [5, 1], [4, 1], [3, 2]], D: [[4, 1], [3, 1], [2, 1], [1, 1], [0, 4]] } },
-  kerbez: { bpm: 104, root: 62, mode: 'mixo', drone: [38, 43], strum: 'X.x.Xxx.', form: 'AABACDAB', vol: 0.28,
+  kerbez: { bpm: 84, root: 62, mode: 'dorian', drone: [38, 43], strum: 'X...x...', form: 'AABACDAB', vol: 0.18, rest: 0.22,
     m: { A: [[0, 1], [2, 1], [4, 2], [5, 1], [4, 1], [2, 2]], B: [[7, 2], [5, 1], [4, 1], [5, 2], [4, 2]], C: [[4, 1], [5, 1], [7, 1], [5, 1], [4, 2], [2, 2]], D: [[2, 1], [1, 1], [0, 2], [0, 4]] } },
-  shabuyl: { bpm: 168, root: 50, mode: 'phrygian', drone: [38, 45], strum: 'XxXxXxXx', form: 'AABACACD', vol: 0.34,
+  shabuyl: { bpm: 132, root: 50, mode: 'phrygian', drone: [38, 45], strum: 'X.x.X.x.', form: 'AABACACD', vol: 0.24, rest: 0.08,
     m: { A: [[0, 1], [0, 1], [1, 1], [0, 1], [3, 1], [1, 1], [0, 2]], B: [[4, 1], [4, 1], [5, 1], [4, 1], [3, 1], [1, 1], [0, 2]], C: [[7, 1], [5, 1], [4, 1], [3, 1], [4, 1], [3, 1], [1, 2]], D: [[0, 1], [1, 1], [3, 1], [4, 1], [5, 2], [4, 2]] } },
-  tun: { bpm: 56, root: 74, mode: 'dorian', drone: [38], strum: 'X.......', form: 'ABACABDA', vol: 0.22,
+  tun: { bpm: 50, root: 69, mode: 'hijaz', drone: [38], strum: '........', form: 'ABACABDA', vol: 0.16, rest: 0.3,
     m: { A: [[4, 4], [2, 4]], B: [[3, 2], [2, 2], [0, 4]], C: [[5, 4], [4, 4]], D: [[2, 2], [1, 2], [0, 4]] } },
 };
+const MUSIC_GAIN = 0.15;
+// a hall made of noise that dies away: enough to soften the strings, not to drown them
+function impulse(c, sec) {
+  const len = Math.floor(c.sampleRate * sec), buf = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+  }
+  return buf;
+}
 const degree = (p, d) => { const md = MODES[p.mode]; return p.root + md[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7); };
 
 function startMusic() {
   const c = sound.ctx;
   const bus = c.createGain();
-  bus.gain.value = (sound.wantMusic ?? 1) * 0.22;
-  bus.connect(sound.out);
+  bus.gain.value = (sound.wantMusic ?? 1) * MUSIC_GAIN;
+  const dry = c.createGain(), wet = c.createGain(), hall = c.createConvolver();
+  dry.gain.value = 0.62;
+  wet.gain.value = 0.5;
+  hall.buffer = impulse(c, 2.8);
+  bus.connect(dry).connect(sound.out);
+  bus.connect(hall).connect(wet).connect(sound.out);
+  // the drone: two soft voices a fifth apart, slowly breathing
+  const pad = c.createGain(), padLp = c.createBiquadFilter();
+  pad.gain.value = 0.05;
+  padLp.type = 'lowpass';
+  padLp.frequency.value = 420;
+  const o1 = c.createOscillator(), o2 = c.createOscillator(), lfo = c.createOscillator(), lg = c.createGain();
+  o1.type = o2.type = 'triangle';
+  o1.frequency.value = hz(38);
+  o2.frequency.value = hz(45);
+  o2.detune.value = 6;
+  lfo.frequency.value = 0.08;
+  lg.gain.value = 0.025;
+  lfo.connect(lg).connect(pad.gain);
+  o1.connect(padLp);
+  o2.connect(padLp);
+  padLp.connect(pad).connect(bus);
+  o1.start(); o2.start(); lfo.start();
+  sound.pad = { o1, o2 };
   sound.music = { bus, next: c.currentTime + 0.2, bar: 0, piece: 'dala', want: sound.wantMood || 'dala', playBars: 0 };
   const tick = () => {
     const m = sound.music;
@@ -187,15 +222,21 @@ function startMusic() {
       // at the start of a bar: change the küi if the moment asks for another
       let want = m.want;
       if (want === 'play') want = Math.floor(m.playBars / 16) % 2 ? 'kerbez' : 'jorga';
-      if (want !== m.piece) { m.piece = want; m.bar = 0; }
+      if (want !== m.piece) {
+        m.piece = want;
+        m.bar = 0;
+        const np = PIECES[want];
+        sound.pad?.o1.frequency.setTargetAtTime(hz(np.drone[0]), m.next, 0.8);
+        sound.pad?.o2.frequency.setTargetAtTime(hz(np.drone[1] || np.drone[0] + 7), m.next, 0.8);
+      }
       if (m.want === 'play') m.playBars++;
       const p = PIECES[m.piece];
       const eighth = 60 / p.bpm / 2;
       // the strum on the lower strings
       [...p.strum].forEach((ch, k) => {
         const t = m.next + k * eighth;
-        if (ch === 'X') { pluck(hz(p.drone[0]), t, 0.42); if (p.drone[1]) pluck(hz(p.drone[1]), t + 0.014, 0.3); }
-        else if (ch === 'x') pluck(hz(p.drone[1] || p.drone[0] + 7), t, 0.16);
+        if (ch === 'X') { pluck(hz(p.drone[0]), t, 0.24); if (p.drone[1]) pluck(hz(p.drone[1]), t + 0.03, 0.16); }
+        else if (ch === 'x') pluck(hz(p.drone[1] || p.drone[0] + 7), t, 0.09);
       });
       // the tune: this bar's motif, now and then an octave up on a repeat, a grace note before long notes
       const motif = p.m[p.form[m.bar % p.form.length]];
@@ -203,7 +244,8 @@ function startMusic() {
       let at = m.next;
       for (const [d, len] of motif) {
         const note = degree(p, d + lift);
-        if (len >= 2 && Math.random() < 0.5) pluck(hz(degree(p, d + lift + 1)), Math.max(m.next, at - 0.05), p.vol * 0.4);
+        if (Math.random() < (p.rest || 0)) { at += len * eighth; continue; } // a breath: the tune leaves room
+        if (len >= 2 && Math.random() < 0.4) pluck(hz(degree(p, d + lift + 1)), Math.max(m.next, at - 0.07), p.vol * 0.35);
         pluck(hz(note), at + 0.004, p.vol);
         at += len * eighth;
       }
@@ -224,7 +266,7 @@ export function musicMood(name) {
 export function musicLevel(v) {
   sound.wantMusic = v;
   if (!sound.ctx || !sound.music) return;
-  sound.music.bus.gain.setTargetAtTime(v * 0.22, sound.ctx.currentTime, 0.6);
+  sound.music.bus.gain.setTargetAtTime(v * MUSIC_GAIN, sound.ctx.currentTime, 0.6);
 }
 
 function tone(freq, dur, type = 'triangle', vol = 0.12, when = 0, slide = 0) {
