@@ -348,11 +348,11 @@ export function showCreate(keep) {
   const k = makeKit(draft.color, draft.sign);
   const cols = PALETTE.map((c) => `<button class="h-sw${c === draft.color ? ' sel' : ''}" style="background:${c}" data-act="colour:${c}" aria-label="${c}"></button>`).join('');
   const signs = SIGN_LIST.map((s) => `<button class="h-sg${s === draft.sign ? ' sel' : ''}" data-act="sign:${s}"><img src="${flag(makeKit(draft.color, s), 96, 60)}" alt="${s}"></button>`).join('');
-  root.innerHTML = `<div class="hub"><div class="h-cup disp">${tr('create')}</div>
-    <div class="h-preview"><img src="${flag(k, 240, 150)}" alt=""></div>
-    <label class="h-lbl">${tr('name')}<input id="clubName" maxlength="22" value="${esc(draft.name)}" autocomplete="off"></label>
-    <div class="h-lbl">${tr('colour')}</div><div class="h-sws">${cols}</div>
-    <div class="h-lbl">${tr('sign')}</div><div class="h-sgs">${signs}</div>
+  root.innerHTML = `<div class="hub create"><div class="h-cup disp">${tr('create')}</div><div class="c-cols">
+    <div class="c-l"><div class="h-preview"><img src="${flag(k, 240, 150)}" alt=""></div>
+    <label class="h-lbl">${tr('name')}<input id="clubName" maxlength="22" value="${esc(draft.name)}" autocomplete="off"></label></div>
+    <div class="c-r"><div class="h-lbl">${tr('colour')}</div><div class="h-sws">${cols}</div>
+    <div class="h-lbl">${tr('sign')}</div><div class="h-sgs">${signs}</div></div></div>
     <button class="big-btn" data-act="save">${tr('done')}</button></div>`;
 }
 export function showResult(sum) {
@@ -365,8 +365,8 @@ export function showResult(sum) {
     <div class="h-cup disp r-title">${sum.champion ? '🏆 ' : ''}${title}</div>
     <div class="r-score"><img src="${flag(k, 144, 90)}" alt=""><span class="disp">${sum.my} : ${sum.their}</span><img src="${flag(f, 144, 90)}" alt=""></div>
     ${sum.note ? `<div class="h-stage big">${sum.note}</div>` : ''}
-    <div class="r-prize"><div class="h-gt">${tr('prize')}</div>${lines}<div class="tot"><span>${tr('total')}</span><b>+${money(sum.total)}</b></div></div>
-    ${mini}
+    <div class="r-cols"><div class="r-prize"><div class="h-gt">${tr('prize')}</div>${lines}<div class="tot"><span>${tr('total')}</span><b>+${money(sum.total)}</b></div></div>
+    <div class="r-mini">${mini}</div></div>
     <button class="big-btn" data-act="hub">${tr('next')}</button></div>`;
 }
 export const goldenText = () => tr('goldenGoal');

@@ -68,6 +68,7 @@ function measure() {
   view.w = view.rot ? innerHeight : innerWidth; view.h = view.rot ? innerWidth : innerHeight;
   document.documentElement.classList.toggle('rot', view.rot);
   document.documentElement.classList.toggle('short', view.h < 520);
+  document.documentElement.style.setProperty('--vh', view.h + 'px'); document.documentElement.style.setProperty('--vw', view.w + 'px'); // высота экрана игры (в повёрнутом виде — ширина телефона)
   Object.assign(document.body.style, view.rot ? { width: view.w + 'px', height: view.h + 'px', transform: `translateX(${innerWidth}px) rotate(90deg)` } : { width: '', height: '', transform: '' });
 }
 measure();
