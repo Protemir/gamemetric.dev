@@ -5,6 +5,7 @@ import { Rider, loadRider } from './rider.js';
 import { makeSerke } from './serke.js';
 import { makeKazan } from './kazan.js';
 import * as career from './career.js';
+import { makeCrowd } from './crowd.js';
 import { flagCanvas } from './flags.js';
 import { initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
 
@@ -12,6 +13,7 @@ const SIM = Number(P.get('sim') || 0);
 if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
 const OFF_RIDERS = (P.get('no') || '').includes('riders'), NO_SHADOW_RIDERS = (P.get('no') || '').includes('rshadow');
 const MATCH_LEN = Number(P.get('len') || 180); // с
+const KAZAN_TOP = 1.58; // верх насыпи казана — туда ложится туша
 const GOAL_X = 52, KAZAN_R = 3.0, SCORE_R = KAZAN_R + 1.5; // к казану надо подъехать вплотную
 const TUG_RANGE = 2.7, TUG_BREAK = 3.5, PICK_R = 1.8;
 const TEAMS = [
@@ -52,6 +54,7 @@ const tr = (k) => TEXT[lang][k];
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = THREE.MathUtils.clamp;
 
+const crowd = SIM || (P.get('no') || '').includes('crowd') ? null : makeCrowd(scene); // зрители и аул вокруг поля
 // ---------- матч карьеры: соперник, его форма и сила (career.js) ----------
 let fx = null; // текущий матч: { name, kit, diff, ko, final, arena }
 const DEFAULT_FX = { id: 'kainar', name: 'Kainar', ko: false, final: false, arena: 'day', kit: career.makeKit('#2456a8', 'mountain'), diff: { pull: 0.06, react: 0.45, speed: 1 } };
@@ -178,11 +181,13 @@ function goal(team, scorer, landed) {
   const k = kazans[team === 0 ? 1 : 0];
   // мешок летит на казан
   sack.carrier = null;
-  if (landed) { sack.flight = null; sack.pos.set(k.x, 1.25, 0); sack.vel.set(0, 0, 0); } // брошена — уже лежит на казане
-  else sack.flight = { from: sack.pos.clone(), to: new THREE.Vector3(k.x, 1.25, 0), t: 0 };
+  if (landed) { sack.flight = null; sack.pos.set(k.x, KAZAN_TOP, 0); sack.vel.set(0, 0, 0); } // брошена — уже лежит на казане
+  else sack.flight = { from: sack.pos.clone(), to: new THREE.Vector3(k.x, KAZAN_TOP, 0), t: 0 };
   banner(tr('goal'), TEAMS[team].grad, 2.4, teamName(team));
   state.events.push({ t: 'goal', team });
   if (!SIM) cheer(team === me?.team);
+  crowd?.cheer(3.5);
+  state.cine = { t: 0, x: k.x, a0: Math.atan2(sack.pos.z, sack.pos.x - k.x) || 0 }; // гол крупным планом
 }
 
 // ---------- бросок туши в казан ----------
@@ -199,7 +204,7 @@ function throwSack(e) {
   const { k, d, chance } = throwInfo(e);
   const hit = rnd() < chance;
   let to;
-  if (hit) to = new THREE.Vector3(k.x + (rnd() - 0.5) * 1.2, 1.2, (rnd() - 0.5) * 1.2);
+  if (hit) to = new THREE.Vector3(k.x + (rnd() - 0.5) * 1.2, KAZAN_TOP - 0.05, (rnd() - 0.5) * 1.2);
   else { const a = rnd() * 6.283, r = KAZAN_R + 1.4 + rnd() * 2.2; to = new THREE.Vector3(k.x + Math.cos(a) * r, GROUND_Y, Math.sin(a) * r); }
   e.throw = { t: 0, to, d, hit };
 }
@@ -229,7 +234,7 @@ function stepAim(dt) {
   if (!on) return;
   aim.p += aim.dir * dt * 1.15;
   if (aim.p >= 1) { aim.p = 1; aim.dir = -1; } else if (aim.p <= 0) { aim.p = 0; aim.dir = 1; }
-  const dist = aimPoint(e), top = aim.hit ? 1.25 : 0.05;
+  const dist = aimPoint(e), top = aim.hit ? KAZAN_TOP : 0.05;
   aimRing.position.set(aim.L.x, top, aim.L.z);
   aimRing.material.color.set(aim.hit ? '#5dff7a' : '#ffffff');
   // дуга полёта точками: от рук над головой до точки падения
@@ -247,7 +252,7 @@ function releaseAim(e) {
   // на скаку рука дрожит: разброс растёт со скоростью
   const n = 0.35 + e.h.v * 0.05, nx = (rnd() - 0.5) * 2 * n, nz = (rnd() - 0.5) * 2 * n;
   const lx = aim.L.x + nx, lz = aim.L.z + nz, hit = Math.hypot(lx - k.x, lz) < KAZAN_R + 0.2;
-  const to = hit ? new THREE.Vector3(k.x + (lx - k.x) * 0.3, 1.2, lz * 0.3) : new THREE.Vector3(lx, GROUND_Y, lz);
+  const to = hit ? new THREE.Vector3(k.x + (lx - k.x) * 0.3, KAZAN_TOP - 0.05, lz * 0.3) : new THREE.Vector3(lx, GROUND_Y, lz);
   Object.assign(e.throw, { aiming: false, to, d: dist, hit, t: Math.max(e.throw.t, WIND * 0.7) });
 }
 function releaseSack(e) { // руки выпрямились — туша летит
@@ -379,6 +384,7 @@ function applyStage() {
   if (!SIM) HB = career.horse();
   paintTeam(0, career.myKit()); paintTeam(1, fx.kit);
   setArena(P.get('arena') || fx.arena);
+  crowd?.paint(TEAMS[0].color, TEAMS[1].color);
   if (!SIM) { el.nmR.textContent = teamName(0); el.nmB.textContent = teamName(1); }
   if (!SIM && !P.has('pull')) Object.assign(DIFF, fx.diff);
   for (const e of ents) if (e.team === 0) e.h.turnMul = HB.turn;
@@ -631,6 +637,7 @@ function onHit(a, b, imp, nx, nz) {
 }
 function step(dt) {
   state.t -= dt;
+  crowd?.update(dt);
   if (state.phase === 'countdown') {
     for (const e of ents) { e.h.gait = 0; e.h.steer = 0; }
     if (!SIM) { const n = Math.ceil(state.t - 0.2); if (n > 0 && n <= 3 && el.bigText.textContent !== String(n) && state.t < 3.2) banner(String(n)); }
@@ -701,6 +708,17 @@ function endMatch() {
 const cam = { pos: new THREE.Vector3(-40, 8, 0), look: new THREE.Vector3(), yaw: Math.PI / 2 };
 function updateCamera(dt, snap) {
   const h = me.h, p = h.obj.position;
+  if (state.phase === 'goal' && state.cine && !snap) { // облёт казана, куда легла туша
+    const c = state.cine; c.t += dt;
+    const a = c.a0 + 0.6 + c.t * 0.32, r = 10.5 - Math.min(2.5, c.t * 1.2);
+    V.set(c.x + Math.cos(a) * r, 3.1 + Math.sin(c.t * 0.8) * 0.4, Math.sin(a) * r);
+    cam.pos.lerp(V, c.t < 0.05 ? 1 : 1 - Math.exp(-dt * 6));
+    cam.look.lerp(V2.set(c.x, 1.3, 0), c.t < 0.05 ? 1 : 1 - Math.exp(-dt * 6));
+    camera.position.copy(cam.pos); camera.lookAt(cam.look);
+    followSun(c.x, 0);
+    return;
+  }
+  if (state.cine && state.phase !== 'goal') { state.cine = null; cam.yaw = h.yaw; }
   let dy = wrap(h.yaw - cam.yaw);
   cam.yaw = snap ? h.yaw : cam.yaw + dy * (1 - Math.exp(-dt * 2.8));
   const fx = Math.sin(cam.yaw), fz = Math.cos(cam.yaw);
@@ -838,8 +856,9 @@ addEventListener('resize', onResize);
 let last = performance.now(), frozen = false;
 function frame(now) {
   if (frozen) return;
-  const dt = Math.min(0.05, (now - last) / 1000);
+  let dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  if (state.phase === 'goal' && state.t > 2.1) dt *= 0.4; // гол — на мгновение замедленно
   step(dt);
   updateCamera(dt);
   hud(dt);
