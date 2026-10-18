@@ -1,4 +1,4 @@
-// Карьера: свой клуб, Лига чемпионов Жетісу (группа → полуфинал → финал), призовые и конюшня.
+// Карьера: свой клуб, Кубок Жетісу (группа → полуфинал → финал), призовые и конюшня.
 // Всё хранится в localStorage; экраны рисуются в #menu вместо старой лестницы аулов.
 import { flagCanvas, SIGN_LIST } from './flags.js';
 import { IC } from './icons.js';
@@ -79,7 +79,7 @@ const GROUP_ARENA = ['day', 'evening', 'winter'];
 // ---------- тексты ----------
 const T = {
   ru: {
-    cup: 'Лига чемпионов Жетісу', season: (n) => 'Сезон ' + n, group: (g, r) => 'Группа ' + g + ' · тур ' + r + ' из 3', semi: 'Полуфинал', final: 'Финал',
+    cup: 'Кубок Жетісу', season: (n) => 'Сезон ' + n, group: (g, r) => 'Группа ' + g + ' · тур ' + r + ' из 3', semi: 'Полуфинал', final: 'Финал',
     play: 'В седло!', table: 'Таблица', stable: 'Конюшня', club: 'Клуб', back: 'Назад', next: 'Дальше', newSeason: 'Новый сезон',
     create: 'Создай свой клуб', name: 'Название клуба', colour: 'Цвет', sign: 'Знак на флаге', done: 'Готово', defName: 'Аксай Батырлары',
     win: 'Победа', loss: 'Поражение', draw: 'Ничья', prize: 'Призовые', forWin: 'за победу', forDraw: 'за ничью', forLoss: 'за участие', forGoals: (n) => 'за голы (' + n + ')',
@@ -95,7 +95,7 @@ const T = {
     q: { win: 'Выиграй матч', goals: (n) => 'Забей командой ' + n + ' голов', my: (n) => 'Забей сам ' + n + ' гола', throw: 'Забей броском в казан', tugs: (n) => 'Выиграй ' + n + ' тартыса', falls: (n) => 'Сбей с коня ' + n + ' соперников', matches: (n) => 'Сыграй ' + n + ' матча', clean: 'Выиграй, пропустив не больше 1 гола' },
   },
   en: {
-    cup: 'Zhetysu Champions League', season: (n) => 'Season ' + n, group: (g, r) => 'Group ' + g + ' · round ' + r + ' of 3', semi: 'Semi-final', final: 'Final',
+    cup: 'Zhetysu Cup', season: (n) => 'Season ' + n, group: (g, r) => 'Group ' + g + ' · round ' + r + ' of 3', semi: 'Semi-final', final: 'Final',
     play: 'Ride!', table: 'Table', stable: 'Stable', club: 'Club', back: 'Back', next: 'Next', newSeason: 'New season',
     create: 'Create your club', name: 'Club name', colour: 'Colour', sign: 'Flag emblem', done: 'Done', defName: 'Aksay Batyrs',
     win: 'Victory', loss: 'Defeat', draw: 'Draw', prize: 'Prize money', forWin: 'win', forDraw: 'draw', forLoss: 'appearance', forGoals: (n) => 'goals (' + n + ')',
@@ -334,7 +334,7 @@ function head() {
 function tabs(active) { // нижние вкладки с иконками; у заданий — счётчик невыполненных
   const left = questsToday().filter((q) => !q.done).length;
   const t = (act, icon, label, badge) => `<button class="h-tab${act === active ? ' on' : ''}" data-act="${act}">${icon}<span>${label}</span>${badge ? `<i class="h-badge">${badge}</i>` : ''}</button>`;
-  return `<nav class="h-tabs">${t('hub', IC.trophy, tr('cup').split(' ')[0] === 'Лига' ? 'Лига' : 'League')}${t('table', IC.cal.replace('M9 15l2 2 4-4', 'M7 14h10M7 17h6'), tr('table'))}${t('stable', IC.horse, tr('stable'))}${t('quests', IC.cal, tr('quests'), left)}</nav>`;
+  return `<nav class="h-tabs">${t('hub', IC.trophy, L() === 'ru' ? 'Кубок' : 'Cup')}${t('table', IC.cal.replace('M9 15l2 2 4-4', 'M7 14h10M7 17h6'), tr('table'))}${t('stable', IC.horse, tr('stable'))}${t('quests', IC.cal, tr('quests'), left)}</nav>`;
 }
 function dailyModal() {
   const d = dailyState();

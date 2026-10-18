@@ -5,6 +5,7 @@ import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
 import { FBXLoader } from '../vendor/loaders/FBXLoader.js';
 import * as SkeletonUtils from '../vendor/utils/SkeletonUtils.js';
 import { hoof, snort, bump, neigh } from './audio.js';
+import { makeTrees } from './trees.js';
 
 const P = new URLSearchParams(location.search);
 const Q = P.get('q') || (() => { try { return localStorage.getItem('kokpar.q'); } catch { return null; } })() || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
@@ -233,6 +234,7 @@ function riverDist(x, z) {
 // Пучки ковыля: один InstancedMesh, три скрещённые плоскости.
 const GRASS = { low: 0, medium: 7000, high: 18000 }[Q] ?? 7000;
 const wind = { value: 0 }; // время для ветра в траве
+if (!OFF.has('trees')) makeTrees(scene, { snow: ENV.snow, time: wind }); // тополя, карагачи, ели вокруг поля
 if (GRASS) {
   const bladeTex = canvasTex(64, 64, (g, w, h) => {
     for (let i = 0; i < 14; i++) {
@@ -439,8 +441,16 @@ async function loadTerrain() {
         float lum = dot(diffuseColor.rgb, vec3(.3, .59, .11));
         // на равнине вместо города и пашен — выгоревшая степь (тон берём из снимка)
         float plain = 1. - smoothstep(1250., 1650., elev);
-        vec3 steppe = mix(vec3(.42, .33, .17), vec3(.62, .52, .30), clamp(lum * 4., 0., 1.));
+        vec3 steppe = mix(vec3(.38, .37, .19), vec3(.58, .54, .31), clamp(lum * 4., 0., 1.)); // предгорья — оливковые, весенняя степь
         diffuseColor.rgb = mix(diffuseColor.rgb, steppe, plain * .9);
+        // зелень гор: пояс ельников 1500–2800 м (гуще на северных склонах), выше — альпийские луга
+        vec3 nrm = normalize(cross(dFdx(vW), dFdy(vW)));
+        float slope = 1. - abs(nrm.y), north = smoothstep(-.25, .45, nrm.z);
+        float belt = smoothstep(1450., 1750., elev) * (1. - smoothstep(2650., 2950., elev));
+        float forest = belt * (.35 + .65 * north) * smoothstep(.05, .25, slope) * smoothstep(.55, .2, lum + .1);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.09, .17, .08) * (.75 + lum * 1.2), clamp(forest * 1.3, 0., .85));
+        float meadow = smoothstep(1650., 2000., elev) * (1. - smoothstep(3050., 3350., elev)) * (1. - forest);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.33, .43, .19) * (.8 + lum * .6), meadow * .45);
         // снег и лёд на вершинах ярче и белее
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.93, .95, .98), smoothstep(3300., 3900., elev) * smoothstep(.18, .45, lum));
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.86, .89, .95) * (.72 + lum * .5), snow * smoothstep(.04, .3, lum + .08) * .92);`)
@@ -454,7 +464,7 @@ async function loadTerrain() {
   // река: вдали — по склонам (дальний проход), у поля — по земле (ближний проход)
   const nearPts = [], farPts = [];
   for (const p of river) { const r = Math.hypot(p[0], p[1]); if (r < 2700) nearPts.push(p); if (r > 2300) farPts.push(p); }
-  const width = (y) => 14 + 10 * (1 - Math.min(1, Math.max(0, y) / 600)); // в горах уже
+  const width = (y) => 26 + 20 * (1 - Math.min(1, Math.max(0, y) / 600)); // широкая у равнины, в горах уже
   if (!OFF.has('river')) {
     if (farPts.length > 1) farScene.add(new THREE.Mesh(ribbon(farPts, width, demH, 2.5), riverMat));
     if (nearPts.length > 1) {

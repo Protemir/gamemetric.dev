@@ -104,7 +104,7 @@ scene.add(sack.mesh);
 // маркер над лежащим мешком: виден издалека
 const sackMarker = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.6, 4), new THREE.MeshBasicMaterial({ color: '#ffd23a' }));
 sackMarker.rotation.x = Math.PI;
-scene.add(sackMarker);
+if (!(P.get('no') || '').includes('marker')) scene.add(sackMarker); // ?no=marker — для обложек и ролика
 
 // кольца команд под конями
 const ringGeo = new THREE.RingGeometry(1.15, 1.4, 40).rotateX(-Math.PI / 2);
@@ -123,7 +123,7 @@ function makeEnt(team, idx, isMe) {
 if (NO_SHADOW_RIDERS) r.root.traverse((o) => { o.castShadow = false; });
   const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: isMe ? '#ffffff' : TEAMS[team].css, transparent: true, opacity: isMe ? 0.75 : 0.45, depthWrite: false }));
   ring.position.y = 0.04;
-  scene.add(ring);
+  if (!(P.get('no') || '').includes('rings')) scene.add(ring);
   const e = { h, r, ring, team, me: isMe, stamina: 100, sprint: 0, tugCD: 0, pickCD: 0, stun: 0, reach: 0, reachSide: -1, bot: { role: 'fetch', tx: 0, tz: 0, react: 0 }, stats: { tugsWon: 0, goals: 0 } };
   if (h.blanket) h.blanket.material = blanketFor(team);
   return e;

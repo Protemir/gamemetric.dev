@@ -36,6 +36,15 @@ function person() {
   }
   add(new THREE.CylinderGeometry(0.05, 0.055, 0.08, 6), '#c79a76', 0, 0, 1.5, 0); // шея
   add(new THREE.SphereGeometry(0.11, 10, 8).scale(0.92, 1.08, 0.98), '#c79a76', 0, 0, 1.63, 0.005); // голова
+  // лицо (смотрит в +Z, на поле): глаза, брови, нос, усы, рот
+  for (const sx of [-0.036, 0.036]) {
+    add(new THREE.SphereGeometry(0.014, 6, 4), '#1b1410', 0, sx, 1.655, 0.098); // глаз
+    add(new THREE.BoxGeometry(0.04, 0.009, 0.012), '#2a1d14', 0, sx, 1.683, 0.096, sx > 0 ? -0.15 : 0.15); // бровь
+  }
+  add(new THREE.ConeGeometry(0.016, 0.045, 5).rotateX(Math.PI / 2), '#b88a68', 0, 0, 1.628, 0.115); // нос
+  add(new THREE.BoxGeometry(0.06, 0.012, 0.012), '#2a1d14', 0, 0, 1.6, 0.104); // усы
+  add(new THREE.BoxGeometry(0.035, 0.007, 0.01), '#7a3f32', 0, 0, 1.585, 0.1); // рот
+  add(new THREE.SphereGeometry(0.02, 6, 4), '#b88a68', 0, -0.103, 1.635, 0); add(new THREE.SphereGeometry(0.02, 6, 4), '#b88a68', 0, 0.103, 1.635, 0); // уши
   // склеиваем
   let n = 0; for (const g of parts) n += g.attributes.position.count;
   const out = new THREE.BufferGeometry();
