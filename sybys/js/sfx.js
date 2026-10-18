@@ -153,33 +153,71 @@ function pluck(freq, when, vol) {
   src.start(when);
 }
 
-// the dombra: a two-string drone strummed in a galloping rhythm, a tune wandering over a pentatonic scale
-const SCALE = [146.83, 164.81, 174.61, 196.0, 220.0, 261.63, 293.66, 329.63, 349.23, 392.0]; // D minor-ish, as a küy might sit
+// The dombra plays our own küis, written for the game in the old manner: a drone on the lower string,
+// the tune on the upper, a strum that gallops or ambles, phrases that fall and return. One fits each moment:
+// «Дала» (the wide steppe) on the title and at the councils, «Жорға» (the ambler) and «Кербез» (the proud one)
+// take turns during play, «Шабуыл» (the raid) when the horde comes, «Түн» (the night) when the knife is near.
+const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
+const MODES = { dorian: [0, 2, 3, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], mixo: [0, 2, 4, 5, 7, 9, 10] };
+// a motif is one bar: [scale degree, length in eighths]
+const PIECES = {
+  dala: { bpm: 84, root: 62, mode: 'dorian', drone: [38, 45], strum: 'X..x..x.', form: 'AABACADA', vol: 0.3,
+    m: { A: [[7, 2], [6, 1], [7, 1], [5, 2], [4, 2]], B: [[4, 1], [5, 1], [4, 1], [3, 1], [2, 2], [0, 2]], C: [[9, 2], [8, 1], [7, 1], [8, 2], [7, 2]], D: [[2, 1], [3, 1], [4, 2], [3, 1], [2, 1], [0, 2]] } },
+  jorga: { bpm: 118, root: 62, mode: 'aeolian', drone: [38, 45], strum: 'X.xX.xX.', form: 'AABACCDA', vol: 0.28,
+    m: { A: [[4, 1], [4, 1], [5, 1], [4, 1], [3, 1], [2, 1], [3, 2]], B: [[2, 1], [2, 1], [3, 1], [2, 1], [1, 1], [0, 1], [1, 2]], C: [[7, 1], [6, 1], [5, 1], [4, 1], [5, 1], [4, 1], [3, 2]], D: [[4, 1], [3, 1], [2, 1], [1, 1], [0, 4]] } },
+  kerbez: { bpm: 104, root: 62, mode: 'mixo', drone: [38, 43], strum: 'X.x.Xxx.', form: 'AABACDAB', vol: 0.28,
+    m: { A: [[0, 1], [2, 1], [4, 2], [5, 1], [4, 1], [2, 2]], B: [[7, 2], [5, 1], [4, 1], [5, 2], [4, 2]], C: [[4, 1], [5, 1], [7, 1], [5, 1], [4, 2], [2, 2]], D: [[2, 1], [1, 1], [0, 2], [0, 4]] } },
+  shabuyl: { bpm: 168, root: 50, mode: 'phrygian', drone: [38, 45], strum: 'XxXxXxXx', form: 'AABACACD', vol: 0.34,
+    m: { A: [[0, 1], [0, 1], [1, 1], [0, 1], [3, 1], [1, 1], [0, 2]], B: [[4, 1], [4, 1], [5, 1], [4, 1], [3, 1], [1, 1], [0, 2]], C: [[7, 1], [5, 1], [4, 1], [3, 1], [4, 1], [3, 1], [1, 2]], D: [[0, 1], [1, 1], [3, 1], [4, 1], [5, 2], [4, 2]] } },
+  tun: { bpm: 56, root: 74, mode: 'dorian', drone: [38], strum: 'X.......', form: 'ABACABDA', vol: 0.22,
+    m: { A: [[4, 4], [2, 4]], B: [[3, 2], [2, 2], [0, 4]], C: [[5, 4], [4, 4]], D: [[2, 2], [1, 2], [0, 4]] } },
+};
+const degree = (p, d) => { const md = MODES[p.mode]; return p.root + md[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7); };
+
 function startMusic() {
   const c = sound.ctx;
   const bus = c.createGain();
   bus.gain.value = (sound.wantMusic ?? 1) * 0.22;
   bus.connect(sound.out);
-  sound.music = { bus, next: c.currentTime + 0.2, step: 0, note: 4, level: 0.0 };
-  const beat = 60 / 132 / 2;
-  const tickMusic = () => {
+  sound.music = { bus, next: c.currentTime + 0.2, bar: 0, piece: 'dala', want: sound.wantMood || 'dala', playBars: 0 };
+  const tick = () => {
     const m = sound.music;
     if (!sound.ctx) return;
-    while (m.next < c.currentTime + 0.3) {
-      const s = m.step % 16;
-      // strum: low D and A on the strong beats, the "gallop" (long-short-short) between
-      if (s % 4 === 0) { pluck(73.42, m.next, 0.5); pluck(110, m.next + 0.012, 0.35); }
-      else if (s % 4 === 2 || s % 4 === 3) pluck(110, m.next, 0.18);
-      // the tune: a step or two along the scale, resting now and then
-      if (s % 2 === 0 && Math.random() < 0.72) {
-        m.note = Math.max(0, Math.min(SCALE.length - 1, m.note + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]));
-        pluck(SCALE[m.note], m.next + 0.005, 0.32);
+    while (m.next < c.currentTime + 0.4) {
+      // at the start of a bar: change the küi if the moment asks for another
+      let want = m.want;
+      if (want === 'play') want = Math.floor(m.playBars / 16) % 2 ? 'kerbez' : 'jorga';
+      if (want !== m.piece) { m.piece = want; m.bar = 0; }
+      if (m.want === 'play') m.playBars++;
+      const p = PIECES[m.piece];
+      const eighth = 60 / p.bpm / 2;
+      // the strum on the lower strings
+      [...p.strum].forEach((ch, k) => {
+        const t = m.next + k * eighth;
+        if (ch === 'X') { pluck(hz(p.drone[0]), t, 0.42); if (p.drone[1]) pluck(hz(p.drone[1]), t + 0.014, 0.3); }
+        else if (ch === 'x') pluck(hz(p.drone[1] || p.drone[0] + 7), t, 0.16);
+      });
+      // the tune: this bar's motif, now and then an octave up on a repeat, a grace note before long notes
+      const motif = p.m[p.form[m.bar % p.form.length]];
+      const lift = m.bar % 16 >= 8 && p.form[m.bar % p.form.length] === 'A' ? 7 : 0;
+      let at = m.next;
+      for (const [d, len] of motif) {
+        const note = degree(p, d + lift);
+        if (len >= 2 && Math.random() < 0.5) pluck(hz(degree(p, d + lift + 1)), Math.max(m.next, at - 0.05), p.vol * 0.4);
+        pluck(hz(note), at + 0.004, p.vol);
+        at += len * eighth;
       }
-      m.next += beat;
-      m.step++;
+      m.next += 8 * eighth;
+      m.bar++;
     }
   };
-  setInterval(tickMusic, 100);
+  setInterval(tick, 100);
+}
+
+// which küi the moment asks for: 'dala', 'play' (jorga and kerbez in turn), 'shabuyl', 'tun', 'kerbez'
+export function musicMood(name) {
+  sound.wantMood = name;
+  if (sound.music) sound.music.want = name;
 }
 
 // how loud the dombra plays: louder on the title, quieter during play

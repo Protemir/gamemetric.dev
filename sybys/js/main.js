@@ -3,7 +3,7 @@ import { View, TRIBE_RGB } from './render.js';
 import { View3D, webglOK, modelsReady } from './render3d.js';
 import { el, store } from './util.js';
 import { T, lang, setLang } from './text.js';
-import { sfx, audioInit, sound, setSound, holdAudio, musicLevel } from './sfx.js';
+import { sfx, audioInit, sound, setSound, holdAudio, musicLevel, musicMood } from './sfx.js';
 import { avatar, elder, LONE_HORSE, ICONS } from './avatars.js';
 import * as M from './meta.js';
 import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute } from './portal.js';
@@ -933,6 +933,7 @@ function showEnd(rec) {
 
 let shownPhase = null;
 let lastMusic = -1;
+let lastMood = '';
 function frame(now) {
   const raw = (now - last) / 1000;
   const dt = Math.min(0.05, raw);
@@ -987,6 +988,9 @@ function frame(now) {
   // the dombra: full on the title and the cards, soft under play
   const lvl = !g || g.demo || g.phase === 'end' ? 1 : g.phase === 'map' ? 0.45 : 0.7;
   if (lvl !== lastMusic) { lastMusic = lvl; musicLevel(lvl); }
+  // and which küi
+  const mood = tourState ? 'kerbez' : !g || g.demo || g.phase !== 'map' ? 'dala' : g.raid ? 'shabuyl' : g.night ? 'tun' : 'play';
+  if (mood !== lastMood) { lastMood = mood; musicMood(mood); }
   // the portal counts only real play: not the title, the cards, the scenes or a pause
   gameplay(!!g && !g.demo && g.phase === 'map' && !paused && !document.hidden);
   view.draw(g && (g.phase !== 'end' || view.setCinema) ? g : null, now, look);
