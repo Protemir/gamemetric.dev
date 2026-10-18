@@ -145,18 +145,29 @@ export class Rider {
     if (!f || f.mount != null) return;
     f.mount = 0; f.mFrom = this.root.position.clone(); f.mQ = this.root.quaternion.clone(); f.mS = this.root.scale.clone();
   }
+  // посадка как в жизни: подходит к боку коня, встаёт лицом по ходу, толчок — и прямо в седло
   stepMount(dt) {
     const f = this.fallen;
-    f.mount = Math.min(1, f.mount + dt / 0.6);
-    // где окажется таз в седле — в мировых координатах
+    f.mount = Math.min(1, f.mount + dt / 1.1);
     this.sock.updateWorldMatrix(true, false);
     Mm.compose(this.home.pos, this.home.quat, this.home.scale).premultiply(this.sock.matrixWorld).decompose(Vm, Qm, Sm);
-    const k = f.mount, e = k * k * (3 - 2 * k);
-    this.root.position.lerpVectors(f.mFrom, Vm, e);
-    this.root.position.y += Math.sin(k * Math.PI) * 0.35; // прыжок
-    this.root.quaternion.slerpQuaternions(f.mQ, Qm, e);
-    this.root.scale.lerpVectors(f.mS, Sm, e);
-    this.stand = 1 - e;
+    // точка у левого бока коня, на земле: туда он подходит
+    const hq = this.horse.obj.getWorldQuaternion(Qb);
+    V0.set(0.85, 0, 0).applyQuaternion(hq);
+    const sx = Vm.x + V0.x, sz = Vm.z + V0.z, standY = 0.98;
+    const k = f.mount, sm = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+    if (k < 0.45) { // подходит и разворачивается по ходу коня, ровно стоя
+      const e = sm(k / 0.45);
+      this.root.position.set(f.mFrom.x + (sx - f.mFrom.x) * e, standY + Math.abs(Math.sin(e * Math.PI * 3)) * 0.04, f.mFrom.z + (sz - f.mFrom.z) * e);
+      this.root.quaternion.slerpQuaternions(f.mQ, Qm, e);
+      this.stand = 1;
+    } else { // толчок вверх и вбок в седло, ноги из прямых — в посадку
+      const e = sm((k - 0.45) / 0.55);
+      this.root.position.set(sx + (Vm.x - sx) * e, standY + (Vm.y - standY) * e + Math.sin(e * Math.PI) * 0.22, sz + (Vm.z - sz) * e);
+      this.root.quaternion.copy(Qm);
+      this.stand = 1 - e;
+    }
+    this.root.scale.lerpVectors(f.mS, Sm, sm(k));
     if (k >= 1) this.remount();
   }
   remount() {
