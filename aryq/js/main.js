@@ -134,6 +134,7 @@ const TEXT = {
     plenty: 'вдоволь',
     ghostStart: 'Пунктир начинается выше, у кольца «начни тут». От этого арыка вода туда не поднимется — начни от кольца.',
     start: 'Начинай от реки или от арыка и тяни.',
+    grew: 'В долине тесно, и сады разрастаются: этот пьёт больше. Подведи к нему ещё воды.',
     pinch: 'Мелко? Раздвинь двумя пальцами — поле приблизится.',
     gateShut: 'Шлюз закрыт: вода сюда не идёт. Нажми ещё раз — откроется.',
     gateOpen: 'Шлюз открыт',
@@ -231,6 +232,7 @@ const TEXT = {
     plenty: 'plenty',
     ghostStart: 'The dashed line starts higher up, at the “start here” ring. From this canal water cannot climb there: start from the ring.',
     start: 'Start from the river or a canal and drag.',
+    grew: 'The valley is full, so orchards grow: this one drinks more now. Bring it more water.',
     pinch: 'Too small? Spread two fingers to zoom in.',
     gateShut: 'Gate closed: no water goes this way. Tap again to open it.',
     gateOpen: 'Gate open',
@@ -957,6 +959,10 @@ function frame(now) {
         say(t('flooded'), 3000);
       }
       if (ev.type === 'left') say(t('left'), 3000);
+      if (ev.type === 'grow') {
+        view.burst(ev.obj.y * W + ev.obj.x, 'leaf');
+        tip('grew', 4500, 2);
+      }
       if (ev.type === 'year') {
         sfx.yearDone();
         happytime();

@@ -40,6 +40,31 @@ const clickText = (text) => B.js(`(() => { const b = [...document.querySelectorA
   check('versions in index.html are fresh', stale.length === 0, stale.join(', ') || 'all');
 }
 
+// 0b. a valley dug full keeps giving something to do: orchards squeeze in, then old ones grow
+{
+  const Sim = await import('../js/sim.js');
+  const g = Sim.newGame(18, 28, 3003, 'mountain');
+  g.melt = 3;
+  g.cap = 4;
+  let t = 0, grows = 0, quiet = 0, last = 0;
+  while (!g.over && t < 2.5 * Sim.YEAR_DAYS) {
+    for (const o of g.objects) {
+      if (o.s >= 0.99) continue;
+      const p = Sim.planFor(g, o);
+      if (!p || !p.cells.length) continue;
+      g.dig = Math.max(g.dig, p.cells.length);
+      Sim.startStroke(g, p.from);
+      for (const c of p.cells) if (!Sim.extend(g, c).ok) break;
+      Sim.endStroke(g);
+    }
+    for (const ev of g.events.splice(0)) if (ev.type === 'grow' || ev.type === 'spawn') { if (ev.type === 'grow') grows++; last = t; }
+    if (g.day < Sim.WINTER) quiet = Math.max(quiet, t - last);
+    Sim.advance(g, 0.5);
+    t += 0.5;
+  }
+  check('a full valley: orchards keep coming or growing', grows > 0 && quiet <= 12, `${grows} grew, longest quiet ${quiet} days`);
+}
+
 try {
   // 1. start screens in both languages
   await B.init('try { localStorage.clear(); } catch {}');

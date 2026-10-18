@@ -454,12 +454,14 @@ function tick(g, dt) {
   g.day += dt;
   if (g.day < WINTER) {
     if (g.day >= g.nextGarden) {
-      spawn(g, 'garden');
+      // a valley full of orchards (18.10: "nothing appears, only the seasons go by"): new ones
+      // squeeze in closer, and when there is no room at all an old orchard grows and drinks more
+      if (!spawn(g, 'garden') && !spawn(g, 'garden', 1)) grow(g);
       // the first few come quickly so there is something to do right away, then the usual pace
       g.nextGarden = g.day + (g.year === 1 && g.gardensEver < 4 ? 2.5 : Math.max(5, 11 - g.year));
     }
     if (g.day >= g.nextHouse) {
-      spawn(g, 'house');
+      if (!spawn(g, 'house')) spawn(g, 'house', 1);
       g.nextHouse = g.day + 22;
     }
   }
@@ -588,7 +590,20 @@ export function planFor(g, o, r = null, spare = false) {
   return { from: c, cells };
 }
 
-function spawn(g, type) {
+export const GROW_MAX = 3; // an orchard can grow three times, each time drinking half as much again
+function grow(g) {
+  const ok = g.objects.filter((o) => o.type === 'garden' && (o.grown || 0) < GROW_MAX && o.s >= 0.9);
+  if (!ok.length) return null;
+  const o = ok[Math.floor(g.rand() * ok.length)];
+  o.grown = (o.grown || 0) + 1;
+  o.need += GARDEN_NEED * 0.5;
+  g.dig += DIG_PER_GARDEN;
+  g.events.push({ type: 'grow', obj: o });
+  return o;
+}
+
+// gap: how many free cells stay between objects (2, or 1 when the valley is full)
+function spawn(g, type, gap = 2) {
   const r = reach(g);
   const { W, H } = g;
   const far = 3 + g.year * 2 + g.gardensEver * 0.3;
@@ -605,7 +620,7 @@ function spawn(g, type) {
           const xx = x + dx, yy = y + dy;
           if (!inside(g, xx, yy)) continue;
           const j = yy * W + xx;
-          if (g.objAt[j] && Math.max(Math.abs(dx), Math.abs(dy)) <= 2) ok = false;
+          if (g.objAt[j] && Math.max(Math.abs(dx), Math.abs(dy)) <= gap) ok = false;
           if (isWater(g, j) && Math.max(Math.abs(dx), Math.abs(dy)) <= 1) ok = false;
         }
       if (!ok) continue;

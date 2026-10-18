@@ -75,7 +75,7 @@ export class View {
         cx.stroke();
       } else {
         const e = 1 - (1 - f) * (1 - f);
-        cx.fillStyle = `rgba(92,62,36,${1 - f})`;
+        cx.fillStyle = b.kind === 'leaf' ? `rgba(96,170,70,${1 - f})` : `rgba(92,62,36,${1 - f})`;
         cx.beginPath();
         cx.arc(b.x + b.vx * e * 0.3, b.y + b.vy * e * 0.3 - Math.sin(f * Math.PI) * this.cs * 0.3, b.r, 0, Math.PI * 2);
         cx.fill();
@@ -604,7 +604,7 @@ export class View {
       const [px, py] = this.center(o.y * g.W + o.x);
       const age = (g.day + (g.year - 1) * S.YEAR_DAYS - o.born) * S.DAY_SEC;
       const pop = age < 0.45 ? 0.3 + 1.6 * age : 1;
-      const r = cs * 0.5 * pop;
+      const r = cs * 0.5 * pop * (1 + 0.07 * (o.grown || 0)); // a grown orchard is a little bigger
       if (o.thirst > 0.7 && g.day < S.WINTER) {
         cx.fillStyle = `rgba(226,73,59,${0.2 + 0.16 * Math.sin(now / 120)})`;
         cx.beginPath();
