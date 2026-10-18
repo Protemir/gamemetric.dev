@@ -322,6 +322,8 @@ class Horse {
     }
     this.neck = M.neck.map((n) => this.obj.getObjectByName(n)).filter(Boolean);
     this.head = this.obj.getObjectByName(M.head);
+    // поза покоя шеи и головы: каждый кадр начинаем с неё, иначе процедурный поворот копится
+    this.rest = [...this.neck, this.head].filter(Boolean).map((b) => [b, b.quaternion.clone()]);
     this.hooves = hoofBones(this.obj).map((b) => ({ b, low: true }));
     this.brain = { t: 0, target: new THREE.Vector3() };
   }
@@ -398,6 +400,7 @@ class Horse {
       if (this.halt > 0 && !A.halt.isRunning()) { A.halt.reset().play(); }
       A.halt.weight = this.halt > 0 ? 1 : 0;
     }
+    for (const [b, q] of this.rest) b.quaternion.copy(q);
     this.mixer.update(dt);
     // Процедурный слой поверх клипов: наклон в поворот, «приседание» при торможении, шея смотрит в поворот.
     const rollT = THREE.MathUtils.clamp(-this.turn * v * 0.045, -0.2, 0.2);
