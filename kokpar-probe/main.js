@@ -20,7 +20,7 @@ const MODELS = {
   },
   // Warhorse Lite (Literock Studios, бесплатная лицензия, можно в коммерческой игре; сам файл отдельно не выкладывать)
   warhorse: {
-    file: 'models/warhorse-2048.glb', height: 1.75, maxScale: 1.9, gallop: 8.5, bright: 1.7,
+    file: P.has('armor') ? 'models/warhorse-2048.glb' : 'models/warhorse-kz.glb', height: 1.75, maxScale: 1.9, gallop: 8.5,
     clips: { idle: 'idle_loop', walk: 'walk_loop', trot: null, canter: 'canter_loop', gallop: null, left: null, right: null, halt: null, rear: 'rear' },
     neck: ['neck_01', 'neck_02', 'neck_03'], head: 'head', hooves: ['finger_L', 'finger_R', 'toe_L', 'toe_R'],
   },
@@ -44,6 +44,7 @@ if (M.gallop) GAITS[4].v = M.gallop;
 const FIELD = 110; // полуширина поля, м
 const REAR_ANGLE = Number(P.get('rear') || 0.58); // свечка: наклон корпуса, рад (~33°)
 const REAR_LEN = 3.0, REAR_UP = 0.85, REAR_DOWN = 0.9; // длительность, подъём, опускание, с
+const CHASE = P.has('chase'); // боты гонятся за игроком
 
 // ---------- рендер ----------
 const renderer = new THREE.WebGLRenderer({ antialias: Q !== 'low', powerPreference: 'high-performance' });
@@ -420,7 +421,6 @@ async function loadModel() {
   root.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true; o.receiveShadow = Q === 'high';
-      if (M.bright && o.material?.color) o.material.color.multiplyScalar(M.bright); // светлее масть
       o.frustumCulled = false; // у skinned mesh рамка от позы покоя — без этого конь пропадает у края кадра
     }
   });
@@ -443,6 +443,7 @@ async function loadModel() {
   const b2 = new THREE.Box3().setFromObject(holder);
   root.position.y -= b2.min.y;
   proto = { scene: holder, clips, native: {} };
+  if (holder.getObjectByName('saddle_socket')) proto.blanket = buildBlanket(holder);
   for (const g of ['walk', 'trot', 'canter', 'gallop']) if (clips[g]) proto.native[g] = calibrate(clips[g]);
 }
 function findTail(root) {
@@ -491,6 +492,88 @@ function hoofBones(o) {
   return out;
 }
 
+// Масти (множитель к текстуре гнедого коня): гнедой, рыжий, вороной, саврасый, тёмно-гнедой, светло-рыжий.
+const COATS = [[1.7, 1.7, 1.7], [2.9, 1.6, 0.95], [0.75, 0.72, 0.72], [3.1, 2.6, 1.7], [1.2, 1.1, 1.05], [3.3, 2.2, 1.3]];
+
+// Тоқым: красный, синий, зелёный войлок с золотым бордюром и «бараньими рогами» (қошқар мүйіз).
+const blanketMats = ['#a3242c', '#1f4f8f', '#2f6b3a', '#7a2a6e'].map((felt) => new THREE.MeshStandardMaterial({
+  map: canvasTex(512, 256, (g, w, h) => {
+    g.fillStyle = felt; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 3000; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } // ворс войлока
+    const gold = '#e2a83a';
+    g.strokeStyle = gold; g.lineWidth = 10; g.strokeRect(12, 12, w - 24, h - 24); // бордюр
+    g.lineWidth = 3; g.strokeRect(30, 30, w - 60, h - 60);
+    const horn = (x, y, s, flip) => { // қошқар мүйіз: ножка и два рога, закрученные наружу спиралью
+      g.beginPath();
+      g.moveTo(x, y + flip * s * 0.55); g.lineTo(x, y);
+      for (const d of [1, -1]) {
+        const cx = x + d * s * 0.42;
+        g.moveTo(x, y);
+        for (let t = 0; t <= 1.001; t += 0.04) {
+          const ang = t * Math.PI * 2.3, r = s * 0.42 * (1 - 0.65 * t);
+          g.lineTo(cx - d * r * Math.cos(ang), y - flip * r * Math.sin(ang));
+        }
+      }
+      g.stroke();
+    };
+    g.lineWidth = 4;
+    for (let x = 48; x < w - 30; x += 52) { horn(x, 24, 12, 1); horn(x, h - 24, 12, -1); }
+    g.lineWidth = 6; // большая розетка по центру каждого бока
+    for (const cx of [w * 0.27, w * 0.73]) { horn(cx, h / 2 - 6, 44, 1); horn(cx, h / 2 + 6, 44, -1); g.beginPath(); g.arc(cx, h / 2, 7, 0, 6.283); g.fillStyle = gold; g.fill(); }
+  }),
+  roughness: 0.95, side: THREE.DoubleSide,
+}));
+
+// Форма тоқыма по бокам коня: берём профиль туловища под седлом из позы покоя и отступаем на 1,5 см наружу.
+function buildBlanket(holder) {
+  holder.updateMatrixWorld(true);
+  const sock = holder.getObjectByName('saddle_socket');
+  const sp = holder.worldToLocal(sock.getWorldPosition(new THREE.Vector3()));
+  let sm = null;
+  holder.traverse((o) => { if (o.isSkinnedMesh) sm = o; });
+  const pts = [], t = new THREE.Vector3();
+  for (let i = 0; i < sm.geometry.attributes.position.count; i++) {
+    sm.getVertexPosition(i, t); sm.localToWorld(t); holder.worldToLocal(t);
+    if (Math.abs(t.z - sp.z) < 0.5 && t.y > sp.y - 0.55) pts.push(t.x, t.y, t.z);
+  }
+  const width = (y, z) => { // половина ширины туловища на высоте y и в сечении z
+    let m = 0;
+    for (let i = 0; i < pts.length; i += 3) if (Math.abs(pts[i + 2] - z) < 0.045 && Math.abs(pts[i + 1] - y) < 0.035) m = Math.max(m, Math.abs(pts[i]));
+    return m;
+  };
+  const yTop = sp.y - 0.07, yBot = sp.y - 0.43, ROWS = 10, SIDE = 9;
+  const pos = [], uv = [], idx = [];
+  const cols = [];
+  for (let j = SIDE; j >= 0; j--) cols.push([-1, j]);
+  cols.push([0, SIDE + 1]);
+  for (let j = 0; j <= SIDE; j++) cols.push([1, j]);
+  for (let r = 0; r <= ROWS; r++) {
+    const v = r / ROWS, z = sp.z - 0.36 + v * 0.62;
+    // нижний край закруглён: к переду и заду тоқым короче
+    const drop = 1 - 0.28 * Math.pow(Math.abs(v - 0.5) * 2, 2.5);
+    cols.forEach(([side, j], c) => {
+      let x, y;
+      if (side === 0) { x = 0; y = sp.y - 0.02; } else {
+        y = yTop - (yTop - yBot) * drop * (j / SIDE);
+        x = side * (width(y, z) + 0.015);
+      }
+      pos.push(x, y, z);
+      uv.push(c / (cols.length - 1), v);
+    });
+  }
+  const C = cols.length;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < C - 1; c++) {
+    const a = r * C + c, b = a + C;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 class Horse {
   constructor(i, ai) {
     this.ai = ai;
@@ -502,6 +585,12 @@ class Horse {
     this.obj.position.set(i === 0 ? 0 : (rnd() - 0.5) * 60, 0, i === 0 ? 0 : (rnd() - 0.5) * 60);
     this.yaw = rnd() * 6.28 * (i === 0 ? 0 : 1);
     this.v = 0; this.gait = 0; this.steer = 0; this.turn = 0; this.halt = 0; this.pitch = 0; this.roll = 0; this.acc = 0;
+    this.push = new THREE.Vector3(); this.jolt = 0; // боковой отлёт и крен после толчка
+    const leg = (s) => ({ thigh: this.obj.getObjectByName('thigh_' + s), calf: this.obj.getObjectByName('calf_' + s), foot: this.obj.getObjectByName('foot_' + s), toe: this.obj.getObjectByName('toe_' + s) });
+    this.hindLegs = ['L', 'R'].map(leg).filter((l) => l.thigh && l.calf && l.foot && l.toe);
+    if (this.hindLegs.length < 2) this.hindLegs = null;
+    // поза покоя задних ног: в верхней точке свечки их не пишет ни один клип, без сброса сгиб копится
+    this.legRest = (this.hindLegs || []).flatMap((l) => [l.thigh, l.calf, l.foot]).map((b) => [b, b.quaternion.clone()]);
     this.mixer = new THREE.AnimationMixer(this.obj);
     this.act = {};
     for (const [k, c] of Object.entries(proto.clips)) {
@@ -517,12 +606,29 @@ class Horse {
     this.rest = [...this.neck, this.head].filter(Boolean).map((b) => [b, b.quaternion.clone()]);
     this.hooves = hoofBones(this.obj).map((b) => ({ b, low: true }));
     this.brain = { t: 0, target: new THREE.Vector3() };
+    // Масть: у каждого коня своя (гнедой, рыжий, вороной, саврасый…), у игрока — гнедой.
+    const coat = COATS[i % COATS.length];
+    this.obj.traverse((o) => { if (o.isMesh && o !== this.blanket && o.material?.color) { o.material = o.material.clone(); o.material.color.setRGB(...coat); } });
+    // Тоқым — войлочный потник с орнаментом под седлом; держится за кость седла и качается вместе с ним.
+    const sock = this.obj.getObjectByName('saddle_socket');
+    if (proto.blanket && sock) {
+      this.obj.updateMatrixWorld(true);
+      this.blanket = new THREE.Mesh(proto.blanket, blanketMats[i % blanketMats.length]);
+      this.blanket.castShadow = true; this.blanket.receiveShadow = true;
+      this.tilt.add(this.blanket);
+      this.blanket.updateMatrixWorld(true);
+      sock.attach(this.blanket);
+    }
   }
   think(dt) {
     const b = this.brain;
     b.t -= dt;
     const p = this.obj.position;
-    if (b.t <= 0 || V.subVectors(b.target, p).setY(0).length() < 6) {
+    if (CHASE && player) { // ?chase — боты скачут к игроку и толкаются (проверка столкновений)
+      const q = player.obj.position;
+      b.target.set(q.x + Math.sin(player.yaw) * 2, 0, q.z + Math.cos(player.yaw) * 2);
+      this.gait = V.subVectors(b.target, p).length() > 8 ? 4 : Math.max(2, player.gait);
+    } else if (b.t <= 0 || V.subVectors(b.target, p).setY(0).length() < 6) {
       b.target.set((rnd() * 2 - 1) * FIELD * 0.8, 0, (rnd() * 2 - 1) * FIELD * 0.8);
       b.t = 4 + rnd() * 8;
       this.gait = rnd() < 0.12 ? 0 : rnd() < 0.55 ? 4 : 1 + Math.floor(rnd() * 3);
@@ -551,6 +657,10 @@ class Horse {
     const p = this.obj.position;
     p.x += Math.sin(this.yaw) * this.v * dt;
     p.z += Math.cos(this.yaw) * this.v * dt;
+    // после толчка конь ещё немного едет боком, пока не погасит удар
+    p.x += this.push.x * dt; p.z += this.push.z * dt;
+    this.push.multiplyScalar(Math.exp(-dt * 3.5));
+    this.jolt *= Math.exp(-dt * 5);
     // мягкая граница поля
     const out = Math.max(Math.abs(p.x), Math.abs(p.z)) - FIELD;
     if (out > 0) { V.set(-p.x, 0, -p.z); let d = Math.atan2(V.x, V.z) - this.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); this.yaw += Math.sign(d) * Math.min(Math.abs(d), dt * 1.2); }
@@ -611,13 +721,14 @@ class Horse {
       A.halt.weight = this.halt > 0 ? 1 : 0;
     }
     for (const [b, q] of this.rest) b.quaternion.copy(q);
+    for (const [b, q] of this.legRest) b.quaternion.copy(q);
     this.mixer.update(dt);
     // Шея и голова тяжёлые: догоняют позу клипа с небольшой задержкой, без рывков.
     if (!this.smooth) this.smooth = this.rest.map(([b]) => b.quaternion.clone());
     const kHead = 1 - Math.exp(-dt * (rearE > 0 ? 8 : 22));
     this.rest.forEach(([b], i) => { this.smooth[i].slerp(b.quaternion, kHead); b.quaternion.copy(this.smooth[i]); });
     // Процедурный слой поверх клипов: наклон в поворот, «приседание» при торможении, шея смотрит в поворот.
-    const rollT = THREE.MathUtils.clamp(-this.turn * v * 0.045, -0.2, 0.2);
+    const rollT = THREE.MathUtils.clamp(-this.turn * v * 0.045 + this.jolt, -0.32, 0.32); // + крен от толчка
     const pitchT = THREE.MathUtils.clamp(-this.acc * 0.012, -0.09, 0.05);
     this.roll = THREE.MathUtils.lerp(this.roll, rollT, 1 - Math.exp(-dt * 6));
     this.pitch = THREE.MathUtils.lerp(this.pitch, pitchT, 1 - Math.exp(-dt * 5));
@@ -629,6 +740,21 @@ class Horse {
     const th = this.pitch - REAR_ANGLE * rearE, zp = this.hindZ ?? 0;
     this.tilt.rotation.set(th, 0, this.roll);
     this.tilt.position.set(0, rearE > 0 ? zp * Math.sin(th) : 0, rearE > 0 ? zp - zp * Math.cos(th) : 0);
+    // В свечке конь садится на круп: бедро вперёд, скакательный сустав сгибается, пясть под себя.
+    // Потом весь корпус сдвигаем так, чтобы задние копыта остались там, где стояли.
+    if (rearE > 0 && this.hindLegs) {
+      if (!this.hindAnchor) { this.obj.updateMatrixWorld(true); this.hindAnchor = this.hindLegs.map((l) => l.toe.getWorldPosition(new THREE.Vector3())); }
+      for (const l of this.hindLegs) {
+        l.thigh.quaternion.multiply(Qx.setFromAxisAngle(AX, 0.34 * rearE));
+        l.calf.quaternion.multiply(Qx.setFromAxisAngle(AX, -0.7 * rearE));
+        l.foot.quaternion.multiply(Qx.setFromAxisAngle(AX, 0.5 * rearE));
+      }
+      this.obj.updateMatrixWorld(true);
+      V.set(0, 0, 0);
+      this.hindLegs.forEach((l, k) => V.add(this.hindAnchor[k].clone().sub(l.toe.getWorldPosition(V2))));
+      V.multiplyScalar(0.5).applyQuaternion(Qy.copy(this.obj.quaternion).invert()); // из мира в систему коня
+      this.tilt.position.add(V);
+    } else this.hindAnchor = null;
     const look = THREE.MathUtils.clamp(this.turn * 0.22, -0.35, 0.35);
     for (const n of this.neck) { Qy.setFromAxisAngle(AY, look / this.neck.length); n.quaternion.premultiply(Qy); }
     if (this.halt > 0 && this.head) { Qx.setFromAxisAngle(AX, -0.25 * this.halt); this.head.quaternion.multiply(Qx); }
@@ -742,6 +868,43 @@ const horses = [];
 let camHold = false; // ?debug: камера стоит, где поставили (кадры сбоку)
 const hud = document.getElementById('hud');
 let frames = 0, fpsT = 0, fps = 0, frozen = false, last = performance.now();
+// ---------- столкновения коней ----------
+// Конь сверху — два круга (грудь и круп). Перекрытие растаскиваем, а по силе встречного удара
+// оба теряют скорость, толкнутый отлетает вбок и кренится; кто бил грудью, теряет меньше.
+const BODY_R = 0.42, BODY_OFF = 0.55;
+const CA = new THREE.Vector3(), CB = new THREE.Vector3(), N2 = new THREE.Vector3();
+function collide() {
+  for (let i = 0; i < horses.length; i++) for (let j = i + 1; j < horses.length; j++) {
+    const a = horses[i], b = horses[j], pa = a.obj.position, pb = b.obj.position;
+    if (Math.abs(pa.x - pb.x) > 3 || Math.abs(pa.z - pb.z) > 3) continue;
+    let best = 0;
+    for (const sa of [-1, 1]) for (const sb of [-1, 1]) {
+      CA.set(pa.x + Math.sin(a.yaw) * BODY_OFF * sa, 0, pa.z + Math.cos(a.yaw) * BODY_OFF * sa);
+      CB.set(pb.x + Math.sin(b.yaw) * BODY_OFF * sb, 0, pb.z + Math.cos(b.yaw) * BODY_OFF * sb);
+      const d = CA.distanceTo(CB), pen = BODY_R * 2 - d;
+      if (pen > best) { best = pen; N2.subVectors(CB, CA).normalize(); if (d < 1e-4) N2.set(1, 0, 0); }
+    }
+    if (best <= 0) continue;
+    // растащить поровну
+    pa.addScaledVector(N2, -best / 2); pb.addScaledVector(N2, best / 2);
+    // скорости вдоль линии удара
+    const va = a.v * (Math.sin(a.yaw) * N2.x + Math.cos(a.yaw) * N2.z);
+    const vb = b.v * (Math.sin(b.yaw) * N2.x + Math.cos(b.yaw) * N2.z);
+    const closing = va - vb; // > 0 — сближаются
+    if (closing <= 0.3) continue;
+    const imp = Math.min(closing, 9);
+    // толчок: каждый получает отлёт от другого, сильнее — тот, в кого врезались
+    a.push.addScaledVector(N2, -imp * (va > vb ? 0.25 : 0.55));
+    b.push.addScaledVector(N2, imp * (va > vb ? 0.55 : 0.25));
+    a.v = Math.max(0, a.v - imp * 0.35); b.v = Math.max(0, b.v - imp * 0.35);
+    // крен в сторону удара (справа ударили — валится влево) и короткое «спотыкание»
+    const side = (h, n) => Math.sign(Math.cos(h.yaw) * n.x - Math.sin(h.yaw) * n.z) || 1;
+    a.jolt += 0.05 * imp * side(a, N2) * -1; b.jolt += 0.05 * imp * side(b, N2);
+    if (imp > 3) { a.pitch -= 0.04; b.pitch -= 0.04; }
+    if (P.has('debug')) (window.__bumps ||= []).push({ t: performance.now(), imp: +imp.toFixed(2), a: i, b: j });
+  }
+}
+
 function step(dt) {
   if (!player.ai) {
     if (AUTO) autopilot(dt);
@@ -751,6 +914,7 @@ function step(dt) {
     }
   }
   for (const h of horses) h.update(dt);
+  collide();
   stepDust(dt);
   wind.value += dt; skyMat.uniforms.time.value += dt;
   if (!camHold) updateCamera(dt);
