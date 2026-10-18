@@ -39,10 +39,10 @@ const TITLE = `(() => {
   document.getElementById('ui').style.display = 'none';
   const t = document.createElement('div');
   t.id = 'coverTitle';
-  t.innerHTML = '<h1>Sybys</h1><div class="orn">' + document.querySelector('.title .orn').innerHTML + '</div><p>Steppe Intrigue</p>';
+  t.innerHTML = '<h1>Whispers of the Steppe</h1><div class="orn">' + document.querySelector('.title .orn').innerHTML + '</div><p>Win the steppe with words, not swords</p>';
   t.style.cssText = 'position:fixed;left:0;right:0;bottom:7%;text-align:center;z-index:20;color:#fff4dc';
   const h = t.querySelector('h1');
-  h.style.cssText = 'margin:0;font-family:Georgia,serif;font-weight:700;letter-spacing:.08em;line-height:1;font-size:' + Math.round(Math.min(innerWidth * 0.17, innerHeight * 0.2)) + 'px;background:linear-gradient(180deg,#fff3cf 10%,#f2c25a 55%,#b8792a);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 6px 18px rgba(0,0,0,.6))';
+  h.style.cssText = 'margin:0;font-family:Georgia,serif;font-weight:700;letter-spacing:.08em;line-height:1.04;font-size:' + Math.round(Math.min(innerWidth * 0.085, innerHeight * 0.12)) + 'px;background:linear-gradient(180deg,#fff3cf 10%,#f2c25a 55%,#b8792a);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 6px 18px rgba(0,0,0,.6))';
   const o = t.querySelector('.orn');
   o.style.cssText = 'width:' + Math.round(innerWidth * 0.3) + 'px;margin:6px auto;color:#f2c25a';
   o.querySelector('svg').style.cssText = 'display:block;width:100%';
@@ -89,9 +89,9 @@ try {
     await B.js(`document.getElementById('coverTitle').style.transition = 'opacity 1s'; document.getElementById('coverTitle').style.opacity = 0`);
     await shoot(120);
     // 10 s: the game: riders with the khan's word, Karasai's sabres, a forged order caught
-    await B.js(`(() => { document.getElementById('ui').style.display = ''; [...document.querySelectorAll('div')].filter((d) => d.id === 'coverTitle' || d.style.zIndex === '19').forEach((d) => d.remove()); [...document.querySelectorAll('button')].find((b) => b.innerText.includes('Play')).click(); })()`);
+    await B.js(`(() => { document.getElementById('ui').style.display = ''; [...document.querySelectorAll('div')].filter((d) => d.id === 'coverTitle' || d.style.zIndex === '19').forEach((d) => d.remove()); [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Play')).click(); })()`);
     await wait(100);
-    await B.js(`[...document.querySelectorAll('button')].find((b) => b.innerText.includes('To the steppe')).click()`);
+    await B.js(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('To the steppe')).click()`);
     await wait(100);
     await B.js(`(() => { const s = window.__sybys; s.g.horses = 5; s.view.zoomAt(innerWidth * 0.5, innerHeight * 0.55, 1.35); })()`);
     await shoot(300, async (k) => {

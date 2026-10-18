@@ -33,7 +33,7 @@ html = html
   .split(/\r?\n/)
   .filter((l) => !/name="theme-color"|name="robots"|rel="canonical"|property="og:/.test(l))
   .join('\n')
-  .replace(/<title>[^<]*<\/title>/, '<title>Sybys: Steppe Intrigue</title>')
+  .replace(/<title>[^<]*<\/title>/, '<title>Whispers of the Steppe</title>')
   .replace(main[0], `<script src="${SDK[portal]}"></script>\n<script>window.SYBYS_PORTAL = '${portal}';</script>\n<script type="module" src="${boot[1]}"></script>`);
 fs.writeFileSync(path.join(out, 'index.html'), html);
 

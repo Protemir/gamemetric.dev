@@ -253,8 +253,8 @@ const RU = {
 };
 
 const EN = {
-  title: 'Sybys',
-  sub: 'When the Steppe Falls Silent',
+  title: 'Whispers of the Steppe',
+  sub: 'Win the steppe with words, not swords',
   play: 'Play',
   again: 'Another season',
   langBtn: 'Русский',

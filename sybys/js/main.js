@@ -215,7 +215,7 @@ function startScreen() {
   }
   const orn = el('div', 'orn');
   orn.innerHTML = ORNAMENT;
-  box.append(el('h1', null, T().title), orn, el('p', 'sub', T().sub));
+  box.append(el('h1', T().title.length > 12 ? 'long' : null, T().title), orn, el('p', 'sub', T().sub));
   const t = T(), meta = M.load();
   const play = el('button', 'big play', t.play);
   play.onclick = () => { audioInit(); mode = 'free'; intro(store.get('sybys.tutDone', false) ? 3 : 1); };

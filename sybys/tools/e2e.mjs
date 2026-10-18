@@ -45,7 +45,7 @@ try {
   check('start screen in Russian', t.includes('Сыбыс') && t.includes('Играть'), t.slice(0, 30).replace(/\n/g, ' '));
   await B.open(page('&lang=en'), 1280, 720);
   t = await uiText();
-  check('start screen in English', t.includes('Sybys') && t.includes('Play'), t.slice(0, 30).replace(/\n/g, ' '));
+  check('start screen in English', t.includes('Whispers of the Steppe') && t.includes('Play'), t.slice(0, 30).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'start-en.png'));
 
   // 2. the opening: a story card, the advisors, the goal

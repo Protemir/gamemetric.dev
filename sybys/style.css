@@ -23,7 +23,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: var(--bg);
-  color: var(--felt);
+  color: var(--ink);
   font-family: var(--sans);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
@@ -568,3 +568,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tourdots i.on { background: var(--gold-hi); }
 .tour .big { height: 38px; margin-top: 6px; min-width: 140px; font-size: 15px; }
 @media (max-width: 560px), (max-height: 500px) { .tour { bottom: 72px; padding: 8px 10px; } .tourline { font-size: 14px; } .tour .big { height: 32px; } }
+
+/* a long name (the English one) sets smaller and may take two lines */
+.title h1.long { font-size: clamp(38px, 6.6vw, 84px); line-height: 1.04; letter-spacing: 0.04em; }
+
+/* the one-line hint (no horses, Aria busy…) must stand out over the map */
+.hint { color: #fff1d0; border-color: var(--gold); font-weight: 700; text-shadow: 0 1px 2px #000; }
