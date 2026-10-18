@@ -61,30 +61,61 @@ const HORIZON = new THREE.Color('#e9dcc0');
 scene.fog = new THREE.Fog(HORIZON, 60, 420);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 1500);
 
-scene.add(new THREE.HemisphereLight('#cfe3ff', '#8a6a3a', 1.1));
-const sun = new THREE.DirectionalLight('#fff1d6', 2.6);
-sun.position.set(-40, 60, 25);
+scene.add(new THREE.HemisphereLight('#bcd6f5', '#7a5c32', 1.05));
+// Солнце ближе к вечеру: тёплое и ниже — длинные тени, рельефнее конь.
+const SUN_DIR = new THREE.Vector3(-0.62, 0.5, 0.6).normalize();
+const sun = new THREE.DirectionalLight('#ffe0ad', 3.1);
 sun.castShadow = renderer.shadowMap.enabled;
 sun.shadow.mapSize.set(Q === 'high' ? 2048 : 1024, Q === 'high' ? 2048 : 1024);
-Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 160 });
+Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 200 });
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 
-// Небо: градиент от горизонта к зениту.
-scene.add(new THREE.Mesh(
-  new THREE.SphereGeometry(1200, 32, 16),
-  new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { top: { value: new THREE.Color('#5d8fcf') }, bot: { value: HORIZON } },
-    vertexShader: 'varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-    fragmentShader: `uniform vec3 top; uniform vec3 bot; varying float h;
-      void main(){ gl_FragColor = vec4(mix(bot, top, smoothstep(0., .45, h)), 1.);
+// Небо: градиент, свечение у солнца и медленные облака.
+// Облака — бесшовная текстура шума, посчитанная один раз (шум в шейдере на каждый пиксель стоил половину FPS).
+const cloudTex = (() => {
+  const S = 256, data = new Uint8Array(S * S * 4);
+  const octs = [8, 16, 32, 64].map((g, i) => { const o = { g, a: 0.5 / 2 ** i, v: [] }; for (let k = 0; k < g * g; k++) o.v.push(Math.random()); return o; });
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let v = 0;
+    for (const o of octs) {
+      const fx = (x / S) * o.g, fy = (y / S) * o.g, ix = Math.floor(fx), iy = Math.floor(fy);
+      let tx = fx - ix, ty = fy - iy; tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+      const at = (cx, cy) => o.v[(((cy % o.g) + o.g) % o.g) * o.g + (((cx % o.g) + o.g) % o.g)];
+      v += o.a * (at(ix, iy) * (1 - tx) * (1 - ty) + at(ix + 1, iy) * tx * (1 - ty) + at(ix, iy + 1) * (1 - tx) * ty + at(ix + 1, iy + 1) * tx * ty);
+    }
+    const i = (y * S + x) * 4;
+    data[i] = data[i + 1] = data[i + 2] = Math.min(255, v * 270); data[i + 3] = 255;
+  }
+  const t = new THREE.DataTexture(data, S, S);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = t.minFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: new THREE.Color('#4a82c8') }, bot: { value: HORIZON }, sunDir: { value: SUN_DIR }, time: { value: 0 }, clouds: { value: cloudTex } },
+  vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
+  fragmentShader: `uniform vec3 top; uniform vec3 bot; uniform vec3 sunDir; uniform float time; uniform sampler2D clouds; varying vec3 vDir;
+    void main(){
+      vec3 d = normalize(vDir);
+      float h = max(d.y, 0.);
+      vec3 col = mix(bot, top, smoothstep(0., .5, h));
+      float s = max(dot(d, sunDir), 0.);
+      col += vec3(1., .78, .5) * (pow(s, 6.) * .22 + pow(s, 300.) * 1.4);
+      vec2 uv = d.xz / (d.y + .12) * .2 + vec2(time * .0005, time * .0002);
+      float n = texture2D(clouds, uv).r * .7 + texture2D(clouds, uv * 2.7 + .37).r * .3;
+      float c = smoothstep(.5, .74, n) * smoothstep(.02, .22, d.y);
+      vec3 cloud = mix(vec3(.93, .9, .86), vec3(1., .93, .8), pow(s, 3.));
+      col = mix(col, cloud, c * .85);
+      gl_FragColor = vec4(col, 1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
-      }`,
-  }),
-));
+    }`,
+});
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), skyMat));
 
 // Отражения для PBR-материалов коня: окружение из того же неба.
 {
@@ -112,23 +143,48 @@ function canvasTex(w, h, draw, repeat) {
 let seed = 7;
 const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
-// Земля: выгоревшая степь, пятна травы и пыли.
+// Земля: выгоревшая степь. Мелкая текстура (комья, камешки, сухие травинки) + крупные пятна по всей степи.
 const groundTex = canvasTex(512, 512, (g, w, h) => {
-  g.fillStyle = '#b39a5f'; g.fillRect(0, 0, w, h);
-  for (let i = 0; i < 9000; i++) {
-    const x = rnd() * w, y = rnd() * h, r = 1 + rnd() * 3;
-    const k = rnd();
-    g.fillStyle = k < 0.45 ? `rgba(120,118,60,${0.25 + rnd() * 0.3})` : k < 0.8 ? `rgba(200,175,115,${0.2 + rnd() * 0.3})` : `rgba(90,70,40,${0.2 + rnd() * 0.2})`;
-    g.fillRect(x, y, r, r * (0.5 + rnd()));
+  g.fillStyle = '#b49b62'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 7000; i++) {
+    const x = rnd() * w, y = rnd() * h, r = 1 + rnd() * 3, k = rnd();
+    g.fillStyle = k < 0.4 ? `rgba(118,112,58,${0.22 + rnd() * 0.3})` : k < 0.75 ? `rgba(205,182,124,${0.2 + rnd() * 0.3})` : `rgba(92,72,42,${0.18 + rnd() * 0.22})`;
+    g.beginPath(); g.ellipse(x, y, r, r * (0.4 + rnd() * 0.6), rnd() * 3, 0, 6.283); g.fill();
+  }
+  g.lineCap = 'round';
+  for (let i = 0; i < 900; i++) {
+    const x = rnd() * w, y = rnd() * h, l = 3 + rnd() * 7, a = rnd() * 6.28;
+    g.strokeStyle = `rgba(${rnd() < 0.5 ? '226,206,150' : '140,126,70'},${0.35 + rnd() * 0.35})`; g.lineWidth = 0.8;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
   }
 }, 90);
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshLambertMaterial({ map: groundTex }));
+const macroTex = canvasTex(256, 256, (g, w, h) => {
+  g.fillStyle = '#808080'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 260; i++) {
+    const x = rnd() * w, y = rnd() * h, r = 8 + rnd() * 40, v = Math.round(90 + rnd() * 90);
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(${v},${v},${v},0.55)`); gr.addColorStop(1, `rgba(${v},${v},${v},0)`);
+    g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+});
+macroTex.colorSpace = THREE.NoColorSpace;
+macroTex.wrapS = macroTex.wrapT = THREE.RepeatWrapping;
+const groundMat = new THREE.MeshLambertMaterial({ map: groundTex });
+groundMat.onBeforeCompile = (sh) => {
+  sh.uniforms.macro = { value: macroTex };
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vW;')
+    .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvW = (modelMatrix * vec4(transformed, 1.)).xz;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D macro; varying vec2 vW;')
+    .replace('#include <map_fragment>', '#include <map_fragment>\nfloat mc = texture2D(macro, vW / 140.).r * .6 + texture2D(macro, vW / 37. + .3).r * .4;\ndiffuseColor.rgb *= mix(.78, 1.2, mc);');
+};
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), groundMat);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
 // Пучки ковыля: один InstancedMesh, три скрещённые плоскости.
 const GRASS = { low: 0, medium: 7000, high: 18000 }[Q] ?? 7000;
+const wind = { value: 0 }; // время для ветра в траве
 if (GRASS) {
   const bladeTex = canvasTex(64, 64, (g, w, h) => {
     for (let i = 0; i < 14; i++) {
@@ -148,6 +204,14 @@ if (GRASS) {
   }
   const geo = mergeQuads(quads);
   const mat = new THREE.MeshLambertMaterial({ map: bladeTex, alphaTest: 0.45 });
+  mat.onBeforeCompile = (sh) => { // ветер: верх пучка качается, волны идут по степи
+    sh.uniforms.time = wind;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float time;').replace('#include <begin_vertex>', `#include <begin_vertex>
+      vec2 ip = vec2(instanceMatrix[3].x, instanceMatrix[3].z);
+      float k = position.y * position.y * 3.;
+      float w = sin(time * 1.6 + ip.x * .18 + ip.y * .11) * .6 + sin(time * 3.1 + ip.x * .7) * .25;
+      transformed.x += w * .09 * k; transformed.z += w * .05 * k;`);
+  };
   const grass = new THREE.InstancedMesh(geo, mat, GRASS);
   const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), s4 = new THREE.Vector3(), p4 = new THREE.Vector3();
   for (let i = 0; i < GRASS; i++) {
@@ -179,57 +243,161 @@ function mergeQuads(list) {
   return out;
 }
 
-// Горы на горизонте (Алатау): низкополигональные конусы в дымке.
+// Горы на горизонте (Алатау): три слоя хребтов, снег выше линии, дальние тонут в дымке.
 {
-  const mat = new THREE.MeshBasicMaterial({ color: '#9fb1c7', fog: false });
-  const snow = new THREE.MeshBasicMaterial({ color: '#eef1f5', fog: false });
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * 6.283 + (rnd() - 0.5) * 0.3, d = 560 + rnd() * 200, hgt = 50 + rnd() * 110;
-    const m = new THREE.Mesh(new THREE.ConeGeometry(hgt * 1.3, hgt, 7), mat);
-    m.position.set(Math.sin(a) * d, hgt / 2 - 4, -Math.cos(a) * d);
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(hgt * 0.36, hgt * 0.28, 7), snow);
-    cap.position.y = hgt * 0.36;
-    m.add(cap);
+  const ridge = (a, L) => { // высота хребта по углу, бесшовно по кругу
+    let h = 0;
+    for (const [f, amp, ph] of [[3, 0.5, L], [7, 0.28, 1.3 + L], [13, 0.16, 2.1 * L], [29, 0.07, 0.7], [57, 0.035, 2.9]]) h += amp * (0.5 + 0.5 * Math.sin(a * f + ph));
+    return Math.pow(h, 1.6);
+  };
+  const sky = new THREE.Color('#9fb6d2'), rock = new THREE.Color('#6f7f96'), snowC = new THREE.Color('#f4f6fa'), haze = HORIZON.clone();
+  for (let L = 0; L < 3; L++) {
+    const D = 520 + L * 190, HMAX = [95, 150, 210][L], SEG = 360, ROWS = 7;
+    const pos = [], col = [], idx = [];
+    for (let i = 0; i <= SEG; i++) {
+      const a = (i / SEG) * Math.PI * 2;
+      const top = ridge(a, L) * HMAX + 6;
+      const slope = ridge(a + 0.004, L) - ridge(a - 0.004, L); // склон к солнцу светлее
+      const lit = THREE.MathUtils.clamp(0.5 + slope * 60 * Math.sign(Math.cos(a - 2.3)), 0.25, 1);
+      for (let r = 0; r <= ROWS; r++) {
+        const t = r / ROWS, y = -12 + (top + 12) * t;
+        const jitter = Math.sin(a * 91 + r * 3.7) * 0.06;
+        pos.push(Math.sin(a) * D, y, -Math.cos(a) * D);
+        const c = rock.clone().lerp(sky, 0.25 + 0.2 * L).multiplyScalar(0.75 + 0.35 * lit);
+        if (y > HMAX * (0.5 + jitter) && t > 0.55) c.copy(snowC).multiplyScalar(0.82 + 0.18 * lit).lerp(sky, 0.12 * L);
+        c.lerp(haze, Math.min(1, Math.pow(1 - t, 3) * 0.9 + L * 0.12)); // у подножия дымка
+        col.push(c.r, c.g, c.b);
+      }
+    }
+    for (let i = 0; i < SEG; i++) for (let r = 0; r < ROWS; r++) {
+      const a = i * (ROWS + 1) + r, b = a + ROWS + 1;
+      idx.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide }));
+    m.renderOrder = -1 - L;
     scene.add(m);
   }
 }
 
 // ---------- пыль из-под копыт ----------
-const DUST = 600;
-const dust = {
-  pos: new Float32Array(DUST * 3), vel: new Float32Array(DUST * 3), life: new Float32Array(DUST), size: new Float32Array(DUST), next: 0,
-};
-const dustGeo = new THREE.BufferGeometry();
-dustGeo.setAttribute('position', new THREE.BufferAttribute(dust.pos, 3));
-dustGeo.setAttribute('life', new THREE.BufferAttribute(dust.life, 1));
-dustGeo.setAttribute('size', new THREE.BufferAttribute(dust.size, 1));
-const dustPts = new THREE.Points(dustGeo, new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false,
-  uniforms: { scale: { value: innerHeight / 2 } },
-  vertexShader: `attribute float life; attribute float size; varying float vL; uniform float scale;
-    void main(){ vL = life; vec4 mv = modelViewMatrix * vec4(position,1.); gl_PointSize = size * (1.4 - life * .4) * scale / -mv.z; gl_Position = projectionMatrix * mv; }`,
-  fragmentShader: `varying float vL; void main(){ if (vL <= 0.) discard; float d = length(gl_PointCoord - .5); float a = smoothstep(.5, .0, d) * vL * .42; gl_FragColor = vec4(.80,.70,.52, a); }`,
-}));
-dustPts.frustumCulled = false;
-scene.add(dustPts);
-function puff(p, speed) {
-  const n = speed > 9 ? 4 : 2;
+// Облачка (большие, мягкие, тают и расползаются) и комья земли (мелкие, тёмные, летят назад и падают).
+function makeParticles(N, frag) {
+  const P = { N, pos: new Float32Array(N * 3), vel: new Float32Array(N * 3), life: new Float32Array(N), size: new Float32Array(N), decay: new Float32Array(N), next: 0 };
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(P.pos, 3));
+  g.setAttribute('life', new THREE.BufferAttribute(P.life, 1));
+  g.setAttribute('size', new THREE.BufferAttribute(P.size, 1));
+  P.geo = g;
+  P.pts = new THREE.Points(g, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: { scale: { value: innerHeight / 2 } },
+    vertexShader: `attribute float life; attribute float size; varying float vL; uniform float scale;
+      void main(){ vL = life; vec4 mv = modelViewMatrix * vec4(position,1.); gl_PointSize = size * scale / -mv.z; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: frag,
+  }));
+  P.pts.frustumCulled = false;
+  scene.add(P.pts);
+  return P;
+}
+const dust = makeParticles(900, `varying float vL;
+  void main(){ if (vL <= 0.) discard; vec2 c = gl_PointCoord - .5; float d = length(c);
+    float a = smoothstep(.5, .1, d) * min(vL * 1.6, 1.) * vL * .38;
+    gl_FragColor = vec4(mix(vec3(.74,.64,.47), vec3(.86,.78,.62), .5 - c.y), a);
+    #include <colorspace_fragment>
+  }`);
+const clods = makeParticles(400, `varying float vL;
+  void main(){ if (vL <= 0. || length(gl_PointCoord - .5) > .5) discard; gl_FragColor = vec4(.36,.28,.17, 1.);
+    #include <colorspace_fragment>
+  }`);
+const particleSets = [dust, clods]; // масштаб точек обновляется при resize
+function emit(P, x, y, z, vx, vy, vz, size, decay) {
+  const i = P.next; P.next = (P.next + 1) % P.N;
+  P.pos[i * 3] = x; P.pos[i * 3 + 1] = y; P.pos[i * 3 + 2] = z;
+  P.vel[i * 3] = vx; P.vel[i * 3 + 1] = vy; P.vel[i * 3 + 2] = vz;
+  P.life[i] = 1; P.size[i] = size; P.decay[i] = decay;
+}
+// p — копыто в мире, speed — м/с, fx/fz — направление бега
+function puff(p, speed, fx, fz) {
+  const n = speed > 7 ? 3 : speed > 3 ? 2 : 1;
   for (let k = 0; k < n; k++) {
-    const i = dust.next; dust.next = (dust.next + 1) % DUST;
-    dust.pos.set([p.x + (Math.random() - 0.5) * 0.2, 0.05, p.z + (Math.random() - 0.5) * 0.2], i * 3);
-    dust.vel.set([(Math.random() - 0.5) * 0.8, 0.4 + Math.random() * 0.7, (Math.random() - 0.5) * 0.8], i * 3);
-    dust.life[i] = 1;
-    dust.size[i] = 0.5 + Math.random() * 0.5 + speed * 0.04;
+    const back = 0.4 + Math.random() * 0.8;
+    emit(dust, p.x + (Math.random() - 0.5) * 0.25, 0.08, p.z + (Math.random() - 0.5) * 0.25,
+      -fx * back + (Math.random() - 0.5) * 0.7, 0.25 + Math.random() * 0.5, -fz * back + (Math.random() - 0.5) * 0.7,
+      0.45 + Math.random() * 0.4 + speed * 0.05, 0.45 + Math.random() * 0.25);
+  }
+  if (speed > 5) for (let k = 0; k < 2; k++) {
+    const back = 1.5 + Math.random() * 2.5;
+    emit(clods, p.x, 0.06, p.z, -fx * back + (Math.random() - 0.5), 1.4 + Math.random() * 2, -fz * back + (Math.random() - 0.5), 0.035 + Math.random() * 0.03, 1.2);
   }
 }
-function stepDust(dt) {
-  for (let i = 0; i < DUST; i++) {
-    if (dust.life[i] <= 0) continue;
-    dust.life[i] -= dt * 0.75;
-    for (let a = 0; a < 3; a++) dust.pos[i * 3 + a] += dust.vel[i * 3 + a] * dt;
-    dust.vel[i * 3 + 1] *= 1 - dt * 1.5;
+function stepParticles(P, dt, gravity, grow) {
+  for (let i = 0; i < P.N; i++) {
+    if (P.life[i] <= 0) continue;
+    P.life[i] -= dt * P.decay[i];
+    const j = i * 3;
+    P.pos[j] += P.vel[j] * dt; P.pos[j + 1] += P.vel[j + 1] * dt; P.pos[j + 2] += P.vel[j + 2] * dt;
+    if (gravity) { P.vel[j + 1] -= 9.8 * dt; if (P.pos[j + 1] < 0.01) P.life[i] = 0; }
+    else { const k = 1 - dt * 1.4; P.vel[j] *= k; P.vel[j + 1] *= 1 - dt * 2.2; P.vel[j + 2] *= k; P.vel[j] += 0.25 * dt; } // ветер слегка сносит
+    if (grow) P.size[i] += grow * dt;
   }
-  dustGeo.attributes.position.needsUpdate = dustGeo.attributes.life.needsUpdate = dustGeo.attributes.size.needsUpdate = true;
+  P.geo.attributes.position.needsUpdate = P.geo.attributes.life.needsUpdate = P.geo.attributes.size.needsUpdate = true;
+}
+function stepDust(dt) { stepParticles(dust, dt, false, 0.5); stepParticles(clods, dt, true, 0); stepPrints(dt); }
+
+// ---------- следы копыт ----------
+// Отпечаток — полупрозрачная тёмная подкова, за 40 с растворяется.
+const PRINTS = 900;
+const printTex = canvasTex(64, 64, (g) => {
+  const gr = g.createRadialGradient(32, 34, 3, 32, 34, 27);
+  gr.addColorStop(0, 'rgba(70,52,30,0.55)'); gr.addColorStop(0.6, 'rgba(60,44,24,0.75)'); gr.addColorStop(0.82, 'rgba(90,70,42,0.3)'); gr.addColorStop(1, 'rgba(90,70,42,0)');
+  g.fillStyle = gr; g.beginPath(); g.ellipse(32, 34, 22, 26, 0, 0, 6.283); g.fill();
+  g.globalCompositeOperation = 'destination-out'; // стрелка копыта светлее
+  g.fillStyle = 'rgba(0,0,0,0.55)'; g.beginPath(); g.ellipse(32, 45, 8, 9, 0, 0, 6.283); g.fill();
+});
+const prints = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.16, 0.19).rotateX(-Math.PI / 2),
+  new THREE.MeshLambertMaterial({ map: printTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), PRINTS);
+prints.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+prints.frustumCulled = false;
+const printAge = new Float32Array(PRINTS).fill(1e9);
+const printFadeAttr = new THREE.InstancedBufferAttribute(new Float32Array(PRINTS).fill(1), 1);
+printFadeAttr.setUsage(THREE.DynamicDrawUsage);
+prints.geometry.setAttribute('fade', printFadeAttr);
+prints.material.onBeforeCompile = (sh) => { // fade 0 — свежий след, 1 — растворился в земле
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float fade; varying float vFade;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFade = fade;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vFade;')
+    .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.a *= 1. - vFade;');
+};
+{
+  const m = new THREE.Matrix4().makeScale(0, 0, 0);
+  for (let i = 0; i < PRINTS; i++) prints.setMatrixAt(i, m);
+}
+scene.add(prints);
+let printNext = 0, printFade = 0;
+const PM = new THREE.Matrix4(), PQ = new THREE.Quaternion(), PS = new THREE.Vector3(1, 1, 1), PP = new THREE.Vector3();
+function stamp(p, yaw, deep) {
+  const i = printNext; printNext = (printNext + 1) % PRINTS;
+  PQ.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
+  PS.setScalar(deep ? 1.1 : 0.95);
+  prints.setMatrixAt(i, PM.compose(PP.set(p.x, 0.012, p.z), PQ, PS));
+  printFadeAttr.array[i] = 0;
+  printAge[i] = 0;
+  prints.instanceMatrix.needsUpdate = printFadeAttr.needsUpdate = true;
+}
+function stepPrints(dt) {
+  printFade += dt;
+  if (printFade < 0.25) return; // выцветание раз в четверть секунды — дёшево
+  for (let i = 0; i < PRINTS; i++) {
+    if (printAge[i] > 40) continue;
+    printAge[i] += printFade;
+    printFadeAttr.array[i] = THREE.MathUtils.smoothstep(printAge[i], 6, 40); // 6 с свежий, к 40 с исчез
+  }
+  printFade = 0;
+  printFadeAttr.needsUpdate = true;
 }
 
 // ---------- конь ----------
@@ -464,15 +632,21 @@ class Horse {
     const look = THREE.MathUtils.clamp(this.turn * 0.22, -0.35, 0.35);
     for (const n of this.neck) { Qy.setFromAxisAngle(AY, look / this.neck.length); n.quaternion.premultiply(Qy); }
     if (this.halt > 0 && this.head) { Qx.setFromAxisAngle(AX, -0.25 * this.halt); this.head.quaternion.multiply(Qx); }
-    // Касание копыт → пыль.
-    if (v > 2.5) {
+    // Касание копыт: след на любом ходу, пыль с рыси, на галопе ещё комья.
+    // Высоту «на земле» берём из стойки: у разных моделей кость копыта на разной высоте.
+    if (v > 0.3) {
       this.obj.updateMatrixWorld(true);
+      const base = this.hoofRest ?? 0.09;
+      const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
       for (const h of this.hooves) {
         h.b.getWorldPosition(V2);
-        const low = V2.y < 0.09;
-        if (low && !h.low) puff(V2, v);
+        const low = V2.y < base + 0.035;
+        if (low && !h.low) { stamp(V2, this.yaw, v > 5); if (v > 2.2) puff(V2, v, fx, fz); }
         h.low = low;
       }
+    } else if (this.hooves.length && this.rearClock == null) {
+      this.obj.updateMatrixWorld(true);
+      this.hoofRest = Math.min(...this.hooves.map((h) => h.b.getWorldPosition(V2).y));
     }
   }
   rear() {
@@ -559,7 +733,7 @@ function updateCamera(dt, snap) {
   camera.lookAt(cam.look);
   const fov = 55 + Math.min(h.v, 13) * 0.75;
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = THREE.MathUtils.lerp(camera.fov, fov, 1 - Math.exp(-dt * 3)); camera.updateProjectionMatrix(); }
-  sun.position.set(p.x - 40, 60, p.z + 25);
+  sun.position.set(p.x + SUN_DIR.x * 90, SUN_DIR.y * 90, p.z + SUN_DIR.z * 90);
   sun.target.position.set(p.x, 0, p.z);
 }
 
@@ -578,6 +752,7 @@ function step(dt) {
   }
   for (const h of horses) h.update(dt);
   stepDust(dt);
+  wind.value += dt; skyMat.uniforms.time.value += dt;
   if (!camHold) updateCamera(dt);
 }
 function frame(now) {
@@ -599,7 +774,7 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  dustPts.material.uniforms.scale.value = innerHeight / 2;
+  for (const P of particleSets) P.pts.material.uniforms.scale.value = innerHeight / 2;
 });
 
 try {
