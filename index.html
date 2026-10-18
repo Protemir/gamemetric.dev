@@ -27,6 +27,7 @@
  "name": "GameMetric",
  "url": "https://gamemetric.dev/",
  "itemListElement": [
+  { "@type": "ListItem", "position": 1, "item": { "@type": "VideoGame", "name": "Сыбыс", "alternateName": "Whispers of the Steppe", "url": "https://gamemetric.dev/sybys/", "image": "https://gamemetric.dev/img/sybys.jpg", "genre": ["Strategy", "Story"], "gamePlatform": "Web browser", "isAccessibleForFree": true } },
   { "@type": "ListItem", "position": 1, "item": { "@type": "VideoGame", "name": "Ою", "alternateName": "Oyu", "url": "https://gamemetric.dev/oyu/", "image": "https://gamemetric.dev/img/oyu.jpg", "genre": ["Puzzle"], "gamePlatform": "Web browser", "isAccessibleForFree": true } },
   { "@type": "ListItem", "position": 6, "item": { "@type": "VideoGame", "name": "Арык", "alternateName": "Aryk", "url": "https://gamemetric.dev/aryq/", "image": "https://gamemetric.dev/img/aryq.jpg", "genre": ["Strategy", "Puzzle"], "gamePlatform": "Web browser", "isAccessibleForFree": true } },
   { "@type": "ListItem", "position": 5, "item": { "@type": "VideoGame", "name": "Асық", "alternateName": "Asyk", "url": "https://gamemetric.dev/asyk/", "image": "https://gamemetric.dev/img/asyk.jpg", "genre": ["Sports", "Story"], "gamePlatform": "Web browser", "isAccessibleForFree": true } },
@@ -79,9 +80,23 @@
   </section>
 
   <section class="games" aria-label="Игры" data-t-label="games">
-    <a class="card hero" href="/oyu/" data-game="oyu" style="--accent:#f4b93a">
+    <a class="card hero" href="/sybys/" data-game="sybys" style="--accent:#d9a441">
       <div class="media">
-        <img src="img/oyu.jpg" width="960" height="540" alt="" fetchpriority="high">
+        <img src="img/sybys.jpg" width="960" height="540" alt="" fetchpriority="high">
+        <video muted loop playsinline preload="none" poster="img/sybys.jpg" data-src="img/sybys.mp4"></video>
+        <span class="badge" data-t="new">Новинка</span>
+      </div>
+      <div class="body">
+        <div class="chips"><span data-t="sybys.genre">Стратегия и интриги</span><span data-t="sybys.meta">3D · 2 сезона · 6 концовок</span></div>
+        <h2 data-t="sybys.name">Сыбыс</h2>
+        <p data-t="sybys.desc">Конь прежнего хана вернулся без всадника. Ты — Темир, новый хан. Склони три рода словом, лови ложные приказы, отбивай набеги орды и найди, кто стоит за заговором, — до курултая.</p>
+        <span class="play"><span data-t="play">Играть</span> <i aria-hidden="true">▶</i></span>
+      </div>
+    </a>
+
+    <a class="card" href="/oyu/" data-game="oyu" style="--accent:#f4b93a">
+      <div class="media">
+        <img src="img/oyu.jpg" width="960" height="540" alt="" loading="lazy">
         <video muted loop playsinline preload="none" poster="img/oyu.jpg" data-src="img/oyu.mp4"></video>
         <span class="badge" data-t="new">Новинка</span>
       </div>

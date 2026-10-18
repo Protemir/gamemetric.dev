@@ -6,6 +6,11 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/?lang=en"/>
   </url>
   <url>
+    <loc>https://gamemetric.dev/sybys/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/sybys/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/sybys/?lang=en"/>
+  </url>
+  <url>
     <loc>https://gamemetric.dev/oyu/</loc>
     <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/oyu/?lang=ru"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/oyu/?lang=en"/>

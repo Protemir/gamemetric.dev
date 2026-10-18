@@ -478,7 +478,16 @@ function buildHud() {
     actionsEl.append(b);
   }
   $('journalBtn').innerHTML = ICONS.scroll;
-  $('fitBtn').innerHTML = ICONS.expand;
+  $('fitBtn').innerHTML = ICONS.map;
+  $('fitBtn').title = lang === 'ru' ? 'Вся карта' : 'Whole map';
+  const fs = $('fsBtn');
+  fs.hidden = !!PORTAL || !document.fullscreenEnabled;
+  fs.title = lang === 'ru' ? 'На весь экран' : 'Fullscreen';
+  fs.innerHTML = document.fullscreenElement ? ICONS.shrink : ICONS.expand;
+  fs.onclick = () => {
+    const done = () => { fs.innerHTML = document.fullscreenElement ? ICONS.shrink : ICONS.expand; setTimeout(fit, 150); };
+    (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).then(done, done);
+  };
   $('horseIcon').innerHTML = ICONS.horse;
   $('journalBtn').onclick = () => { if (g.phase === 'map') journal(); };
   $('fitBtn').hidden = !view.resetCam;

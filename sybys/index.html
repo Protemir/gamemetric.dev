@@ -4,12 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Сыбыс · Whispers of the Steppe</title>
-<meta name="robots" content="noindex">
-<meta name="description" content="Сыбыс — интриги в степи: молва вместо войска, заговор, курултай. Прототип.">
+<meta name="description" content="Сыбыс (Whispers of the Steppe) — бесплатная 3D-игра в браузере: интриги в казахской степи. Склони роды словом хана, лови ложные приказы, отбивай набеги и найди заговорщика до курултая. Win the steppe with words, not swords.">
+<link rel="canonical" href="https://gamemetric.dev/sybys/">
+<meta property="og:title" content="Сыбыс · Whispers of the Steppe">
+<meta property="og:description" content="Интриги в степи: слово хана вместо войска, заговор, набеги орды и курултай.">
+<meta property="og:image" content="https://gamemetric.dev/img/sybys.jpg">
+<meta property="og:url" content="https://gamemetric.dev/sybys/">
 <meta name="theme-color" content="#1b1712">
 <link rel="stylesheet" href="style.css?v=71081b67">
-<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","./js/avatars.js":"./js/avatars.js?v=06b86517","./js/boot.js":"./js/boot.js?v=c0d647e4","./js/main.js":"./js/main.js?v=823c772e","./js/map.js":"./js/map.js?v=b1992353","./js/meta.js":"./js/meta.js?v=72d86139","./js/portal.js":"./js/portal.js?v=4895ca83","./js/render.js":"./js/render.js?v=e5fdeadd","./js/render3d.js":"./js/render3d.js?v=29b3c684","./js/sfx.js":"./js/sfx.js?v=2318c99e","./js/sim.js":"./js/sim.js?v=12504bf8","./js/text.js":"./js/text.js?v=e91e404a","./js/util.js":"./js/util.js?v=67c9e81e"}}</script>
-<script type="module" src="./js/main.js?v=823c772e"></script>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","./js/avatars.js":"./js/avatars.js?v=69ffbfdb","./js/boot.js":"./js/boot.js?v=c0d647e4","./js/main.js":"./js/main.js?v=9414a6b1","./js/map.js":"./js/map.js?v=b1992353","./js/meta.js":"./js/meta.js?v=72d86139","./js/portal.js":"./js/portal.js?v=4895ca83","./js/render.js":"./js/render.js?v=e5fdeadd","./js/render3d.js":"./js/render3d.js?v=29b3c684","./js/sfx.js":"./js/sfx.js?v=2318c99e","./js/sim.js":"./js/sim.js?v=12504bf8","./js/text.js":"./js/text.js?v=e91e404a","./js/util.js":"./js/util.js?v=67c9e81e"}}</script>
+<script type="module" src="./js/main.js?v=9414a6b1"></script>
 </head>
 <body>
 <canvas id="game" aria-label="Whispers of the Steppe"></canvas>
@@ -18,6 +22,7 @@
   <div class="chip season" id="seasonChip"><small id="seasonLbl"></small><div class="bar"><i id="seasonBar"></i></div></div>
   <div class="tribes" id="tribes"></div>
   <button type="button" class="icon" id="fitBtn" aria-label="Whole map"></button>
+  <button type="button" class="icon" id="fsBtn" aria-label="Fullscreen" hidden></button>
   <button type="button" class="icon" id="journalBtn" aria-label="Journal"></button>
   <button type="button" class="icon" id="speedBtn" aria-label="Speed">×1</button>
   <button type="button" class="icon" id="pauseBtn" aria-label="Pause"></button>

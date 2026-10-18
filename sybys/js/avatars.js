@@ -96,6 +96,8 @@ export const ICONS = {
   horse: ic('<path d="M7 21c-.5-4 .5-7.5 3-9.5L8.5 7.5 10 6l2 2.2C13 5 15.5 3.6 18 4l-.8 2.2c1.6 1 2.6 2.8 2.8 5L18 12.6l-1.5-1.8c-1 .8-1.6 2.2-1.7 3.8L15 21"/><circle cx="15.6" cy="8.2" r=".6" fill="currentColor"/>'),
   scroll: ic('<path d="M7 4h11a2 2 0 0 1 2 2v1H9"/><path d="M7 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M9 10h6M9 13h6M9 16h4"/>'),
   expand: ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
+  shrink: ic('<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>'),
+  map: ic('<path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z"/><path d="M9 4v13.5M15 6.5V20"/>'),
   pause: ic('<path d="M9 5v14M15 5v14"/>'),
   play: ic('<path d="M7 5l12 7-12 7z"/>'),
   soundOn: ic('<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>'),
