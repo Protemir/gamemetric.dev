@@ -53,7 +53,7 @@ if (typeof document !== 'undefined') {
 }
 
 // call from inside a tap or a click: browsers start sound only there
-const OUT = 0.8; // the master level; a compressor keeps the peaks in hand
+const OUT = 0.55; // the master level; a compressor keeps the peaks in hand
 export function audioInit() {
   unlockMedia();
   if (sound.ctx) {
@@ -179,7 +179,7 @@ const PIECES = {
   tun: { bpm: 50, root: 69, mode: 'hijaz', drone: [38], strum: '........', form: 'ABACABDA', vol: 0.16, rest: 0.3,
     m: { A: [[4, 4], [2, 4]], B: [[3, 2], [2, 2], [0, 4]], C: [[5, 4], [4, 4]], D: [[2, 2], [1, 2], [0, 4]] } },
 };
-const MUSIC_GAIN = 3.2;
+const MUSIC_GAIN = 2.3;
 // a hall made of noise that dies away: enough to soften the strings, not to drown them
 function impulse(c, sec) {
   const len = Math.floor(c.sampleRate * sec), buf = c.createBuffer(2, len, c.sampleRate);
