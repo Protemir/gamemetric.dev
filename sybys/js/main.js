@@ -231,6 +231,7 @@ function start() {
   action = 'word';
   look.names = T().tribes;
   look.pulse = null;
+  trend.last = null;
   Object.assign(coach, { step: null, words: 0, plot: null, nextTip: 0, idle: 0, votes: null, soonTold: false, markTold: false, handUntil: 0 });
   buildHud();
   fit();
@@ -324,6 +325,29 @@ function updateHud() {
   $('speedBtn').textContent = '×' + speed;
   $('pauseBtn').textContent = paused ? '▶' : '❚❚';
   $('soundBtn').textContent = sound.on ? '🔊' : '🔇';
+}
+
+// a clan's sign jumps when its trust in the khan rises, and shows by how much
+const trend = { at: 0, last: null };
+function tribePulse(now) {
+  if (!g || g.phase !== 'map' || now - trend.at < 1200) return;
+  trend.at = now;
+  const v = [0, 1, 2].map((k) => S.tribeTrust(g, k));
+  if (trend.last) {
+    const chips = $('tribes').children;
+    v.forEach((x, k) => {
+      const d = Math.round((x - trend.last[k]) * 100);
+      if (Math.abs(d) < 1) return;
+      const c = chips[k];
+      c.classList.remove('bump', 'sink');
+      void c.offsetWidth;
+      c.classList.add(d > 0 ? 'bump' : 'sink');
+      const tag = el('span', 'delta' + (d > 0 ? '' : ' down'), (d > 0 ? '+' : '−') + Math.abs(d) + '%');
+      c.append(tag);
+      setTimeout(() => tag.remove(), 1300);
+    });
+  }
+  trend.last = v;
 }
 
 // —— taps on the map ——
@@ -537,6 +561,7 @@ function frame(now) {
     for (const tt of g.toasts.splice(0)) showToast(tt);
     lessonTick(now);
     tips(now);
+    tribePulse(now);
     if (coach.until && now > coach.until) hush();
     if (g.phase !== shownPhase) {
       shownPhase = g.phase;

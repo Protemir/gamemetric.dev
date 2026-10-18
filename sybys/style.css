@@ -89,6 +89,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tribe .tb { flex: 1; min-width: 0; }
 .tribe .tick { position: absolute; right: -6px; bottom: -6px; width: 20px; height: 20px; border-radius: 50%; background: #6aa84f; color: #fff; font-size: 12px; font-weight: 900; display: none; place-items: center; box-shadow: var(--shadow); }
 .tribe.ok .tick { display: grid; }
+.tribe.bump .ava { animation: bump 0.55s ease-out; }
+.tribe.sink .ava { animation: sink 0.55s ease-out; }
+@keyframes bump { 35% { transform: translateY(-9px) scale(1.18); } }
+@keyframes sink { 35% { transform: translateY(4px) scale(0.9); filter: grayscale(0.6); } }
+.delta { position: absolute; right: 8px; top: -6px; font-size: 13px; font-weight: 900; color: #2f7a1a; text-shadow: 0 1px 0 #fff; animation: rise 1.3s ease-out forwards; pointer-events: none; }
+.delta.down { color: var(--red); }
+@keyframes rise { from { transform: translateY(6px); opacity: 0; } 20% { opacity: 1; } to { transform: translateY(-14px); opacity: 0; } }
 .tribe .tn { display: block; font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tribe .bar { margin-top: 5px; position: relative; }
 .tribe .bar::after { content: ""; position: absolute; left: 55%; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: 0.5; }

@@ -29,6 +29,7 @@ export class View {
     this.lastNow = 0;
     this.frameNo = 0;
     this.tintMix = 0.62;
+    this.flash = new Map(); // pasture -> when the word landed there: it lights up and fades
   }
 
   resize() {
@@ -137,7 +138,7 @@ export class View {
         const xi = Math.round(x), yi = Math.round(y);
         if (xi < 0 || yi < 0 || xi >= GW || yi >= GH || near[yi * GW + xi] < 1.5 * K || cell[yi * GW + xi] !== r.id) continue;
         if (yurts.some((u) => Math.hypot(u.x - x, u.y - y) < 3.6 * K)) continue;
-        yurts.push({ x, y, big: k === 0 && r.id === 0, smoke: rand() * 10 });
+        yurts.push({ x, y, big: k === 0 && r.id === 0, cap: k === 0 && map.capitals.includes(r.id), smoke: rand() * 10 });
         k++;
       }
       yurts.sort((a, b) => a.y - b.y);
@@ -188,7 +189,12 @@ export class View {
       if (lie) c = c.map((v, j) => v + (LIE[j] - v) * lie);
       return c;
     });
-    const glow = regions.map((r) => clamp(g.m[r.id] * 0.1, 0, 0.18));
+    const now = this.lastNow || 0;
+    const glow = regions.map((r) => {
+      const f = this.flash.get(r.id);
+      const flash = f ? Math.max(0, 1 - (now - f) / 1100) * 0.6 : 0;
+      return Math.max(flash, clamp(g.m[r.id] * 0.1, 0, 0.18));
+    });
     for (let i = 0; i < GW * GH; i++) {
       const o = i * 4, t3 = i * 3;
       if (river[i]) {
@@ -294,6 +300,7 @@ export class View {
     const { ctx, u } = this;
     const R = g.map.regions;
     for (const rd of this.roads) {
+      if (rd.a !== this.hover && rd.b !== this.hover && !rd.ford) continue;
       const a = R[rd.a], b = R[rd.b];
       const [ax, ay] = this.toScreen(a.x, a.y), [bx, by] = this.toScreen(b.x, b.y), [cx, cy] = this.toScreen(rd.cx, rd.cy);
       ctx.beginPath();
@@ -385,7 +392,7 @@ export class View {
       }
       for (const yt of this.deco[r.id].yurts) {
         const [sx, sy] = this.toScreen(yt.x, yt.y);
-        this.yurt(sx, sy, u * (yt.big ? 1.8 : 0.95), yt.big ? '#d9a53a' : dome, now, yt.smoke);
+        this.yurt(sx, sy, u * (yt.big ? 1.8 : yt.cap ? 1.35 : 0.95), yt.big ? '#d9a53a' : dome, now, yt.smoke);
       }
       const cap = g.map.capitals.includes(r.id);
       if (r.id === 0 || cap) this.banner(x + u * (r.id === 0 ? 2.4 : 1.6), y, r.id === 0 ? GOLD : TRIBE_RGB[r.tribe], r.id === 0 ? '♛' : ['Ψ', 'Λ', 'Ш'][r.tribe], now, r.id === 0 ? 1.3 : 1);
@@ -664,8 +671,8 @@ export class View {
       ctx.globalAlpha = 1 - age;
       if (f.ring) {
         ctx.strokeStyle = f.color;
-        ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(x, y, u * (1.5 + age * 7), 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 6 * (1 - age) + 1;
+        ctx.beginPath(); ctx.ellipse(x, y, u * (1.5 + age * 11), u * (1 + age * 6), 0, 0, Math.PI * 2); ctx.stroke();
       }
       ctx.font = `800 ${Math.round(Math.max(18, u * 2.6))}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
@@ -680,6 +687,7 @@ export class View {
   }
 
   pushFx(f, now) {
+    if (f.type === 'word' || f.type === 'force') this.flash.set(f.region, now);
     const look = { word: ['+', '#ffe7a0', true], lie: ['−', '#e0b0ff', true], force: ['⚔', '#ff8f7a', true], clue: ['🔍', '#fff', false], caught: ['✋', '#fff', true], aria: ['👁', '#d9c4ff', false] }[f.type];
     if (look) this.fx.push({ region: f.region, text: look[0], color: look[1], ring: look[2], t0: now });
   }

@@ -310,7 +310,7 @@ export class View3D extends View {
     const bands = mk(bandG, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, side: THREE.DoubleSide }));
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
     list.forEach((y, k) => {
-      const size = y.big ? 0.62 : 0.3;
+      const size = y.big ? 0.62 : y.cap ? 0.44 : 0.3;
       p.set(toWorldX(y.x), this.height(y.x, y.y) - 0.02, toWorldZ(y.y));
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), (Math.sin(k * 12.9) * 0.6));
       s.set(size, size, size);
@@ -390,7 +390,7 @@ export class View3D extends View {
       x.fillText(id === 0 ? '♛' : ['Ψ', 'Λ', 'Ш'][r.tribe], 60, 38);
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
-      const big = id === 0 ? 1.4 : 1;
+      const big = id === 0 ? 1.5 : 1.3;
       const cloth = new THREE.Mesh(new THREE.PlaneGeometry(0.9 * big, 0.56 * big, 12, 4).translate(0.45 * big, 0, 0), new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.9 }));
       cloth.castShadow = true;
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 1.7 * big, 6).translate(0, 0.85 * big, 0), new THREE.MeshStandardMaterial({ color: '#4a3420' }));
@@ -626,7 +626,7 @@ export class View3D extends View {
     for (const sp of this.smoke) {
       const d = sp.userData;
       d.t = (d.t + dt / 3.2) % 1;
-      const size = d.y.big ? 0.62 : 0.3;
+      const size = d.y.big ? 0.62 : d.y.cap ? 0.44 : 0.3;
       sp.position.set(toWorldX(d.y.x) + d.t * 0.35, this.height(d.y.x, d.y.y) + size * 1.35 + d.t * 0.9, toWorldZ(d.y.y) - d.t * 0.1);
       sp.scale.setScalar(0.12 + d.t * 0.35);
       sp.material.opacity = 0.45 * Math.sin(d.t * Math.PI);
