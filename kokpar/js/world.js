@@ -54,6 +54,7 @@ function measure() {
   view.rot = touchDev && innerHeight > innerWidth;
   view.w = view.rot ? innerHeight : innerWidth; view.h = view.rot ? innerWidth : innerHeight;
   document.documentElement.classList.toggle('rot', view.rot);
+  document.documentElement.classList.toggle('short', view.h < 520);
   Object.assign(document.body.style, view.rot ? { width: view.w + 'px', height: view.h + 'px', transform: `translateX(${innerWidth}px) rotate(90deg)` } : { width: '', height: '', transform: '' });
 }
 measure();

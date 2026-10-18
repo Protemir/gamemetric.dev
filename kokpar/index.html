@@ -90,9 +90,18 @@
   #load #loadbar { display: block; height: 100%; width: 3%; border-radius: 4px; background: linear-gradient(90deg, #ffe58a, #f0a01c); box-shadow: 0 0 12px rgba(255,190,60,.7); }
   #load .s { margin-top: 8px; text-align: center; letter-spacing: .2em; text-transform: uppercase; opacity: .8; }
   html.rot, html.rot body { overflow: hidden; }
+  /* низкий экран (телефон лёжа): меню компактнее */
+  html.short #menu .logo { font-size: 46px; }
+  html.short #menu .sub { display: none; }
+  html.short #menu .ttl { font-size: 14px; margin: 4px 0 6px; }
+  html.short .ladder { margin-bottom: 8px; gap: 4px; }
+  html.short .ladder span { padding: 3px 8px; font-size: 11px; }
+  html.short .vs { font-size: 14px; margin-bottom: 8px; }
+  html.short .big-btn { font-size: 19px; padding: 10px 34px; }
+  html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
   html.rot body { position: fixed; top: 0; left: 0; transform-origin: 0 0; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mve2toie","./js/flags.js":"./js/flags.js?v=mve2toie","./js/game.js":"./js/game.js?v=mve2toie","./js/kazan.js":"./js/kazan.js?v=mve2toie","./js/rider.js":"./js/rider.js?v=mve2toie","./js/serke.js":"./js/serke.js?v=mve2toie","./js/world.js":"./js/world.js?v=mve2toie"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mve2vk6w","./js/flags.js":"./js/flags.js?v=mve2vk6w","./js/game.js":"./js/game.js?v=mve2vk6w","./js/kazan.js":"./js/kazan.js?v=mve2vk6w","./js/rider.js":"./js/rider.js?v=mve2vk6w","./js/serke.js":"./js/serke.js?v=mve2vk6w","./js/world.js":"./js/world.js?v=mve2vk6w"}}</script>
 </head>
 <body>
 <div id="load"><div><div class="t disp">KOKPAR</div><div class="s" id="loadtxt">…</div><div class="lbar"><i id="loadbar"></i></div></div><div class="credits" data-credits></div></div>
@@ -133,6 +142,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div class="panel"><div class="logo disp">KOKPAR</div><div id="menuSub" class="sub"></div><div id="menuTitle" class="ttl disp"></div><div id="menuLadder" class="ladder"></div><div id="menuVs" class="vs"></div><button id="playBtn" class="big-btn"></button></div><div class="credits" data-credits></div></div>
 <div id="end" hidden><div class="panel"><div id="endTitle" class="disp"></div><div id="endScore" class="disp"></div><div id="endNext" class="vs"></div><div id="endLadder" class="ladder"></div><button id="again" class="big-btn"></button></div><div class="credits" data-credits></div></div>
-<script type="module" src="./js/game.js?v=mve2toie"></script>
+<script type="module" src="./js/game.js?v=mve2vk6w"></script>
 </body>
 </html>
