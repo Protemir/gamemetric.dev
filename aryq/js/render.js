@@ -770,12 +770,28 @@ export class View {
     if (this.startLabel) {
       cx.font = `700 ${Math.max(11, Math.min(14, cs * 0.32))}px system-ui, sans-serif`;
       const tw = cx.measureText(this.startLabel).width + 10, th = Math.max(16, Math.min(22, cs * 0.5));
-      const [nx, ny] = pts[1] || pts[0];
+      // beside the ring, on whichever side covers no orchard, yurt or the path itself
+      // (18.10: in the gorge the tag sat right on the orchard it pointed to)
+      const keep = (lx, ly) => [Math.min(Math.max(lx, this.ox + 2), this.ox + this.bw - tw - 2), Math.min(Math.max(ly, this.oy + 2), this.oy + this.bh - th - 2)];
+      const things = [...this.g.objects.map((o) => [...this.center(o.y * this.g.W + o.x), cs * 0.6]), ...pts.slice(1).map(([x, y]) => [x, y, cs * 0.3])];
+      const covers = ([lx, ly]) => things.reduce((n, [x, y, r]) => n + (x + r > lx && x - r < lx + tw && y + r > ly && y - r < ly + th ? 1 : 0), 0);
+      const [nx] = pts[1] || pts[0];
       const away = nx >= sx ? -1 : 1; // the side the path does not go
-      let lx = away < 0 ? sx - cs * 0.8 - tw : sx + cs * 0.8;
-      if (lx < this.ox + 2 || lx + tw > this.ox + this.bw - 2) lx = away < 0 ? sx + cs * 0.8 : sx - cs * 0.8 - tw;
-      lx = Math.min(Math.max(lx, this.ox + 2), this.ox + this.bw - tw - 2);
-      const ly = Math.min(Math.max(sy - th / 2 + (Math.abs(ny - sy) < 1 ? cs * 0.75 : 0), this.oy + 2), this.oy + this.bh - th - 2);
+      const tries = [
+        [away < 0 ? sx - cs * 0.8 - tw : sx + cs * 0.8, sy - th / 2],
+        [away < 0 ? sx + cs * 0.8 : sx - cs * 0.8 - tw, sy - th / 2],
+        [sx - tw / 2, sy - cs * 0.75 - th],
+        [sx - tw / 2, sy + cs * 0.75],
+      ].map(([x, y]) => keep(x, y));
+      let best = tries[0], least = Infinity;
+      for (const p of tries) {
+        const n = covers(p);
+        if (n < least) {
+          least = n;
+          best = p;
+        }
+      }
+      const [lx, ly] = best;
       cx.fillStyle = 'rgba(0,0,0,0.35)';
       this.roundRect(lx + 1, ly + 2, tw, th, 6);
       cx.fill();
