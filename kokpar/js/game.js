@@ -395,8 +395,9 @@ function think(e, dt) {
     if (along <= 0 || along >= L) continue;
     const off = (cx * sz - cz * sx) / L; // расстояние от центра казана до прямой
     if (Math.abs(off) > KAZAN_R + 2.2) continue;
-    const side = off > 0 ? -1 : 1; // обходим с той стороны, куда прямая ближе
-    tx = k.x + (sz / L) * side * (KAZAN_R + 3.6) * -1; tz = 0 + (-sx / L) * side * (KAZAN_R + 3.6) * -1;
+    // точка обхода — по ту же сторону от прямой, где проходит конь, а не через насыпь
+    const sg = off > 0 ? -1 : 1;
+    tx = k.x + (sz / L) * sg * (KAZAN_R + 3.6); tz = (-sx / L) * sg * (KAZAN_R + 3.6);
   }
   steerTo(e, tx, tz, gait);
   e.wantSprint = sprint;
