@@ -440,6 +440,67 @@ try {
   const s2 = await B.js(`${A}.g.seed`);
   check('valley of the day is stable', s1 === s2, `${s1} / ${s2}`);
 
+  // 10b. a phone: cells are small under a finger, so two fingers zoom in and a loupe shows the cell
+  await B.init('try { localStorage.clear(); } catch {}');
+  await B.open(page('&lang=ru&seed=1004'), 375, 812);
+  await wait(300);
+  await clickText('Играть');
+  await wait(200);
+  const touch = (type, pts) => B.cdp('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+  let gh = await B.js(`JSON.stringify(${A}.state.ghost)`).then(JSON.parse);
+  let [px, py] = (await centers([gh.from]))[0];
+  await B.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: px, y: py, deltaX: 0, deltaY: -500 });
+  await wait(50);
+  r = await B.js(`(() => { const v = ${A}.view, [x, y] = v.center(${gh.from}); return JSON.stringify({ z: v.zoom, same: v.cellAt(x, y) === ${gh.from}, cs: v.cs }); })()`).then(JSON.parse);
+  check('the mouse wheel zooms in and cells stay where they are', r.z > 1.5 && r.z <= 2.5 && r.same, JSON.stringify(r));
+  await B.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: px, y: py, deltaX: 0, deltaY: 3000 });
+  await wait(50);
+  const strokes0 = await B.js(`${A}.g.strokes.length`);
+  await touch('touchStart', [[150, 400], [200, 420]]);
+  for (let k = 1; k <= 6; k++) await touch('touchMove', [[150 - k * 15, 400 - k * 12], [200 + k * 15, 420 + k * 12]]);
+  await touch('touchEnd', []);
+  await wait(50);
+  r = await B.js(`JSON.stringify({ z: ${A}.view.zoom, strokes: ${A}.g.strokes.length, ox: ${A}.view.ox, bw: ${A}.view.bw })`).then(JSON.parse);
+  check('two fingers zoom in and dig nothing', r.z > 1.6 && r.strokes === strokes0, JSON.stringify(r));
+  check('a zoomed valley still covers the screen edge to edge', r.ox <= 10 && r.ox + r.bw >= 365, JSON.stringify(r));
+  // dig the hint with one finger in the zoomed valley; the loupe is up while the finger moves
+  gh = await B.js(`JSON.stringify(${A}.state.ghost)`).then(JSON.parse);
+  const tp = await centers([gh.from, ...gh.cells]);
+  const onScreen = tp.every(([x, y]) => x > 0 && x < 375 && y > 58 && y < 766);
+  if (!onScreen) { // bring the path into view first
+    const [mx, my] = tp[Math.floor(tp.length / 2)];
+    await B.js(`${A}.view.pan(${187 - mx}, ${412 - my})`);
+  }
+  const tp2 = await centers([gh.from, ...gh.cells]);
+  await touch('touchStart', [tp2[0]]);
+  for (const p of tp2.slice(1)) await touch('touchMove', [p]);
+  const loupe = await B.js(`JSON.stringify(${A}.state.loupe)`);
+  await wait(60);
+  await B.shot(path.join(out, 'phone-loupe.png'));
+  await touch('touchEnd', []);
+  await B.js(`${A}.step(0.3)`);
+  r = await B.js(`JSON.stringify({ s: ${A}.g.objects[0].s, strokes: ${A}.g.strokes.length, loupe: ${A}.state.loupe })`).then(JSON.parse);
+  check('a finger in the zoomed valley digs the path', r.s >= 0.99 && r.strokes === strokes0 + 1 && r.loupe === null, loupe + ' ' + JSON.stringify(r));
+
+  // at the normal size the finger hides a cell: the loupe shows it while digging
+  await B.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 187, y: 400, deltaX: 0, deltaY: 3000 });
+  await wait(50);
+  r = await B.js(`(() => { const { g, S, view } = ${A}; const W = g.W;
+    for (const c of g.river) { const x = c % W;
+      for (const d of [-1, 1]) { const n = c + d, n2 = c + 2 * d;
+        if (x + 2 * d >= 0 && x + 2 * d < W && !S.isWater(g, n) && !S.isWater(g, n2) && !g.objAt[n] && !g.objAt[n2] && g.h[n2] <= g.h[c]) return JSON.stringify([c, n, n2].map((i) => view.center(i))); } }
+    return 'null'; })()`).then(JSON.parse);
+  if (r) {
+    await touch('touchStart', [r[0]]);
+    await touch('touchMove', [r[1]]);
+    await touch('touchMove', [r[2]]);
+    await wait(60);
+    const lp = await B.js(`JSON.stringify({ loupe: ${A}.state.loupe, cs: ${A}.view.cs })`).then(JSON.parse);
+    await B.shot(path.join(out, 'phone-loupe.png'));
+    await touch('touchEnd', []);
+    check('the loupe shows the cell under the finger on a phone', lp.loupe && lp.cs < 36, JSON.stringify(lp));
+  } else check('the loupe shows the cell under the finger on a phone', false, 'no place to dig');
+
   // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads
   //     even if the cache keeps giving the old code (the loop of 17.10)
   await B.init(`try { localStorage.clear(); sessionStorage.removeItem('x'); } catch {}

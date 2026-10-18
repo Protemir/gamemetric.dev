@@ -7,6 +7,9 @@ import * as S from './sim.js';
 import { clamp, lerp, rng, valueNoise } from './util.js';
 
 const TOP = 58;
+const MAX_ZOOM = 2.5;
+const LOUPE_UNTIL = 36; // a cell this big is seen well enough past the finger
+const TERRAIN_SHARP = 1.5; // but never more than 3 pixels per screen point
 const BOTTOM = 46;
 export const LAYER = S.MAX_CUT; // height between two contour lines
 const R = 8; // height samples per cell for smooth light
@@ -91,16 +94,57 @@ export class View {
     this.rot = w > h * 1.05;
     const cols = this.rot ? g.H : g.W;
     const rows = this.rot ? g.W : g.H;
+    // a resize (a phone's address bar, turning it) keeps the zoom and the middle of the screen
+    const keep = this.g === g && this.zoom > 1 ? { z: this.zoom, bx: (this.lastW / 2 - this.ox) / this.cs, by: (this.lastH / 2 - this.oy) / this.cs, rot: this.lastRot } : null;
+    this.lastRot = this.rot;
+    this.lastW = w;
+    this.lastH = h;
     const cs = Math.floor(Math.min((w - 20) / cols, (h - TOP - BOTTOM) / rows));
-    this.cs = Math.max(8, cs);
-    this.bw = cols * this.cs;
-    this.bh = rows * this.cs;
+    // the whole valley at zoom 1; pinch or the mouse wheel can bring it closer (zoomAt, pan)
+    this.cols = cols;
+    this.rows = rows;
+    this.cs0 = Math.max(8, cs);
+    this.bw0 = cols * this.cs0;
+    this.bh0 = rows * this.cs0;
+    this.zoom = 1;
+    this.cs = this.cs0;
+    this.bw = this.bw0;
+    this.bh = this.bh0;
     this.ox = Math.round((w - this.bw) / 2);
     this.oy = Math.round(TOP + (h - TOP - BOTTOM - this.bh) / 2);
     this.g = g;
     this.terrain = this.paintTerrain(g);
+    if (keep && keep.rot === this.rot) {
+      this.zoomAt(keep.z, this.ox, this.oy);
+      this.pan(w / 2 - (this.ox + keep.bx * this.cs), h / 2 - (this.oy + keep.by * this.cs));
+    }
     const r = rng(g.seed ^ 77);
-    this.snow = Array.from({ length: 160 }, () => [r() * this.bw, r() * this.bh, 0.6 + r() * 1.4]);
+    this.snow = Array.from({ length: 160 }, () => [r() * this.bw0, r() * this.bh0, 0.6 + r() * 1.4]);
+  }
+
+  // zoom to z (1 = the whole valley) keeping the board point under (ax, ay) where it is
+  zoomAt(z, ax, ay) {
+    z = clamp(z, 1, MAX_ZOOM);
+    const bx = (ax - this.ox) / this.cs, by = (ay - this.oy) / this.cs;
+    this.zoom = z;
+    this.cs = this.cs0 * z;
+    this.bw = this.cols * this.cs;
+    this.bh = this.rows * this.cs;
+    this.ox = ax - bx * this.cs;
+    this.oy = ay - by * this.cs;
+    this.keepInView();
+  }
+  pan(dx, dy) {
+    this.ox += dx;
+    this.oy += dy;
+    this.keepInView();
+  }
+  // a board smaller than the screen sits in the middle; a bigger one cannot be dragged off it
+  keepInView() {
+    const w = window.innerWidth, h = window.innerHeight;
+    const left = 10, right = w - 10, top = TOP, bottom = h - BOTTOM;
+    this.ox = this.bw <= right - left ? (w - this.bw) / 2 : clamp(this.ox, right - this.bw, left);
+    this.oy = this.bh <= bottom - top ? top + (bottom - top - this.bh) / 2 : clamp(this.oy, bottom - this.bh, top);
   }
 
   // cell (x, y) of the valley -> top-left corner on screen
@@ -127,10 +171,11 @@ export class View {
 
   // the relief, drawn once per layout
   paintTerrain(g) {
-    const { cs, dpr } = this;
+    // painted sharper than the screen needs, so it still looks good brought closer
+    const cs = this.cs0, dpr = Math.min(3, this.dpr * TERRAIN_SHARP);
     const { W, H } = g;
     const c = document.createElement('canvas');
-    const Wp = Math.ceil(this.bw * dpr), Hp = Math.ceil(this.bh * dpr);
+    const Wp = Math.ceil(this.bw0 * dpr), Hp = Math.ceil(this.bh0 * dpr);
     c.width = Wp;
     c.height = Hp;
     const x2 = c.getContext('2d');
@@ -419,6 +464,7 @@ export class View {
       }
     }
     if (g.day >= S.WINTER) this.drawSnow();
+    if (ui.loupe && this.cs < LOUPE_UNTIL) this.drawLoupe(ui.loupe);
     if (g.over) {
       const [px, py] = this.center(g.over.y * g.W + g.over.x);
       cx.strokeStyle = C.thirst;
@@ -438,6 +484,36 @@ export class View {
       this.cx.lineTo(x2 + dx, y2 + dy);
     }
     this.cx.stroke();
+  }
+
+  // a magnifier above the finger while digging on a phone: the finger hides what it digs
+  drawLoupe({ x, y }) {
+    const { cx, dpr } = this;
+    const r = 56, m = 1.7, src = r / m;
+    const lx = clamp(x, r + 6, window.innerWidth - r - 6);
+    const ly = y - 112 < TOP + r ? y + 112 : y - 112;
+    cx.save();
+    cx.fillStyle = 'rgba(0,0,0,0.35)';
+    cx.beginPath();
+    cx.arc(lx + 2, ly + 4, r + 4, 0, Math.PI * 2);
+    cx.fill();
+    cx.beginPath();
+    cx.arc(lx, ly, r, 0, Math.PI * 2);
+    cx.clip();
+    cx.fillStyle = '#1f2420';
+    cx.fillRect(lx - r, ly - r, r * 2, r * 2);
+    cx.drawImage(this.cv, (x - src) * dpr, (y - src) * dpr, src * 2 * dpr, src * 2 * dpr, lx - r, ly - r, r * 2, r * 2);
+    cx.restore();
+    // the cell under the finger
+    const s = this.cs * m;
+    cx.strokeStyle = '#fff8ea';
+    cx.lineWidth = 2;
+    cx.strokeRect(lx - s / 2, ly - s / 2, s, s);
+    cx.strokeStyle = 'rgba(255,248,234,0.95)';
+    cx.lineWidth = 3;
+    cx.beginPath();
+    cx.arc(lx, ly, r, 0, Math.PI * 2);
+    cx.stroke();
   }
 
   seg(a, b, dx = 0, dy = 0) {
@@ -646,7 +722,7 @@ export class View {
     cx.fillStyle = 'rgba(255,255,255,0.85)';
     for (const [x, y, r] of this.snow) {
       cx.beginPath();
-      cx.arc(this.ox + x, this.oy + y, r, 0, Math.PI * 2);
+      cx.arc(this.ox + x * this.zoom, this.oy + y * this.zoom, r, 0, Math.PI * 2);
       cx.fill();
     }
   }

@@ -134,6 +134,7 @@ const TEXT = {
     plenty: 'вдоволь',
     ghostStart: 'Пунктир начинается выше, у кольца «начни тут». От этого арыка вода туда не поднимется — начни от кольца.',
     start: 'Начинай от реки или от арыка и тяни.',
+    pinch: 'Мелко? Раздвинь двумя пальцами — поле приблизится.',
     gateShut: 'Шлюз закрыт: вода сюда не идёт. Нажми ещё раз — откроется.',
     gateOpen: 'Шлюз открыт',
     gateRiver: 'Шлюз ставят на арык: нажми на сам арык.',
@@ -230,6 +231,7 @@ const TEXT = {
     plenty: 'plenty',
     ghostStart: 'The dashed line starts higher up, at the “start here” ring. From this canal water cannot climb there: start from the ring.',
     start: 'Start from the river or a canal and drag.',
+    pinch: 'Too small? Spread two fingers to zoom in.',
     gateShut: 'Gate closed: no water goes this way. Tap again to open it.',
     gateOpen: 'Gate open',
     gateRiver: 'Gates go on canals: tap the canal itself.',
@@ -319,7 +321,32 @@ function toCell(e) {
   return view.cellAt(e.clientX - r.left, e.clientY - r.top);
 }
 
+const fingers = new Map(); // pointerId -> {x, y}
+let pinch = null; // two fingers on the screen: { d, z, mx, my }
+const spread = () => {
+  const [a, b] = [...fingers.values()];
+  return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+};
+function startPinch() {
+  // a stroke the first finger had begun is taken back: the second finger means "zoom", not "dig"
+  if (press && press.moved && g && g.cur) {
+    S.endStroke(g);
+    S.undo(g);
+  }
+  press = null;
+  state.reach = null;
+  state.loupe = null;
+  const s = spread();
+  pinch = { d: Math.max(20, s.d), z: view.zoom, mx: s.mx, my: s.my };
+  if (!store.get('aryq.pinchSeen', false)) store.set('aryq.pinchSeen', true);
+}
 cv.addEventListener('pointerdown', (e) => {
+  const rr = cv.getBoundingClientRect();
+  if (e.pointerType === 'touch') fingers.set(e.pointerId, { x: e.clientX - rr.left, y: e.clientY - rr.top });
+  if (fingers.size >= 2) {
+    startPinch();
+    return;
+  }
   sfx.audioInit();
   if (!g || g.over || paused) return;
   const c = toCell(e);
@@ -374,12 +401,28 @@ cv.addEventListener('pointerdown', (e) => {
 });
 
 cv.addEventListener('pointermove', (e) => {
+  const rr = cv.getBoundingClientRect();
+  if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX - rr.left, y: e.clientY - rr.top });
+  if (pinch) {
+    if (fingers.size < 2) return;
+    const s = spread();
+    view.zoomAt(pinch.z * (s.d / pinch.d), s.mx, s.my);
+    view.pan(s.mx - pinch.mx, s.my - pinch.my);
+    pinch.mx = s.mx;
+    pinch.my = s.my;
+    pinch.z = view.zoom;
+    pinch.d = Math.max(20, s.d);
+    return;
+  }
   if (!press || !g) return;
+  // the loupe follows a finger that digs
+  if (press.moved && e.pointerType === 'touch') state.loupe = { x: e.clientX - rr.left, y: e.clientY - rr.top };
   const c = toCell(e);
   if (c < 0 || c === press.cell && !press.moved) return;
   if (!press.moved) {
     if (!S.startStroke(g, press.cell)) return;
     press.moved = true;
+    if (e.pointerType === 'touch') state.loupe = { x: e.clientX - rr.left, y: e.clientY - rr.top };
   }
   walkTo(c);
 });
@@ -517,6 +560,24 @@ function walkTo(target) {
   }
 }
 
+let lifts = 0;
+function lift(e) {
+  fingers.delete(e.pointerId);
+  state.loupe = null;
+  if (pinch) {
+    if (fingers.size === 0) pinch = null;
+    return; // the last finger of a pinch does not tap or dig
+  }
+  release();
+  // small cells under a finger: say once that the valley can be brought closer
+  if (e.pointerType === 'touch' && ++lifts === 3 && view.zoom === 1 && view.cs0 < 32 && !store.get('aryq.pinchSeen', false)) tip('pinch', 3200, 1);
+}
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rr = cv.getBoundingClientRect();
+  view.zoomAt(view.zoom * Math.exp(-e.deltaY * 0.0015), e.clientX - rr.left, e.clientY - rr.top);
+}, { passive: false });
+
 function release() {
   if (!press || !g) return;
   state.reach = null;
@@ -564,8 +625,8 @@ function release() {
   press = null;
   updateHud();
 }
-cv.addEventListener('pointerup', release);
-cv.addEventListener('pointercancel', release);
+cv.addEventListener('pointerup', lift);
+cv.addEventListener('pointercancel', lift);
 
 window.addEventListener('keydown', (e) => {
   if (!g) return;
