@@ -5,29 +5,16 @@
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/three/loaders/GLTFLoader.js';
 import * as SkeletonUtils from '../vendor/three/utils/SkeletonUtils.js';
-import { EffectComposer } from '../vendor/three/postprocessing/EffectComposer.js';
-import { RenderPass } from '../vendor/three/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from '../vendor/three/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from '../vendor/three/postprocessing/ShaderPass.js';
-import { OutputPass } from '../vendor/three/postprocessing/OutputPass.js';
-
-// the film look: a touch more contrast and warmth, a soft dark edge
-const GRADE = {
-  uniforms: { tDiffuse: { value: null }, strength: { value: 1 } },
-  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
-    void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
-      vec3 col = c.rgb;
-      float l = dot(col, vec3(0.299, 0.587, 0.114));
-      col = mix(vec3(l), col, 1.0 + 0.08 * strength);
-      col *= vec3(1.0 + 0.03 * strength, 1.0, 1.0 - 0.03 * strength);
-      float d = distance(vUv, vec2(0.5, 0.52));
-      col *= 1.0 - 0.32 * strength * smoothstep(0.42, 0.9, d);
-      gl_FragColor = vec4(col, c.a);
-    }`,
-};
 import { GW, GH, K } from './map.js';
+// how far a point lies past the edge of the khan's land (negative inside), with a ragged line
+const FAR_GLSL = (xz, muv, ph2) => `
+    vec2 qq = abs(${xz}) - vec2(19.2, 10.8);
+    float sd = length(max(qq, 0.0)) + min(max(qq.x, qq.y), 0.0);
+    float rag = (dot(texture2D(grass, ${muv} * vec2(0.9, 0.5) + 0.61).rgb, vec3(0.3, 0.59, 0.11)) - 0.2) * 14.0 + (dot(${ph2}, vec3(0.3, 0.59, 0.11)) - 0.2) * 6.0;
+    float far = smoothstep(-0.3, 8.0, sd + rag * 1.2);`;
+const BEYOND_GLSL = (v) => `
+    float lb = dot(${v}, vec3(0.3, 0.59, 0.11));
+    ${v} = mix(${v}, mix(vec3(lb), ${v}, 0.5) * vec3(0.6, 0.64, 0.7), far * 0.9);`;
 const TERR_HEAD = 'uniform sampler2D idTex;\nuniform sampler2D edgeTex;\nuniform sampler2D pal;\nuniform float uHR;\nuniform float uWash;\nuniform float uPhoto;\n';
 const TERR_BODY = `  {
     float rid = floor(texture2D(idTex, vMapUv).r * 255.0 + 0.5);
@@ -43,24 +30,28 @@ const TERR_BODY = `  {
     float pl = max(dot(photo, vec3(0.3, 0.59, 0.11)), 0.02);
     vec3 ground = diffuseColor.rgb;
     float gl0 = dot(ground, vec3(0.3, 0.59, 0.11));
+    float rim = min(min(vMapUv.x, 1.0 - vMapUv.x) * 1.78, min(vMapUv.y, 1.0 - vMapUv.y));
+    float wsh = uWash * smoothstep(0.004, 0.045, rim + (dot(ph2, vec3(0.3, 0.59, 0.11)) - 0.18) * 0.12);
     ground = mix(ground, photo * 2.0 * clamp(gl0 / 0.3, 0.75, 1.2), uPhoto);
     ground = mix(ground, ground * vec3(0.8, 1.0, 0.86), step(0.7, uPhoto) * (0.6 + 0.4 * smoothstep(0.1, 0.3, dot(ph2, vec3(0.3, 0.59, 0.11)))));
     float gl = dot(ground, vec3(0.3, 0.59, 0.11));
     vec3 tint = pow(p0.rgb, vec3(2.2));
-    vec3 col = mix(ground, tint * (0.25 + gl * 2.1), p0.a * uWash);
+    vec3 col = mix(ground, tint * (0.25 + gl * 2.1), p0.a * wsh);
     vec3 edgeC = pow(p1.rgb, vec3(2.2));
     float band = 1.0 - smoothstep(0.0, 9.0, dT);
-    col = mix(col, edgeC * (0.3 + gl * 2.0), band * band * 0.72 * uWash);
+    col = mix(col, edgeC * (0.3 + gl * 2.0), band * band * 0.72 * wsh);
     float line = 1.0 - smoothstep(0.35, 1.1, dT);
-    col = mix(col, edgeC * 1.25 + 0.04, line * 0.95 * uWash);
+    col = mix(col, edgeC * 1.25 + 0.04, line * 0.95 * wsh);
     float seam = 1.0 - smoothstep(0.1, 0.6, dR);
-    col *= 1.0 - seam * 0.32 * uWash;
+    col *= 1.0 - seam * 0.32 * wsh;
     col = mix(col, vec3(1.0, 0.8, 0.45), p1.a);
     col = mix(col, col * 1.2 + vec3(0.03, 0.025, 0.012), p2.r);
     col = mix(col, vec3(1.0, 0.78, 0.36), p2.r * (1.0 - smoothstep(0.25, 1.2, dR)) * 0.95);
     col = mix(col, vec3(0.03, 0.022, 0.016), p2.g);
     float cl0 = dot(col, vec3(0.3, 0.59, 0.11));
-    diffuseColor.rgb = max(mix(vec3(cl0), col, 1.1), 0.0);
+    col = max(mix(vec3(cl0), col, 1.1), 0.0);
+    vec2 wxz = vec2((vMapUv.x - 0.5) * 38.4, (0.5 - vMapUv.y) * 21.6);` + FAR_GLSL('wxz', 'vMapUv', 'ph2') + BEYOND_GLSL('col') + `
+    diffuseColor.rgb = col;
   }
 `;
 import { riderPos } from './sim.js';
@@ -116,16 +107,8 @@ export class View3D extends View {
     this.ray = new THREE.Raycaster();
     this.clock3 = 0;
     this.setupWorld();
-    // glow and grading where the device can afford it
-    if (!mobile) {
-      this.composer = new EffectComposer(this.renderer);
-      this.composer.addPass(new RenderPass(this.scene, this.camera));
-      this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.55, 0.86);
-      this.composer.addPass(this.bloom);
-      this.composer.addPass(new ShaderPass(GRADE));
-      this.composer.addPass(new OutputPass());
-    }
-    if (!this.composer) this.veil();
+    // no post-processing: bloom halved the frame rate on a laptop's own graphics; the edges darken by a CSS veil
+    this.veil();
     loading.then(() => { if (this.disposed) return; this.modelsLoaded = true; if (this.map) this.populate(this.lastG); });
   }
 
@@ -403,6 +386,15 @@ export class View3D extends View {
     return (h[i] * (1 - fx) + h[i + 1] * fx) * (1 - fy) + (h[i + GW] * (1 - fx) + h[i + GW + 1] * fx) * fy;
   }
 
+  landHeight(X, Z) {
+    const L = this.landGrid;
+    if (!L) return 0.6;
+    const f = (v) => clamp((v / L.SIZE + 0.5) * L.N, 0, L.N - 1.001);
+    const fx = f(X), fz = f(Z), i = Math.floor(fx), j = Math.floor(fz), tx = fx - i, tz = fz - j;
+    const y = (a, b) => L.pos[((j + b) * (L.N + 1) + i + a) * 3 + 1];
+    return (y(0, 0) * (1 - tx) + y(1, 0) * tx) * (1 - tz) + (y(0, 1) * (1 - tx) + y(1, 1) * tx) * tz;
+  }
+
   toScreen(x, y) {
     return this.project(toWorldX(x), Math.max(WATER, this.height(x, y)), toWorldZ(y));
   }
@@ -424,7 +416,7 @@ export class View3D extends View {
     const map = g.map;
     if (this.group) {
       this.scene.remove(this.group);
-      const keep = new Set([this.grassTex, this.puffTex].filter(Boolean));
+      const keep = new Set([this.grassTex, this.puffTex, this.cloudsTex].filter(Boolean));
       this.group.traverse((o) => {
         o.geometry?.dispose();
         const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
@@ -628,7 +620,7 @@ export class View3D extends View {
   withGrass(mat, terr = false) {
     const tex = this.grassTex;
     const rx = (14 * W / D).toFixed(1);
-    const clouds = this.cloudTexture();
+    const clouds = this.cloudsTex || (this.cloudsTex = this.cloudTexture());
     this.shaderTime = this.shaderTime || { value: 0 };
     const time = this.shaderTime;
     mat.onBeforeCompile = (sh) => {
@@ -666,6 +658,11 @@ export class View3D extends View {
       const back = Math.max(smooth(0, 30, -Z - D / 2), smooth(0, 30, -X - W / 2) * 0.8);
       const ridge = 1 - Math.abs(nz2[k]); // sharp crests
       let h = 0.62 + Math.pow(out, 1.1) * 0.06 * (0.6 + n1) + back * smooth(16, 52, out) * (3.5 + 8 * n1 + 4 * ridge) + n2 * 0.15 * smooth(0, 6, out);
+      h += smooth(2, 14, out) * n1 * n1 * 1.4; // rolling hills round the khan's land
+      // at the edge the land meets the map at the map's own height: no step, no frame
+      const edgeH = this.height((clamp(X, -W / 2, W / 2) / W + 0.5) * GW, (clamp(Z, -D / 2, D / 2) / D + 0.5) * GH);
+      const meet = smooth(0, 9 + 6 * n1, out);
+      h = edgeH * (1 - meet) + h * meet;
       // the river: its line continues past the left and right edges
       const x = (X / W + 0.5) * GW;
       if (ry && (x < 0 || x > GW)) {
@@ -673,7 +670,7 @@ export class View3D extends View {
         const t = smooth(0.12, 0.7, Math.abs(Z - rz));
         h = h * t + (WATER - 0.25) * (1 - t);
       }
-      if (out === 0) h = 0.3; // under the map the land hides
+      if (out === 0) h = edgeH - 0.08; // under the map the land hides
       pos.setY(k, h);
       const rock = smooth(2.2, 5, h), snow = smooth(7, 9.5, h + n2 * 2);
       c.copy(c1).lerp(c2, rock).lerp(c3, snow);
@@ -683,17 +680,37 @@ export class View3D extends View {
     }
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.computeVertexNormals();
+    this.landGrid = { pos: pos.array, N, SIZE };
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
-    const tex = this.grassTex;
+    const tex = this.grassTex, clouds = this.cloudsTex, time = this.shaderTime;
+    const rx = (14 * W / D).toFixed(1);
+    const photo = { winter: 0.08, autumn: 0.4 }[this.style] ?? 0.78;
     mat.onBeforeCompile = (sh) => {
-      sh.uniforms.grass = { value: tex };
-      sh.vertexShader = 'varying vec2 vWorldXZ;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWorldXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
-      sh.fragmentShader = 'uniform sampler2D grass;\nvarying vec2 vWorldXZ;\n' + sh.fragmentShader.replace(
+      Object.assign(sh.uniforms, { grass: { value: tex }, clouds: { value: clouds }, uTime: time });
+      sh.vertexShader = 'varying vec2 vWorldXZ;\nvarying float vH;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWorldXZ = (modelMatrix * vec4(transformed, 1.0)).xz;\n  vH = transformed.y;');
+      sh.fragmentShader = 'uniform sampler2D grass;\nuniform sampler2D clouds;\nuniform float uTime;\nvarying vec2 vWorldXZ;\nvarying float vH;\n' + sh.fragmentShader.replace(
         '#include <color_fragment>',
-        '#include <color_fragment>\n  diffuseColor.rgb *= 0.4 + 1.3 * dot(texture2D(grass, vWorldXZ / 2.7).rgb, vec3(0.3, 0.59, 0.11));',
+        `#include <color_fragment>
+  {
+    // read the photo exactly as the map reads it, so the two meet without a seam
+    vec2 muv = vec2(vWorldXZ.x / ${W.toFixed(1)} + 0.5, 0.5 - vWorldXZ.y / ${D.toFixed(1)});
+    vec3 ph = texture2D(grass, muv * vec2(${rx}, 14.0)).rgb;
+    vec3 ph2 = texture2D(grass, muv * vec2(2.3, 1.3) + 0.37).rgb;
+    vec3 photo = ph * 0.6 + ph2 * 0.4;
+    float L0 = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+    float grassy = (1.0 - smoothstep(1.8, 3.8, vH)) * ${photo.toFixed(2)};
+    vec3 g = photo * 2.0 * clamp(L0 / 0.3, 0.75, 1.2);
+    g = mix(g, g * vec3(0.8, 1.0, 0.86), step(0.7, ${photo.toFixed(2)}) * (0.6 + 0.4 * smoothstep(0.1, 0.3, dot(ph2, vec3(0.3, 0.59, 0.11)))));
+    diffuseColor.rgb = mix(diffuseColor.rgb * (0.4 + 1.3 * dot(ph, vec3(0.3, 0.59, 0.11))), g, grassy);
+    float cl = texture2D(clouds, muv * vec2(1.6, 0.9) + vec2(uTime * 0.006, uTime * 0.0025)).r;
+    diffuseColor.rgb *= 1.0 - 0.28 * smoothstep(0.52, 0.72, cl);
+    // beyond the khan's land the steppe is a shade duller and darker: it is not his to rule
+    vec3 dc = diffuseColor.rgb;${FAR_GLSL('vWorldXZ', 'muv', 'ph2')}${BEYOND_GLSL('dc')}
+    diffuseColor.rgb = dc;
+  }`,
       );
     };
-    mat.customProgramCacheKey = () => 'land';
+    mat.customProgramCacheKey = () => 'land-' + photo;
     const land = new THREE.Mesh(geo, mat);
     land.receiveShadow = true;
     this.group.add(land);
@@ -719,7 +736,7 @@ export class View3D extends View {
 
   // tufts of steppe grass that bend with the wind (a few thousand, one draw)
   buildGrass(g) {
-    const n = this.mobile ? 900 : 2600;
+    const n = this.mobile ? 1300 : 3700;
     const blade = new THREE.ConeGeometry(0.026, 0.22, 3, 1, true).translate(0, 0.11, 0);
     const parts = [0, 2.1, 4.2].map((a, k) => blade.clone().rotateZ((k - 1) * 0.35).rotateY(a).translate(Math.cos(a) * 0.02, 0, Math.sin(a) * 0.02));
     const geo = parts.reduce((acc, p) => {
@@ -749,15 +766,27 @@ export class View3D extends View {
     const pal = { summer: ['#a2a85a', '#c2b86a'], autumn: ['#c99a48', '#dcb45a'], winter: ['#c9c2a8', '#a9a28a'] }[this.style] || ['#7a8a3a', '#9a9a48'];
     let k = 0;
     for (let tries = 0; tries < n * 4 && k < n; tries++) {
-      const x = rand() * GW, y = rand() * GH, i = Math.floor(y) * GW + Math.floor(x);
-      if (g.map.river[i] || this.height(x, y) < WATER + 0.08) continue;
-      p.set(toWorldX(x), this.height(x, y) - 0.01, toWorldZ(y));
+      // the grass runs on past the edge of the map and thins out raggedly
+      const x = (rand() * 1.5 - 0.25) * GW, y = (rand() * 1.6 - 0.3) * GH;
+      const inside = x >= 0 && x < GW && y >= 0 && y < GH;
+      const X = toWorldX(x), Z = toWorldZ(y);
+      let h;
+      if (inside) {
+        if (g.map.river[Math.floor(y) * GW + Math.floor(x)] || this.height(x, y) < WATER + 0.08) continue;
+        h = this.height(x, y);
+      } else {
+        const o = Math.hypot(Math.max(0, Math.abs(X) - W / 2), Math.max(0, Math.abs(Z) - D / 2));
+        if (rand() > 1 - o / 8 + Math.sin(X * 0.7) * Math.cos(Z * 0.9) * 0.3) continue;
+        h = this.landHeight(X, Z);
+        if (h < WATER + 0.08 || h > 2.2) continue;
+      }
+      p.set(X, h - 0.01, Z);
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * 6.28);
       const s = 0.7 + rand() * 0.9;
       sc.set(s, s * (0.8 + rand() * 0.6), s);
       m4.compose(p, q, sc);
       im.setMatrixAt(k, m4);
-      col.set(pal[rand() < 0.5 ? 0 : 1]).multiplyScalar(0.85 + rand() * 0.3);
+      col.set(pal[rand() < 0.5 ? 0 : 1]).multiplyScalar((0.85 + rand() * 0.3) * (inside ? 1 : 0.8));
       im.setColorAt(k, col);
       k++;
     }
@@ -987,7 +1016,7 @@ export class View3D extends View {
     if (!g || !this.group || this.populated === g.map) return;
     this.populated = g.map;
     const rand = rng(g.seed * 13 + 1);
-    const inst = (name, spots, height, yaw = true) => {
+    const inst = (name, spots, height, yaw = true, cast = true) => {
       const src = MODELS[name];
       if (!src || !spots.length) return;
       src.scene.updateMatrixWorld(true);
@@ -998,11 +1027,12 @@ export class View3D extends View {
         const geo = o.geometry.clone().applyMatrix4(o.matrixWorld);
         geo.translate(0, -box.min.y, 0);
         const im = new THREE.InstancedMesh(geo, o.material, spots.length);
-        im.castShadow = true;
+        im.castShadow = cast;
         im.receiveShadow = true;
         const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3();
         spots.forEach((sp, i) => {
-          p.set(toWorldX(sp.x), this.height(sp.x, sp.y) - 0.02, toWorldZ(sp.y));
+          if (sp.wx != null) p.set(sp.wx, this.landHeight(sp.wx, sp.wz) - 0.03, sp.wz);
+          else p.set(toWorldX(sp.x), this.height(sp.x, sp.y) - 0.02, toWorldZ(sp.y));
           q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw ? sp.a ?? rand() * 6.28 : 0);
           const sc = k * (sp.s || 1);
           s.set(sc, sc, sc);
@@ -1027,6 +1057,32 @@ export class View3D extends View {
     }
     inst('bush', bushes, 0.36);
     inst('rock', rocks, 0.38);
+    // the country beyond: birch groves in the hollows, bushes, stones on the hills
+    const beyond = { birch: [], bush: [], rock: [] };
+    const outAt = (X, Z) => Math.hypot(Math.max(0, Math.abs(X) - W / 2), Math.max(0, Math.abs(Z) - D / 2));
+    const wet = (X, Z) => {
+      if (!map.riverY) return false;
+      const rz = (map.riverY(clamp((X / W + 0.5) * GW, -60 * K, GW + 60 * K)) / GH - 0.5) * D;
+      return Math.abs(Z - rz) < 0.9;
+    };
+    const groves = this.mobile ? 5 : 9;
+    for (let k = 0; k < groves * 8; k++) {
+      const X = (rand() - 0.5) * (W + 50), Z = (rand() - 0.5) * (D + 36);
+      const o = outAt(X, Z);
+      if (o < 0.8 || o > 22 || wet(X, Z)) continue;
+      const h = this.landHeight(X, Z);
+      if (h > 4.5) continue;
+      if (h > 2.4) { if (beyond.rock.length < 30) beyond.rock.push({ wx: X, wz: Z, s: 1.4 + rand() * 2.2 }); continue; }
+      if (beyond.birch.length < groves * 6 && rand() < 0.5) {
+        for (let t = 0, n = 3 + Math.floor(rand() * 5); t < n; t++) {
+          const a = rand() * 6.28, r = rand() * 1.6, x = X + Math.cos(a) * r, z = Z + Math.sin(a) * r;
+          if (outAt(x, z) > 0.6 && !wet(x, z)) beyond.birch.push({ wx: x, wz: z, s: 0.8 + rand() * 0.6 });
+        }
+      } else if (beyond.bush.length < 50) beyond.bush.push({ wx: X, wz: Z, s: 1 + rand() * 0.8 });
+    }
+    inst('birch', beyond.birch, 0.9, true, false);
+    inst('bush', beyond.bush, 0.36, true, false);
+    inst('rock', beyond.rock, 0.38, true, false);
     // herds at every other aul: sheep or horses, few and big enough to see
     const herdAt = (r) => this.deco[r.id].herd.length && (r.id % 2 === 0 || map.capitals.includes(r.id));
     // sheep stand where the 2D view put its herds (the woolly ones)
