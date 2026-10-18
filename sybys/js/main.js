@@ -1007,7 +1007,7 @@ function frame(now) {
   const lvl = !g || g.demo || g.phase === 'end' ? 1 : g.phase === 'map' ? 0.7 : 0.85;
   if (lvl !== lastMusic) { lastMusic = lvl; musicLevel(lvl); }
   // and which küi
-  const mood = tourState ? 'kerbez' : !g || g.demo || g.phase !== 'map' ? 'dala' : g.raid ? 'shabuyl' : g.night ? 'tun' : 'play';
+  const mood = tourState ? 'kerbez' : !g || g.demo ? 'adai' : g.phase !== 'map' ? 'dala' : g.raid ? 'shabuyl' : g.night ? 'tun' : 'play';
   if (mood !== lastMood) { lastMood = mood; musicMood(mood); }
   // the portal counts only real play: not the title, the cards, the scenes or a pause
   gameplay(!!g && !g.demo && g.phase === 'map' && !paused && !document.hidden);

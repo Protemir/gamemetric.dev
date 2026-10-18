@@ -164,6 +164,10 @@ const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 const MODES = { dorian: [0, 2, 3, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], mixo: [0, 2, 4, 5, 7, 9, 10], hijaz: [0, 1, 4, 5, 7, 8, 10] };
 // a motif is one bar: [scale degree, length in eighths]
 const PIECES = {
+  // in the spirit of Kurmangazy's «Адай»: a running gallop of repeated notes, a run that climbs and falls back
+  // (our own notes, not a transcription)
+  adai: { bpm: 112, root: 62, mode: 'aeolian', drone: [38, 45], strum: 'X.x.X.x.', form: 'ABACABDA', vol: 0.2, rest: 0.05,
+    m: { A: [[4, 1], [4, 1], [5, 1], [4, 1], [3, 1], [4, 1], [2, 2]], B: [[0, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 2]], C: [[7, 1], [7, 1], [8, 1], [7, 1], [6, 1], [5, 1], [4, 2]], D: [[4, 1], [3, 1], [2, 1], [1, 1], [0, 2], [0, 2]] } },
   dala: { bpm: 70, root: 62, mode: 'dorian', drone: [38, 45], strum: 'X.......', form: 'AABACADA', vol: 0.2, rest: 0.18,
     m: { A: [[7, 2], [6, 1], [7, 1], [5, 2], [4, 2]], B: [[4, 1], [5, 1], [4, 1], [3, 1], [2, 2], [0, 2]], C: [[9, 2], [8, 1], [7, 1], [8, 2], [7, 2]], D: [[2, 1], [3, 1], [4, 2], [3, 1], [2, 1], [0, 2]] } },
   jorga: { bpm: 92, root: 62, mode: 'aeolian', drone: [38, 45], strum: 'X...x...', form: 'AABACCDA', vol: 0.18, rest: 0.22,
@@ -175,7 +179,7 @@ const PIECES = {
   tun: { bpm: 50, root: 69, mode: 'hijaz', drone: [38], strum: '........', form: 'ABACABDA', vol: 0.16, rest: 0.3,
     m: { A: [[4, 4], [2, 4]], B: [[3, 2], [2, 2], [0, 4]], C: [[5, 4], [4, 4]], D: [[2, 2], [1, 2], [0, 4]] } },
 };
-const MUSIC_GAIN = 1.6;
+const MUSIC_GAIN = 3.2;
 // a hall made of noise that dies away: enough to soften the strings, not to drown them
 function impulse(c, sec) {
   const len = Math.floor(c.sampleRate * sec), buf = c.createBuffer(2, len, c.sampleRate);
@@ -196,39 +200,42 @@ function startMusic() {
   wet.gain.value = 0.5;
   hall.buffer = impulse(c, 2.8);
   bus.connect(dry).connect(sound.out);
-  bus.connect(hall).connect(wet).connect(sound.out);
+  const hp = c.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 280;
+  bus.connect(hp).connect(hall).connect(wet).connect(sound.out);
   // the drone: two soft voices a fifth apart, slowly breathing
   const pad = c.createGain(), padLp = c.createBiquadFilter();
-  pad.gain.value = 0.05;
+  pad.gain.value = 0.018;
   padLp.type = 'lowpass';
   padLp.frequency.value = 420;
   const o1 = c.createOscillator(), o2 = c.createOscillator(), lfo = c.createOscillator(), lg = c.createGain();
   o1.type = o2.type = 'triangle';
-  o1.frequency.value = hz(38);
-  o2.frequency.value = hz(45);
+  o1.frequency.value = hz(50);
+  o2.frequency.value = hz(57);
   o2.detune.value = 6;
   lfo.frequency.value = 0.08;
-  lg.gain.value = 0.025;
+  lg.gain.value = 0.008;
   lfo.connect(lg).connect(pad.gain);
   o1.connect(padLp);
   o2.connect(padLp);
   padLp.connect(pad).connect(bus);
   o1.start(); o2.start(); lfo.start();
   sound.pad = { o1, o2 };
-  sound.music = { bus, next: c.currentTime + 0.2, bar: 0, piece: 'dala', want: sound.wantMood || 'dala', playBars: 0 };
+  sound.music = { bus, next: c.currentTime + 0.2, bar: 0, piece: 'adai', want: sound.wantMood || 'adai', playBars: 0 };
   const tick = () => {
     const m = sound.music;
     if (!sound.ctx) return;
     while (m.next < c.currentTime + 0.4) {
       // at the start of a bar: change the küi if the moment asks for another
       let want = m.want;
-      if (want === 'play') want = Math.floor(m.playBars / 16) % 2 ? 'kerbez' : 'jorga';
+      if (want === 'play') want = ['adai', 'jorga', 'kerbez'][Math.floor(m.playBars / 16) % 3];
       if (want !== m.piece) {
         m.piece = want;
         m.bar = 0;
         const np = PIECES[want];
-        sound.pad?.o1.frequency.setTargetAtTime(hz(np.drone[0]), m.next, 0.8);
-        sound.pad?.o2.frequency.setTargetAtTime(hz(np.drone[1] || np.drone[0] + 7), m.next, 0.8);
+        sound.pad?.o1.frequency.setTargetAtTime(hz(np.drone[0] + 12), m.next, 0.8);
+        sound.pad?.o2.frequency.setTargetAtTime(hz((np.drone[1] || np.drone[0] + 7) + 12), m.next, 0.8);
       }
       if (m.want === 'play') m.playBars++;
       const p = PIECES[m.piece];
@@ -236,8 +243,8 @@ function startMusic() {
       // the strum on the lower strings
       [...p.strum].forEach((ch, k) => {
         const t = m.next + k * eighth;
-        if (ch === 'X') { pluck(hz(p.drone[0]), t, 0.24); if (p.drone[1]) pluck(hz(p.drone[1]), t + 0.03, 0.16); }
-        else if (ch === 'x') pluck(hz(p.drone[1] || p.drone[0] + 7), t, 0.09);
+        if (ch === 'X') { pluck(hz(p.drone[0] + 12), t, p.vol * 0.42); if (p.drone[1]) pluck(hz(p.drone[1] + 12), t + 0.03, p.vol * 0.3); }
+        else if (ch === 'x') pluck(hz((p.drone[1] || p.drone[0] + 7) + 12), t, p.vol * 0.25);
       });
       // the tune: this bar's motif, now and then an octave up on a repeat, a grace note before long notes
       const motif = p.m[p.form[m.bar % p.form.length]];
@@ -257,7 +264,7 @@ function startMusic() {
   setInterval(tick, 100);
 }
 
-// which küi the moment asks for: 'dala', 'play' (jorga and kerbez in turn), 'shabuyl', 'tun', 'kerbez'
+// which küi the moment asks for: 'adai' (the title), 'dala', 'play' (adai, jorga and kerbez in turn), 'shabuyl', 'tun', 'kerbez'
 export function musicMood(name) {
   sound.wantMood = name;
   if (sound.music) sound.music.want = name;
