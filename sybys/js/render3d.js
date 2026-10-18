@@ -227,6 +227,7 @@ export class View3D extends View {
     this.mobile = mobile;
     this.renderer = new THREE.WebGLRenderer({ canvas: gl, antialias: false, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.debug.checkShaderErrors = /[?&]debug/.test(location.search);
     this.renderer.toneMapping = THREE.AgXToneMapping;
     this.renderer.toneMappingExposure = 1.15;
     this.renderer.shadowMap.enabled = true;
@@ -643,7 +644,7 @@ export class View3D extends View {
   // the photo of grass and stones (Poly Haven, CC0) gives the ground its grain; only its light and dark
   // are used on the map, so the clans' colours stay true
   buildTerritory(g) {
-    const map = g.map, HR = this.mobile ? 3 : 4, w = GW * HR, h = GH * HR;
+    const map = g.map, HR = this.mobile ? 2 : 3, w = GW * HR, h = GH * HR;
     const R = map.regions, cell = map.cell;
     // the natural ground, as the 2D view coloured it
     const gc = document.createElement('canvas');
@@ -667,11 +668,19 @@ export class View3D extends View {
     };
     const id = new Uint8Array(w * h);
     const cand = [];
+    const edgeCell = new Uint8Array(GW * GH);
+    for (let cy = 0; cy < GH; cy++) for (let cx = 0; cx < GW; cx++) {
+      const c0 = cell[cy * GW + cx];
+      for (let dy = -1; dy <= 1 && !edgeCell[cy * GW + cx]; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (cell[clamp(cy + dy, 0, GH - 1) * GW + clamp(cx + dx, 0, GW - 1)] !== c0) { edgeCell[cy * GW + cx] = 1; break; }
+      }
+    }
     for (let Y = 0; Y < h; Y++) {
       const y = (Y + 0.5) / HR - 0.5, cy = clamp(Math.round(y), 0, GH - 1);
       for (let X = 0; X < w; X++) {
         const x = (X + 0.5) / HR - 0.5, cx = clamp(Math.round(x), 0, GW - 1);
         const c0 = cell[cy * GW + cx];
+        if (!edgeCell[cy * GW + cx]) { id[Y * w + X] = c0; continue; }
         cand.length = 0;
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
           const c = cell[clamp(cy + dy, 0, GH - 1) * GW + clamp(cx + dx, 0, GW - 1)];

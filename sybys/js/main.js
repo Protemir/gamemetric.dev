@@ -209,6 +209,23 @@ function backdrop() {
   return true;
 }
 
+// a tap answers at once: the button presses in and a veil says the steppe is being laid out;
+// the heavy work (a new map, its 3D) starts only after that has been painted, so a phone never seems frozen
+function busyThen(btn, fn) {
+  btn?.classList.add('busy');
+  let veil = document.getElementById('preparing');
+  if (!veil) {
+    veil = el('div', null);
+    veil.id = 'preparing';
+    veil.append(el('i', 'spin'), el('span', null, T().preparing));
+    document.body.append(veil);
+  }
+  veil.classList.add('on');
+  requestAnimationFrame(() => setTimeout(() => {
+    try { fn(); } finally { requestAnimationFrame(() => requestAnimationFrame(() => veil.classList.remove('on'))); }
+  }, 0));
+}
+
 function startScreen() {
   hud.hidden = true;
   actionsEl.hidden = true;
@@ -226,7 +243,7 @@ function startScreen() {
   box.append(el('h1', T().title.length > 12 ? 'long' : null, T().title), orn, el('p', 'sub', T().sub));
   const t = T(), meta = M.load();
   const play = el('button', 'big play', t.play);
-  play.onclick = () => { audioInit(); mode = 'free'; start(); };
+  play.onclick = () => { audioInit(); mode = 'free'; busyThen(play, start); };
   box.append(play);
   // the steppe of the day: the same for everyone, one condition, a streak
   const d = M.daily();
@@ -235,11 +252,11 @@ function startScreen() {
   day.append(el('b', null, M.dailyDone(meta) ? t.dailyDoneBtn : t.dailyBtn), el('small', null, `${modName}: ${modLine}`));
   const st = M.liveStreak(meta);
   if (st) day.append(el('em', null, t.streak(st)));
-  day.onclick = () => { audioInit(); mode = 'daily'; start(); };
+  day.onclick = () => { audioInit(); mode = 'daily'; busyThen(day, start); };
   box.append(day);
   const row = el('div', 'titlerow');
   const how = el('button', 'link', t.howBtn);
-  how.onclick = () => { audioInit(); tour(); };
+  how.onclick = () => { audioInit(); busyThen(how, tour); };
   row.append(how);
   const chron = el('button', 'link', t.chronicleBtn + ' · ' + t.glory(meta.glory));
   chron.onclick = () => chronicle(startScreen);
@@ -339,11 +356,25 @@ function tour() {
   const line = el('p', 'tourline');
   const dots = el('div', 'tourdots');
   const skip = el('button', 'big', T().tourSkip);
-  skip.onclick = endTour;
+  skip.onclick = () => busyThen(skip, endTour);
   bar.append(line, dots, skip);
   document.body.append(bar);
   tourState = { t0: performance.now(), step: -1, bar, line, dots, target: -1 };
   if (DEBUG || q.has('covers')) window.__sybys = { get g() { return g; }, S, view, coach, look, act: doAction, intercept: tapRider, choose: pickEvent, finish: pickEnd, step: (d) => S.step(g, d), lesson, autumn: goAutumn, tour: tourState };
+}
+// a tap on the map during the show: say it is a show, and make its Play button call
+function nudgeTour() {
+  const t = tourState;
+  if (!t || t.nudged > performance.now() - 2500) return;
+  t.nudged = performance.now();
+  t.line.textContent = T().tourTap;
+  t.line.classList.remove('in');
+  void t.line.offsetWidth;
+  t.line.classList.add('in');
+  const b = t.bar.querySelector('.big');
+  b.classList.remove('call');
+  void b.offsetWidth;
+  b.classList.add('call');
 }
 function endTour() {
   if (!tourState) return;
@@ -660,7 +691,8 @@ function markAt(px, py) {
 }
 
 function pointer(e) {
-  if (!g || g.phase !== 'map' || paused || tourState) return;
+  if (tourState) { nudgeTour(); return; }
+  if (!g || g.phase !== 'map' || paused) return;
   audioInit();
   const px = e.clientX, py = e.clientY;
   // the riders worth tapping are found generously; an honest messenger only when the tap is right on him
@@ -927,13 +959,13 @@ function showEnd(rec) {
     for (const s of rec.opened) box.append(el('p', 'deed', t.opened(t.styles[s])));
   }
   const b = el('button', 'big', t.playAgain);
-  b.onclick = () => { mode = 'free'; start(); };
+  b.onclick = () => { mode = 'free'; busyThen(b, start); };
   box.append(b);
   const meta = M.load();
   const row = el('div', 'titlerow');
   if (!M.dailyDone(meta)) {
     const dly = el('button', 'link', t.dailyBtn);
-    dly.onclick = () => { mode = 'daily'; start(); };
+    dly.onclick = () => { mode = 'daily'; busyThen(dly, start); };
     row.append(dly);
   }
   const chr = el('button', 'link', t.chronicleBtn);

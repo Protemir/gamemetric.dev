@@ -164,6 +164,7 @@ const RU = {
   },
   howBtn: 'Как играть?',
   tourSkip: 'Играть',
+  tourTap: 'Это показ. Нажми «Играть» и начни сам.',
   tour: [
     'Ты — Темир, новый хан. Три рода степи ещё не верят тебе.',
     'Нажми на пастбище — туда поскачет гонец со словом хана.',
@@ -266,6 +267,7 @@ const RU = {
   gfx3d: 'Графика 3D',
   trustTag: (name, p) => `${name} · доверие ${p}% / нужно 55`,
   clockShort: (mm, n) => `Курултай ${mm} · за тебя ${n} из 2`,
+  preparing: 'Седлаю коней…',
   clockTiny: (mm, n) => `Курултай ${mm} · ${n}/2`,
 };
 
@@ -424,6 +426,7 @@ const EN = {
   },
   howBtn: 'How to play?',
   tourSkip: 'Play',
+  tourTap: 'This is a show. Press Play to start yourself.',
   tour: [
     'You are Temir, the new khan. The three clans of the steppe do not trust you yet.',
     "Tap a pasture: a rider takes the khan's word there.",
@@ -523,6 +526,7 @@ const EN = {
   gfx3d: '3D graphics',
   trustTag: (name, p) => `${name} · trust ${p}% / 55 needed`,
   clockShort: (mm, n) => `Kurultai ${mm} · ${n} of 2 with you`,
+  preparing: 'Saddling the horses…',
   clockTiny: (mm, n) => `Kurultai ${mm} · ${n}/2`,
 };
 

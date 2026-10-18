@@ -72,8 +72,7 @@ export function audioInit() {
     const d = noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     Object.assign(sound, { ctx: c, out, noise, strings: new Map() });
-    startWind();
-    startMusic();
+    setTimeout(() => { if (sound.ctx === c) { startWind(); startMusic(); } }, 150);
   } catch {
     sound.ctx = null;
   }

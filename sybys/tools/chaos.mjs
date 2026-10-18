@@ -104,7 +104,7 @@ async function campaign(w, h, label) {
       continue;
     }
     // the how-to-play tour: watch a moment, then press its Play
-    if (await B.js(`!!document.querySelector('.tour')`)) { await wait(800); await B.js(`document.querySelector('.tour .big').click()`); continue; }
+    if (await B.js(`!!document.querySelector('.tour')`)) { await wait(800); await B.js(`document.querySelector('.tour .big')?.click()`); continue; }
     // play: a burst of input, then let time run fast (the clock jumps 6–15 s)
     if (await B.js(`!!document.querySelector('#ui .pause, #ui .journal')`)) {
       await B.js(`[...document.querySelectorAll('#ui button')].pop().click()`);
