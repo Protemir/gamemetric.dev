@@ -487,7 +487,20 @@ function routeTo(target) {
 
 // when the finger asks for a place this stroke cannot reach, show where it could start instead
 function showBetterStart(target) {
-  const o = g.objAt[target];
+  // the finger on an orchard or a yurt, or near a thirsty one (18.10: "a cross everywhere below"):
+  // the finger rarely lands right on the orchard it means
+  let o = g.objAt[target];
+  if (!o) {
+    const tx = target % W, ty = (target / W) | 0;
+    let best = 3.2;
+    for (const x of g.objects) {
+      const d = Math.hypot(x.x - tx, x.y - ty);
+      if (x.s < 0.99 && d < best) {
+        best = d;
+        o = x;
+      }
+    }
+  }
   if (!o) return;
   const plan = S.planFor(g, o);
   if (!plan || !plan.cells.length || plan.from === (g.cur && g.cur.from)) return;
@@ -552,7 +565,7 @@ function walkTo(target) {
         if (following && gh.cells.includes(b)) tip('ghostStart', 5000);
         else if (WHY[r.why]) tip(r.why, 2200);
         // a better start is shown only when the finger goes to an orchard or a yurt
-        if ((r.why === 'high' || r.why === 'up') && g.objAt[target]) showBetterStart(target);
+        if (r.why === 'high' || r.why === 'up') showBetterStart(target);
       }
       return;
     }
