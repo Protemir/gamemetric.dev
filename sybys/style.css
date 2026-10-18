@@ -643,3 +643,6 @@ button:active:not(:disabled) { transform: scale(0.95); }
 /* four suspects in one row (two by two on a phone) */
 .suspects .choices { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 560px) { .suspects .choices { grid-template-columns: repeat(2, 1fr); } }
+
+/* where the grading pass is off (phones, slow machines) the edges of the world still darken */
+.veil { position: fixed; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(ellipse 75% 70% at 50% 52%, transparent 55%, rgba(16, 10, 5, 0.42) 100%); }

@@ -263,7 +263,8 @@ const RU = {
   gfx2d: 'Лёгкая графика',
   gfx3d: 'Графика 3D',
   trustTag: (name, p) => `${name} · доверие ${p}% / нужно 55`,
-  clockShort: (mm, n) => `Курултай ${mm} · ${n}/3 (нужно 2)`,
+  clockShort: (mm, n) => `Курултай ${mm} · за тебя ${n} из 2`,
+  clockTiny: (mm, n) => `Курултай ${mm} · ${n}/2`,
 };
 
 const EN = {
@@ -517,7 +518,8 @@ const EN = {
   gfx2d: 'Light graphics',
   gfx3d: '3D graphics',
   trustTag: (name, p) => `${name} · trust ${p}% / 55 needed`,
-  clockShort: (mm, n) => `Kurultai ${mm} · ${n}/3 (2 needed)`,
+  clockShort: (mm, n) => `Kurultai ${mm} · ${n} of 2 with you`,
+  clockTiny: (mm, n) => `Kurultai ${mm} · ${n}/2`,
 };
 
 export const T = () => (lang === 'ru' ? RU : EN);

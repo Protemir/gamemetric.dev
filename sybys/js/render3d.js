@@ -75,6 +75,7 @@ export class View3D extends View {
     this.renderer.toneMappingExposure = 1.15;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.autoUpdate = false; // the shadows are redrawn every other frame: nobody sees the difference
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(32, 1, 0.5, 200);
     this.ray = new THREE.Raycaster();
@@ -89,7 +90,15 @@ export class View3D extends View {
       this.composer.addPass(new ShaderPass(GRADE));
       this.composer.addPass(new OutputPass());
     }
+    if (!this.composer) this.veil();
     loading.then(() => { if (this.disposed) return; this.modelsLoaded = true; if (this.map) this.populate(this.lastG); });
+  }
+
+  veil() {
+    if (this.veilEl) return;
+    this.veilEl = document.createElement('div');
+    this.veilEl.className = 'veil';
+    this.glCanvas.after(this.veilEl);
   }
 
   setupWorld() {
@@ -208,14 +217,23 @@ export class View3D extends View {
 
   // a slow device: sharpness down to 1, softer and cheaper shadows, no grass tufts, no walkers
   lighter() {
+    this.lite = (this.lite || 0) + 1;
     this.composer = null;
-    this.renderer.setPixelRatio(1);
-    this.sun.shadow.mapSize.set(512, 512);
+    this.veil();
+    if (this.lite === 1) {
+      this.sun.shadow.mapSize.set(1024, 1024);
+      if (this.grassMesh) this.grassMesh.visible = false;
+      for (const f of this.folk || []) f.grp.visible = false;
+      for (const s of this.sheep || []) s.traverse((m) => { if (m.isMesh) m.castShadow = false; });
+      this.sharp = Math.min(this.sharp || 2, 1.5);
+    } else {
+      this.sun.shadow.mapSize.set(512, 512);
+      this.sharp = 1;
+    }
     this.sun.shadow.map?.dispose();
     this.sun.shadow.map = null;
-    if (this.grassMesh) this.grassMesh.visible = false;
-    for (const f of this.folk || []) f.grp.visible = false;
-    this.lite = true;
+    this.renderer.setPixelRatio(Math.min(this.sharp, window.devicePixelRatio || 1));
+    this.renderer.setSize(this.w, this.h, false);
   }
 
   paint3d() {
@@ -235,7 +253,7 @@ export class View3D extends View {
   resize() {
     super.resize();
     const w = this.w, h = this.h;
-    this.renderer.setPixelRatio(Math.min(this.mobile ? 1.5 : 2, window.devicePixelRatio || 1));
+    this.renderer.setPixelRatio(Math.min(this.sharp || 2, window.devicePixelRatio || 1));
     this.renderer.setSize(w, h, false);
     if (this.composer) {
       this.composer.setPixelRatio(this.renderer.getPixelRatio());
@@ -487,7 +505,7 @@ export class View3D extends View {
   // the steppe beyond the map: low swells near it, mountains with snow far to the north and west,
   // the river running on past both edges
   buildLand(g) {
-    const SIZE = 200, N = 220;
+    const SIZE = 200, N = this.mobile ? 150 : 220;
     const geo = new THREE.PlaneGeometry(SIZE, SIZE, N, N);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
@@ -869,6 +887,7 @@ export class View3D extends View {
     const herdAt = (r) => this.deco[r.id].herd.length && (r.id % 2 === 0 || map.capitals.includes(r.id));
     // sheep stand where the 2D view put its herds (the woolly ones)
     this.mixers = [];
+    this.sheep = [];
     if (MODELS.sheep) {
       const src = MODELS.sheep;
       const box = new THREE.Box3().setFromObject(src.scene);
@@ -876,13 +895,14 @@ export class View3D extends View {
       const idle = src.animations.find((a) => /Idle/.test(a.name));
       for (const r of map.regions) {
         if (!herdAt(r)) continue;
-        for (const h of this.deco[r.id].herd.slice(0, 4)) {
+        for (const h of this.deco[r.id].herd.slice(0, this.mobile ? 2 : 4)) {
           if (!h.sheep) continue;
           const o = SkeletonUtils.clone(src.scene);
           o.scale.setScalar(k * (0.9 + rand() * 0.25));
           o.position.set(toWorldX(h.x), this.height(h.x, h.y), toWorldZ(h.y));
           o.rotation.y = rand() * 6.28;
-          o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.frustumCulled = false; } });
+          o.traverse((m) => { if (m.isMesh) { m.castShadow = !this.lite; m.frustumCulled = false; } });
+          this.sheep.push(o);
           if (idle) {
             const mx = new THREE.AnimationMixer(o);
             const a = mx.clipAction(idle);
@@ -1073,6 +1093,7 @@ export class View3D extends View {
     const dt = Math.min(0.05, (now - (this.lastNow || now)) / 1000);
     this.lastNow = now;
     this.frameNo++;
+    this.renderer.shadowMap.needsUpdate = this.frameNo % (this.lite ? 3 : 2) === 0 || this.frameNo < 4;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.w, this.h);
     if (!g) {
@@ -1083,13 +1104,17 @@ export class View3D extends View {
     this.lastG = g;
     if (this.map !== g.map) { this.prepare(g); this.painted = false; }
     if (this.modelsLoaded && this.populated !== g.map) this.populate(g);
-    if (this.frameNo % 2 === 0 || !this.painted) {
+    if (this.frameNo % (this.lite ? 3 : 2) === 0 || !this.painted) {
       this.paintMap(g);
       this.tex.needsUpdate = true;
       this.painted = true;
     }
     // the world moves
-    for (const m of this.mixers || []) m.update(dt);
+    this.herdDt = (this.herdDt || 0) + dt;
+    if (this.frameNo % (this.lite ? 3 : 2) === 0) {
+      for (const m of this.mixers || []) m.update(this.herdDt);
+      this.herdDt = 0;
+    }
     this.water.material.normalMap.offset.x = (now / 40000) % 1;
     this.water.material.normalMap.offset.y = (now / 55000) % 1;
     for (const f of this.flags) {
@@ -1150,8 +1175,9 @@ export class View3D extends View {
     this.drawMarks(g, now);
     for (const r of g.map.regions) {
       const [x, y] = this.toScreen(r.x, r.y);
-      if (g.map.capitals.includes(r.id) && look.names) this.label(look.names[r.tribe], x, y + this.u * 0.8, Math.max(13, this.u * 1.5));
-      if (look.numbers && r.tribe >= 0) this.label(String(Math.round(g.t[r.id] * 100)), x, y + this.u * 2.6, Math.max(10, this.u * 1.2));
+      const cap = g.map.capitals.includes(r.id) && look.names, nameSize = Math.max(13, this.u * 1.5);
+      if (cap) this.label(look.names[r.tribe], x, y + this.u * 0.8, nameSize);
+      if (look.numbers && r.tribe >= 0) this.label(String(Math.round(g.t[r.id] * 100)), x, cap ? y + this.u * 0.8 + nameSize * 1.05 : y + this.u * 2.6, Math.max(this.small ? 9 : 10, this.u * 1.2));
     }
     this.drawPulse(g, now, look);
     this.drawSeen(g, now);
@@ -1161,15 +1187,18 @@ export class View3D extends View {
     this.drawFx(g, now);
   }
 
+  get small() { return Math.min(this.w, this.h) < 500; }
+  get medal() { return clamp(this.u * 1.05, this.small ? 7.5 : 10, 19); }
+
   markAt(r) {
     const [x, y] = this.toScreen(r.x, r.y);
-    const rad = clamp(this.u * 1.05, 10, 19);
+    const rad = this.medal;
     return [x - rad * 1.1, y - this.u * 2.4 - rad * 0.85, rad * 0.66];
   }
 
   drawTrust(g) {
     const { ctx } = this;
-    const rad = clamp(this.u * 1.05, 10, 19);
+    const rad = this.medal;
     for (const r of g.map.regions) {
       if (r.tribe < 0) continue;
       const [x0, y0] = this.toScreen(r.x, r.y);
@@ -1179,7 +1208,7 @@ export class View3D extends View {
       ctx.arc(x, y, rad, 0, Math.PI * 2);
       ctx.fillStyle = won ? 'rgba(255,214,90,0.95)' : 'rgba(30,22,14,0.62)';
       ctx.fill();
-      ctx.lineWidth = Math.max(2.5, rad * 0.38);
+      ctx.lineWidth = Math.max(2, rad * 0.38);
       ctx.strokeStyle = 'rgba(255,255,255,0.18)';
       ctx.beginPath(); ctx.arc(x, y, rad * 0.72, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = won ? '#fff6d0' : `rgb(${TRIBE_RGB[r.tribe].map((v) => Math.min(255, v + 60)).join(',')})`;

@@ -32,10 +32,10 @@ function watchSpeed(dt) {
   if (perf.t < 4) return;
   perf.done = true;
   const fps = perf.k / perf.t;
-  if ((perf.lighter && fps < 14) || q.has('forceLite')) downgrade(fps);
-  else if (fps < 40 && !perf.lighter && view.lighter) {
-    // one more look after making it lighter
-    perf.lighter = true;
+  if ((perf.lighter >= 2 && fps < 14) || q.has('forceLite')) downgrade(fps);
+  else if (view.lighter && ((!perf.lighter && fps < 40) || (perf.lighter === 1 && fps < 26))) {
+    // a step lighter, then one more look
+    perf.lighter = (perf.lighter || 0) + 1;
     view.lighter();
     perf.done = false;
     perf.n = 0;
@@ -529,7 +529,7 @@ function updateHud() {
   const left = Math.max(0, Math.ceil(S.SEASON - g.clock));
   const v = S.kurultai(g);
   const mm = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-  $('seasonLbl').textContent = g.hold ? t.clockHold : window.innerWidth < 900 ? t.clockShort(mm, v.yes) : (g.season > 1 ? t.season2 + ' · ' : '') + t.clock(mm, v.yes);
+  $('seasonLbl').textContent = g.hold ? t.clockHold : window.innerWidth < 900 ? (window.innerHeight < 500 ? t.clockTiny : t.clockShort)(mm, v.yes) : (g.season > 1 ? t.season2 + ' · ' : '') + t.clock(mm, v.yes);
   $('seasonChip').classList.toggle('win', v.yes >= 2);
   const chips = $('tribes').children;
   for (let k = 0; k < 3; k++) {
