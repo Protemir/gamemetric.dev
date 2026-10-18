@@ -152,6 +152,14 @@ try {
   check('the 3D steppe with its models', await (async () => { for (let k = 0; k < 50; k++) { if (await B.js(`!!document.getElementById('world') && ${A}.view.is3d && ${A}.view.modelsLoaded && ${A}.view.populated === ${A}.g.map`)) return true; await wait(100); } return false; })());
   await B.open(page('&lang=en&play&2d'), 1280, 720);
   check('?2d gives the painted map', !(await B.js(`!!document.getElementById('world')`)) && !(await B.js(`${A}.view.is3d`)));
+  // 9. a slow device: the game drops to 2D by itself and remembers it
+  await B.open(page('&lang=en&play&forceLite'), 1280, 720);
+  const lite = await (async () => { for (let k = 0; k < 120; k++) { if (await B.js(`!document.getElementById('world') && localStorage.getItem('sybys.lite') === 'true'`)) return true; await wait(100); } return false; })();
+  check('a slow device switches to 2D on its own', lite);
+  await B.init('/* keep what the page saved */');
+  await B.open(page('&lang=en&play&nodebug'), 1280, 720);
+  check('…and starts in 2D next time', !(await B.js(`!!document.getElementById('world')`)));
+  await B.js(`localStorage.removeItem('sybys.lite')`);
   check('no errors in the console', B.errors.length === 0, B.errors.slice(0, 3).join(' | '));
 } catch (e) {
   check('ran to the end', false, e.message);

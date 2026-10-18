@@ -12,7 +12,34 @@ const SPEEDS = DEBUG ? [1, 2, 8] : [1, 2];
 
 const cv = document.getElementById('game');
 // the 3D steppe where the browser can, the painted 2D map where it cannot (or with ?2d)
-const view = webglOK() && !q.has('2d') ? new View3D(cv) : new View(cv);
+// 3D is the game; an old device (no WebGL, or one remembered as too slow) gets the painted 2D map
+let view = webglOK() && !q.has('2d') && !(store.get('sybys.lite', false) && !q.has('3d')) ? new View3D(cv) : new View(cv);
+
+// if the 3D steppe runs under ~20 frames a second on this device, switch to 2D at once and remember it
+const perf = { n: 0, t: 0 };
+function watchSpeed(dt) {
+  if (!view.is3d || !g || g.phase !== 'map' || paused || perf.done) return;
+  if (DEBUG && !q.has('forceLite')) return; // tests run in a software-rendered browser
+  perf.n++;
+  perf.t += dt;
+  if (perf.n < 90) return; // the first frames load models and build the scene: skip them
+  if (perf.n === 90) { perf.t = 0; perf.k = 0; return; }
+  perf.k++;
+  if (perf.t < 4) return;
+  perf.done = true;
+  const fps = perf.k / perf.t;
+  if (fps < 20 || q.has('forceLite')) downgrade(fps);
+}
+function downgrade(fps) {
+  store.set('sybys.lite', true);
+  view.dispose();
+  const hover = view.hover;
+  view = new View(cv);
+  view.hover = hover;
+  fit();
+  if (DEBUG && window.__sybys) window.__sybys.view = view;
+  console.info('sybys: 3D too slow here (' + fps.toFixed(1) + ' fps), switched to 2D');
+}
 const $ = (id) => document.getElementById(id);
 const hud = $('hud'), ui = $('ui'), hintEl = $('hint'), actionsEl = $('actions'), toastsEl = $('toasts'), coachEl = $('coach');
 
@@ -540,7 +567,9 @@ function showEnd() {
 
 let shownPhase = null;
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const raw = (now - last) / 1000;
+  const dt = Math.min(0.05, raw);
+  watchSpeed(Math.min(0.5, raw));
   last = now;
   if (g && !paused && g.phase === 'map') {
     // the false rider of the lesson comes slowly, so there is time to see him

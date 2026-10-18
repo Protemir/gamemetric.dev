@@ -58,7 +58,7 @@ export class View3D extends View {
     this.ray = new THREE.Raycaster();
     this.clock3 = 0;
     this.setupWorld();
-    loading.then(() => { this.modelsLoaded = true; if (this.map) this.populate(this.lastG); });
+    loading.then(() => { if (this.disposed) return; this.modelsLoaded = true; if (this.map) this.populate(this.lastG); });
   }
 
   setupWorld() {
@@ -84,6 +84,14 @@ export class View3D extends View {
     far.position.y = 0.2;
     far.receiveShadow = true;
     scene.add(far);
+  }
+
+  // give the screen back to the 2D map
+  dispose() {
+    this.disposed = true;
+    this.renderer.dispose();
+    this.renderer.forceContextLoss?.();
+    this.glCanvas.remove();
   }
 
   // —— the camera looks at the map from the south, tilted; on an upright phone from the east ——
