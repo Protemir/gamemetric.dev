@@ -175,6 +175,17 @@ export class View3D extends View {
     }
   }
 
+  // a slow device: sharpness down to 1, softer and cheaper shadows, no grass tufts, no walkers
+  lighter() {
+    this.renderer.setPixelRatio(1);
+    this.sun.shadow.mapSize.set(512, 512);
+    this.sun.shadow.map?.dispose();
+    this.sun.shadow.map = null;
+    if (this.grassMesh) this.grassMesh.visible = false;
+    for (const f of this.folk || []) f.grp.visible = false;
+    this.lite = true;
+  }
+
   // give the screen back to the 2D map
   dispose() {
     this.disposed = true;
@@ -535,6 +546,8 @@ export class View3D extends View {
     }
     im.count = k;
     im.receiveShadow = true;
+    im.visible = !this.lite;
+    this.grassMesh = im;
     this.group.add(im);
   }
 

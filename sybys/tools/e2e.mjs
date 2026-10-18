@@ -48,23 +48,12 @@ try {
   check('start screen in English', t.includes('Whispers of the Steppe') && t.includes('Play'), t.slice(0, 30).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'start-en.png'));
 
-  // 2. the opening: a story card, the advisors, the goal
+  // 2. Play goes straight onto the map (no cards in between); the loading screen has gone
+  check('the loading screen leaves', await (async () => { for (let k = 0; k < 40; k++) { if (!(await B.js(`!!document.getElementById('boot')`))) return true; await wait(100); } return false; })());
   await clickText('Play');
-  await wait(150);
-  t = await uiText();
-  check('the story card', t.includes('without its rider') && t.includes('Next'), t.slice(0, 40).replace(/\n/g, ' '));
-  await clickText('Next');
-  await wait(100);
-  t = await uiText();
-  check('Aria and Karasai speak', t.includes('Aria') && t.includes('Karasai'));
-  await B.shot(path.join(out, 'intro-2.png'));
-  await clickText('Next');
-  await wait(100);
-  t = await uiText();
-  check('the goal: 2 clans of 3', t.includes('2 clans of 3') && t.includes('Kokzhal'));
-  await B.shot(path.join(out, 'intro-goal.png'));
-  await clickText('To the steppe');
   await wait(300);
+  t = await uiText();
+  check('Play opens the map at once', t === '' && (await B.js(`!document.getElementById('hud').hidden`)), t.slice(0, 40));
 
   // 3. the lesson: each step waits for the player; the season clock stands still meanwhile
   const poll = async (expr, ms = 12000) => {
@@ -76,7 +65,7 @@ try {
   };
   const handXY = () => B.js(`(() => { const s = ${A}; const r = s.g.map.regions[s.look.hand]; return r ? s.view.toScreen(r.x, r.y) : null; })()`);
   let st = await B.js(`JSON.stringify({ step: ${A}.coach.step, hold: ${A}.g.hold, said: document.getElementById('coach').innerText })`).then(JSON.parse);
-  check('lesson 1: Aria points at a pasture', st.step === 'send' && st.hold && st.said.includes('Tap the pasture'), st.step);
+  check('lesson 1: Aria points at a pasture', st.step === 'send' && st.hold && st.said.includes('tap by the hand'), st.step);
   let xy = await handXY();
   await click(xy[0], xy[1]);
   await wait(100);

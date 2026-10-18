@@ -33,6 +33,13 @@ function watchSpeed(dt) {
   perf.done = true;
   const fps = perf.k / perf.t;
   if (fps < 20 || q.has('forceLite')) downgrade(fps);
+  else if (fps < 40 && !perf.lighter && view.lighter) {
+    // one more look after making it lighter
+    perf.lighter = true;
+    view.lighter();
+    perf.done = false;
+    perf.n = 0;
+  }
 }
 function downgrade(fps) {
   store.set('sybys.lite', true);
@@ -218,7 +225,7 @@ function startScreen() {
   box.append(el('h1', T().title.length > 12 ? 'long' : null, T().title), orn, el('p', 'sub', T().sub));
   const t = T(), meta = M.load();
   const play = el('button', 'big play', t.play);
-  play.onclick = () => { audioInit(); mode = 'free'; intro(store.get('sybys.tutDone', false) ? 3 : 1); };
+  play.onclick = () => { audioInit(); mode = 'free'; start(); };
   box.append(play);
   // the steppe of the day: the same for everyone, one condition, a streak
   const d = M.daily();
@@ -227,7 +234,7 @@ function startScreen() {
   day.append(el('b', null, M.dailyDone(meta) ? t.dailyDoneBtn : t.dailyBtn), el('small', null, `${modName}: ${modLine}`));
   const st = M.liveStreak(meta);
   if (st) day.append(el('em', null, t.streak(st)));
-  day.onclick = () => { audioInit(); mode = 'daily'; intro(store.get('sybys.tutDone', false) ? 3 : 1); };
+  day.onclick = () => { audioInit(); mode = 'daily'; start(); };
   box.append(day);
   const row = el('div', 'titlerow');
   const how = el('button', 'link', t.howBtn);
@@ -373,7 +380,7 @@ function endTour() {
   look.pulse = null;
   mode = 'free';
   store.set('sybys.tutDone', true);
-  intro(3);
+  start();
 }
 // what the tour does at each second
 const TOUR = [
@@ -915,13 +922,13 @@ function showEnd(rec) {
     for (const s of rec.opened) box.append(el('p', 'deed', t.opened(t.styles[s])));
   }
   const b = el('button', 'big', t.playAgain);
-  b.onclick = () => { mode = 'free'; intro(3); };
+  b.onclick = () => { mode = 'free'; start(); };
   box.append(b);
   const meta = M.load();
   const row = el('div', 'titlerow');
   if (!M.dailyDone(meta)) {
     const dly = el('button', 'link', t.dailyBtn);
-    dly.onclick = () => { mode = 'daily'; intro(3); };
+    dly.onclick = () => { mode = 'daily'; start(); };
     row.append(dly);
   }
   const chr = el('button', 'link', t.chronicleBtn);
@@ -1059,7 +1066,11 @@ view.resize();
 if (q.has('covers')) window.__view = () => ({ view, g, S });
 startScreen();
 // loading is over once the models are in (they are small; the 2D map needs none)
-modelsReady.then(() => loadingDone());
+modelsReady.then(() => {
+  loadingDone();
+  const boot = document.getElementById('boot');
+  if (boot) { boot.classList.add('gone'); setTimeout(() => boot.remove(), 700); }
+});
 onPortalMute((muted) => holdAudio(muted));
 if (q.has('play')) start();
 requestAnimationFrame(frame);
