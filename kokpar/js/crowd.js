@@ -48,7 +48,7 @@ function person() {
 }
 // материал: чапан — цвет экземпляра, остальное — свой; руки на гол поднимаются и машут
 function personMat() {
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 }); // тот же свет, что у коней и всадников
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.excite = excite; sh.uniforms.time = time;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float excite; uniform float time; attribute float part;')
