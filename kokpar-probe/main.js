@@ -20,7 +20,7 @@ const MODELS = {
   },
   // Warhorse Lite (Literock Studios, бесплатная лицензия, можно в коммерческой игре; сам файл отдельно не выкладывать)
   warhorse: {
-    file: 'models/warhorse-2048.glb', height: 1.75, maxScale: 1.9, gallop: 8.5,
+    file: 'models/warhorse-2048.glb', height: 1.75, maxScale: 1.9, gallop: 8.5, bright: 1.7,
     clips: { idle: 'idle_loop', walk: 'walk_loop', trot: null, canter: 'canter_loop', gallop: null, left: null, right: null, halt: null, rear: 'rear' },
     neck: ['neck_01', 'neck_02', 'neck_03'], head: 'head', hooves: ['finger_L', 'finger_R', 'toe_L', 'toe_R'],
   },
@@ -42,6 +42,8 @@ const GAITS = [
 ];
 if (M.gallop) GAITS[4].v = M.gallop;
 const FIELD = 110; // полуширина поля, м
+const REAR_ANGLE = Number(P.get('rear') || 0.58); // свечка: наклон корпуса, рад (~33°)
+const REAR_LEN = 3.0, REAR_UP = 0.85, REAR_DOWN = 0.9; // длительность, подъём, опускание, с
 
 // ---------- рендер ----------
 const renderer = new THREE.WebGLRenderer({ antialias: Q !== 'low', powerPreference: 'high-performance' });
@@ -93,7 +95,7 @@ scene.add(new THREE.Mesh(
   env.add(g);
   const pm = new THREE.PMREMGenerator(renderer);
   scene.environment = pm.fromScene(env, 0.02).texture;
-  scene.environmentIntensity = 0.95;
+  scene.environmentIntensity = 1.15;
   pm.dispose();
 }
 
@@ -245,10 +247,12 @@ async function loadModel() {
     if (!name) continue;
     const c = res.animations.find((a) => a.name === name || a.name.endsWith('|' + name));
     if (c) clips[k] = inPlace(c.clone(), root);
+    if (c && k === 'rear') clips[k].tracks = clips[k].tracks.filter((t) => !/^(root|pelvis|spine_d+|thigh_|calf_|foot_|toe_)/.test(t.name));
   }
   root.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true; o.receiveShadow = Q === 'high';
+      if (M.bright && o.material?.color) o.material.color.multiplyScalar(M.bright); // светлее масть
       o.frustumCulled = false; // у skinned mesh рамка от позы покоя — без этого конь пропадает у края кадра
     }
   });
@@ -364,7 +368,9 @@ class Horse {
   update(dt) {
     if (this.ai) this.think(dt);
     // Скорость: разгон плавный, торможение сильнее; резкий стоп — ещё сильнее.
-    const target = GAITS[this.gait].v;
+    // В свечке конь стоит и не поворачивает; выбранный аллюр включится, когда опустится.
+    const rearing = this.rearClock != null;
+    const target = rearing ? 0 : GAITS[this.gait].v;
     const prev = this.v;
     const rate = this.halt > 0 ? 11 : target > this.v ? 2.6 + this.v * 0.12 : 5.5;
     this.v += THREE.MathUtils.clamp(target - this.v, -rate * dt, rate * dt);
@@ -372,7 +378,7 @@ class Horse {
     this.acc = THREE.MathUtils.lerp(this.acc, (this.v - prev) / Math.max(dt, 1e-4), 1 - Math.exp(-dt * 6));
     // Поворот: на галопе радиус шире, на месте — разворот шагом.
     const maxTurn = this.v < 0.5 ? 1.3 : 2.4 / (1 + this.v * 0.22);
-    this.turn = THREE.MathUtils.lerp(this.turn, this.steer * maxTurn, 1 - Math.exp(-dt * 5));
+    this.turn = THREE.MathUtils.lerp(this.turn, rearing ? 0 : this.steer * maxTurn, 1 - Math.exp(-dt * 5));
     this.yaw += this.turn * dt;
     const p = this.obj.position;
     p.x += Math.sin(this.yaw) * this.v * dt;
@@ -394,7 +400,10 @@ class Horse {
     else for (let i = 0; i < have.length - 1; i++) {
       const [ka, va] = have[i], [kb, vb] = have[i + 1];
       if (v >= va && v <= vb) {
-        const mid = (va + vb) / 2, band = (vb - va) * 0.22;
+        // Переход там, где оба клипа ещё идут с естественной скоростью: шаг не ускорен вдвое, кентер не замедлен.
+        const na = proto.native[ka], nb = proto.native[kb];
+        const mid = na && nb ? THREE.MathUtils.clamp((na * 1.5 + nb * 0.6) / 2, va + 0.3, vb - 0.3) : (va + vb) / 2;
+        const band = Math.min(0.3, (vb - va) * 0.22); // короткий: смесь двух аллюров даёт «висящую» ногу
         const t = THREE.MathUtils.smoothstep(v, mid - band, mid + band);
         w[ka] = 1 - t; w[kb] = t;
       }
@@ -414,11 +423,19 @@ class Horse {
       a.weight = wk;
       if (k !== 'idle') a.timeScale = this.scaleFor(k);
     }
-    // Свечка: одноразовый клип поверх всего, конь стоит.
-    if (A.rear) {
-      const on = A.rear.isRunning();
-      A.rear.weight = on ? 1 : 0;
-      if (on) for (const k of Object.keys(w)) if (A[k]) A[k].weight = 0;
+    // Свечка: корпус поднимаем сами вокруг задних копыт (~40°, как у живой лошади), плавно вверх и плавно вниз.
+    // Клип пака даёт только передние ноги, шею и голову: целиком он ставит коня вертикально и роняет рывком.
+    let rearE = 0;
+    if (this.rearClock != null) {
+      this.rearClock += dt;
+      const t = this.rearClock;
+      rearE = THREE.MathUtils.smoothstep(t, 0, REAR_UP) * (1 - THREE.MathUtils.smoothstep(t, REAR_LEN - REAR_DOWN, REAR_LEN));
+      if (t >= REAR_LEN) { this.rearClock = null; A.rear.stop(); }
+      else {
+        A.rear.weight = rearE;
+        for (const k of Object.keys(w)) if (A[k]) A[k].weight = 0;
+        A.idle.weight = 1 - rearE;
+      }
     }
     // Резкий стоп: одноразовый клип, если он есть.
     if (A.halt) {
@@ -427,13 +444,23 @@ class Horse {
     }
     for (const [b, q] of this.rest) b.quaternion.copy(q);
     this.mixer.update(dt);
+    // Шея и голова тяжёлые: догоняют позу клипа с небольшой задержкой, без рывков.
+    if (!this.smooth) this.smooth = this.rest.map(([b]) => b.quaternion.clone());
+    const kHead = 1 - Math.exp(-dt * (rearE > 0 ? 8 : 22));
+    this.rest.forEach(([b], i) => { this.smooth[i].slerp(b.quaternion, kHead); b.quaternion.copy(this.smooth[i]); });
     // Процедурный слой поверх клипов: наклон в поворот, «приседание» при торможении, шея смотрит в поворот.
     const rollT = THREE.MathUtils.clamp(-this.turn * v * 0.045, -0.2, 0.2);
     const pitchT = THREE.MathUtils.clamp(-this.acc * 0.012, -0.09, 0.05);
     this.roll = THREE.MathUtils.lerp(this.roll, rollT, 1 - Math.exp(-dt * 6));
     this.pitch = THREE.MathUtils.lerp(this.pitch, pitchT, 1 - Math.exp(-dt * 5));
-    this.tilt.rotation.set(this.pitch, 0, this.roll);
-    this.tilt.position.y = Math.max(0, -this.pitch) * 0.0; // точка вращения — у копыт
+    // Ось свечки — задние копыта: поворачиваем вокруг них, чтобы они стояли на месте.
+    if (this.hindZ == null && this.hooves.length > 2) {
+      this.obj.updateMatrixWorld(true);
+      this.hindZ = this.hooves.slice(2).reduce((z, h) => z + this.obj.worldToLocal(h.b.getWorldPosition(V2)).z, 0) / 2;
+    }
+    const th = this.pitch - REAR_ANGLE * rearE, zp = this.hindZ ?? 0;
+    this.tilt.rotation.set(th, 0, this.roll);
+    this.tilt.position.set(0, rearE > 0 ? zp * Math.sin(th) : 0, rearE > 0 ? zp - zp * Math.cos(th) : 0);
     const look = THREE.MathUtils.clamp(this.turn * 0.22, -0.35, 0.35);
     for (const n of this.neck) { Qy.setFromAxisAngle(AY, look / this.neck.length); n.quaternion.premultiply(Qy); }
     if (this.halt > 0 && this.head) { Qx.setFromAxisAngle(AX, -0.25 * this.halt); this.head.quaternion.multiply(Qx); }
@@ -450,9 +477,11 @@ class Horse {
   }
   rear() {
     const a = this.act.rear;
-    if (!a || a.isRunning() || this.v > 1.5) return;
+    if (!a || this.rearClock != null || this.v > 1.5) return;
     this.gait = 0;
     a.reset().play();
+    a.timeScale = a.getClip().duration / REAR_LEN;
+    this.rearClock = 0;
   }
   scaleFor(k) {
     const nat = proto.native[k];
@@ -536,6 +565,7 @@ function updateCamera(dt, snap) {
 
 // ---------- цикл ----------
 const horses = [];
+let camHold = false; // ?debug: камера стоит, где поставили (кадры сбоку)
 const hud = document.getElementById('hud');
 let frames = 0, fpsT = 0, fps = 0, frozen = false, last = performance.now();
 function step(dt) {
@@ -548,7 +578,7 @@ function step(dt) {
   }
   for (const h of horses) h.update(dt);
   stepDust(dt);
-  updateCamera(dt);
+  if (!camHold) updateCamera(dt);
 }
 function frame(now) {
   if (frozen) return;
@@ -587,7 +617,8 @@ requestAnimationFrame(frame);
 
 if (P.has('debug')) {
   window.__kp = {
-    horses, player, renderer, proto, GAITS,
+    horses, player, renderer, proto, GAITS, camera,
+    side(dist = 5, h = 1.3, ang = Math.PI / 2) { camHold = true; const p = player.obj.position, a = player.yaw + ang; camera.position.set(p.x + Math.sin(a) * dist, h, p.z + Math.cos(a) * dist); camera.lookAt(p.x, 1.1, p.z); camera.fov = 50; camera.updateProjectionMatrix(); },
     freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } },
     step(n, dt) { for (let i = 0; i < n; i++) step(dt); renderer.render(scene, camera); },
     warm(sec) { for (let t = 0; t < sec; t += 1 / 60) step(1 / 60); updateCamera(0, true); },
