@@ -91,8 +91,6 @@ try {
     // 10 s: the game: riders with the khan's word, Karasai's sabres, a forged order caught
     await B.js(`(() => { document.getElementById('ui').style.display = ''; [...document.querySelectorAll('div')].filter((d) => d.id === 'coverTitle' || d.style.zIndex === '19').forEach((d) => d.remove()); [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Play')).click(); })()`);
     await wait(100);
-    await B.js(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('To the steppe')).click()`);
-    await wait(100);
     await B.js(`(() => { const s = window.__sybys; s.g.horses = 5; s.view.zoomAt(innerWidth * 0.5, innerHeight * 0.55, 1.35); })()`);
     await shoot(300, async (k) => {
       if (k % 30 === 5) await B.js(`(() => { const s = window.__sybys; s.g.horses = Math.max(s.g.horses, 2); s.act('word', s.S.suggest(s.g)); })()`);

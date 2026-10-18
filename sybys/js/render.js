@@ -828,7 +828,7 @@ export class View {
       ctx.fillStyle = gr;
       ctx.fillRect(0, 0, W, H);
     }
-    if (this.flashAt && now - this.flashAt < 220) {
+    if (this.flashAt && now >= this.flashAt && now - this.flashAt < 220) {
       ctx.fillStyle = `rgba(255,250,230,${0.35 * (1 - (now - this.flashAt) / 220)})`;
       ctx.fillRect(0, 0, this.w, this.h);
     }

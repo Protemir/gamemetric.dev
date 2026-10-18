@@ -698,7 +698,7 @@ function doAction(kind, id) {
 
 function tapRider(id) {
   const res = S.intercept(g, id);
-  if (res === 'caught' || res === 'killer' || res === 'repelled') { hitStop = performance.now() + 140; view.flashAt = performance.now(); }
+  if (res === 'caught' || res === 'killer' || res === 'repelled') { hitStop = performance.now() + 140; view.flashAt = view.lastNow || performance.now(); } // the flash runs on the drawing clock
   if (res === 'caught') { sfx.caught(); if (!coach.step) say(T().caught, 1800); if (look.pulse === id) look.pulse = null; }
   if (res === 'insult') { sfx.bad(); say(T().insulted, 2200); }
   if (res === 'repelled') sfx.clash();
