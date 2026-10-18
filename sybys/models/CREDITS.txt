@@ -5,3 +5,4 @@ birch.glb  — "Birch Tree"   https://poly.pizza/m/k6cozoNfLH
 bush.glb   — "Bush"         https://poly.pizza/m/ooG6CkLyE8
 rock.glb   — "Rock"         https://poly.pizza/m/RtLRqYjfMs
 three.js (vendor/three) — MIT License, see vendor/three/LICENSE
+grass.jpg — "Aerial Grass Rock" by Rob Tuytel, Poly Haven, CC0 1.0 — https://polyhaven.com/a/aerial_grass_rock

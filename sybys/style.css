@@ -75,7 +75,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   gap: 5px;
-  width: 118px;
+  width: 150px;
   height: 44px;
   padding: 5px 7px;
   border-radius: 10px;
@@ -97,8 +97,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .delta.down { color: var(--red); }
 @keyframes rise { from { transform: translateY(6px); opacity: 0; } 20% { opacity: 1; } to { transform: translateY(-14px); opacity: 0; } }
 .tribe .tn { display: block; font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tribe .bar { margin-top: 5px; position: relative; }
-.tribe .bar::after { content: ""; position: absolute; left: 55%; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: 0.5; }
+.tribe .bar { margin-top: 5px; position: relative; height: 9px; overflow: visible; }
+.tribe .bar i { border-radius: 4px; }
+.tribe .bar::after { content: ""; position: absolute; left: 55%; top: -4px; bottom: -4px; width: 3px; border-radius: 2px; background: var(--ink); }
 .tribe .bar i { background: var(--c); }
 .tribe.ok .bar i { background: var(--gold); }
 .tribe .fear { position: absolute; right: 4px; top: 2px; font-size: 12px; }
@@ -132,8 +133,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   align-items: center;
   column-gap: 8px;
   min-width: 128px;
-  height: 64px;
-  padding: 6px 14px;
+  height: 66px;
+  padding: 5px 14px;
   border: 3px solid transparent;
   border-radius: 14px;
   background: var(--felt);
@@ -145,8 +146,33 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ava svg, .ai svg { display: block; width: 100%; height: 100%; }
 .act.glow { animation: glow 0.9s ease-in-out infinite alternate; }
 @keyframes glow { from { box-shadow: var(--shadow), 0 0 0 0 rgba(255, 220, 120, 0.9); } to { box-shadow: var(--shadow), 0 0 0 8px rgba(255, 220, 120, 0); } }
-.act .an { font-weight: 800; font-size: 16px; }
-.act .ac { font-size: 11px; }
+.act { grid-template-rows: auto auto auto; row-gap: 0; }
+.act .ai { grid-row: span 3; }
+.act .an { font-weight: 800; font-size: 15px; line-height: 1.1; white-space: nowrap; }
+.act .as { font-size: 11.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.act .ac { font-size: 10px; }
+.tip {
+  position: fixed;
+  z-index: 8;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: min(330px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--felt);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.15s, transform 0.15s;
+  pointer-events: none;
+}
+.tip.on { opacity: 1; transform: none; }
+.tip .ava { width: 52px; height: 52px; flex: none; }
+.tip b { font-size: 15px; }
+.tip p { margin: 3px 0 4px; font-size: 13.5px; line-height: 1.35; }
+.tip small { font-size: 12px; color: var(--muted); font-weight: 700; }
 .act.sel { border-color: var(--gold); background: #fff6dc; transform: translateY(-3px); }
 .act.off { opacity: 0.55; }
 
@@ -216,6 +242,43 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .coach .said b { display: block; font-size: 12px; color: var(--muted); }
 .coach .said p { margin: 2px 0 0; font-size: 15px; font-weight: 600; line-height: 1.35; }
+
+/* the title over the living steppe */
+#ui.cine { background: linear-gradient(180deg, rgba(20, 12, 24, 0) 30%, rgba(20, 12, 10, 0.55) 70%, rgba(14, 8, 6, 0.85)); align-items: end; }
+.title { width: min(640px, 100%); padding: 0 16px max(40px, 7vh); text-align: center; color: #fff4dc; animation: titleIn 1.6s ease-out both; }
+@keyframes titleIn { from { opacity: 0; transform: translateY(18px); } }
+.title h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(56px, 11vw, 112px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  background: linear-gradient(180deg, #fff3cf 10%, #f2c25a 55%, #b8792a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.55));
+}
+.title .orn { width: min(280px, 70%); margin: 4px auto 6px; color: #f2c25a; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6)); }
+.title .orn svg { display: block; width: 100%; }
+.title .sub { margin: 0 0 22px; font-family: Georgia, serif; font-style: italic; font-size: clamp(17px, 2.6vw, 24px); color: #f6e2bd; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); }
+.title .play {
+  position: relative;
+  min-width: 240px;
+  height: 62px;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, #ffd978, #e0a43a);
+  box-shadow: 0 4px 0 #8a5a18, 0 0 0 0 rgba(255, 210, 110, 0.7), 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: glowPlay 1.8s ease-in-out infinite;
+  overflow: hidden;
+}
+.title .play::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.55) 45%, transparent 60%); transform: translateX(-120%); animation: shine 3.2s ease-in-out infinite; }
+@keyframes glowPlay { 50% { box-shadow: 0 4px 0 #8a5a18, 0 0 0 10px rgba(255, 210, 110, 0), 0 10px 30px rgba(0, 0, 0, 0.5); } }
+@keyframes shine { 60%, 100% { transform: translateX(120%); } }
+.title .link { color: #e8d6b4; }
+.title .small { color: #d9c6a2; font-size: 13px; }
 
 /* screens */
 #ui:empty { display: none; }
@@ -318,19 +381,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .icon { width: 34px; height: 38px; font-size: 14px; }
   .act { min-width: 96px; height: 52px; padding: 4px 10px; }
   .act .ai { font-size: 22px; }
-  .act .an { font-size: 14px; }
+  .act .an { font-size: 13px; }
+  .act .as { font-size: 10px; }
   .hint { bottom: 72px; font-size: 13px; }
   .coach { bottom: 70px; }
   .coach .ava { width: 52px; height: 52px; }
   .coach .said p { font-size: 13px; }
-  .tribe { width: 96px; }
+  .tribe { width: 112px; }
   .tribe .ava { width: 26px; height: 26px; }
   .act .ai { width: 34px; height: 34px; }
   .toasts { top: 54px; }
   .screen h1 { font-size: 40px; }
 }
 @media (max-width: 560px) {
-  #unityChip { display: none; }
   .season { order: 8; flex: 1 0 100%; height: 34px; }
   .hud { justify-content: space-between; }
   .tribes { order: 9; flex: 1 0 100%; }

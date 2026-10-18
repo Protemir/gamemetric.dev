@@ -150,7 +150,7 @@ export function makeMap(seed) {
     }
   }
 
-  return { GW, GH, cell, elev, river, riverLine, border, regions, capitals, orda: 0 };
+  return { GW, GH, cell, elev, river, riverLine, riverY, border, regions, capitals, orda: 0 };
 }
 
 // shortest road from a to b: [a, ..., b] with the time of each step

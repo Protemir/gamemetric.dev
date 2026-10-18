@@ -124,6 +124,39 @@ try {
     check('Karasai rides when chosen', k.k && k.cd, JSON.stringify(k));
   }
 
+  // 5b. a tap on a ✕ sends Aria without her button
+  const mk = await B.js(`(() => { const s = ${A}; const free = (r) => { const [x, y] = s.view.toScreen(r.x, r.y); return !s.view.riderAt(s.g, x - s.view.u * 2.6, y - s.view.u * 2.2) && y > 120 && y < 560; }; const r = s.g.map.regions.filter((r) => r.tribe >= 0 && !s.g.marks.has(r.id) && free(r))[0]; s.g.marks.add(r.id); s.g.horses = 5; s.g.aria.busy = 0; s.g.aria.riding = false; const [x, y] = s.view.toScreen(r.x, r.y); return { id: r.id, xy: [x - s.view.u * 2.6, y - s.view.u * 2.2] }; })()`);
+  await click(mk.xy[0], mk.xy[1]);
+  await wait(100);
+  check('a tap on ✕ sends Aria', await B.js(`${A}.g.riders.some((r) => r.kind === 'aria' && r.to === ${mk.id})`), await B.js(`JSON.stringify({ aria: ${A}.g.aria, phase: ${A}.g.phase, riders: ${A}.g.riders.map((r) => r.kind) })`));
+
+  // 5c. the camera: a drag moves the map and sends nobody, the wheel zooms, ⤢ shows the whole map again
+  const before = await B.js(`JSON.stringify({ h: ${A}.g.horses, n: ${A}.g.riders.filter((r) => r.kind === 'word').length })`).then(JSON.parse);
+  await B.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 360, deltaX: 0, deltaY: -600 });
+  await B.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 360, deltaX: 0, deltaY: -600 });
+  await wait(100);
+  const z = await B.js(`${A}.view.zoom`);
+  check('the wheel zooms in', z > 1.2, String(z));
+  await B.cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: 640, y: 360, button: 'left', buttons: 1, clickCount: 1 });
+  for (let k = 1; k <= 8; k++) await B.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 640 - k * 15, y: 360 - k * 6, button: 'left', buttons: 1 });
+  await B.cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 520, y: 312, button: 'left', buttons: 0, clickCount: 1 });
+  await wait(100);
+  const after = await B.js(`JSON.stringify({ h: ${A}.g.horses, n: ${A}.g.riders.filter((r) => r.kind === 'word').length, pan: ${A}.view.pan.length() })`).then(JSON.parse);
+  check('a drag moves the map and sends nobody', after.pan > 0.3 && after.n === before.n, JSON.stringify(after));
+  await B.shot(path.join(out, 'zoomed.png'));
+  await clickText('⤢');
+  await wait(100);
+  check('⤢ shows the whole map again', (await B.js(`${A}.view.zoom === 1 && ${A}.view.pan.length() === 0`)));
+
+  // 5d. what an action does: a card over its button
+  const bx = await B.js(`(() => { const r = document.querySelector('.act[data-key="word"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await B.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: bx[0], y: bx[1] });
+  await wait(250);
+  const tip = await B.js(`document.querySelector('.tip.on')?.innerText || ''`);
+  check('hovering an action explains it', tip.includes('rider') && tip.includes('1 horse'), tip.slice(0, 40).replace(/\n/g, ' '));
+  await B.shot(path.join(out, 'tip.png'));
+  await B.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 640, y: 300 });
+
   // 6. the rest of the season, the kurultai, an ending
   await B.js(`(() => { const s = ${A}; let n = 0; while (s.g.phase !== 'kurultai' && n++ < 20000) { if (s.g.phase === 'event') { const c = s.S.eventChoices(s.g).find((c) => c.ok); s.choose(c.key); } else s.step(0.1); } })()`);
   await wait(1200);

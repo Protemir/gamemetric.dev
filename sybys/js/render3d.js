@@ -63,13 +63,16 @@ export class View3D extends View {
 
   setupWorld() {
     const { scene } = this;
-    const haze = new THREE.Color('#d8b98a');
+    // late afternoon: a warm low sun from the west, long shadows, a blue-grey haze far off
+    const haze = new THREE.Color('#c9c3b4');
+    this.haze = haze;
+    this.sky = this.skyTexture();
     scene.background = haze;
-    scene.fog = new THREE.Fog(haze, 34, 80);
-    const hemi = new THREE.HemisphereLight('#f2f0ea', '#6a5a40', 1.1);
+    scene.fog = new THREE.Fog(haze, 40, 150);
+    const hemi = new THREE.HemisphereLight('#e4ecf4', '#6a5a40', 0.95);
     scene.add(hemi);
-    const sun = new THREE.DirectionalLight('#fff0d6', 2.5);
-    sun.position.set(-14, 22, -9);
+    const sun = new THREE.DirectionalLight('#ffd9a6', 3.0);
+    sun.position.set(-22, 15, -7);
     sun.castShadow = true;
     const S = this.mobile ? 1024 : 2048;
     sun.shadow.mapSize.set(S, S);
@@ -78,12 +81,91 @@ export class View3D extends View {
     sun.shadow.normalBias = 0.03;
     scene.add(sun, sun.target);
     this.sun = sun;
-    // the steppe goes on past the edge of the map and fades into the haze
-    const far = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#a08a5a', roughness: 1 }));
+    // under everything, in case the eye finds a gap
+    const far = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: '#8f8460', roughness: 1 }));
     far.rotation.x = -Math.PI / 2;
-    far.position.y = 0.2;
-    far.receiveShadow = true;
+    far.position.y = -0.4;
     scene.add(far);
+    this.grassTex = new THREE.TextureLoader().load(new URL('../textures/grass.jpg', import.meta.url).href);
+    this.grassTex.wrapS = this.grassTex.wrapT = THREE.RepeatWrapping;
+    this.grassTex.colorSpace = THREE.SRGBColorSpace;
+    this.zoom = 1;
+    this.pan = new THREE.Vector3();
+  }
+
+  skyTexture() {
+    const c = document.createElement('canvas');
+    c.width = 4;
+    c.height = 256;
+    const x = c.getContext('2d');
+    const gr = x.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, '#2a2347');
+    gr.addColorStop(0.35, '#6d4a6a');
+    gr.addColorStop(0.62, '#d9895a');
+    gr.addColorStop(0.8, '#f2c27a');
+    gr.addColorStop(1, '#f2c27a');
+    x.fillStyle = gr;
+    x.fillRect(0, 0, 4, 256);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+
+  // the title screen: golden hour, the camera low over the Orda, a riderless horse wandering
+  setCinema(on) {
+    if (this.cinema === on) return;
+    this.cinema = on;
+    const s = this.scene;
+    if (on) {
+      s.background = this.sky;
+      s.fog.color.set('#e0a874');
+      this.sun.position.set(-26, 6.5, -14);
+      this.sun.color.set('#ffb070');
+      this.sun.intensity = 3.4;
+      this.cineT = 0;
+    } else {
+      s.background = this.haze;
+      s.fog.color.copy(this.haze);
+      this.sun.position.set(-22, 15, -7);
+      this.sun.color.set('#ffd9a6');
+      this.sun.intensity = 3.0;
+      if (this.loneHorse) this.loneHorse.root.visible = false;
+      this.applyCam();
+    }
+  }
+
+  cinemaCam(g, dt) {
+    this.cineT += dt;
+    const o = g.map.regions[0];
+    const cx = toWorldX(o.x), cz = toWorldZ(o.y), cy = this.height(o.x, o.y);
+    // the camera swings slowly south of the Orda and looks past it, north, to the mountains
+    const a = -0.5 + Math.sin(this.cineT * 0.04) * 0.55;
+    const R = this.rot ? 12 : 10;
+    const cam = this.camera;
+    cam.position.set(cx + Math.sin(a) * R, cy + 2.3 + Math.sin(this.cineT * 0.2) * 0.12, cz + Math.cos(a) * R);
+    cam.up.set(0, 1, 0);
+    cam.lookAt(cx - Math.sin(a) * 9, cy + 2.6, cz - Math.cos(a) * 9);
+    cam.updateMatrixWorld();
+    this.scene.fog.near = 14;
+    this.scene.fog.far = 150;
+    // the horse without its rider walks slowly round the Orda
+    if (MODELS.horse) {
+      if (!this.loneHorse) {
+        this.loneHorse = this.makeHorse('#4a2c18');
+        this.loneHorse.play('Walk');
+        this.loneHorse.root.scale.multiplyScalar(1.4);
+        this.group.add(this.loneHorse.root);
+      }
+      const h = this.loneHorse;
+      h.root.visible = true;
+      if (h.root.parent !== this.group) this.group.add(h.root);
+      const b = this.cineT * 0.05 + 1.2, rr = 2.4;
+      const x = cx + Math.sin(b) * rr, z = cz + Math.cos(b) * rr;
+      const gx = (x / W + 0.5) * GW, gy = (z / D + 0.5) * GH;
+      h.root.position.set(x, this.height(gx, gy), z);
+      h.root.rotation.y = b + Math.PI / 2;
+      h.mixer.update(dt * 0.9);
+    }
   }
 
   // give the screen back to the 2D map
@@ -105,7 +187,7 @@ export class View3D extends View {
     const cam = this.camera;
     cam.aspect = w / h;
     // aim at the middle of the free area between the bars
-    cam.setViewOffset(w, h, 0, -(this.top - this.bottom) / 2, w, h);
+    cam.setViewOffset(w, h, 0, -(this.top - this.bottom) / 2, w, h); // the image itself shifts; projections already include it
     cam.updateProjectionMatrix();
     const availW = w - 16, availH = h - this.top - this.bottom;
     this.rot = availH > availW * 1.15;
@@ -120,27 +202,82 @@ export class View3D extends View {
       cam.updateMatrixWorld();
       return corners.every((c) => {
         const p = c.clone().project(cam);
-        const sx = (p.x * 0.5 + 0.5) * w, sy = (-p.y * 0.5 + 0.5) * h - (this.top - this.bottom) / 2;
+        const sx = (p.x * 0.5 + 0.5) * w, sy = (-p.y * 0.5 + 0.5) * h;
         return sx >= 4 && sx <= w - 4 && sy >= this.top - 2 && sy <= h - this.bottom + 2;
       });
     };
     let lo = 5, hi = 200;
     for (let k = 0; k < 30; k++) { const m = (lo + hi) / 2; fits(m) ? (hi = m) : (lo = m); }
-    // a little closer than the full fit: the corners may hide in the haze, the middle matters
-    fits(hi * (this.rot ? 0.95 : 0.96));
-    this.scene.fog.near = hi * 0.9;
-    this.scene.fog.far = hi * 2.6;
-    // sprite unit for the overlay: pixels per "old cell" at the middle of the map
-    const a = this.project(0, 0.6, 0), b = this.project(toWorldX(GW / 2 + K) - toWorldX(GW / 2), 0.6, 0);
-    this.u = Math.max(4, Math.hypot(b[0] - a[0], b[1] - a[1]) * 1.6);
+    this.base = { dir, target, d: hi * (this.rot ? 0.95 : 0.96) };
+    this.u1 = 0;
+    this.applyCam();
+  }
+
+  // zoom 1 shows the whole map; closer, the camera may slide but never off the map
+  applyCam() {
+    const cam = this.camera, b = this.base;
+    if (!b) return;
+    this.zoom = clamp(this.zoom, 1, 4);
+    const free = 1 - 1 / this.zoom;
+    this.pan.x = clamp(this.pan.x, (-W / 2) * free, (W / 2) * free);
+    this.pan.z = clamp(this.pan.z, (-D / 2) * free - 1, (D / 2) * free);
+    const d = b.d / this.zoom;
+    const target = b.target.clone().add(this.pan);
+    cam.position.copy(target).addScaledVector(b.dir, d);
+    cam.up.set(0, 1, 0);
+    cam.lookAt(target);
+    cam.updateMatrixWorld();
+    this.scene.fog.near = d * 1.4 + 10;
+    this.scene.fog.far = d * 1.4 + 120;
+    // sprite unit for the overlay: pixels per "old cell" at the middle of the view; it grows with zoom, but not too much
+    const a = this.project(target.x, 0.6, target.z), c = this.project(target.x + toWorldX(GW / 2 + K) - toWorldX(GW / 2), 0.6, target.z);
+    const u = Math.max(4, Math.hypot(c[0] - a[0], c[1] - a[1]) * 1.6);
+    if (this.zoom === 1 || !this.u1) this.u1 = u;
+    this.u = Math.min(u, this.u1 * 1.7);
     this.s = this.u / (K * 1.6);
     this.ox = 0;
     this.oy = 0;
   }
 
+  // the point of the ground under a screen point (on the plane of the steppe)
+  groundAt(px, py) {
+    const ndc = new THREE.Vector2((px / this.w) * 2 - 1, -(py / this.h) * 2 + 1);
+    this.ray.setFromCamera(ndc, this.camera);
+    const p = new THREE.Vector3();
+    return this.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.8), p) ? p : null;
+  }
+
+  // drag: the ground under the finger stays under the finger
+  panBy(x0, y0, x1, y1) {
+    const a = this.groundAt(x0, y0), b = this.groundAt(x1, y1);
+    if (!a || !b) return;
+    this.pan.x += a.x - b.x;
+    this.pan.z += a.z - b.z;
+    this.applyCam();
+  }
+
+  // zoom towards the point under the cursor or between the fingers
+  zoomAt(px, py, k) {
+    const before = this.groundAt(px, py);
+    this.zoom *= k;
+    this.applyCam();
+    const after = this.groundAt(px, py);
+    if (before && after) {
+      this.pan.x += before.x - after.x;
+      this.pan.z += before.z - after.z;
+      this.applyCam();
+    }
+  }
+
+  resetCam() {
+    this.zoom = 1;
+    this.pan.set(0, 0, 0);
+    this.applyCam();
+  }
+
   project(X, Y, Z) {
     const p = new THREE.Vector3(X, Y, Z).project(this.camera);
-    return [(p.x * 0.5 + 0.5) * this.w, (-p.y * 0.5 + 0.5) * this.h - (this.top - this.bottom) / 2];
+    return [(p.x * 0.5 + 0.5) * this.w, (-p.y * 0.5 + 0.5) * this.h];
   }
 
   height(x, y) {
@@ -159,7 +296,7 @@ export class View3D extends View {
 
   regionAt(g, px, py) {
     if (!this.terrain) return -1;
-    const ndc = new THREE.Vector2((px / this.w) * 2 - 1, -((py + (this.top - this.bottom) / 2) / this.h) * 2 + 1);
+    const ndc = new THREE.Vector2((px / this.w) * 2 - 1, -(py / this.h) * 2 + 1);
     this.ray.setFromCamera(ndc, this.camera);
     const hit = this.ray.intersectObject(this.terrain, false)[0];
     if (!hit) return -1;
@@ -216,37 +353,29 @@ export class View3D extends View {
     const pos = geo.attributes.position;
     for (let k = 0; k < pos.count; k++) {
       const x = (pos.getX(k) / W + 0.5) * GW, y = (pos.getZ(k) / D + 0.5) * GH;
-      // the edge of the map dips a little, like the edge of a felt
-      const edge = Math.min(x, y, GW - x, GH - y);
-      pos.setY(k, this.height(x, y) - (edge < 2 ? (2 - edge) * 0.12 : 0));
+      pos.setY(k, this.height(x, y));
     }
     geo.computeVertexNormals();
     this.tex = new THREE.CanvasTexture(this.off);
     this.tex.colorSpace = THREE.SRGBColorSpace;
     this.tex.anisotropy = 4;
-    const grain = this.grainTexture();
     const mat = new THREE.MeshStandardMaterial({ map: this.tex, roughness: 0.95, metalness: 0 });
-    mat.onBeforeCompile = (sh) => {
-      sh.uniforms.grain = { value: grain };
-      sh.fragmentShader = 'uniform sampler2D grain;\n' + sh.fragmentShader.replace(
-        '#include <map_fragment>',
-        '#include <map_fragment>\n  diffuseColor.rgb *= 0.86 + 0.28 * texture2D(grain, vMapUv * vec2(48.0, 27.0)).r;',
-      );
-    };
+    this.withGrass(mat);
     this.terrain = new THREE.Mesh(geo, mat);
     this.terrain.receiveShadow = true;
     this.group.add(this.terrain);
 
     // water: a sheet at one level; the carved bed shows only where the river is
     const water = new THREE.Mesh(
-      new THREE.PlaneGeometry(W, D, 1, 1),
+      new THREE.PlaneGeometry(W + 120, D + 120, 1, 1),
       new THREE.MeshStandardMaterial({ color: '#2a5f88', roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.93, normalMap: this.rippleTexture(), normalScale: new THREE.Vector2(0.6, 0.6) }),
     );
     water.rotation.x = -Math.PI / 2;
     water.position.y = WATER;
-    water.material.normalMap.repeat.set(16, 9);
+    water.material.normalMap.repeat.set(66, 50);
     this.water = water;
     this.group.add(water);
+    this.buildLand(g);
 
     this.buildYurts(g);
     this.buildRings(g);
@@ -254,6 +383,74 @@ export class View3D extends View {
     this.riderObjs = new Map();
     this.smoke = [];
     if (this.modelsLoaded) this.populate(g);
+  }
+
+  // the photo of grass and stones (Poly Haven, CC0) gives the ground its grain; only its light and dark
+  // are used on the map, so the clans' colours stay true
+  withGrass(mat) {
+    const tex = this.grassTex;
+    const rx = (14 * W / D).toFixed(1);
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.grass = { value: tex };
+      sh.fragmentShader = 'uniform sampler2D grass;\n' + sh.fragmentShader.replace(
+        '#include <map_fragment>',
+        '#include <map_fragment>\n  diffuseColor.rgb *= 0.45 + 1.25 * dot(texture2D(grass, vMapUv * vec2(' + rx + ', 14.0)).rgb, vec3(0.3, 0.59, 0.11));',
+      );
+    };
+    mat.customProgramCacheKey = () => 'grass-map';
+  }
+
+  // the steppe beyond the map: low swells near it, mountains with snow far to the north and west,
+  // the river running on past both edges
+  buildLand(g) {
+    const SIZE = 200, N = 220;
+    const geo = new THREE.PlaneGeometry(SIZE, SIZE, N, N);
+    geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position;
+    const col = new Float32Array(pos.count * 3);
+    const nz = valueNoise(rng(g.seed + 77), N + 1, N + 1, 9), nz2 = valueNoise(rng(g.seed + 78), N + 1, N + 1, 3);
+    const ry = g.map.riverY;
+    const c1 = new THREE.Color('#a4955e'), c2 = new THREE.Color('#7d7568'), c3 = new THREE.Color('#f4f6fa'), c = new THREE.Color();
+    for (let k = 0; k < pos.count; k++) {
+      const X = pos.getX(k), Z = pos.getZ(k);
+      const dx = Math.max(0, Math.abs(X) - W / 2), dz = Math.max(0, Math.abs(Z) - D / 2);
+      const out = Math.hypot(dx, dz);
+      const n1 = nz[k] * 0.5 + 0.5, n2 = nz2[k];
+      // mountains rise behind the map (north, and west for the upright phone), hills elsewhere
+      const back = Math.max(smooth(0, 30, -Z - D / 2), smooth(0, 30, -X - W / 2) * 0.8);
+      const ridge = 1 - Math.abs(nz2[k]); // sharp crests
+      let h = 0.62 + Math.pow(out, 1.1) * 0.06 * (0.6 + n1) + back * smooth(16, 52, out) * (3.5 + 8 * n1 + 4 * ridge) + n2 * 0.15 * smooth(0, 6, out);
+      // the river: its line continues past the left and right edges
+      const x = (X / W + 0.5) * GW;
+      if (ry && (x < 0 || x > GW)) {
+        const rz = (ry(clamp(x, -60 * K, GW + 60 * K)) / GH - 0.5) * D;
+        const t = smooth(0.12, 0.7, Math.abs(Z - rz));
+        h = h * t + (WATER - 0.25) * (1 - t);
+      }
+      if (out === 0) h = 0.3; // under the map the land hides
+      pos.setY(k, h);
+      const rock = smooth(2.2, 5, h), snow = smooth(7, 9.5, h + n2 * 2);
+      c.copy(c1).lerp(c2, rock).lerp(c3, snow);
+      col[k * 3] = c.r;
+      col[k * 3 + 1] = c.g;
+      col[k * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+    const tex = this.grassTex;
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.grass = { value: tex };
+      sh.vertexShader = 'varying vec2 vWorldXZ;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWorldXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+      sh.fragmentShader = 'uniform sampler2D grass;\nvarying vec2 vWorldXZ;\n' + sh.fragmentShader.replace(
+        '#include <color_fragment>',
+        '#include <color_fragment>\n  diffuseColor.rgb *= 0.4 + 1.3 * dot(texture2D(grass, vWorldXZ / 2.7).rgb, vec3(0.3, 0.59, 0.11));',
+      );
+    };
+    mat.customProgramCacheKey = () => 'land';
+    const land = new THREE.Mesh(geo, mat);
+    land.receiveShadow = true;
+    this.group.add(land);
   }
 
   grainTexture() {
@@ -299,7 +496,8 @@ export class View3D extends View {
   // yurts: felt walls, a dome in the clan's colour, a red door — all instanced
   buildYurts(g) {
     const list = [];
-    for (const r of g.map.regions) for (const y of this.deco[r.id].yurts) list.push({ ...y, r });
+    // two yurts to a pasture, more at the great auls: the map reads better with less
+    for (const r of g.map.regions) this.deco[r.id].yurts.forEach((y, k) => { if (k < 2 || r.id === 0 || g.map.capitals.includes(r.id)) list.push({ ...y, r }); });
     this.yurtList = list;
     const wallG = new THREE.CylinderGeometry(1, 1, 0.7, 18, 1, true).translate(0, 0.35, 0);
     const roofG = new THREE.LatheGeometry([new THREE.Vector2(1.06, 0.68), new THREE.Vector2(0.75, 1.02), new THREE.Vector2(0.3, 1.3), new THREE.Vector2(0.2, 1.34), new THREE.Vector2(0.0, 1.34)], 18);
@@ -328,7 +526,9 @@ export class View3D extends View {
       doors.setMatrixAt(k, m4);
       bands.setMatrixAt(k, m4);
       const rgb = y.r.tribe < 0 ? GOLD : TRIBE_RGB[y.r.tribe];
-      col.setRGB(...(y.big ? [0.85, 0.62, 0.2] : [0.86, 0.8, 0.7]), THREE.SRGBColorSpace);
+      const felt = [0.9, 0.85, 0.76];
+      const dome = y.big ? [0.86, 0.62, 0.18] : felt.map((v, j) => v * 0.55 + (rgb[j] / 255) * 0.45);
+      col.setRGB(...dome, THREE.SRGBColorSpace);
       roofs.setColorAt(k, col);
       col.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, THREE.SRGBColorSpace);
       bands.setColorAt(k, col);
@@ -447,25 +647,29 @@ export class View3D extends View {
     inst('birch', this.trees.map((t) => ({ x: t.x, y: t.y, s: 0.8 + t.r * 0.4 })), 0.9);
     // bushes and rocks scattered over the steppe, more rocks up in the hills
     const bushes = [], rocks = [];
-    for (let k = 0; k < 2600 && (bushes.length < 70 || rocks.length < 50); k++) {
+    // a few big stones up in the hills and some bushes: fewer, larger, so they read as things, not specks
+    for (let k = 0; k < 2600 && (bushes.length < 36 || rocks.length < 12); k++) {
       const x = rand() * GW, y = rand() * GH, i = Math.floor(y) * GW + Math.floor(x);
       if (map.river[i] || this.height(x, y) < WATER + 0.1) continue;
-      const nearAul = map.regions.some((r) => Math.hypot(r.x - x, r.y - y) < 6 * K);
+      const nearAul = map.regions.some((r) => Math.hypot(r.x - x, r.y - y) < 7 * K);
       if (nearAul) continue;
-      if (map.elev[i] > 0.6 && rocks.length < 50) rocks.push({ x, y, s: 0.6 + rand() * 0.9 });
-      else if (rand() < 0.35 && bushes.length < 70) bushes.push({ x, y, s: 0.7 + rand() * 0.6 });
+      if (map.elev[i] > 0.62 && rocks.length < 12) rocks.push({ x, y, s: 1 + rand() * 1.2 });
+      else if (rand() < 0.25 && bushes.length < 36) bushes.push({ x, y, s: 0.9 + rand() * 0.6 });
     }
-    inst('bush', bushes, 0.28);
-    inst('rock', rocks, 0.22);
+    inst('bush', bushes, 0.36);
+    inst('rock', rocks, 0.38);
+    // herds at every other aul: sheep or horses, few and big enough to see
+    const herdAt = (r) => this.deco[r.id].herd.length && (r.id % 2 === 0 || map.capitals.includes(r.id));
     // sheep stand where the 2D view put its herds (the woolly ones)
     this.mixers = [];
     if (MODELS.sheep) {
       const src = MODELS.sheep;
       const box = new THREE.Box3().setFromObject(src.scene);
-      const k = 0.17 / (box.max.y - box.min.y);
+      const k = 0.26 / (box.max.y - box.min.y);
       const idle = src.animations.find((a) => /Idle/.test(a.name));
       for (const r of map.regions) {
-        for (const h of this.deco[r.id].herd) {
+        if (!herdAt(r)) continue;
+        for (const h of this.deco[r.id].herd.slice(0, 4)) {
           if (!h.sheep) continue;
           const o = SkeletonUtils.clone(src.scene);
           o.scale.setScalar(k * (0.9 + rand() * 0.25));
@@ -486,11 +690,13 @@ export class View3D extends View {
     // herds of horses graze, a few to an aul
     if (MODELS.horse) {
       for (const r of map.regions) {
-        for (const h of this.deco[r.id].herd) {
+        if (!herdAt(r)) continue;
+        for (const h of this.deco[r.id].herd.slice(0, 3)) {
           if (h.sheep) continue;
           const o = this.makeHorse(['#7a4a2a', '#3a2418', '#c9a06a', '#efe8dc'][Math.floor(rand() * 4)]);
           o.root.position.set(toWorldX(h.x), this.height(h.x, h.y), toWorldZ(h.y));
           o.root.rotation.y = rand() * 6.28;
+          o.root.scale.multiplyScalar(1.3);
           o.play(rand() < 0.6 ? 'Eating' : 'Idle', rand());
           this.group.add(o.root);
           this.mixers.push(o.mixer);
@@ -674,9 +880,14 @@ export class View3D extends View {
       }
       pos.needsUpdate = true;
     }
-    for (const r of g.map.regions) this.rings[r.id].visible = r.tribe >= 0 && g.t[r.id] >= 0.55;
+    for (const r of g.map.regions) this.rings[r.id].visible = !this.cinema && r.tribe >= 0 && g.t[r.id] >= 0.55;
     this.syncRiders(g, now, dt);
     this.stepSmoke(g, dt);
+    if (this.cinema) {
+      this.cinemaCam(g, dt);
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
     this.renderer.render(this.scene, this.camera);
 
     // what the player reads, on top
@@ -684,6 +895,7 @@ export class View3D extends View {
     this.drawMarks(g, now);
     this.drawParts(g, dt, 'under');
     this.drawParts(g, dt, 'over');
+    this.drawTrust(g);
     for (const r of g.map.regions) {
       const [x, y] = this.toScreen(r.x, r.y);
       if (g.map.capitals.includes(r.id) && look.names) this.label(look.names[r.tribe], x, y + this.u * 0.8, Math.max(13, this.u * 1.5));
@@ -692,6 +904,39 @@ export class View3D extends View {
     this.drawPulse(g, now, look);
     this.drawHand(g, now, look);
     this.drawFx(g, now);
+  }
+
+  drawTrust(g) {
+    const { ctx } = this;
+    const rad = clamp(this.u * 1.05, 10, 19);
+    for (const r of g.map.regions) {
+      if (r.tribe < 0) continue;
+      const [x0, y0] = this.toScreen(r.x, r.y);
+      const x = x0, y = y0 - this.u * 2.4;
+      const t = g.t[r.id], won = t >= 0.55;
+      ctx.beginPath();
+      ctx.arc(x, y, rad, 0, Math.PI * 2);
+      ctx.fillStyle = won ? 'rgba(255,214,90,0.95)' : 'rgba(30,22,14,0.62)';
+      ctx.fill();
+      ctx.lineWidth = Math.max(2.5, rad * 0.38);
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.beginPath(); ctx.arc(x, y, rad * 0.72, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = won ? '#fff6d0' : `rgb(${TRIBE_RGB[r.tribe].map((v) => Math.min(255, v + 60)).join(',')})`;
+      ctx.beginPath(); ctx.arc(x, y, rad * 0.72, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * t); ctx.stroke();
+      if (won) {
+        ctx.fillStyle = '#6a4a08';
+        ctx.font = `900 ${Math.round(rad * 1.1)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('♛', x, y + 1);
+      } else {
+        // the line the kurultai needs
+        const a = -Math.PI / 2 + Math.PI * 2 * 0.55;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * rad * 0.45, y + Math.sin(a) * rad * 0.45); ctx.lineTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad); ctx.stroke();
+      }
+    }
   }
 
   // your riders show a dotted line to where they go; the forged ones do not

@@ -102,8 +102,6 @@ function lesson(step) {
   if (step === 'aria') {
     const m = [...g.marks][0];
     look.hand = m ?? -1;
-    action = 'aria';
-    glowButton('aria');
     advise('aria', t.aria);
   }
   if (step === 'karasai') { glowButton('karasai'); advise('karasai', t.karasai); coach.stepUntil = performance.now() + 6500; }
@@ -155,7 +153,6 @@ function tips(now) {
   if (!coach.markTold && g.marks.size && S.canAct(g, 'aria') && [...g.marks].some((i) => !g.found.has(i))) {
     coach.markTold = true;
     look.hand = [...g.marks].find((i) => !g.found.has(i));
-    glowButton('aria');
     advise('aria', t.aria, 9000);
     coach.handUntil = now + 9000;
     return;
@@ -184,16 +181,35 @@ function tips(now) {
 
 // —— start ——
 
+// behind the title and the opening cards the steppe itself is shown, filmed from close and low
+function backdrop() {
+  if (!view.setCinema) return false;
+  if (!g || g.phase === 'end' || !g.demo) {
+    g = S.newGame(q.has('seed') ? +q.get('seed') : (Math.random() * 1e9) | 0);
+    g.demo = true;
+    g.hold = true; // no plot, no scenes: only the clans' riders on the roads
+    for (let k = 0; k < 40; k++) S.step(g, 0.1); // riders already on the roads
+  }
+  view.setCinema(true);
+  return true;
+}
+
 function startScreen() {
   hud.hidden = true;
   actionsEl.hidden = true;
   hush();
   paused = true;
-  const box = el('div', 'screen start');
-  const pic = el('div', 'pic');
-  pic.innerHTML = LONE_HORSE;
-  box.append(pic, el('h1', null, T().title), el('p', 'sub', T().sub));
-  const play = el('button', 'big', T().play);
+  const live = backdrop();
+  const box = el('div', live ? 'title' : 'screen start');
+  if (!live) {
+    const pic = el('div', 'pic');
+    pic.innerHTML = LONE_HORSE;
+    box.append(pic);
+  }
+  const orn = el('div', 'orn');
+  orn.innerHTML = ORNAMENT;
+  box.append(el('h1', null, T().title), orn, el('p', 'sub', T().sub));
+  const play = el('button', 'big play', T().play);
   play.onclick = () => { audioInit(); intro(store.get('sybys.tutDone', false) ? 3 : 1); };
   const lng = el('button', 'link', T().langBtn);
   lng.onclick = () => { setLang(lang === 'ru' ? 'en' : 'ru'); document.documentElement.lang = lang; startScreen(); };
@@ -201,19 +217,27 @@ function startScreen() {
   const best = store.get('sybys.best', null);
   const seen = store.get('sybys.ends', []);
   if (best != null) box.append(el('p', 'small', T().best(best) + ' · ' + T().endsSeen(seen.length)));
+  ui.classList.toggle('cine', live);
   ui.replaceChildren(box);
 }
+
+// a ram's-horn ornament (qoshqar müiz) under the title
+const ORNAMENT = '<svg viewBox="0 0 240 28" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M120 22c-8 0-12-6-12-10s4-8 8-6-2 6-4 4"/><path d="M120 22c8 0 12-6 12-10s-4-8-8-6 2 6 4 4"/><path d="M104 14H20M136 14h84"/><path d="M20 14c-6 0-8-6-4-8s6 2 4 4M220 14c6 0 8-6 4-8s-6 2-4 4"/><circle cx="120" cy="5" r="2.2" fill="currentColor"/></g></svg>';
 
 // three short cards: what happened, who is with you, what to do
 function intro(page) {
   const t = T();
+  backdrop();
   const box = el('div', 'screen intro');
   const go = el('button', 'big', page < 3 ? t.next : t.begin);
   go.onclick = () => (page < 3 ? intro(page + 1) : start());
   if (page === 1) {
-    const pic = el('div', 'pic');
-    pic.innerHTML = LONE_HORSE;
-    box.append(pic, el('p', 'line', t.intro1));
+    if (!view.setCinema) {
+      const pic = el('div', 'pic');
+      pic.innerHTML = LONE_HORSE;
+      box.append(pic);
+    }
+    box.append(el('p', 'line', t.intro1));
   }
   if (page === 2) {
     for (const [who, line] of [['aria', t.intro2], ['karasai', t.intro3]]) {
@@ -250,6 +274,9 @@ function intro(page) {
 
 function start() {
   g = S.newGame(q.has('seed') ? +q.get('seed') : (Math.random() * 1e9) | 0);
+  view.setCinema?.(false);
+  view.resetCam?.();
+  ui.classList.remove('cine');
   ui.replaceChildren();
   hud.hidden = false;
   actionsEl.hidden = false;
@@ -303,15 +330,42 @@ function buildHud() {
     b.title = T()[key + 'Tip'];
     const ava = el('span', 'ai');
     ava.innerHTML = face(who);
-    b.append(ava, el('span', 'an', T()[key]), el('span', 'ac', '🐎'.repeat(S.COST[key])));
+    b.append(ava, el('span', 'an', T()[key]), el('span', 'as', T()[key + 'Sub']), el('span', 'ac', '🐎'.repeat(S.COST[key])));
     b.onclick = () => { action = key; sfx.send(); updateHud(); };
+    // what the action does: on hover, or for a moment after a tap on a phone
+    b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showTip(b, key, who); });
+    b.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hideTip(); });
+    b.addEventListener('pointerup', (e) => { if (e.pointerType !== 'mouse') { showTip(b, key, who); clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 3500); } });
     actionsEl.append(b);
   }
   $('journalBtn').onclick = () => { if (g.phase === 'map') journal(); };
+  $('fitBtn').hidden = !view.resetCam;
+  $('fitBtn').onclick = () => view.resetCam?.();
   $('speedBtn').onclick = () => { speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; updateHud(); };
   $('pauseBtn').onclick = () => { if (g.phase === 'map') togglePause(); };
   $('soundBtn').onclick = () => { setSound(!sound.on); audioInit(); updateHud(); };
   updateHud();
+}
+
+const tipEl = el('div', 'tip');
+document.body.append(tipEl);
+let tipTimer = 0;
+function showTip(btn, key, who) {
+  const t = T();
+  tipEl.replaceChildren();
+  const ava = el('div', 'ava');
+  ava.innerHTML = face(who);
+  const box = el('div');
+  box.append(el('b', null, t[key]), el('p', null, t[key + 'Tip']), el('small', null, '🐎 ' + t.costs(S.COST[key])));
+  tipEl.append(ava, box);
+  const r = btn.getBoundingClientRect();
+  tipEl.classList.add('on');
+  const w = tipEl.offsetWidth;
+  tipEl.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+  tipEl.style.bottom = window.innerHeight - r.top + 10 + 'px';
+}
+function hideTip() {
+  tipEl.classList.remove('on');
 }
 
 function togglePause(force) {
@@ -328,7 +382,7 @@ function togglePause(force) {
 }
 
 function updateHud() {
-  if (!g) return;
+  if (!g || g.demo) return;
   const t = T();
   $('horses').textContent = `${g.horses}/${S.HORSE_MAX}`;
   $('regen').style.width = g.horses >= S.HORSE_MAX ? '100%' : `${(g.horseT / S.HORSE_EVERY) * 100}%`;
@@ -337,7 +391,6 @@ function updateHud() {
   const v = S.kurultai(g);
   $('seasonLbl').textContent = g.hold ? t.clockHold : t.clock(`${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`, v.yes);
   $('seasonChip').classList.toggle('win', v.yes >= 2);
-  $('unity').textContent = Math.round(S.unity(g) * 100) + '%';
   const chips = $('tribes').children;
   for (let k = 0; k < 3; k++) {
     chips[k].querySelector('i').style.width = `${v.votes[k].trust * 100}%`;
@@ -379,12 +432,76 @@ function tribePulse(now) {
 
 // —— taps on the map ——
 
+// a short tap acts; a drag moves the map; the wheel or two fingers zoom (the 3D map only)
+const touch = { pts: new Map(), down: null, last: null, moved: false, pinch: 0 };
+cv.addEventListener('pointerdown', (e) => {
+  try { cv.setPointerCapture(e.pointerId); } catch { /* old browsers */ }
+  touch.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (touch.pts.size === 1) {
+    touch.down = { x: e.clientX, y: e.clientY };
+    touch.last = { ...touch.down };
+    touch.moved = false;
+  } else if (touch.pts.size === 2) {
+    const [a, b] = [...touch.pts.values()];
+    touch.pinch = Math.hypot(a.x - b.x, a.y - b.y);
+    touch.moved = true;
+  }
+});
+cv.addEventListener('pointermove', (e) => {
+  if (g && e.pointerType === 'mouse' && !touch.pts.size) view.hover = view.regionAt(g, e.clientX, e.clientY);
+  if (!touch.pts.has(e.pointerId)) return;
+  touch.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!view.panBy || !g) return;
+  if (touch.pts.size === 1) {
+    if (!touch.moved && Math.hypot(e.clientX - touch.down.x, e.clientY - touch.down.y) > 9) touch.moved = true;
+    if (touch.moved) view.panBy(touch.last.x, touch.last.y, e.clientX, e.clientY);
+    touch.last = { x: e.clientX, y: e.clientY };
+  } else if (touch.pts.size === 2) {
+    const [a, b] = [...touch.pts.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (touch.pinch) view.zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d / touch.pinch);
+    touch.pinch = d;
+  }
+});
+const lift = (e) => {
+  if (!touch.pts.has(e.pointerId)) return;
+  touch.pts.delete(e.pointerId);
+  if (touch.pts.size === 1) touch.last = { ...[...touch.pts.values()][0] };
+  if (!touch.pts.size && !touch.moved) pointer(e);
+};
+cv.addEventListener('pointerup', lift);
+cv.addEventListener('pointercancel', (e) => { touch.pts.delete(e.pointerId); touch.moved = true; });
+cv.addEventListener('wheel', (e) => {
+  if (!view.zoomAt || !g) return;
+  e.preventDefault();
+  view.zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.15 : 1 / 1.15);
+}, { passive: false });
+
+// a ✕ (where a lie passed) or the hideout under the finger: Aria rides there, no button needed
+function markAt(px, py) {
+  const spots = [...g.marks].filter((i) => !g.found.has(i));
+  if (g.lairKnown && !g.clues.some((c) => c.kind === 'lair')) spots.push(g.lair);
+  let best = -1, bd = Math.max(30, view.u * 2.2) ** 2;
+  for (const i of spots) {
+    const r = g.map.regions[i];
+    if (r.tribe < 0) continue;
+    const [x, y] = view.toScreen(r.x, r.y);
+    for (const [mx, my] of [[x - view.u * 2.6, y - view.u * 2.2], [x, y]]) {
+      const d = (mx - px) ** 2 + (my - py) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    }
+  }
+  return best;
+}
+
 function pointer(e) {
   if (!g || g.phase !== 'map' || paused) return;
   audioInit();
   const px = e.clientX, py = e.clientY;
   const rider = view.riderAt(g, px, py);
   if (rider && (rider.kind === 'false' || rider.kind === 'tribe')) { tapRider(rider.id); return; }
+  const mark = coach.step === 'false' ? -1 : markAt(px, py);
+  if (mark >= 0 && (action === 'aria' || S.canAct(g, 'aria') || coach.step === 'aria')) { doAction('aria', mark); return; }
   const id = view.regionAt(g, px, py);
   if (id < 0) return;
   if (id === 0) { say(T().hintOrda, 1500); return; }
@@ -559,6 +676,7 @@ function showEnd() {
   hud.hidden = true;
   actionsEl.hidden = true;
   hush();
+  view.setCinema?.(true);
   ui.replaceChildren(box);
   sfx[r.end === 'uniter' || r.end === 'mediator' ? 'clue' : 'bad']();
 }
@@ -571,7 +689,8 @@ function frame(now) {
   const dt = Math.min(0.05, raw);
   watchSpeed(Math.min(0.5, raw));
   last = now;
-  if (g && !paused && g.phase === 'map') {
+  if (g && g.demo) S.step(g, dt * 0.6);
+  else if (g && !paused && g.phase === 'map') {
     // the false rider of the lesson comes slowly, so there is time to see him
     const slow = coach.step === 'false' ? 0.4 : 1;
     for (let k = 0; k < speed; k++) S.step(g, dt * slow);
@@ -588,9 +707,11 @@ function frame(now) {
       if (f.type === 'clue') sfx.clue();
     }
     for (const tt of g.toasts.splice(0)) showToast(tt);
-    lessonTick(now);
-    tips(now);
-    tribePulse(now);
+    if (!g.demo) {
+      lessonTick(now);
+      tips(now);
+      tribePulse(now);
+    }
     if (coach.until && now > coach.until) hush();
     if (g.phase !== shownPhase) {
       shownPhase = g.phase;
@@ -607,7 +728,7 @@ function frame(now) {
     updateHud();
   }
   if (hintUntil && now > hintUntil) { hintEl.classList.remove('on'); hintUntil = 0; }
-  view.draw(g && g.phase !== 'end' ? g : null, now, look);
+  view.draw(g && (g.phase !== 'end' || view.setCinema) ? g : null, now, look);
   requestAnimationFrame(frame);
 }
 
@@ -627,8 +748,7 @@ function showToast(tt) {
   setTimeout(() => n.remove(), 4800);
 }
 
-cv.addEventListener('pointerdown', pointer);
-cv.addEventListener('pointermove', (e) => { if (g && e.pointerType === 'mouse') view.hover = view.regionAt(g, e.clientX, e.clientY); });
+
 function fit() {
   // the map takes what the bars leave
   view.top = hud.hidden ? 12 : hud.getBoundingClientRect().bottom + 8;

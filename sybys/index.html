@@ -7,17 +7,17 @@
 <meta name="robots" content="noindex">
 <meta name="description" content="Сыбыс — интриги в степи: молва вместо войска, заговор, курултай. Прототип.">
 <meta name="theme-color" content="#1b1712">
-<link rel="stylesheet" href="style.css?v=104dda70">
-<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","./js/avatars.js":"./js/avatars.js?v=5784a701","./js/main.js":"./js/main.js?v=884aa83c","./js/map.js":"./js/map.js?v=86af5ee5","./js/render.js":"./js/render.js?v=939545c0","./js/render3d.js":"./js/render3d.js?v=ae881e94","./js/sfx.js":"./js/sfx.js?v=26714bfa","./js/sim.js":"./js/sim.js?v=35f34519","./js/text.js":"./js/text.js?v=8b2eb3ee","./js/util.js":"./js/util.js?v=67c9e81e"}}</script>
-<script type="module" src="./js/main.js?v=884aa83c"></script>
+<link rel="stylesheet" href="style.css?v=2b1032a6">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","./js/avatars.js":"./js/avatars.js?v=5784a701","./js/main.js":"./js/main.js?v=cf6829df","./js/map.js":"./js/map.js?v=b1992353","./js/render.js":"./js/render.js?v=939545c0","./js/render3d.js":"./js/render3d.js?v=df9d349e","./js/sfx.js":"./js/sfx.js?v=26714bfa","./js/sim.js":"./js/sim.js?v=35f34519","./js/text.js":"./js/text.js?v=6c5df413","./js/util.js":"./js/util.js?v=67c9e81e"}}</script>
+<script type="module" src="./js/main.js?v=cf6829df"></script>
 </head>
 <body>
 <canvas id="game" aria-label="Sybys"></canvas>
 <header class="hud" id="hud" hidden>
   <p class="chip" id="horsesChip"><span>🐎</span><b id="horses"></b><i class="regen"><i id="regen"></i></i></p>
   <div class="chip season" id="seasonChip"><small id="seasonLbl"></small><div class="bar"><i id="seasonBar"></i></div></div>
-  <p class="chip" id="unityChip"><span>♛</span><b id="unity"></b></p>
   <div class="tribes" id="tribes"></div>
+  <button type="button" class="icon" id="fitBtn" aria-label="Whole map" title="Вся карта / Whole map">⤢</button>
   <button type="button" class="icon" id="journalBtn" aria-label="Journal">📜</button>
   <button type="button" class="icon" id="speedBtn" aria-label="Speed">×1</button>
   <button type="button" class="icon" id="pauseBtn" aria-label="Pause">❚❚</button>
