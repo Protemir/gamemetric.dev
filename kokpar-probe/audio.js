@@ -95,3 +95,68 @@ export function ambience(speed, riverDistance) {
   windHi.gain.setTargetAtTime(Math.max(0, speed - 4) * 0.01, t, 0.3);
   riverG.gain.setTargetAtTime(0.16 * Math.max(0, 1 - Math.max(0, riverDistance - 6) / 70), t, 0.4);
 }
+
+// ржание «иһаһаһа»: тон с формантами, резко вверх, потом вниз с дрожью и прерывистым «ха-ха-ха» в конце
+export function neigh(x, z) {
+  if (!ctx || muted) return;
+  const { vol, pan } = place(x, z, 4);
+  if (vol < 0.05) return;
+  const t = ctx.currentTime, L = 1.5;
+  const o = ctx.createOscillator(); o.type = 'sawtooth';
+  const f = o.frequency;
+  f.setValueAtTime(520, t); f.exponentialRampToValueAtTime(1150, t + 0.12); f.exponentialRampToValueAtTime(900, t + 0.45); f.exponentialRampToValueAtTime(380, t + L);
+  const lfo = ctx.createOscillator(), lfoG = ctx.createGain(); // дрожь голоса
+  lfo.frequency.setValueAtTime(14, t); lfo.frequency.linearRampToValueAtTime(19, t + L);
+  lfoG.gain.setValueAtTime(15, t); lfoG.gain.linearRampToValueAtTime(110, t + L);
+  lfo.connect(lfoG); lfoG.connect(f);
+  const amp = ctx.createGain(); // огибающая + прерывистость к концу
+  amp.gain.setValueAtTime(0.0001, t); amp.gain.exponentialRampToValueAtTime(vol * 0.32, t + 0.06);
+  amp.gain.setValueAtTime(vol * 0.32, t + 0.5); amp.gain.exponentialRampToValueAtTime(0.001, t + L);
+  const chop = ctx.createGain(), chopL = ctx.createOscillator(), chopG = ctx.createGain();
+  chopL.frequency.value = 9; chopG.gain.setValueAtTime(0, t); chopG.gain.linearRampToValueAtTime(0, t + 0.55); chopG.gain.linearRampToValueAtTime(0.5, t + 0.9);
+  chop.gain.value = 0.5; chopL.connect(chopG); chopG.connect(chop.gain);
+  const mix = ctx.createGain(); mix.gain.value = 1;
+  for (const [fr, q, g] of [[800, 5, 1], [1700, 6, 0.6], [2700, 7, 0.3]]) { // форманты конской глотки
+    const bp = filter('bandpass', fr, q), bg = ctx.createGain(); bg.gain.value = g;
+    o.connect(bp); bp.connect(bg); bg.connect(mix);
+  }
+  const s = ctx.createBufferSource(); s.buffer = noise; const nf = filter('bandpass', 1500, 0.8), ng = ctx.createGain(); ng.gain.value = 0.25; // хрип дыхания
+  s.connect(nf); nf.connect(ng); ng.connect(mix);
+  mix.connect(chop); chop.connect(amp); amp.connect(out(1, pan));
+  for (const n of [o, lfo, chopL, s]) { n.start(t); n.stop(t + L + 0.05); }
+}
+// щелчок қамшы
+export function whip() {
+  if (!ctx || muted) return;
+  const t = ctx.currentTime, s = ctx.createBufferSource(); s.buffer = noise;
+  const f = filter('highpass', 2200, 0.7), g = ctx.createGain();
+  g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  s.connect(f); f.connect(g); g.connect(out(1, 0.2)); s.start(t, Math.random()); s.stop(t + 0.06);
+}
+// подхватил мешок — шорох мешковины
+export function grabSound(x, z) {
+  if (!ctx || muted) return;
+  const { vol, pan } = place(x, z, 4);
+  const t = ctx.currentTime, s = ctx.createBufferSource(); s.buffer = noise;
+  const f = filter('bandpass', 1300, 0.9), g = ctx.createGain();
+  g.gain.setValueAtTime(vol * 0.35, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  s.connect(f); f.connect(g); g.connect(out(1, pan)); s.start(t, Math.random()); s.stop(t + 0.22);
+}
+// гол: гул толпы и дробь домбыры-барабана; свои — громче
+export function cheer(ours) {
+  if (!ctx || muted) return;
+  const t = ctx.currentTime, L = 2.6;
+  const s = ctx.createBufferSource(); s.buffer = noise; s.loop = true;
+  const f1 = filter('bandpass', 700, 0.6), f2 = filter('bandpass', 1500, 0.8), g = ctx.createGain();
+  const top = ours ? 0.32 : 0.16;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(top, t + 0.35); g.gain.setValueAtTime(top, t + 1.2); g.gain.exponentialRampToValueAtTime(0.001, t + L);
+  const trem = ctx.createOscillator(), tg = ctx.createGain(); trem.frequency.value = 6; tg.gain.value = top * 0.4; trem.connect(tg); tg.connect(g.gain);
+  s.connect(f1); f1.connect(f2); f2.connect(g); g.connect(out(1, 0));
+  s.start(t); s.stop(t + L); trem.start(t); trem.stop(t + L);
+  for (let i = 0; i < 6; i++) { // барабан
+    const o = ctx.createOscillator(), og = ctx.createGain(), tt = t + 0.1 + i * 0.16;
+    o.frequency.setValueAtTime(140, tt); o.frequency.exponentialRampToValueAtTime(60, tt + 0.12);
+    og.gain.setValueAtTime(0.4, tt); og.gain.exponentialRampToValueAtTime(0.001, tt + 0.15);
+    o.connect(og); og.connect(out(1, 0)); o.start(tt); o.stop(tt + 0.17);
+  }
+}

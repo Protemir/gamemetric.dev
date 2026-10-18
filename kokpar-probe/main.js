@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
 import { FBXLoader } from './vendor/loaders/FBXLoader.js';
 import * as SkeletonUtils from './vendor/utils/SkeletonUtils.js';
-import { initAudio, toggleMute, setListener, hoof, snort, bump, ambience, stats as sound } from './audio.js?v=2';
+import { initAudio, toggleMute, setListener, hoof, snort, bump, ambience, neigh, stats as sound } from './audio.js?v=3';
 
 const P = new URLSearchParams(location.search);
 const Q = P.get('q') || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
@@ -928,6 +928,7 @@ class Horse {
     a.reset().play();
     a.timeScale = a.getClip().duration / REAR_LEN;
     this.rearClock = 0;
+    neigh(this.obj.position.x, this.obj.position.z); // иһаһаһа
   }
   scaleFor(k) {
     const nat = proto.native[k];
