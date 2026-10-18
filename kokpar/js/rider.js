@@ -10,7 +10,7 @@ import * as SkeletonUtils from '../vendor/utils/SkeletonUtils.js';
 let proto = null;
 const HEIGHT = 1.72; // рост шабандоза, м
 export async function loadRider() {
-  const g = await new GLTFLoader().loadAsync('models/rider.glb');
+  const g = await new GLTFLoader().loadAsync('models/rider.glb', (e) => window.__loadProg?.('rider', e.loaded));
   const root = g.scene;
   root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material.metalness = 0; } });
   root.updateMatrixWorld(true);

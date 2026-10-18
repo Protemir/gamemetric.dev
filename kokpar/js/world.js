@@ -46,10 +46,21 @@ export const BOUNDS = { x: 64, z: 38 }; // поле игры: за край ко
 const REAR_ANGLE = Number(P.get('rear') || 0.58); // свечка: наклон корпуса, рад (~33°)
 const REAR_LEN = 3.0, REAR_UP = 0.85, REAR_DOWN = 0.9; // длительность, подъём, опускание, с
 
+// ---------- экран ----------
+// телефон в портрете: страницу поворачиваем на 90°, игра всегда горизонтальная
+export const view = { w: innerWidth, h: innerHeight, rot: false };
+const touchDev = matchMedia('(pointer: coarse)').matches;
+function measure() {
+  view.rot = touchDev && innerHeight > innerWidth;
+  view.w = view.rot ? innerHeight : innerWidth; view.h = view.rot ? innerWidth : innerHeight;
+  document.documentElement.classList.toggle('rot', view.rot);
+  Object.assign(document.body.style, view.rot ? { width: view.w + 'px', height: view.h + 'px', transform: `translateX(${innerWidth}px) rotate(90deg)` } : { width: '', height: '', transform: '' });
+}
+measure();
 // ---------- рендер ----------
 const renderer = new THREE.WebGLRenderer({ antialias: Q !== 'low', powerPreference: 'high-performance', preserveDrawingBuffer: P.has('debug') }); // в отладке кадр можно снять скриншотом
 renderer.setPixelRatio(Math.min(devicePixelRatio, Q === 'high' ? 2 : Q === 'medium' ? 1.5 : 1));
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(view.w, view.h);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -60,7 +71,7 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color('#dcd8cc');
 scene.fog = new THREE.FogExp2(HORIZON, 0.0015); // дымка: даль и горы светлеют постепенно
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 4000);
+const camera = new THREE.PerspectiveCamera(55, view.w / view.h, 0.1, 4000);
 
 scene.add(new THREE.HemisphereLight('#bcd6f5', '#7a5c32', 1.05));
 // Солнце ближе к вечеру: тёплое и ниже — длинные тени, рельефнее конь.
@@ -260,7 +271,7 @@ function mergeQuads(list) {
 // Горы до 50 км: рисуем их отдельным «дальним» проходом со своей камерой (near 30 м, far 200 км),
 // потом очищаем глубину и рисуем поле с конями обычной камерой — так нет мерцания вблизи.
 const farScene = new THREE.Scene();
-const farCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 30, 200000);
+const farCam = new THREE.PerspectiveCamera(55, view.w / view.h, 30, 200000);
 farScene.add(new THREE.HemisphereLight('#bcd6f5', '#7a5c32', 1.0));
 const farSun = new THREE.DirectionalLight('#ffe0ad', 2.6);
 farSun.position.copy(SUN_DIR).multiplyScalar(1000);
@@ -355,18 +366,19 @@ function ribbon(pts, width, heightAt, lift) {
 }
 
 async function loadTerrain() {
-  const [m, buf, river] = await Promise.all([
+  const [m0, buf, river, sat] = await Promise.all([
     fetch('models/alatau.json').then((r) => r.json()),
-    fetch('models/alatau-h.bin').then((r) => r.arrayBuffer()),
+    fetch('models/alatau-h2.bin').then((r) => r.arrayBuffer()),
     fetch('models/alatau-river.json').then((r) => r.json()),
+    new THREE.TextureLoader().loadAsync(Q === 'high' ? 'models/alatau-sat.jpg' : 'models/alatau-sat-1k.jpg'),
   ]);
+  const m = { ...m0, w: (m0.w >> 1), h: (m0.h >> 1) }; // каждая вторая точка исходной сетки
   dem = { m, H: new Uint16Array(buf) };
   riverPts = river;
-  const sat = await new THREE.TextureLoader().loadAsync(Q === 'high' ? 'models/alatau-sat.jpg' : 'models/alatau-sat-1k.jpg');
   sat.colorSpace = THREE.SRGBColorSpace;
   sat.anisotropy = renderer.capabilities.getMaxAnisotropy();
   // сетка: на high каждая вторая точка (~200 м), ниже — реже
-  const st = Q === 'high' ? 2 : Q === 'medium' ? 3 : 4;
+  const st = Q === 'high' ? 1 : Q === 'medium' ? 1.5 : 2;
   const W = Math.floor((m.w - 1) / st) + 1, Hh = Math.floor((m.h - 1) / st) + 1;
   const pos = new Float32Array(W * Hh * 3), uvs = new Float32Array(W * Hh * 2), idx = [];
   for (let j = 0; j < Hh; j++) for (let i = 0; i < W; i++) {
@@ -444,7 +456,7 @@ function makeParticles(N, frag) {
   P.geo = g;
   P.pts = new THREE.Points(g, new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
-    uniforms: { scale: { value: innerHeight / 2 } },
+    uniforms: { scale: { value: view.h / 2 } },
     vertexShader: `attribute float life; attribute float size; varying float vL; uniform float scale;
       void main(){ vL = life; vec4 mv = modelViewMatrix * vec4(position,1.); gl_PointSize = size * scale / -mv.z; gl_Position = projectionMatrix * mv; }`,
     fragmentShader: frag,
@@ -558,7 +570,7 @@ let proto = null; // { scene, clips, native: {walk: м/с...}, fix }
 
 async function loadModel() {
   const isFbx = M.file.toLowerCase().endsWith('.fbx');
-  const res = await (isFbx ? new FBXLoader() : new GLTFLoader()).loadAsync(M.file);
+  const res = await (isFbx ? new FBXLoader() : new GLTFLoader()).loadAsync(M.file, (e) => window.__loadProg?.('horse', e.loaded));
   const root = isFbx ? res : res.scene;
   const clips = {};
   for (const [k, name] of Object.entries(M.clips)) {
@@ -1012,10 +1024,12 @@ function stepWorld(dt) {
   wind.value += dt; skyMat.uniforms.time.value += dt; riverMat.uniforms.time.value += dt;
 }
 function onResize() {
-  renderer.setSize(innerWidth, innerHeight);
-  camera.aspect = innerWidth / innerHeight;
+  measure();
+  renderer.setSize(view.w, view.h);
+  camera.aspect = view.w / view.h;
   camera.updateProjectionMatrix();
-  for (const P of particleSets) P.pts.material.uniforms.scale.value = innerHeight / 2;
+  farCam.aspect = camera.aspect; farCam.updateProjectionMatrix();
+  for (const P of particleSets) P.pts.material.uniforms.scale.value = view.h / 2;
 }
 const getProto = () => proto;
 export { THREE, P, Q, renderer, scene, camera, sun, SUN_DIR, rnd, canvasTex, loadModel, loadTerrain, renderAll, getProto, feltMat, Horse, GAITS, riverDist, terrainH, stepWorld, onResize, puff };

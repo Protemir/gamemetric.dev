@@ -1,6 +1,6 @@
 // Көкпар — игра: 3×3, мешок-серке, два казана, тартыс (перетягивание мешка на скаку), боты.
 // ?debug — window.__kokpar; ?sim=N — N матчей ботов без картинки (проверка баланса); ?bots — игрок тоже бот.
-import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
+import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, view, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
 import { Rider, loadRider } from './rider.js';
 import { makeSerke } from './serke.js';
 import { makeKazan } from './kazan.js';
@@ -25,7 +25,7 @@ const TEXT = {
     red: 'Красные', blue: 'Синие', loading: 'Загрузка степи…', ready: 'Готовьтесь!', go: 'Вперёд!', goal: 'ГОЛ!', goalBy: (t) => t,
     tug: 'Тартыс!', tugSub: 'Схватка за серке', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
     fumble: 'Выронил серке!', win: 'Победа', lose: 'Поражение', draw: 'Ничья', again: 'Ещё раз', stamina: 'Сила коня',
-    btnTug: 'ВЫРВАТЬ', btnWhip: 'КАМЧА', mashKey: 'Жми E быстрее!', mashTap: 'Жми ВЫРВАТЬ быстрее!', canTug: '<kbd>E</kbd> — вырвать серке',
+    btnTug: 'ВЫРВАТЬ', btnWhip: 'КАМЧА', btnRear: 'СВЕЧКА', mashKey: 'Жми E быстрее!', mashTap: 'Жми ВЫРВАТЬ быстрее!', canTug: '<kbd>E</kbd> — вырвать серке',
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
     canPass: '<kbd>E</kbd> — взять серке у своего', passMe: 'Пас!',
     helpTouch: 'Палец слева — куда скакать · ВЫРВАТЬ — отнять серке · КАМЧА — рывок',
@@ -37,7 +37,7 @@ const TEXT = {
     red: 'Red', blue: 'Blue', loading: 'Loading the steppe…', ready: 'Get ready!', go: 'Go!', goal: 'GOAL!', goalBy: (t) => t,
     tug: 'Tug of war!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
     fumble: 'Fumble!', win: 'Victory', lose: 'Defeat', draw: 'Draw', again: 'Play again', stamina: 'Horse stamina',
-    btnTug: 'GRAB', btnWhip: 'WHIP', mashKey: 'Mash E!', mashTap: 'Tap GRAB fast!', canTug: '<kbd>E</kbd> — grab the serke',
+    btnTug: 'GRAB', btnWhip: 'WHIP', btnRear: 'REAR UP', mashKey: 'Mash E!', mashTap: 'Tap GRAB fast!', canTug: '<kbd>E</kbd> — grab the serke',
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
     canPass: '<kbd>E</kbd> — take the serke from a teammate', passMe: 'Pass!',
     helpTouch: 'Left thumb — where to ride · GRAB — take the serke · WHIP — burst',
@@ -461,7 +461,7 @@ addEventListener('keydown', (e) => {
   initAudio();
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyE' || e.code === 'Space') { tugTap = true; e.preventDefault(); }
-  if (e.code === 'KeyR' && me && state.phase !== 'menu' && !me.r.fallen && sack.carrier !== me) me.h.rear(); // свечка — только стоя или шагом
+  if (e.code === 'KeyR' && canRear()) me.h.rear(); // свечка — только стоя
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 function playerInput(dt) {
@@ -491,12 +491,14 @@ function playerInput(dt) {
 function stepEnt(e, dt) {
   // қамшы: рывок, тратит силы; силы восполняются
   if (e.wantSprint && e.stamina > 8 && e.h.gait >= 3) { e.sprint = 0.2; e.stamina -= 26 * dt; if (!SIM && e.me && !e.whipT) { whip(); e.whipT = 0.6; } }
+  else if (e.h.gait >= 4 && e.h.v > 8) e.stamina = Math.max(0, e.stamina - 1.8 * dt); // галоп утомляет
   else e.stamina = Math.min(100, e.stamina + 11 * dt);
+  e.tired = e.stamina < 10 ? true : e.stamina > 35 ? false : e.tired;
   e.whipT = Math.max(0, (e.whipT || 0) - dt);
   e.sprint = Math.max(0, e.sprint - dt);
   e.tugCD = Math.max(0, e.tugCD - dt); e.pickCD = Math.max(0, e.pickCD - dt); e.stun = Math.max(0, e.stun - dt);
   const tugging = state.tug && (state.tug.car === e || state.tug.att === e);
-  e.h.speedMul = (e.sprint > 0 ? 1.22 : 1) * (sack.carrier === e ? 0.9 : 1) * (e.stun > 0 ? 0.6 : 1) * (tugging ? 0.75 : 1) * (e.team === 1 ? DIFF.speed : 1);
+  e.h.speedMul = (e.sprint > 0 ? 1.22 : 1) * (sack.carrier === e ? 0.9 : 1) * (e.stun > 0 ? 0.6 : 1) * (tugging ? 0.75 : 1) * (e.tired ? 0.82 : 1) * (e.team === 1 ? DIFF.speed : 1);
 }
 function stepSack(dt) {
   if (sack.flight) { // летит: после гола на казан или брошена
@@ -684,7 +686,6 @@ function applyLang() {
   document.documentElement.lang = lang;
   el.nmR.textContent = teamName(0); el.nmB.textContent = teamName(1);
   el.stamlbl.textContent = tr('stamina'); el.btnTug.textContent = tr('btnTug'); el.btnWhip.textContent = tr('btnWhip');
-  el.loadtxt.textContent = tr('loading');
   if (state.phase === 'menu') showMenu();
   el.lang.textContent = lang === 'ru' ? 'EN' : 'RU';
   if (el.hint.dataset.keep) el.hint.innerHTML = touch ? tr('helpTouch') : tr('help');
@@ -718,6 +719,7 @@ function hud(dt) {
   const nearKazan = sack.carrier === me && throwInfo(me).d < THROW_MAX;
   el.btnTug.textContent = nearKazan ? tr('btnThrow') : tr('btnTug');
   const pass = !T && canPass(me);
+  if (touch) { const lbl = canRear() ? tr('btnRear') : tr('btnWhip'); if (el.btnWhip.textContent !== lbl) el.btnWhip.textContent = lbl; }
   const can = !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan || pass);
   el.btnTug.classList.toggle('ready', !!(can || mine));
   if (can && !touch) el.hint.innerHTML = nearKazan ? tr('canThrow') : pass ? tr('canPass') : tr('canTug');
@@ -740,25 +742,35 @@ function hud(dt) {
 }
 // телефон: стик слева, кнопки справа
 let whipHeld = false;
+const pt = (e) => (view.rot ? { x: e.clientY, y: innerWidth - e.clientX } : { x: e.clientX, y: e.clientY }); // палец → координаты игры
+const canRear = () => me && me.h.v < 1.5 && !me.r.fallen && sack.carrier !== me && state.phase !== 'menu';
+// на Android: во весь экран и закрепить горизонталь (на iPhone — поворот страницы выше)
+function goLandscape() {
+  if (!touch || matchMedia('(display-mode: fullscreen)').matches) return;
+  const d = document.documentElement;
+  (d.requestFullscreen?.({ navigationUI: 'hide' }) || Promise.reject()).then(() => screen.orientation?.lock?.('landscape')).catch(() => {}).finally(() => setTimeout(onResize, 300));
+}
 if (touch) document.body.classList.add('touch');
 addEventListener('pointerdown', (e) => {
   initAudio();
   if (e.pointerType !== 'touch' || e.target.closest('button')) return;
-  if (e.clientX > innerWidth * 0.55) return;
-  stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 };
-  Object.assign(el.stick.style, { display: 'block', left: e.clientX + 'px', top: e.clientY + 'px' });
+  const p = pt(e);
+  if (p.x > view.w * 0.55) return;
+  stick = { id: e.pointerId, x: p.x, y: p.y, dx: 0, dy: 0 };
+  Object.assign(el.stick.style, { display: 'block', left: p.x + 'px', top: p.y + 'px' });
 });
 addEventListener('pointermove', (e) => {
   if (!stick || e.pointerId !== stick.id) return;
-  stick.dx = clamp((e.clientX - stick.x) / 60, -1.2, 1.2);
-  stick.dy = clamp((e.clientY - stick.y) / 60, -1.2, 1.2);
+  const p = pt(e);
+  stick.dx = clamp((p.x - stick.x) / 60, -1.2, 1.2);
+  stick.dy = clamp((p.y - stick.y) / 60, -1.2, 1.2);
   el.stick.firstElementChild.style.transform = `translate(${clamp(stick.dx, -1, 1) * 36}px, ${clamp(stick.dy, -1, 1) * 36}px)`;
 });
 const endStick = (e) => { if (stick && e.pointerId === stick.id) { stick = null; el.stick.style.display = 'none'; } };
 addEventListener('pointerup', endStick);
 addEventListener('pointercancel', endStick);
 el.btnTug.addEventListener('pointerdown', (e) => { e.preventDefault(); initAudio(); tugTap = true; });
-el.btnWhip.addEventListener('pointerdown', (e) => { e.preventDefault(); whipHeld = true; });
+el.btnWhip.addEventListener('pointerdown', (e) => { e.preventDefault(); if (canRear()) me.h.rear(); else whipHeld = true; });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.btnWhip.addEventListener(ev, () => { whipHeld = false; });
 function startMatch() {
   applyStage(); applyLang();
@@ -766,7 +778,7 @@ function startMatch() {
   state.score = [0, 0]; state.clock = MATCH_LEN; kickoff(true);
 }
 el.again.addEventListener('click', startMatch);
-el.playBtn.addEventListener('click', () => { initAudio(); startMatch(); });
+el.playBtn.addEventListener('click', () => { initAudio(); goLandscape(); startMatch(); });
 function ladder(box) { // ступени лиги: пройденные, текущая, закрытые
   box.innerHTML = LEAGUE.map((L, i) => '<span class="' + (i < stage ? 'done' : i === stage ? 'cur' : 'lock') + '"><img src="' + flagCanvas(L, 96, 60).toDataURL() + '" alt="">' + (i < stage ? '✓ ' : '') + L[lang] + '</span>').join('');
 }
@@ -796,7 +808,8 @@ function frame(now) {
 }
 
 if (!SIM) applyLang();
-await Promise.all([loadModel(), loadRider(), SIM ? null : loadTerrain()]);
+await Promise.all([loadModel(), loadRider()]);
+if (!SIM) loadTerrain().catch((err) => console.warn('рельеф не загрузился', err)); // горы появятся чуть позже
 for (const team of [0, 1]) for (let i = 0; i < 3; i++) ents.push(makeEnt(team, i, team === 0 && i === 1));
 me = ents.find((e) => e.me);
 // масти: игроку — гнедой, остальным разные
@@ -822,7 +835,7 @@ if (SIM) {
   window.__sim = res;
   document.title = 'SIM DONE';
 } else {
-  el.load.remove();
+  window.__loadDone?.(); setTimeout(() => el.load.remove(), 250);
   if ((P.has('bots') || P.has('debug')) && !P.has('menu')) applyStage(); else showMenu();
   updateCamera(0, true);
   el.hint.dataset.keep = '1';
