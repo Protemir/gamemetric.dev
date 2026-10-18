@@ -269,7 +269,14 @@ function chronicle(back) {
   if (nxt) box.append(el('p', 'small', t.nextOpen(t.styles[nxt.key], nxt.glory - meta.glory)));
   box.append(el('h3', null, `${t.endsHead} · ${meta.ends.length}/6`));
   const ends = el('div', 'tiles');
-  for (const e of S.ENDINGS) ends.append(el('span', 'tile' + (meta.ends.includes(e) ? ' got' : ''), meta.ends.includes(e) ? t.end[e][0] : t.locked));
+  for (const e of S.ENDINGS) {
+    const got = meta.ends.includes(e);
+    const tile = el('div', 'tile' + (got ? ' got' : ''));
+    const seal = el('i');
+    seal.innerHTML = ICONS.seal;
+    tile.append(seal, el('b', null, got ? t.end[e][0] : t.locked), el('small', null, t.endHints[e]));
+    ends.append(tile);
+  }
   box.append(ends, el('h3', null, `${t.plottersHead} · ${meta.plotters.length}/4`));
   const pl = el('div', 'faces');
   for (const w of S.SUSPECTS) {
@@ -465,6 +472,11 @@ function buildHud() {
     ava.innerHTML = face(k);
     const box = el('div', 'tb');
     box.append(el('span', 'tn', tribeName(k)), Object.assign(el('div', 'bar'), { innerHTML: '<i></i>' }));
+    const tt = g.traits && T().traits[g.traits[k]];
+    if (tt) {
+      box.append(el('span', 'trait', tt[0]));
+      c.title = `${tribeName(k)} — ${tt[0]}: ${tt[1]}`;
+    }
     c.append(ava, box, el('span', 'fear'), el('span', 'tick', '✓'));
     tr.append(c);
   }
@@ -795,6 +807,7 @@ function showKurultai(council = false) {
     const ava = el('div', 'ava');
     ava.innerHTML = face(x.tribe);
     s.append(el('span', 'whip', '·'), ava, el('b', null, tribeName(x.tribe)), el('small', null, Math.round(x.trust * 100) + '%'));
+    if (g.traits) s.append(el('small', 'trait', T().traits[g.traits[x.tribe]][0]));
     ring.append(s);
     return s;
   });

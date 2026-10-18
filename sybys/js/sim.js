@@ -42,6 +42,9 @@ export const CLUES = { assassin: true, forged: true, stones: true, lair: true, s
 export const RAIDS = { 1: [125], 2: [60, 215] };
 export const NIGHT_AT = { 2: 140 };
 
+// the temper of each clan's elder, new every campaign: it changes what works on that clan
+export const TRAITS = ['proud', 'greedy', 'truthful', 'fearful', 'oldways'];
+
 // who is really behind the forged orders: a different one each campaign; true clues hint at him
 export const SUSPECTS = ['karasai', 'sarman', 'zaltyr', 'orazbai'];
 // the steppe of the day comes with one condition
@@ -58,6 +61,7 @@ export function newGame(seed = 1, opts = {}) {
   const far = map.regions.filter((r) => r.tribe >= 0).sort((a, b) => route(map, 0, b.id).time - route(map, 0, a.id).time);
   const lair = far[Math.floor(rand() * 6)].id;
   const culprit = SUSPECTS[Math.floor(rand() * SUSPECTS.length)];
+  const traits = [...TRAITS].sort(() => rand() - 0.5).slice(0, 3);
   const mod = opts.mod || null;
   const g = {
     seed, rand, map, R, tribes, t, m, n,
@@ -85,7 +89,7 @@ export function newGame(seed = 1, opts = {}) {
     flags: {},
     acted: 0, caught: 0, wrongCatch: 0,
     result: null,
-    culprit, mod, daily: !!opts.daily,
+    culprit, mod, daily: !!opts.daily, traits,
     forceRides: 0,
     raidIdx: 0, raid: null, burn: {}, night: null, nightDone: false,
     chain: 0, lastWord: { at: -99, region: -1 },
@@ -114,10 +118,12 @@ export function unity(g) {
 }
 
 // how willing a pasture is to retell the khan's word (the rest of the time it retells lies)
+export const trait = (g, k) => (g.traits ? g.traits[k] : null);
 export function receptivity(g, i) {
   const r = g.map.regions[i];
   if (r.tribe < 0) return 1;
   const tr = g.tribes[r.tribe];
+  if (trait(g, r.tribe) === 'proud') return clamp(0.15 + 0.75 * tr.mood - 0.45 * tr.fear + (g.t[i] - 0.5) * 0.45, 0.05, 1);
   const dry = g.drought && g.drought.tribe === r.tribe && g.clock < g.drought.until ? 0.15 : 0;
   return clamp(0.2 + 0.75 * tr.mood - 0.45 * tr.fear + (g.t[i] - 0.5) * 0.45 - dry, 0.05, 1);
 }
@@ -195,6 +201,8 @@ export function intercept(g, id) {
   if (rider.kind === 'false') {
     g.riders.splice(k, 1);
     g.caught++;
+    const meant = g.map.regions[rider.to].tribe;
+    if (meant >= 0 && trait(g, meant) === 'truthful') g.tribes[meant].mood = clamp(g.tribes[meant].mood + 0.03, 0, 1);
     addClue(g, 'forged', riderRegion(g, rider));
     g.fx.push({ type: 'caught', region: riderRegion(g, rider) });
     return 'caught';
@@ -265,7 +273,8 @@ function arrive(g, rider) {
     const tr = g.tribes[r.tribe];
     g.t[i] = Math.max(g.t[i], 0.88);
     for (const e of r.nb) if (g.map.regions[e.to].tribe === r.tribe) g.t[e.to] = Math.min(1, g.t[e.to] + 0.12);
-    tr.fear = clamp(tr.fear + 0.3, 0, 1);
+    tr.fear = clamp(tr.fear + 0.3 * ({ proud: 1.6, fearful: 0.6 }[trait(g, r.tribe)] || 1), 0, 1);
+    if (trait(g, r.tribe) === 'fearful') tr.mood = clamp(tr.mood + 0.04, 0, 1);
     g.karasai++;
     g.fx.push({ type: 'force', region: i });
     if (tr.fear > 0.55 && !tr.talks) {
@@ -293,7 +302,7 @@ function arrive(g, rider) {
       if (!g.flags['defended' + r.tribe]) { g.flags['defended' + r.tribe] = true; toast(g, r.tribe, 'tClanDefends', i, { tribe: r.tribe }); }
     } else if (r.tribe >= 0) {
       g.t[i] = Math.max(0, g.t[i] - 0.25);
-      tr.mood = clamp(tr.mood - 0.05, 0, 1);
+      tr.mood = clamp(tr.mood - (trait(g, r.tribe) === 'fearful' ? 0.09 : 0.05), 0, 1);
       g.burn[i] = g.time;
       g.burned++;
       g.fx.push({ type: 'fire', region: i });
@@ -321,13 +330,14 @@ function arrive(g, rider) {
     g.fx.push({ type: 'aria', region: i });
   } else if (rider.kind === 'caravan') {
     // Sarman's caravan pays in horses, unless he has taken his privileges
+    if (r.tribe >= 0 && trait(g, r.tribe) === 'greedy') g.tribes[r.tribe].mood = clamp(g.tribes[r.tribe].mood + 0.03, 0, 1);
     if (!(g.flags.sarmanUntil > g.time)) {
       g.horses = Math.min(HORSE_MAX + 2, g.horses + 1);
       g.fx.push({ type: 'trade', region: i });
     }
     if (g.caravan) g.caravan.next = g.time + 4;
   } else if (rider.kind === 'false') {
-    g.n[i] = Math.min(2, g.n[i] + TUNE.lie);
+    g.n[i] = Math.min(2, g.n[i] + TUNE.lie * (trait(g, r.tribe) === 'truthful' ? 1.3 : 1));
     if (r.tribe >= 0) g.tribes[r.tribe].mood = clamp(g.tribes[r.tribe].mood - 0.035, 0, 1);
     g.marks.add(i);
     (g.markAt || (g.markAt = {}))[i] = g.time;
@@ -728,6 +738,7 @@ export function choose(g, key) {
       g.drought.until = g.clock + 50;
       break;
     case 'drought.sarman':
+      for (let k = 0; k < 3; k++) if (trait(g, k) === 'greedy') T[k].mood = clamp(T[k].mood + 0.06, 0, 1);
       g.horses = Math.min(HORSE_MAX + 2, g.horses + 2);
       g.drought.until = g.clock + 30;
       later(g, 70, 'sarmanDemands');
@@ -879,7 +890,7 @@ export function choose(g, key) {
 export function kurultai(g) {
   const votes = g.tribes.map((tr, k) => {
     const avg = tribeAvg(g, k);
-    const line = voteAt(g);
+    const line = trait(g, k) === 'oldways' ? clamp(VOTE_AT + (0.5 - g.orazbai) * 0.24, 0.45, 0.66) : voteAt(g);
     const yes = tr.forced || (avg >= line && (tr.grievance === 0 || avg >= line + 0.13) && !(tr.talks && avg < line + 0.07));
     return { tribe: k, trust: avg, yes, line };
   });

@@ -582,3 +582,25 @@ button:active:not(:disabled) { transform: scale(0.95); }
 /* a horse came back */
 #horsesChip.gain { animation: gain 0.6s ease-out; }
 @keyframes gain { 30% { box-shadow: 0 0 0 2px var(--gold-hi), 0 0 18px rgba(243, 207, 122, 0.6); transform: scale(1.06); } }
+
+/* the elder's temper on the clan chip */
+.tribe .tb { display: grid; grid-template-columns: 1fr auto; align-items: baseline; column-gap: 4px; }
+.tribe .tb .bar { grid-column: 1 / -1; grid-row: 2; }
+.tribe .trait { grid-row: 1; grid-column: 2; font-size: 10px; font-family: var(--serif); font-style: italic; color: var(--gold); white-space: nowrap; }
+.seat .trait { font-family: var(--serif); font-style: italic; color: var(--gold); }
+@media (max-width: 560px) { .tribe .trait { display: none; } }
+
+.tribe:has(.trait) { width: 184px; }
+@media (max-width: 1100px) { .tribe .trait { display: none; } .tribe:has(.trait) { width: 150px; } }
+@media (max-width: 760px), (max-height: 520px) { .tribe:has(.trait) { width: 112px; } }
+@media (max-width: 560px) { .tribe:has(.trait) { width: auto; } }
+
+/* the chronicle: every ending a scroll — sealed with a hint how to open it, or open in gold */
+.chronicle .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.chronicle .tile { display: grid; grid-template-columns: 22px 1fr; column-gap: 8px; align-items: center; text-align: left; padding: 8px 10px; border-radius: 8px; background: rgba(40, 30, 20, 0.85); border: 1px dashed var(--line); color: var(--muted); }
+.chronicle .tile i { grid-row: span 2; color: var(--muted); }
+.chronicle .tile i svg { width: 20px; height: 20px; display: block; }
+.chronicle .tile b { font-family: var(--serif); font-size: 13px; letter-spacing: 0.04em; }
+.chronicle .tile small { font-size: 11px; line-height: 1.3; }
+.chronicle .tile.got { background: linear-gradient(180deg, rgba(110, 78, 30, 0.95), rgba(48, 34, 16, 0.95)); border: 1px solid var(--gold); color: var(--ink); }
+.chronicle .tile.got i, .chronicle .tile.got b { color: var(--gold-hi); }
