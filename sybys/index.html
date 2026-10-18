@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Сыбыс · Sybys</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="Сыбыс — интриги в степи: молва вместо войска, заговор, курултай. Прототип.">
+<meta name="theme-color" content="#1b1712">
+<link rel="stylesheet" href="style.css?v=6908980a">
+<script type="importmap">{"imports":{"./js/main.js":"./js/main.js?v=80cb8977","./js/map.js":"./js/map.js?v=1e36e601","./js/render.js":"./js/render.js?v=3ad8d0a6","./js/sfx.js":"./js/sfx.js?v=26714bfa","./js/sim.js":"./js/sim.js?v=61b1c2c5","./js/text.js":"./js/text.js?v=026e499d","./js/util.js":"./js/util.js?v=67c9e81e"}}</script>
+<script type="module" src="./js/main.js?v=80cb8977"></script>
+</head>
+<body>
+<canvas id="game" aria-label="Sybys"></canvas>
+<header class="hud" id="hud" hidden>
+  <p class="chip" id="horsesChip"><span>🐎</span><b id="horses"></b><i class="regen"><i id="regen"></i></i></p>
+  <div class="chip season"><small id="seasonLbl"></small><div class="bar"><i id="seasonBar"></i></div></div>
+  <p class="chip" id="unityChip"><span>♛</span><b id="unity"></b></p>
+  <div class="tribes" id="tribes"></div>
+  <button type="button" class="icon" id="journalBtn" aria-label="Journal">📜</button>
+  <button type="button" class="icon" id="speedBtn" aria-label="Speed">×1</button>
+  <button type="button" class="icon" id="pauseBtn" aria-label="Pause">❚❚</button>
+  <button type="button" class="icon" id="soundBtn" aria-label="Sound">🔊</button>
+</header>
+<nav class="actions" id="actions" hidden></nav>
+<p class="hint" id="hint" aria-live="polite"></p>
+<div class="toasts" id="toasts"></div>
+<div id="ui"></div>
+</body>
+</html>
