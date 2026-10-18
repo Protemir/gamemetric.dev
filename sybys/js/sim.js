@@ -37,7 +37,12 @@ export const TUNE = {
 };
 export const CLUES = { forged: true, stones: true, lair: true, scouts: true, letter: true, zaltyr: true, informant: false, arrest: false, zaltyrFalse: false };
 
-export function newGame(seed = 1) {
+// who is really behind the forged orders: a different one each campaign; true clues hint at him
+export const SUSPECTS = ['karasai', 'sarman', 'zaltyr', 'orazbai'];
+// the steppe of the day comes with one condition
+export const MODS = ['drought', 'wind', 'bold', 'calm'];
+
+export function newGame(seed = 1, opts = {}) {
   const map = makeMap(seed);
   const rand = rng(seed * 7 + 3);
   const R = map.regions.length;
@@ -47,7 +52,9 @@ export function newGame(seed = 1) {
   // the plotters hide in a pasture far from the Orda
   const far = map.regions.filter((r) => r.tribe >= 0).sort((a, b) => route(map, 0, b.id).time - route(map, 0, a.id).time);
   const lair = far[Math.floor(rand() * 6)].id;
-  return {
+  const culprit = SUSPECTS[Math.floor(rand() * SUSPECTS.length)];
+  const mod = opts.mod || null;
+  const g = {
     seed, rand, map, R, tribes, t, m, n,
     time: 0, // everything that moves
     clock: 0, // the season: stands still while the advisors teach (g.hold)
@@ -73,7 +80,17 @@ export function newGame(seed = 1) {
     flags: {},
     acted: 0, caught: 0, wrongCatch: 0,
     result: null,
+    culprit, mod, daily: !!opts.daily,
+    forceRides: 0,
   };
+  // the day's condition
+  if (mod === 'drought') {
+    const k = Math.floor(rand() * 3);
+    g.drought = { tribe: k, until: 150 };
+  }
+  if (mod === 'bold') { g.plotEvery *= 0.8; g.plotT = 16; }
+  if (mod === 'calm') g.horses = HORSE_MAX;
+  return g;
 }
 
 const tribeAvg = (g, k) => {
@@ -101,7 +118,7 @@ function addClue(g, kind, region = -1) {
   // a second forged order says little new: two count at most
   if (kind === 'forged' && g.clues.filter((c) => c.kind === 'forged').length >= 2) return false;
   if (kind !== 'forged' && g.clues.some((c) => c.kind === kind)) return false;
-  g.clues.push({ kind, region, at: g.time });
+  g.clues.push({ kind, region, at: g.time, hint: CLUES[kind] ? g.clues.filter((c) => CLUES[c.kind]).length : -1 });
   g.fx.push({ type: 'clue', region, kind });
   return true;
 }
@@ -153,7 +170,7 @@ export function act(g, kind, target) {
   if (!r || r.tribe < 0) return null;
   let rider;
   if (kind === 'word') rider = spawnRider(g, 'word', sourceFor(g, target), target);
-  else if (kind === 'karasai') { rider = spawnRider(g, 'karasai', 0, target); g.karasaiCD = KARASAI_CD; }
+  else if (kind === 'karasai') { rider = spawnRider(g, 'karasai', 0, target); g.karasaiCD = KARASAI_CD; g.forceRides++; }
   else if (kind === 'aria') { rider = spawnRider(g, 'aria', g.aria.at >= 0 ? g.aria.at : 0, target); g.aria.riding = true; g.aria.at = -1; }
   else if (kind === 'zaltyr') { rider = spawnRider(g, 'zaltyr', 0, target); g.zaltyr.riding = true; }
   if (!rider) return null;
@@ -259,7 +276,8 @@ function stepRumor(g, dt) {
   for (const r of regions) {
     const i = r.id;
     const rec = receptivity(g, i);
-    const outM = m[i] * TUNE.flow * dt, outN = n[i] * TUNE.flow * dt;
+    const flow = TUNE.flow * (g.mod === 'wind' ? 1.35 : 1);
+    const outM = m[i] * flow * dt, outN = n[i] * flow * dt;
     dm[i] -= outM;
     dn[i] -= outN;
     for (const e of r.nb) {
@@ -748,7 +766,7 @@ export function kurultai(g) {
 
 export const ENDINGS = ['uniter', 'mediator', 'ironHorde', 'noPeople', 'truthBreaks', 'vanish'];
 
-export function finish(g, choice) {
+export function finish(g, choice, suspect = null) {
   const v = g.vote || kurultai(g);
   const yes = Math.min(3, v.yes + (choice === 'council' && (g.flags.council || g.orazbai >= 0.65) ? 1 : 0));
   const tc = trueClues(g), fc = falseClues(g);
@@ -756,11 +774,12 @@ export function finish(g, choice) {
   let end, variant = null;
   if (g.karasai >= 3 && (g.aria.trust < 0.35 || g.karasaiAngry) && choice !== 'leave') end = 'vanish';
   else if (choice === 'leave') { end = 'vanish'; variant = 'left'; }
+  else if (choice === 'reveal' && suspect && suspect !== g.culprit) end = 'truthBreaks'; // an innocent man named
   else if (choice === 'reveal') end = proven ? (yes >= (g.flags.reform ? 1 : 2) ? 'uniter' : 'mediator') : 'truthBreaks';
   else if (choice === 'council') end = yes >= 2 ? 'mediator' : 'noPeople';
   else end = g.karasai >= 2 ? 'ironHorde' : 'noPeople';
   const score = Math.round(unity(g) * 100);
-  g.result = { end, variant, choice, yes, tc, fc, score };
+  g.result = { end, variant, choice, yes, tc, fc, score, culprit: g.culprit, named: suspect, nailed: choice === 'reveal' && suspect === g.culprit && proven };
   g.phase = 'end';
   return g.result;
 }

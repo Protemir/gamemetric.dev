@@ -4,7 +4,8 @@ import { View3D, webglOK, modelsReady } from './render3d.js';
 import { el, store } from './util.js';
 import { T, lang, setLang } from './text.js';
 import { sfx, audioInit, sound, setSound, holdAudio, musicLevel } from './sfx.js';
-import { avatar, elder, LONE_HORSE } from './avatars.js';
+import { avatar, elder, LONE_HORSE, ICONS } from './avatars.js';
+import * as M from './meta.js';
 import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute } from './portal.js';
 
 const q = new URLSearchParams(location.search);
@@ -51,7 +52,7 @@ let speed = 1;
 let paused = true;
 let last = performance.now();
 let action = 'word';
-const look = { hand: -1, pulse: null, numbers: DEBUG || q.has('numbers'), names: null };
+const look = { hand: -1, pulse: null, numbers: DEBUG || q.has('numbers'), names: null, mouse: null, actIcon: '' };
 let hintUntil = 0;
 
 const tribeName = (k) => T().tribes[k];
@@ -215,15 +216,69 @@ function startScreen() {
   const orn = el('div', 'orn');
   orn.innerHTML = ORNAMENT;
   box.append(el('h1', null, T().title), orn, el('p', 'sub', T().sub));
-  const play = el('button', 'big play', T().play);
-  play.onclick = () => { audioInit(); intro(store.get('sybys.tutDone', false) ? 3 : 1); };
-  const lng = el('button', 'link', T().langBtn);
+  const t = T(), meta = M.load();
+  const play = el('button', 'big play', t.play);
+  play.onclick = () => { audioInit(); mode = 'free'; intro(store.get('sybys.tutDone', false) ? 3 : 1); };
+  box.append(play);
+  // the steppe of the day: the same for everyone, one condition, a streak
+  const d = M.daily();
+  const day = el('button', 'daily' + (M.dailyDone(meta) ? ' done' : ''));
+  const [modName, modLine] = t.mods[d.mod];
+  day.append(el('b', null, M.dailyDone(meta) ? t.dailyDoneBtn : t.dailyBtn), el('small', null, `${modName}: ${modLine}`));
+  const st = M.liveStreak(meta);
+  if (st) day.append(el('em', null, t.streak(st)));
+  day.onclick = () => { audioInit(); mode = 'daily'; intro(store.get('sybys.tutDone', false) ? 3 : 1); };
+  box.append(day);
+  const row = el('div', 'titlerow');
+  const chron = el('button', 'link', t.chronicleBtn + ' · ' + t.glory(meta.glory));
+  chron.onclick = () => chronicle(startScreen);
+  const lng = el('button', 'link', t.langBtn);
   lng.onclick = () => { setLang(lang === 'ru' ? 'en' : 'ru'); document.documentElement.lang = lang; startScreen(); };
-  box.append(play, lng);
-  const best = store.get('sybys.best', null);
-  const seen = store.get('sybys.ends', []);
-  if (best != null) box.append(el('p', 'small', T().best(best) + ' · ' + T().endsSeen(seen.length)));
+  row.append(chron, lng);
+  box.append(row);
+  // the look of the steppe: opened by glory
+  const chips = el('div', 'styles');
+  for (const s of M.STYLES) {
+    const open = M.unlocked(meta, s.key);
+    const c = el('button', 'chip-style' + (meta.style === s.key ? ' on' : '') + (open ? '' : ' locked'), open ? t.styles[s.key] : `${t.styles[s.key]} · ${s.glory} ✦`);
+    c.disabled = !open;
+    c.onclick = () => { M.setStyle(s.key); view.setStyle?.(s.key); startScreen(); };
+    chips.append(c);
+  }
+  box.append(chips);
   ui.classList.toggle('cine', live);
+  ui.replaceChildren(box);
+}
+
+// the chronicle: glory, endings, unmasked plotters, deeds — what is still missing shows as ???
+function chronicle(back) {
+  const t = T(), meta = M.load();
+  const box = el('div', 'screen chronicle');
+  box.append(el('h2', null, t.chronicleTitle), el('p', 'line', t.glory(meta.glory)));
+  const nxt = M.STYLES.find((s) => s.glory > meta.glory);
+  if (nxt) box.append(el('p', 'small', t.nextOpen(t.styles[nxt.key], nxt.glory - meta.glory)));
+  box.append(el('h3', null, `${t.endsHead} · ${meta.ends.length}/6`));
+  const ends = el('div', 'tiles');
+  for (const e of S.ENDINGS) ends.append(el('span', 'tile' + (meta.ends.includes(e) ? ' got' : ''), meta.ends.includes(e) ? t.end[e][0] : t.locked));
+  box.append(ends, el('h3', null, `${t.plottersHead} · ${meta.plotters.length}/4`));
+  const pl = el('div', 'faces');
+  for (const w of S.SUSPECTS) {
+    const a = el('div', 'ava' + (meta.plotters.includes(w) ? '' : ' unknown'));
+    a.innerHTML = face(w);
+    a.title = meta.plotters.includes(w) ? t.who[w] : '?';
+    pl.append(a);
+  }
+  box.append(pl, el('h3', null, `${t.deedsTitle} · ${meta.deeds.length}/${M.DEEDS.length}`));
+  const ul = el('ul', 'deeds');
+  for (const d of M.DEEDS) {
+    const li = el('li', meta.deeds.includes(d) ? 'got' : '');
+    li.append(el('b', null, (meta.deeds.includes(d) ? '✦ ' : '· ') + t.deeds[d][0]), el('small', null, t.deeds[d][1]));
+    ul.append(li);
+  }
+  box.append(ul);
+  const b = el('button', 'big', t.back);
+  b.onclick = back;
+  box.append(b);
   ui.replaceChildren(box);
 }
 
@@ -278,8 +333,11 @@ function intro(page) {
   ui.replaceChildren(box);
 }
 
+let mode = 'free'; // 'daily' for the steppe of the day
 function start() {
-  g = S.newGame(q.has('seed') ? +q.get('seed') : (Math.random() * 1e9) | 0);
+  const d = M.daily();
+  g = mode === 'daily' ? S.newGame(d.seed, { mod: d.mod, daily: true }) : S.newGame(q.has('seed') ? +q.get('seed') : (Math.random() * 1e9) | 0);
+  view.setStyle?.(M.load().style);
   view.setCinema?.(false);
   view.resetCam?.();
   ui.classList.remove('cine');
@@ -335,7 +393,9 @@ function buildHud() {
     b.dataset.key = key;
     const ava = el('span', 'ai');
     ava.innerHTML = face(who);
-    b.append(ava, el('span', 'an', T()[key]), el('span', 'as', T()[key + 'Sub']), el('span', 'ac', '🐎'.repeat(S.COST[key])));
+    const cost = el('span', 'ac');
+    cost.innerHTML = ICONS.horse.repeat(S.COST[key]);
+    b.append(ava, el('span', 'an', T()[key]), el('span', 'as', T()[key + 'Sub']), cost);
     b.onclick = () => { action = key; sfx.send(); updateHud(); };
     // what the action does: on hover, or for a moment after a tap on a phone
     b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showTip(b, key, who); });
@@ -343,6 +403,9 @@ function buildHud() {
     b.addEventListener('pointerup', (e) => { if (e.pointerType !== 'mouse') { showTip(b, key, who); clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 3500); } });
     actionsEl.append(b);
   }
+  $('journalBtn').innerHTML = ICONS.scroll;
+  $('fitBtn').innerHTML = ICONS.expand;
+  $('horseIcon').innerHTML = ICONS.horse;
   $('journalBtn').onclick = () => { if (g.phase === 'map') journal(); };
   $('fitBtn').hidden = !view.resetCam;
   $('fitBtn').onclick = () => view.resetCam?.();
@@ -361,7 +424,7 @@ function showTip(btn, key, who) {
   const ava = el('div', 'ava');
   ava.innerHTML = face(who);
   const box = el('div');
-  box.append(el('b', null, t[key]), el('p', null, t[key + 'Tip']), el('small', null, '🐎 ' + t.costs(S.COST[key])));
+  box.append(el('b', null, t[key]), el('p', null, t[key + 'Tip']), el('small', null, t.costs(S.COST[key])));
   tipEl.append(ava, box);
   const r = btn.getBoundingClientRect();
   tipEl.classList.add('on');
@@ -401,7 +464,7 @@ function updateHud() {
     chips[k].querySelector('i').style.width = `${v.votes[k].trust * 100}%`;
     chips[k].classList.toggle('ok', v.votes[k].yes);
     const tr = g.tribes[k];
-    chips[k].querySelector('.fear').textContent = (tr.grievance ? '😠' : '') + (tr.fear > 0.25 ? '😨' : '') + (tr.talks ? '🤫' : '');
+    chips[k].querySelector('.fear').textContent = (tr.grievance ? '⚑' : '') + (tr.fear > 0.25 ? '⚔' : '') + (tr.talks ? '☍' : '');
   }
   for (const b of actionsEl.children) {
     b.classList.toggle('sel', b.dataset.key === action);
@@ -409,9 +472,12 @@ function updateHud() {
     // Zaltyr rides with the khan from autumn on
     if (b.dataset.key === 'zaltyr') b.hidden = g.season < 2 || !!g.flags.noScout;
   }
+  look.actIcon = '· ' + T()[action];
+  look.ordaName = T().hintOrda;
   $('speedBtn').textContent = '×' + speed;
-  $('pauseBtn').textContent = paused ? '▶' : '❚❚';
-  $('soundBtn').textContent = sound.on ? '🔊' : '🔇';
+  const pi = paused ? 'play' : 'pause', si = sound.on ? 'soundOn' : 'soundOff';
+  if ($('pauseBtn').dataset.i !== pi) { $('pauseBtn').dataset.i = pi; $('pauseBtn').innerHTML = ICONS[pi]; }
+  if ($('soundBtn').dataset.i !== si) { $('soundBtn').dataset.i = si; $('soundBtn').innerHTML = ICONS[si]; }
 }
 
 // a clan's sign jumps when its trust in the khan rises, and shows by how much
@@ -455,7 +521,12 @@ cv.addEventListener('pointerdown', (e) => {
   }
 });
 cv.addEventListener('pointermove', (e) => {
-  if (g && e.pointerType === 'mouse' && !touch.pts.size) view.hover = view.regionAt(g, e.clientX, e.clientY);
+  if (g && e.pointerType === 'mouse' && !touch.pts.size) {
+    const id = view.regionAt(g, e.clientX, e.clientY);
+    if (id !== view.hover) view.painted = false; // light it up at once
+    view.hover = id;
+    look.mouse = id >= 0 ? [e.clientX, e.clientY] : null;
+  }
   if (!touch.pts.has(e.pointerId)) return;
   touch.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (!view.panBy || !g) return;
@@ -477,6 +548,7 @@ const lift = (e) => {
   if (!touch.pts.size && !touch.moved) pointer(e);
 };
 cv.addEventListener('pointerup', lift);
+cv.addEventListener('pointerleave', () => { view.hover = -1; look.mouse = null; view.painted = false; });
 cv.addEventListener('pointercancel', (e) => { touch.pts.delete(e.pointerId); touch.moved = true; });
 cv.addEventListener('wheel', (e) => {
   if (!view.zoomAt || !g) return;
@@ -575,7 +647,7 @@ function showEvent() {
     const b = el('button', 'choice');
     b.disabled = !c.ok;
     b.append(el('b', null, label), el('small', null, fmt(note, ...names)));
-    if (c.cost) b.append(el('span', 'cost', t.cost(c.cost)));
+    if (c.cost) { const cs = el('span', 'cost'); cs.innerHTML = ICONS.horse + ' ' + c.cost; b.append(cs); }
     b.onclick = () => pickEvent(c.key);
     row.append(b);
   }
@@ -598,7 +670,11 @@ function journal() {
   box.append(el('h2', null, t.journalTitle), el('h3', null, t.clueHead));
   const ul = el('ul');
   if (!g.clues.length) ul.append(el('li', 'muted', t.noClues));
-  for (const c of g.clues) ul.append(el('li', null, '🔍 ' + t.clue[c.kind]));
+  for (const c of g.clues) {
+    const li = el('li', null, '✦ ' + t.clue[c.kind]);
+    if (c.hint >= 0 && c.hint < 4) li.append(el('small', 'hint', t.hints[g.culprit][c.hint]));
+    ul.append(li);
+  }
   box.append(ul, el('h3', null, t.deedsHead));
   const dl = el('ul');
   for (const d of g.log.filter((x) => x.key.startsWith('d.'))) dl.append(el('li', null, '• ' + t.ch[d.key.slice(2)][0]));
@@ -676,12 +752,35 @@ function showKurultai(council = false) {
       const b = el('button', 'choice');
       b.disabled = !c.ok;
       b.append(el('b', null, label), el('small', null, note));
-      b.onclick = () => pickEnd(c.key);
+      b.onclick = () => (c.key === 'reveal' ? suspects() : pickEnd(c.key));
       row.append(b);
     }
     rest.append(row);
   };
   setTimeout(next, DEBUG ? 50 : 700);
+}
+
+// who is behind it all: four faces, and what the clues say
+function suspects() {
+  const t = T();
+  const box = el('div', 'screen suspects');
+  box.append(el('h2', null, t.suspectTitle), el('p', 'line', t.suspectLine));
+  const hints = el('ul', 'hintlist');
+  for (const c of g.clues) if (c.hint >= 0 && c.hint < 4) hints.append(el('li', null, '✦ ' + t.hints[g.culprit][c.hint]));
+  box.append(hints);
+  const row = el('div', 'choices');
+  for (const w of S.SUSPECTS) {
+    const b = el('button', 'choice suspect');
+    const a = el('div', 'ava');
+    a.innerHTML = face(w);
+    b.append(a, el('b', null, t.who[w]));
+    b.onclick = () => pickEnd('reveal', w);
+    row.append(b);
+  }
+  const back = el('button', 'link', t.back);
+  back.onclick = () => { shownPhase = null; };
+  box.append(row, back);
+  ui.replaceChildren(box);
 }
 
 // autumn: the same steppe, three more people, the great kurultai at the end
@@ -701,30 +800,49 @@ function goAutumn() {
   return true;
 }
 
-function pickEnd(key) {
+function pickEnd(key, suspect = null) {
   const c = S.choicesAtKurultai(g).find((x) => x.key === key);
   if (!c || !c.ok || g.phase !== 'kurultai') return null;
-  const res = S.finish(g, key);
-  const best = store.get('sybys.best', null);
-  if (best == null || res.score > best) store.set('sybys.best', res.score);
-  const seen = new Set(store.get('sybys.ends', []));
-  seen.add(res.end);
-  store.set('sybys.ends', [...seen]);
-  showEnd();
+  const res = S.finish(g, key, suspect);
+  showEnd(M.record(g));
   return res;
 }
 
-function showEnd() {
+function showEnd(rec) {
   const t = T();
   const r = g.result;
   const [title, ...lines] = t.end[r.variant === 'left' ? 'vanishLeft' : r.end];
   const box = el('div', 'screen end ' + r.end);
   box.append(el('p', 'small', t.endHead), el('h2', null, title));
   for (const l of lines) box.append(el('p', 'line', l));
-  box.append(el('p', 'small', t.endStat(r.score, r.yes)), el('p', 'small', t.endsSeen(store.get('sybys.ends', []).length)));
-  const b = el('button', 'big', t.again);
-  b.onclick = () => intro(3);
+  // the mystery solved, or not
+  const who = el('div', 'speaker culprit');
+  const a = el('div', 'ava');
+  a.innerHTML = face(r.culprit);
+  const said = el('div', 'said');
+  said.append(el('b', null, t.culpritWas(t.who[r.culprit])), el('p', r.nailed ? 'ok' : 'warn', r.nailed ? '✓ ' + t.named.right : r.named ? t.named.wrong(t.who[r.named]) : t.named.none));
+  who.append(a, said);
+  box.append(who, el('p', 'small', t.endStat(r.score, r.yes)));
+  if (rec) {
+    box.append(el('p', 'glory', t.gloryGain(rec.gained, rec.total)));
+    for (const d of rec.newDeeds) box.append(el('p', 'deed', `✦ ${t.newDeed}: ${t.deeds[d][0]}`));
+    for (const s of rec.opened) box.append(el('p', 'deed', t.opened(t.styles[s])));
+  }
+  const b = el('button', 'big', t.playAgain);
+  b.onclick = () => { mode = 'free'; intro(3); };
   box.append(b);
+  const meta = M.load();
+  const row = el('div', 'titlerow');
+  if (!M.dailyDone(meta)) {
+    const dly = el('button', 'link', t.dailyBtn);
+    dly.onclick = () => { mode = 'daily'; intro(3); };
+    row.append(dly);
+  }
+  const chr = el('button', 'link', t.chronicleBtn);
+  chr.onclick = () => chronicle(() => showEnd(rec));
+  row.append(chr);
+  box.append(row);
+  if (rec && rec.newDeeds.length) setTimeout(() => sfx.clue(), 600);
   hud.hidden = true;
   actionsEl.hidden = true;
   hush();

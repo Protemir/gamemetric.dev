@@ -1,90 +1,82 @@
-// Small drawn portraits for the people who speak, until painted ones arrive.
-const face = (skin = '#e2b48c') => `<ellipse cx="32" cy="36" rx="12" ry="14" fill="${skin}"/>
-  <circle cx="27.5" cy="35" r="1.6" fill="#2a1a10"/><circle cx="36.5" cy="35" r="1.6" fill="#2a1a10"/>`;
-// every portrait needs its own gradient id: inline SVGs on one page share ids
+// Portraits as medallions: a figure in profile against the light, a thin gold rim — like a seal or a coin.
+// Each one is told apart by what he wears on his head: Temir's fur borik, Aria's tall saukele,
+// Karasai's helmet with a plume, Zaltyr's hood, Sarman's turban, Orazbai's tall kalpak and staff,
+// the elders of the clans in white felt kalpaks.
+
 let uid = 0;
-const frame = (bg, body) => {
+const HEAD = 'M27 22C33 18 41 21 42 28L44.5 32.5 42.2 33.4 43 36.3C42 38.3 40.2 39 38.4 39.2L37.6 43 29 44.5C26 40.5 24.2 36 24.2 30.5 24.2 26.5 25.2 24 27 22Z';
+const BODY = 'M28.5 42.5 36.8 42 37.8 48.2C46.5 50 52.4 55.2 54.6 64H9.4C11.6 55 17.6 50.2 26.8 48.4Z';
+
+// a medallion: the glow behind (the person's colour), the figure, the rim
+function medal(tone, parts, ring = '#c99a3e') {
   const id = 'av' + uid++;
-  return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="${id}" cx="50%" cy="35%" r="70%"><stop offset="0" stop-color="${bg[0]}"/><stop offset="1" stop-color="${bg[1]}"/></radialGradient></defs><rect width="64" height="64" rx="14" fill="url(#${id})"/>${body}</svg>`;
-};
-
-const PEOPLE = {
-  // Aria: a tall white saukele with red and gold, braids
-  aria: frame(['#9d7be0', '#4b2d7d'], `
-    <path d="M14 64c2-12 9-17 18-17s16 5 18 17z" fill="#6b3fb0"/>
-    <path d="M20 40c-3 8-2 16-4 22h6c0-7 1-13 1-20zM44 40c3 8 2 16 4 22h-6c0-7-1-13-1-20z" fill="#2c1a12"/>
-    ${face()}
-    <path d="M20 31c1-6 6-9 12-9s11 3 12 9c-4-2-8-3-12-3s-8 1-12 3z" fill="#2c1a12"/>
-    <path d="M22 26L27 4h10l5 22z" fill="#f6f0e4" stroke="#c9a24a" stroke-width="1.2"/>
-    <path d="M25 18h14M24 22h16" stroke="#b8322a" stroke-width="2"/>
-    <circle cx="32" cy="5" r="2.5" fill="#d8b04a"/>
-    <path d="M28.5 42q3.5 2 7 0" stroke="#8a3a2a" stroke-width="1.4" fill="none"/>`),
-  // Karasai: a pointed iron helmet with a red plume, a heavy moustache
-  karasai: frame(['#b04a3a', '#4a120c'], `
-    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#3b2a22"/>
-    <path d="M14 64c3-10 9-14 18-14s15 4 18 14" fill="none" stroke="#8a8f96" stroke-width="3"/>
-    ${face('#c99472')}
-    <path d="M24 42q8-5 16 0q-2 4-8 3q-6 1-8-3z" fill="#24160e"/>
-    <path d="M18 32q0-14 14-22q14 8 14 22z" fill="#8a8f96" stroke="#4a4e54" stroke-width="1.4"/>
-    <path d="M18 32h28" stroke="#c9a24a" stroke-width="2.4"/>
-    <path d="M32 10q4-8 0-9q-5 3 0 9z" fill="#c43a2c"/>`),
-  // Temir: a fox-fur borik, a short beard
-  temir: frame(['#e8c069', '#7a5212'], `
-    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#2f5a7a"/>
-    <path d="M26 50l6 6 6-6" fill="none" stroke="#d8b04a" stroke-width="2"/>
-    ${face()}
-    <path d="M22 42q10 10 20 0q-1 7-10 8q-9-1-10-8z" fill="#3a2416"/>
-    <path d="M17 30q2-16 15-17q13 1 15 17z" fill="#a8582a"/>
-    <path d="M16 31q16-6 32 0" stroke="#e8d2a8" stroke-width="5" stroke-linecap="round" fill="none"/>`),
-  // Zaltyr: a hood, a sharp look, a scar
-  zaltyr: frame(['#5a6a4a', '#1e2618'], `
-    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#3d4a30"/>
-    ${face('#c99472')}
-    <path d="M14 40q0-26 18-28q18 2 18 28q-4-14-18-16q-14 2-18 16z" fill="#2c3622"/>
-    <path d="M24 33l6 1M34 34l6-1" stroke="#2a1a10" stroke-width="1.6"/>
-    <path d="M38 38l3 6" stroke="#8a4a3a" stroke-width="1.2"/>
-    <path d="M27 44q5 2 10 0" stroke="#3a2416" stroke-width="1.4" fill="none"/>`),
-  // Sarman: a white turban, a rich chapan, a trimmed beard
-  sarman: frame(['#c9a06a', '#5a3a12'], `
-    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#7a2a4a"/>
-    <path d="M24 50l8 14 8-14" fill="#d8b04a"/>
-    ${face()}
-    <path d="M23 43q9 9 18 0q-2 6-9 6q-7 0-9-6z" fill="#3a2416"/>
-    <path d="M17 30q0-14 15-15q15 1 15 15q-15-6-30 0z" fill="#f4efe2" stroke="#c9b48a"/>
-    <circle cx="32" cy="20" r="2.4" fill="#2a7a6a"/>`),
-  // Orazbai: the elder, a tall fur hat, a long white beard, a staff
-  orazbai: frame(['#8a7a5a', '#2e2618'], `
-    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#4a3a6a"/>
-    ${face('#d9a882')}
-    <path d="M21 40q11 26 22 0q-3 5-11 5q-8 0-11-5z" fill="#f4f2ec"/>
-    <path d="M20 31q1-20 12-21q11 1 12 21q-12-5-24 0z" fill="#7a5232"/>
-    <path d="M19 31q13-6 26 0" stroke="#e8d8b8" stroke-width="4" stroke-linecap="round" fill="none"/>
-    <path d="M52 64V22" stroke="#6a4a2a" stroke-width="2.4"/>`),
-  scouts: frame(['#6a7a5a', '#2a3420'], `
-    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#4a5a3a"/>${face('#c99472')}
-    <path d="M18 31q14-14 28 0q-14-5-28 0z" fill="#3a3020"/>`),
-  merchants: frame(['#c9a06a', '#6a4a22'], `
-    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#7a3a5a"/>${face()}
-    <path d="M18 30q2-12 14-12t14 12q-14-4-28 0z" fill="#f2e6cc"/><path d="M24 42q8 6 16 0" stroke="#3a2416" stroke-width="3" fill="none"/>`),
-};
-
-// an elder of a tribe: a white felt kalpak and a long beard, in the tribe's colour
-export function elder(rgb) {
-  const c = `rgb(${rgb.join(',')})`;
-  return frame([c, `rgb(${rgb.map((v) => (v * 0.4) | 0).join(',')})`], `
-    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="${c}" stroke="#2a1a10" stroke-opacity=".3"/>
-    ${face('#d9a882')}
-    <path d="M22 40q10 22 20 0q-3 4-10 4q-7 0-10-4z" fill="#eeeae2"/>
-    <path d="M19 31l5-17h16l5 17q-13-4-26 0z" fill="#f4efe2" stroke="#9a8a6a"/>
-    <path d="M19 31q13-5 26 0" stroke="#2a1a10" stroke-width="2" fill="none"/>`);
+  return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><defs>
+<radialGradient id="${id}" cx="38%" cy="36%" r="70%"><stop offset="0" stop-color="${tone}"/><stop offset=".62" stop-color="${tone}" stop-opacity=".35"/><stop offset="1" stop-color="#0b0806"/></radialGradient>
+<clipPath id="${id}c"><circle cx="32" cy="32" r="30"/></clipPath></defs>
+<circle cx="32" cy="32" r="31" fill="#0b0806"/><circle cx="32" cy="32" r="30" fill="url(#${id})"/>
+<g clip-path="url(#${id}c)" fill="#120c08" stroke="${tone}" stroke-opacity=".55" stroke-width=".9" stroke-linejoin="round">
+<path d="${BODY}"/>${parts.under || ''}<path d="${HEAD}"/>${parts.over || ''}</g>
+<circle cx="32" cy="32" r="30.4" fill="none" stroke="${ring}" stroke-width="1.7"/><circle cx="32" cy="32" r="28.2" fill="none" stroke="${ring}" stroke-opacity=".35" stroke-width=".7"/></svg>`;
 }
 
-// each copy on the page gets its own gradient id: a hidden copy would otherwise own the shared one
+const PEOPLE = {
+  // Temir: a fox-fur borik with a broad rim, a short beard
+  temir: medal('#c8942e', {
+    over: `<path d="M22.5 27C22 17 31 12.5 39.5 15.2 43.6 16.6 45.4 20.6 44.4 25 38 21.8 30 22.3 22.5 27Z"/>
+<path d="M21.6 28.6C29.5 22.8 39.5 22.6 45.6 25.6L45.4 28.6C38.6 25.8 30.2 26.2 21.8 31.4Z"/>
+<path d="M37.8 39.3C40 41.6 39.4 44.4 36.4 45L35 41Z"/>`,
+  }),
+  // Aria: the tall saukele with hanging strings of beads, a braid down the back
+  aria: medal('#8a5cd6', {
+    under: `<path d="M26 30C21.5 38 21 46 23 53L25.4 52.6C24 46 24.8 39 27.6 32Z"/>`,
+    over: `<path d="M25.2 25.4 30.6 2.6H37.2L41.6 24.6C35.4 21.2 30 21.6 25.2 25.4Z"/>
+<path d="M24.6 25.8 22.4 44M26.4 25 25.2 46" fill="none" stroke-dasharray="1.4 1.6"/>
+<circle cx="33.9" cy="3.2" r="2.2"/>`,
+  }, '#d4aa58'),
+  // Karasai: a pointed helmet with a plume, mail down the neck, a heavy moustache
+  karasai: medal('#b23a2a', {
+    over: `<path d="M23.6 27.6C23.4 16 29.4 9.6 34 6.2 38.6 9.8 44.6 15.2 44.6 26.4 37.6 22.2 30.2 22.4 23.6 27.6Z"/>
+<path d="M34 6.6C30.4 0 25.2-1.6 20.6 2.4 26 2.4 30 4 33 7.6Z"/>
+<path d="M23.8 27.6 21.8 41 29.4 43.4 28.6 30Z"/>
+<path d="M38 37.6C41.6 37.4 43.2 39.4 43.4 42 41 40.6 39.4 40.4 37.6 40.6Z"/>`,
+  }),
+  // Zaltyr: a deep hood, the face in its shadow
+  zaltyr: medal('#6f8a4e', {
+    over: `<path d="M20.8 41.8C18.4 27.6 23.4 15.4 34.2 14.6 42.8 14.2 46.8 21.6 46.6 30.4L44.6 33.6 44.8 37.6C41 42.6 34.6 44.8 27.6 46.8Z"/>`,
+  }),
+  // Sarman: a wound turban with a jewel, a trimmed merchant's beard
+  sarman: medal('#2f8a76', {
+    over: `<path d="M22.4 27.4C20.4 18.6 27.2 13.4 34.4 13.4 41.4 13.4 46.6 17.6 46.4 24.6 40.4 21.2 31 21 22.4 27.4Z"/>
+<path d="M24 22.6C30 17.6 39 17 45.6 20.6M23.2 25.2C30 20.6 39.4 20.2 46.2 23.4" fill="none"/>
+<circle cx="36.4" cy="16.6" r="1.8" fill="${'#2f8a76'}"/>
+<path d="M37.6 38.6C40.8 41.6 39.8 46.2 35.4 46.6L34.6 41.6Z"/>`,
+  }),
+  // Orazbai: the elder — a tall kalpak, a long white beard, a carved staff
+  orazbai: medal('#9a8a6a', {
+    over: `<path d="M24.8 26.4 28.4 9.6C32.2 7.6 36.4 7.6 39.4 10.8L43.4 24.2C37.4 21 31 21.6 24.8 26.4Z"/>
+<path d="M36.6 37.4C43.4 40.4 43.4 50.6 37 57.6 34.6 51 32.2 47 29.6 43.6Z" fill="#d8d0bf" stroke="#d8d0bf"/>
+<path d="M50 64V14" fill="none" stroke="#7a5a32" stroke-opacity="1" stroke-width="2.2"/>`,
+  }),
+};
+PEOPLE.scouts = PEOPLE.zaltyr;
+PEOPLE.merchants = PEOPLE.sarman;
+
+// an elder of a clan: a white felt kalpak with its brim turned up, a beard; the rim in the clan's colour
+export function elder(rgb) {
+  const c = `rgb(${rgb.join(',')})`;
+  return medal(c, {
+    over: `<path d="M25 26.4 28.6 12 37.4 11 42.4 24.4C36.4 21.4 30.4 22 25 26.4Z" fill="#e8e0cf" stroke="#e8e0cf"/>
+<path d="M23.6 27.6C30 22.6 38.6 22.4 44 25.2L44.8 22.4C38 19.6 30 20.2 23.2 24.6Z" fill="#cfc6b2" stroke="#cfc6b2"/>
+<path d="M37 38.6C41.4 41 41 47 36.6 50.4 34.6 46.6 32.8 44.4 30.6 43.4Z" fill="#cfc6b2" stroke="#cfc6b2"/>`,
+  }, c);
+}
+
+// each copy on the page gets its own ids: a hidden copy would otherwise own the shared gradient
 let copy = 0;
 const fresh = (svg) => { const k = ++copy; return svg.replace(/av(\d+)/g, (_, n) => `av${n}_${k}`); };
 export const avatar = (who) => fresh(PEOPLE[who] || PEOPLE.temir);
 
-// the opening picture: a saddled horse alone on the steppe at dusk
+// the opening picture for the 2D fallback: a saddled horse alone on the steppe at dusk
 export const LONE_HORSE = `<svg viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="loneSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b2a4a"/><stop offset=".55" stop-color="#d7834a"/><stop offset="1" stop-color="#f2c06a"/></linearGradient></defs>
 <rect width="320" height="140" rx="12" fill="url(#loneSky)"/><circle cx="240" cy="92" r="22" fill="#ffd88a" opacity=".85"/>
 <path d="M0 100q60-14 120-4t110-6t90 4v46H0z" fill="#5a3a2a"/><path d="M0 112q80-10 160-2t160-4v34H0z" fill="#3a2418"/>
@@ -97,3 +89,17 @@ export const LONE_HORSE = `<svg viewBox="0 0 320 140" xmlns="http://www.w3.org/2
 <path d="M-24 12 Q-38 14 -40 34 Q-34 26 -26 20 Z"/>
 </g>
 <path d="M140 74 q10 -6 20 0 l-2 8 h-16 z" fill="#7a3a22"/><path d="M150 82 v14" stroke="#7a3a22" stroke-width="2"/></svg>`;
+
+// thin gold line icons for the bars (no emoji: they read as a toy)
+const ic = (d, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" ${extra}>${d}</svg>`;
+export const ICONS = {
+  horse: ic('<path d="M7 21c-.5-4 .5-7.5 3-9.5L8.5 7.5 10 6l2 2.2C13 5 15.5 3.6 18 4l-.8 2.2c1.6 1 2.6 2.8 2.8 5L18 12.6l-1.5-1.8c-1 .8-1.6 2.2-1.7 3.8L15 21"/><circle cx="15.6" cy="8.2" r=".6" fill="currentColor"/>'),
+  scroll: ic('<path d="M7 4h11a2 2 0 0 1 2 2v1H9"/><path d="M7 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M9 10h6M9 13h6M9 16h4"/>'),
+  expand: ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
+  pause: ic('<path d="M9 5v14M15 5v14"/>'),
+  play: ic('<path d="M7 5l12 7-12 7z"/>'),
+  soundOn: ic('<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>'),
+  soundOff: ic('<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l5 6M22 9l-5 6"/>'),
+  crown: ic('<path d="M4 18h16l-1.5-9-4 4L12 6l-2.5 7-4-4z"/>'),
+  seal: ic('<circle cx="12" cy="10" r="5"/><path d="M9 14.5 7.5 21 12 19l4.5 2-1.5-6.5"/>'),
+};

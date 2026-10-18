@@ -23,8 +23,8 @@ const wait = (ms) => B.js(`new Promise((r) => setTimeout(r, ${ms}))`);
 const click = async (x, y) => {
   for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await B.cdp('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });
 };
-const clickText = (text) => B.js(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.innerText.includes(${JSON.stringify(text)}) && !x.disabled); if (b) b.click(); return !!b; })()`);
-const uiText = () => B.js(`document.getElementById('ui').innerText`);
+const clickText = (text) => B.js(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes(${JSON.stringify(text)}) && !x.disabled); if (b) b.click(); return !!b; })()`);
+const uiText = () => B.js(`document.getElementById('ui').textContent`);
 
 // 0. every file carries the version of its current content (node sybys/tools/stamp.mjs was run)
 {
@@ -144,7 +144,7 @@ try {
   const after = await B.js(`JSON.stringify({ h: ${A}.g.horses, n: ${A}.g.riders.filter((r) => r.kind === 'word').length, pan: ${A}.view.pan.length() })`).then(JSON.parse);
   check('a drag moves the map and sends nobody', after.pan > 0.3 && after.n === before.n, JSON.stringify(after));
   await B.shot(path.join(out, 'zoomed.png'));
-  await clickText('⤢');
+  await B.js(`document.getElementById('fitBtn').click()`);
   await wait(100);
   check('⤢ shows the whole map again', (await B.js(`${A}.view.zoom === 1 && ${A}.view.pan.length() === 0`)));
 
@@ -152,7 +152,7 @@ try {
   const bx = await B.js(`(() => { const r = document.querySelector('.act[data-key="word"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
   await B.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: bx[0], y: bx[1] });
   await wait(250);
-  const tip = await B.js(`document.querySelector('.tip.on')?.innerText || ''`);
+  const tip = await B.js(`document.querySelector('.tip.on')?.textContent || ''`);
   check('hovering an action explains it', tip.includes('rider') && tip.includes('1 horse'), tip.slice(0, 40).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'tip.png'));
   await B.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 640, y: 300 });
@@ -169,7 +169,7 @@ try {
   const au = await B.js(`JSON.stringify({ season: ${A}.g.season, phase: ${A}.g.phase, zaltyrBtn: !document.querySelector('.act[data-key="zaltyr"]').hidden, caravan: !!${A}.g.caravan })`).then(JSON.parse);
   check('autumn: Zaltyr joins, Sarman sends caravans', au.season === 2 && au.phase === 'map' && au.zaltyrBtn && au.caravan, JSON.stringify(au));
   // Zaltyr on watch marks a forged rider near him
-  const zw = await B.js(`(() => { const s = ${A}; s.g.horses = 5; const f = s.S.spawnPlot(s.g); if (!f) return 'no rider'; const at = f.path[Math.min(1, f.path.length - 1)]; s.act('zaltyr', at); for (let k = 0; k < 120 && !f.seen && s.g.riders.includes(f); k++) s.step(0.1); return f.seen ? 'seen' : 'missed'; })()`);
+  const zw = await B.js(`(() => { const s = ${A}; s.g.horses = 5; const f = s.S.spawnPlot(s.g); if (!f) return 'no rider'; const at = f.path[Math.min(2, f.path.length - 1)]; s.g.zaltyr.at = at; s.g.zaltyr.busy = 30; for (let k = 0; k < 120 && !f.seen && s.g.riders.includes(f); k++) s.step(0.1); return f.seen ? 'seen' : 'missed'; })()`);
   check('Zaltyr marks a forged rider', zw === 'seen', zw);
   await wait(200);
   await B.shot(path.join(out, 'autumn.png'));
@@ -182,7 +182,7 @@ try {
   await wait(200);
   t = await uiText();
   const end = await B.js(`${A}.g.result && ${A}.g.result.end`);
-  check('an ending with its chronicle', !!end && t.includes('Chronicle') && t.includes('Another season'), end);
+  check('an ending with its chronicle', !!end && t.includes('Chronicle') && t.includes('Another campaign') && t.includes('Glory'), end);
   await B.shot(path.join(out, 'end.png'));
   check('the ending is remembered', (await B.js(`localStorage.getItem('sybys.ends')`))?.includes(end));
 

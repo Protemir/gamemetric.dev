@@ -112,6 +112,12 @@ export class View3D extends View {
   }
 
   // the title screen: golden hour, the camera low over the Orda, a riderless horse wandering
+  setStyle(key) {
+    if (key === this.style) return;
+    super.setStyle(key);
+    if (!this.cinema) { this.cinema = true; this.setCinema(false); }
+  }
+
   setCinema(on) {
     if (this.cinema === on) return;
     this.cinema = on;
@@ -124,6 +130,7 @@ export class View3D extends View {
       this.sun.intensity = 3.4;
       this.cineT = 0;
     } else {
+      this.haze.set({ summer: '#c9c3b4', autumn: '#d2bf9c', winter: '#cdd6e0' }[this.style] || '#c9c3b4');
       s.background = this.haze;
       s.fog.color.copy(this.haze);
       this.sun.position.set(-22, 15, -7);
@@ -368,7 +375,7 @@ export class View3D extends View {
     // water: a sheet at one level; the carved bed shows only where the river is
     const water = new THREE.Mesh(
       new THREE.PlaneGeometry(W + 120, D + 120, 1, 1),
-      new THREE.MeshStandardMaterial({ color: '#2a5f88', roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.93, normalMap: this.rippleTexture(), normalScale: new THREE.Vector2(0.6, 0.6) }),
+      new THREE.MeshStandardMaterial({ color: this.style === 'winter' ? '#9cc0d4' : '#2a5f88', roughness: this.style === 'winter' ? 0.45 : 0.1, metalness: 0.3, transparent: true, opacity: 0.93, normalMap: this.rippleTexture(), normalScale: new THREE.Vector2(0.6, 0.6) }),
     );
     water.rotation.x = -Math.PI / 2;
     water.position.y = WATER;
@@ -410,7 +417,7 @@ export class View3D extends View {
     const col = new Float32Array(pos.count * 3);
     const nz = valueNoise(rng(g.seed + 77), N + 1, N + 1, 9), nz2 = valueNoise(rng(g.seed + 78), N + 1, N + 1, 3);
     const ry = g.map.riverY;
-    const c1 = new THREE.Color('#a4955e'), c2 = new THREE.Color('#7d7568'), c3 = new THREE.Color('#f4f6fa'), c = new THREE.Color();
+    const c1 = new THREE.Color({ summer: '#a4955e', autumn: '#b8924a', winter: '#e4e9ef' }[this.style] || '#a4955e'), c2 = new THREE.Color(this.style === 'winter' ? '#a9b0b9' : '#7d7568'), c3 = new THREE.Color('#f4f6fa'), c = new THREE.Color();
     for (let k = 0; k < pos.count; k++) {
       const X = pos.getX(k), Z = pos.getZ(k);
       const dx = Math.max(0, Math.abs(X) - W / 2), dz = Math.max(0, Math.abs(Z) - D / 2);
@@ -910,6 +917,7 @@ export class View3D extends View {
     }
     this.drawPulse(g, now, look);
     this.drawSeen(g, now);
+    this.drawHoverTag(g, look);
     this.drawHand(g, now, look);
     this.drawFx(g, now);
   }

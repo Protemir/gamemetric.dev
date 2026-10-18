@@ -11,6 +11,12 @@ export const GOLD = [242, 178, 44];
 const LIE = [70, 36, 86];
 const css = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 
+export const PALETTES = {
+  summer: { base: [196, 178, 112], slope: [20, 34, 30], wet: [118, 150, 82], hill: [150, 128, 104] },
+  autumn: { base: [214, 168, 88], slope: [16, 30, 24], wet: [168, 150, 70], hill: [156, 118, 82] },
+  winter: { base: [232, 236, 242], slope: [10, 8, 4], wet: [196, 210, 222], hill: [206, 210, 218] },
+};
+
 export class View {
   constructor(canvas) {
     this.cv = canvas;
@@ -29,7 +35,15 @@ export class View {
     this.lastNow = 0;
     this.frameNo = 0;
     this.tintMix = 0.62;
+    this.style = 'summer';
     this.flash = new Map(); // pasture -> when the word landed there: it lights up and fades
+  }
+
+  // a new look of the land: the next frame paints it again
+  setStyle(key) {
+    if (!PALETTES[key] || key === this.style) return;
+    this.style = key;
+    this.map = null;
   }
 
   resize() {
@@ -114,11 +128,13 @@ export class View {
         const dy = elev[Math.min(GH - 1, y + 1) * GW + x] - elev[Math.max(0, y - 1) * GW + x];
         const shade = clamp(1 - (dx + dy) * 7 * K, 0.88, 1.12);
         // dry ochre steppe, greener in hollows, brown hills in the north, green banks by the river
-        let c = [196 - e * 20 + patch[i] * 14, 178 - e * 34 + patch[i] * 10, 112 - e * 30];
+        // the season of the land: Zhetysu in summer, golden Saryarka in autumn, snow in winter
+        const P = PALETTES[this.style] || PALETTES.summer;
+        let c = [P.base[0] - e * P.slope[0] + patch[i] * 14, P.base[1] - e * P.slope[1] + patch[i] * 10, P.base[2] - e * P.slope[2]];
         const wet = clamp(1 - near[i] / (5 * K), 0, 1);
-        c = [c[0] + (118 - c[0]) * wet * 0.7, c[1] + (150 - c[1]) * wet * 0.7, c[2] + (82 - c[2]) * wet * 0.7];
+        c = c.map((v, j) => v + (P.wet[j] - v) * wet * 0.7);
         const hill = clamp((e - 0.62) * 2.5, 0, 1);
-        c = [c[0] + (150 - c[0]) * hill, c[1] + (128 - c[1]) * hill, c[2] + (104 - c[2]) * hill];
+        c = c.map((v, j) => v + (P.hill[j] - v) * hill);
         const gr = 1 + grain[i] * 0.07 + ((((i * 2654435761) >>> 0) % 100) - 50) / 2200;
         for (let k = 0; k < 3; k++) ter[i * 3 + k] = c[k] * shade * gr;
         lum[i] = ((c[0] * 0.3 + c[1] * 0.55 + c[2] * 0.15) / 170) * shade * gr;
@@ -205,13 +221,17 @@ export class View {
       }
       const id = cell[i], c = tint[id];
       const L = lum[i] * 1.12;
-      const a = (id === this.hover ? 0.1 : 0) + this.tintMix;
+      const a = this.tintMix;
       let R = ter[t3] + (c[0] * L - ter[t3]) * a;
       let G = ter[t3 + 1] + (c[1] * L - ter[t3 + 1]) * a;
       let B = ter[t3 + 2] + (c[2] * L - ter[t3 + 2]) * a;
       const gl = glow[id];
       if (gl) { R += (255 - R) * gl; G += (236 - G) * gl; B += (180 - B) * gl; }
       const b = border[i];
+      if (id === this.hover && id > 0) {
+        R += (255 - R) * 0.16; G += (245 - G) * 0.16; B += (215 - B) * 0.16;
+        if (b) { R = 255; G = 236; B = 170; d[o] = R; d[o + 1] = G; d[o + 2] = B; d[o + 3] = 255; continue; }
+      }
       if (b === 2) {
         const tc = regions[id].tribe >= 0 ? TRIBE_RGB[regions[id].tribe] : GOLD;
         R = tc[0] * 0.55; G = tc[1] * 0.55; B = tc[2] * 0.55;
@@ -258,6 +278,7 @@ export class View {
     this.drawParts(g, dt, 'over');
     this.drawSeen(g, now);
     this.drawClouds(dt);
+    this.drawHoverTag(g, look);
     this.drawHand(g, now, look);
     this.drawFx(g, now);
     // a soft dark edge, like an old painted map
@@ -471,7 +492,8 @@ export class View {
       ctx.beginPath(); ctx.arc(x, y, u * 4.4 * p, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
       ctx.font = `${Math.round(u * 2)}px system-ui, sans-serif`;
-      ctx.fillText('👁', x + u * 3.6, y - u * 3.4);
+      ctx.fillStyle = '#ff6a5a';
+      ctx.fillText('◉', x + u * 3.6, y - u * 3.4);
     }
     // Zaltyr on watch: an amber ring round his pasture, closing as his time runs out
     if (g.zaltyr && g.zaltyr.busy > 0) {
@@ -669,10 +691,21 @@ export class View {
     ctx.strokeStyle = `rgba(255,255,255,${1 - k})`;
     ctx.lineWidth = 4;
     ctx.beginPath(); ctx.arc(x, y, u * (2 + k * 4), 0, Math.PI * 2); ctx.stroke();
-    ctx.font = `${Math.round(Math.max(30, u * 3))}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText('👆', x + u * 0.8, y + u * 0.8 + Math.sin(now / 200) * u * 0.5);
+    const ay = y - u * 4.6 - Math.abs(Math.sin(now / 260)) * u * 1.4, s = Math.max(12, u * 1.4);
+    ctx.fillStyle = '#f3cf7a';
+    ctx.strokeStyle = '#3a240c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, ay + s);
+    ctx.lineTo(x - s * 0.8, ay);
+    ctx.lineTo(x - s * 0.3, ay);
+    ctx.lineTo(x - s * 0.3, ay - s);
+    ctx.lineTo(x + s * 0.3, ay - s);
+    ctx.lineTo(x + s * 0.3, ay);
+    ctx.lineTo(x + s * 0.8, ay);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
 
   drawFx(g, now) {
@@ -701,6 +734,33 @@ export class View {
     }
   }
 
+  // a small plate by the cursor: whose pasture, how much it trusts the khan, what a click will do
+  drawHoverTag(g, look) {
+    const id = this.hover;
+    if (id == null || id < 0 || !look.mouse || g.phase !== 'map') return;
+    const r = g.map.regions[id];
+    const { ctx } = this;
+    const name = r.tribe < 0 ? look.ordaName : look.names?.[r.tribe];
+    if (!name) return;
+    const text = r.tribe < 0 ? name : `${name} · ${Math.round(g.t[id] * 100)}% ${look.actIcon || ''}`;
+    ctx.font = '700 13px system-ui, sans-serif';
+    const w = ctx.measureText(text).width + 18;
+    let x = look.mouse[0] + 16, y = look.mouse[1] + 18;
+    if (x + w > this.w - 6) x = look.mouse[0] - w - 10;
+    ctx.fillStyle = 'rgba(28,18,10,0.82)';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x, y, w, 26, 8) : ctx.rect(x, y, w, 26);
+    ctx.fill();
+    if (r.tribe >= 0) {
+      ctx.fillStyle = css(TRIBE_RGB[r.tribe]);
+      ctx.fillRect(x, y + 4, 4, 18);
+    }
+    ctx.fillStyle = '#fff2d6';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + 10, y + 13);
+  }
+
   // the riders Zaltyr has marked: a red "!" over them
   drawSeen(g, now) {
     const { ctx, u } = this;
@@ -726,7 +786,7 @@ export class View {
 
   pushFx(f, now) {
     if (f.type === 'word' || f.type === 'force') this.flash.set(f.region, now);
-    const look = { trade: ['🐎', '#ffe7a0', false], word: ['+', '#ffe7a0', true], lie: ['−', '#e0b0ff', true], force: ['⚔', '#ff8f7a', true], clue: ['🔍', '#fff', false], caught: ['✋', '#fff', true], aria: ['👁', '#d9c4ff', false] }[f.type];
+    const look = { trade: ['+1', '#ffe7a0', false], word: ['+', '#ffe7a0', true], lie: ['−', '#e0b0ff', true], force: ['⚔', '#ff8f7a', true], clue: ['✦', '#ffe7a0', false], caught: ['✓', '#fff', true], aria: ['◉', '#d9c4ff', false] }[f.type];
     if (look) this.fx.push({ region: f.region, text: look[0], color: look[1], ring: look[2], t0: now });
   }
 }
