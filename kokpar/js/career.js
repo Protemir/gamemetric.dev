@@ -232,6 +232,7 @@ export function horse() { // прокачка коней клуба
 }
 export const arenaName = (a) => ARENAS[a][L()];
 export const hasClub = () => !!S.club;
+export const played = () => S.played || 0;
 
 // итог матча игрока: таблица, остальные матчи тура, призовые; возвращает сводку для экрана
 export function report(my, their, st = {}) {
@@ -270,6 +271,7 @@ export function report(my, their, st = {}) {
   for (const q of quests) lines.push([tr('questReward') + ': ' + questText(q), q.r]);
   const total = lines.reduce((a, l) => a + l[1], 0);
   S.money += total;
+  S.played = (S.played || 0) + 1;
   save(S);
   return { res, my, their, opp: id, lines, total, note, quests: quests.length, champion: c.result === 'champion' && c.phase === 'done' };
 }
@@ -302,7 +304,7 @@ const ACTS = {
   sign: (s) => { draft.sign = s; showCreate(true); },
   save: () => {
     const name = (root.querySelector('#clubName').value || '').trim().slice(0, 22) || tr('defName');
-    S.club = { name, color: draft.color, sign: draft.sign };
+    S.club = { name, color: draft.color, sign: draft.sign }; // auto снимается — клуб назван
     draft = null; save(S); showHub();
   },
   up: (k) => { const l = S.upg[k]; if (l < 5 && S.money >= COSTS[l]) { S.money -= COSTS[l]; S.upg[k]++; save(S); showStable(); } },
@@ -348,7 +350,7 @@ export function showQuests() {
     <div class="q-list">${rows}</div>${tabs('quests')}</div>`;
 }
 export function showHub(skipDaily) {
-  if (!S.club) return showCreate();
+  if (!S.club) { S.club = { name: tr('defName'), color: PALETTE[0], sign: 'shanyrak', auto: true }; save(S); } // в игру — сразу, клуб назовёт потом
   if (!S.cup) { S.cup = newCup(); save(S); }
   const c = S.cup, f = fixture();
   let body;
@@ -373,7 +375,7 @@ export function showHub(skipDaily) {
     <div class="h-cup disp">${tr('cup')}</div><div class="h-season">${tr('season')(S.season)}${S.titles ? ' · ' + tr('titles')(S.titles) : ''}</div>
     ${body}
     ${tabs('hub')}
-  </div>${!skipDaily && dailyState().ready ? dailyModal() : ''}`;
+  </div>${!skipDaily && S.played && dailyState().ready ? dailyModal() : ''}`;
 }
 function tableHTML(ids, g) {
   const t = S.cup.table;
@@ -445,6 +447,7 @@ export function showResult(sum) {
     ${sum.note ? `<div class="h-stage big">${sum.note}</div>` : ''}
     <div class="r-cols"><div class="r-prize"><div class="h-gt">${tr('prize')}</div>${lines}<div class="tot"><span>${tr('total')}</span><b>+${money(sum.total)}</b></div></div>
     <div class="r-mini">${mini}</div></div>
+    ${S.club?.auto ? `<button class="r-name" data-act="club">${L() === 'ru' ? 'Придумай название и флаг своего клуба' : 'Name your club and pick its flag'}</button>` : ''}
     <button class="big-btn" data-act="hub">${tr('next')}</button></div>`;
 }
 export const goldenText = () => tr('goldenGoal');

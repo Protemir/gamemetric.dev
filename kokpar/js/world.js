@@ -63,8 +63,10 @@ const REAR_LEN = 3.0, REAR_UP = 0.85, REAR_DOWN = 0.9; // длительност
 // телефон в портрете: страницу поворачиваем на 90°, игра всегда горизонтальная
 export const view = { w: innerWidth, h: innerHeight, rot: false };
 const touchDev = matchMedia('(pointer: coarse)').matches;
+export const PORTAL = P.has('cg') || window.top !== window.self;
 function measure() {
-  view.rot = touchDev && innerHeight > innerWidth;
+  view.rot = touchDev && innerHeight > innerWidth && !PORTAL; // на портале не крутим — просим повернуть телефон
+  document.documentElement.classList.toggle('portrait', PORTAL && touchDev && innerHeight > innerWidth);
   view.w = view.rot ? innerHeight : innerWidth; view.h = view.rot ? innerWidth : innerHeight;
   document.documentElement.classList.toggle('rot', view.rot);
   document.documentElement.classList.toggle('short', view.h < 520);

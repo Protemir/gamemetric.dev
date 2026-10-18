@@ -1,6 +1,6 @@
 // Көкпар — игра: 3×3, мешок-серке, два казана, тартыс (перетягивание мешка на скаку), боты.
 // ?debug — window.__kokpar; ?sim=N — N матчей ботов без картинки (проверка баланса); ?bots — игрок тоже бот.
-import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, setArena, followSun, tuneRes, Q, view, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
+import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, setArena, followSun, tuneRes, Q, view, PORTAL, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
 import { Rider, loadRider } from './rider.js';
 import { makeSerke } from './serke.js';
 import { makeKazan } from './kazan.js';
@@ -155,7 +155,7 @@ function kickoff(first) {
   dropSack(new THREE.Vector3(0, GROUND_Y, 0), new THREE.Vector3());
   state.tug = null;
   state.phase = 'countdown';
-  state.intro = first && !SIM && !AI_PLAYER && !!fx;
+  state.intro = first && !SIM && !AI_PLAYER && !!fx && career.played() > 0;
   state.t = state.intro ? 5.6 : first ? 3.2 : 2.2;
   if (state.intro) banner(fx.label, ['#fff3c0', '#f0a01c'], 2.3, teamName(0) + '  —  ' + teamName(1));
   else banner(first ? '3' : tr('ready'));
@@ -514,7 +514,7 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   initAudio();
   if (e.code === 'KeyM') toggleMute();
-  if ((e.code === 'Escape' || e.code === 'KeyP') && !SIM) togglePause();
+  if (e.code === 'KeyP' && !SIM) togglePause();
   if (e.code === 'KeyE' || e.code === 'Space') { e.preventDefault(); if (me && canAim(me) && !AI_PLAYER) startAim(me); else tugTap = true; }
   if (e.code === 'KeyR' && canRear()) me.h.rear(); // свечка — только стоя
 });
@@ -697,7 +697,7 @@ function step(dt) {
   collide(ents.map((e) => e.h), onHit);
   for (const e of ents) for (const k of kazans) pushOut(e.h, k.x, 0, KAZAN_R);
   stepSack(dt);
-  if (!SIM) stepAim(dt);
+  if (!SIM) { stepAim(dt); stepTut(dt); }
   // гол: несущий у чужого казана
   if (state.phase === 'play' && sack.carrier) {
     const c = sack.carrier, k = kazans[c.team === 0 ? 1 : 0];
@@ -777,12 +777,13 @@ function updateCamera(dt, snap) {
 }
 
 // ---------- интерфейс ----------
-const el = Object.fromEntries(['menu', 'pause', 'pauseBtn', 'pow', 'powbar', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
+const el = Object.fromEntries(['menu', 'tut', 'pause', 'pauseBtn', 'pow', 'powbar', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
 el.bigText = el.banner.querySelector('.big'); el.subText = el.banner.querySelector('.small');
 const CREDITS = 'Рельеф / Terrain: SRTM (USGS), AWS Terrain Tiles · Снимок / Imagery: EOxCloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016), CC BY 4.0 · Конь / Horse: Warhorse Lite by Literock Studios · Всадник / Rider: Heraklios by A. Dizon (Mixamo)';
 for (const c of document.querySelectorAll('[data-credits]')) c.textContent = CREDITS;
 function applyLang() {
   document.documentElement.lang = lang; globalThis.__kokparLang = lang;
+  document.querySelector('[data-turn]').textContent = lang === 'ru' ? 'Поверни телефон горизонтально' : 'Turn your phone sideways';
   el.nmR.textContent = teamName(0); el.nmB.textContent = teamName(1);
   el.stamlbl.textContent = tr('stamina'); el.btnTug.textContent = tr('btnTug'); el.btnWhip.textContent = tr('btnWhip');
   if (state.phase === 'menu') career.showHub();
@@ -825,7 +826,8 @@ function hud(dt) {
   if (touch) { const lbl = canRear() ? tr('btnRear') : tr('btnWhip'); if (el.btnWhip.textContent !== lbl) el.btnWhip.textContent = lbl; }
   const can = !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan || pass);
   el.btnTug.classList.toggle('ready', !!(can || mine));
-  if (can && nearKazan) el.hint.innerHTML = touch ? tr('aimTouch') : tr('canThrow');
+  if (tut.on && !el.tut.hidden) { if (!el.hint.dataset.keep) el.hint.textContent = ''; }
+  else if (can && nearKazan) el.hint.innerHTML = touch ? tr('aimTouch') : tr('canThrow');
   else if (can && !touch) el.hint.innerHTML = pass ? tr('canPass') : tr('canTug');
   else if (!el.hint.dataset.keep) el.hint.textContent = '';
   if (state.phase === 'menu') el.hint.textContent = ''; // под меню подсказок нет
@@ -850,7 +852,7 @@ const pt = (e) => (view.rot ? { x: e.clientY, y: innerWidth - e.clientX } : { x:
 const canRear = () => me && me.h.v < 1.5 && !me.r.fallen && sack.carrier !== me && state.phase !== 'menu';
 // на Android: во весь экран и закрепить горизонталь (на iPhone — поворот страницы выше)
 function goLandscape() {
-  if (!touch || matchMedia('(display-mode: fullscreen)').matches) return;
+  if (!touch || PORTAL || matchMedia('(display-mode: fullscreen)').matches) return;
   const d = document.documentElement;
   (d.requestFullscreen?.({ navigationUI: 'hide' }) || Promise.reject()).then(() => screen.orientation?.lock?.('landscape')).catch(() => {}).finally(() => setTimeout(onResize, 300));
 }
@@ -931,14 +933,14 @@ function togglePause(force) {
 }
 const PT = {
   ru: { title: 'Пауза', settings: 'Настройки', resume: 'Продолжить', close: 'Готово', sound: 'Звук', master: 'Громкость', crowdVol: 'Толпа', mute: 'Без звука', gfx: 'Графика', low: 'Низкая', medium: 'Средняя', high: 'Высокая', full: 'Во весь экран', lang: 'Язык', controls: 'Управление', quit: 'Выйти в меню', note: 'Матч не засчитается', reload: 'Графика сменится после перезапуска — перезапустить?',
-    keys: [['W', 'вперёд'], ['S', 'стоп'], ['A D', 'поворот'], ['Shift', 'камча · таран'], ['E', 'вырвать · бросок (держать)'], ['R', 'свечка'], ['Esc', 'пауза'], ['M', 'звук']],
+    keys: [['W', 'вперёд'], ['S', 'стоп'], ['A D', 'поворот'], ['Shift', 'камча · таран'], ['E', 'вырвать · бросок (держать)'], ['R', 'свечка'], ['P', 'пауза'], ['M', 'звук']],
     touchKeys: [['◐', 'палец слева — куда скакать'], ['ВЫРВАТЬ', 'отнять серке · держать — бросок'], ['КАМЧА', 'рывок · стоя — свечка']] },
   en: { title: 'Paused', settings: 'Settings', resume: 'Resume', close: 'Done', sound: 'Sound', master: 'Volume', crowdVol: 'Crowd', mute: 'Mute', gfx: 'Graphics', low: 'Low', medium: 'Medium', high: 'High', full: 'Fullscreen', lang: 'Language', controls: 'Controls', quit: 'Quit to menu', note: 'The match will not count', reload: 'Graphics change after a restart — restart now?',
-    keys: [['W', 'go'], ['S', 'stop'], ['A D', 'steer'], ['Shift', 'whip · ram'], ['E', 'grab · throw (hold)'], ['R', 'rear up'], ['Esc', 'pause'], ['M', 'sound']],
+    keys: [['W', 'go'], ['S', 'stop'], ['A D', 'steer'], ['Shift', 'whip · ram'], ['E', 'grab · throw (hold)'], ['R', 'rear up'], ['P', 'pause'], ['M', 'sound']],
     touchKeys: [['◐', 'left thumb — where to ride'], ['GRAB', 'take the serke · hold — throw'], ['WHIP', 'burst · standing — rear up']] },
 };
 let setMode = 'pause'; // 'pause' — во время матча, 'menu' — из главного меню
-const canFull = !!document.documentElement.requestFullscreen;
+const canFull = !PORTAL && !!document.documentElement.requestFullscreen; // на портале своя кнопка полного экрана запрещена
 function renderPause() {
   const t = PT[lang], inMatch = setMode === 'pause';
   const slider = (k, label, icon) => `<div class="s-row"><span class="s-l">${icon}${label}</span><input type="range" min="0" max="100" value="${Math.round(getVolume(k) * 100)}" style="--p:${Math.round(getVolume(k) * 100)}%" data-v="${k}" aria-label="${label}"><b class="s-n">${Math.round(getVolume(k) * 100)}</b></div>`;
@@ -954,8 +956,44 @@ function renderPause() {
       ${canFull ? tog('full', !!document.fullscreenElement, t.full, IC.full) : ''}
       <div class="s-row"><span class="s-l">${IC.globe}${t.lang}</span><div class="p-seg"><button data-p="lang:ru" class="${lang === 'ru' ? 'on' : ''}">Русский</button><button data-p="lang:en" class="${lang === 'en' ? 'on' : ''}">English</button></div></div></div>
     <div class="s-sec"><div class="s-t">${t.controls}</div><div class="s-keys">${keys}</div></div>
+    <details class="s-sec s-cred"><summary class="s-t">${lang === 'ru' ? 'Авторы' : 'Credits'}</summary><p>${CREDITS}</p></details>
     ${inMatch ? `<button class="p-quit" data-p="quit">${IC.exit}<span>${t.quit}<small>${t.note}</small></span></button>` : `<button class="big-btn" data-p="close">${t.close}</button>`}
   </div>`;
+}
+// ---------- обучение в первом матче: 4 шага, переходят сами, можно пропустить ----------
+const TUT = {
+  ru: [['Скачи к туше', 'золотая стрелка над ней'], ['Вези тушу в казан соперника', 'стрелка у края экрана'], ['Зажми и отпусти — бросок', 'зелёный круг — попадёшь'], ['Отбери тушу у соперника', 'догони и жми — тартыс']],
+  en: [['Ride to the carcass', 'gold arrow above it'], ['Carry it to the enemy kazan', 'arrow at the screen edge'], ['Hold and release to throw', 'green ring — it will land in'], ['Steal it from a rival', 'catch up and press — tug of war']],
+};
+const tut = { on: false, step: 0, shown: -1, doneT: 0 };
+try { tut.on = !P.has('bots') && localStorage.getItem('kokpar.tut') !== '1'; } catch { tut.on = false; }
+function tutEnd() { tut.on = false; el.tut.hidden = true; try { localStorage.setItem('kokpar.tut', '1'); } catch { /* приватный режим */ } }
+el.tut.addEventListener('click', (e) => { if (e.target.closest('.t-skip')) tutEnd(); });
+el.tut.addEventListener('pointerdown', (e) => e.stopPropagation());
+function tutPic(step) {
+  const k = (t) => `<kbd>${t}</kbd>`;
+  if (touch) return [`${IC.play}`, `${IC.play}`, `<kbd>✊</kbd><span class="hold">${lang === 'ru' ? 'держи' : 'hold'}</span>`, `<kbd>✋</kbd>`][step];
+  return [k('W'), k('W') + k('A') + k('D'), k('E') + `<span class="hold">${lang === 'ru' ? 'держи' : 'hold'}</span>`, k('E')][step];
+}
+function stepTut(dt) {
+  if (!tut.on || SIM || AI_PLAYER || !me) return;
+  const playing = state.phase === 'play' || state.phase === 'countdown';
+  el.tut.hidden = !playing || paused;
+  if (!playing) return;
+  // переходы: подобрал → везу → у казана → бросил; если туша у соперника рядом — учим тартысу
+  const c = sack.carrier;
+  let want = tut.step;
+  if (tut.step === 0 && c === me) want = 1;
+  if (tut.step <= 1 && c === me && throwInfo(me).d < AIM_MAX) want = 2;
+  if (tut.step === 2 && (me.throw?.aiming === false || state.phase === 'goal')) want = 4;
+  if (tut.step < 3 && c && c.team !== me.team && me.h.obj.position.distanceTo(c.h.obj.position) < 9) want = Math.max(want, 3);
+  if (tut.step === 3 && (state.tug || c?.team === me.team)) want = c === me ? 1 : 0;
+  if (want !== tut.step) { tut.step = want; tut.doneT = 0; }
+  if (tut.step >= 4) { tut.doneT += dt; if (tut.doneT > 0.1) tutEnd(); return; }
+  if (tut.shown === tut.step + (lang === 'ru' ? 0 : 10)) return;
+  tut.shown = tut.step + (lang === 'ru' ? 0 : 10);
+  const [b, s] = TUT[lang][tut.step];
+  el.tut.innerHTML = `<div class="t-card"><div class="t-pic">${tutPic(tut.step)}</div><div class="t-txt"><span class="t-step">${tut.step + 1}/4</span><b>${b}</b><small>${s}</small></div><button class="t-skip">${lang === 'ru' ? 'Пропустить' : 'Skip'}</button></div>`;
 }
 function openSettings() { setMode = 'menu'; el.pause.hidden = false; renderPause(); }
 function frame(now) {

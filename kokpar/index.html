@@ -323,16 +323,42 @@
   html.short .d-box { padding: 10px 14px; }
   html.short .d-tiles { margin: 6px 0 4px; }
   html.short .q-row { padding: 7px 12px; }
+  #turn { display: none; position: fixed; inset: 0; z-index: 20; place-items: center; text-align: center; background: radial-gradient(#3a2c1a, #120d08); font: 18px 'Russo One', sans-serif; color: #ffe58a; }
+  #turn b { display: block; margin-top: 12px; padding: 0 30px; }
+  html.portrait #turn { display: grid; }
+  /* обучение в первом матче */
+  #tut { left: 50%; top: 70px; transform: translateX(-50%); z-index: 4; pointer-events: auto; }
+  #tut[hidden] { display: none; }
+  .t-card { display: flex; align-items: center; gap: 14px; padding: 10px 14px 10px 10px; border-radius: 16px; background: linear-gradient(180deg, rgba(40,29,15,.92), rgba(16,11,6,.94)); box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,214,130,.35); animation: pop .3s cubic-bezier(.2,1.4,.4,1); }
+  .t-pic { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 12px; background: rgba(255,207,58,.14); }
+  .t-pic kbd { min-width: 40px; height: 40px; display: grid; place-items: center; padding: 0 8px; border-radius: 9px; background: linear-gradient(180deg, #fff, #d9d2c2); color: #1d1206; font: 18px 'Russo One', sans-serif; box-shadow: inset 0 -4px 0 rgba(0,0,0,.25), 0 3px 8px rgba(0,0,0,.4); animation: press 1.2s ease-in-out infinite; }
+  @keyframes press { 50% { transform: translateY(3px); box-shadow: inset 0 -1px 0 rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.4); } }
+  .t-pic .ic { width: 34px; height: 34px; color: #ffe58a; }
+  .t-pic .hold { font: 700 11px 'Rubik', sans-serif; color: #ffe58a; letter-spacing: .06em; text-transform: uppercase; }
+  .t-txt b { display: block; font: 17px 'Russo One', sans-serif; color: #fff; }
+  .t-txt small { display: block; margin-top: 2px; font-size: 12px; opacity: .7; }
+  .t-step { font: 700 11px 'Rubik', sans-serif; color: #ffcf3a; letter-spacing: .1em; }
+  .t-skip { margin-left: 6px; align-self: flex-start; border: 0; padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,.08); color: rgba(255,255,255,.6); font: 700 11px 'Rubik', sans-serif; cursor: pointer; }
+  .t-done { box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 0 0 2px #3fd264; }
+  .r-name { display: block; margin: 10px auto 0; border: 0; padding: 9px 16px; border-radius: 12px; background: rgba(255,207,58,.14); box-shadow: inset 0 0 0 1px rgba(255,207,58,.45); color: #ffe58a !important; font-weight: 700; }
+  html.short #tut { top: 54px; }
+  html.short .t-pic kbd { min-width: 32px; height: 32px; font-size: 14px; }
+  html.short .t-txt b { font-size: 14px; }
+  .s-cred summary { cursor: pointer; list-style: none; }
+  .s-cred summary::after { content: " ▾"; }
+  .s-cred p { margin: 4px 0 6px; font-size: 11px; line-height: 1.45; opacity: .7; }
+  html.short .hub { max-height: calc(var(--vh, 100vh) - 14px); }
+  html.short #menu { align-items: center; padding-top: 0; }
   html.rot, html.rot body { overflow: hidden; }
   /* низкий экран (телефон лёжа): меню компактнее */
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
   html.rot body { position: fixed; top: 0; left: 0; transform-origin: 0 0; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mve5ctw5","./js/career.js":"./js/career.js?v=mve5ctw5","./js/crowd.js":"./js/crowd.js?v=mve5ctw5","./js/flags.js":"./js/flags.js?v=mve5ctw5","./js/game.js":"./js/game.js?v=mve5ctw5","./js/icons.js":"./js/icons.js?v=mve5ctw5","./js/kazan.js":"./js/kazan.js?v=mve5ctw5","./js/rider.js":"./js/rider.js?v=mve5ctw5","./js/serke.js":"./js/serke.js?v=mve5ctw5","./js/world.js":"./js/world.js?v=mve5ctw5"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mve5ghnh","./js/career.js":"./js/career.js?v=mve5ghnh","./js/crowd.js":"./js/crowd.js?v=mve5ghnh","./js/flags.js":"./js/flags.js?v=mve5ghnh","./js/game.js":"./js/game.js?v=mve5ghnh","./js/icons.js":"./js/icons.js?v=mve5ghnh","./js/kazan.js":"./js/kazan.js?v=mve5ghnh","./js/rider.js":"./js/rider.js?v=mve5ghnh","./js/serke.js":"./js/serke.js?v=mve5ghnh","./js/world.js":"./js/world.js?v=mve5ghnh"}}</script>
 </head>
 <body>
-<div id="load"><div><div class="t disp">KOKPAR</div><div class="s" id="loadtxt">…</div><div class="lbar"><i id="loadbar"></i></div></div><div class="credits" data-credits></div></div>
+<div id="load"><div><div class="t disp">KOKPAR</div><div class="s" id="loadtxt">…</div><div class="lbar"><i id="loadbar"></i></div></div></div>
 <script>
 // полоса загрузки: сначала движок (без данных о байтах — ползёт до 15%), потом кони и всадники по байтам
 (() => {
@@ -368,10 +394,12 @@
 <button id="lang">EN</button>
 <button id="pauseBtn" class="ui" aria-label="Pause">II</button>
 <div id="pause" hidden></div>
+<div id="tut" class="ui" hidden></div>
+<div id="turn"><div><svg viewBox="0 0 64 64" width="72" height="72" fill="none" stroke="#ffe58a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="20" y="8" width="24" height="44" rx="4" transform="rotate(-90 32 32)"/><path d="M14 14a22 22 0 0 1 26-6M40 8l1 6-6 1"/></svg><b data-turn></b></div></div>
 <div id="stick"><i></i></div>
 <button id="btnWhip" class="btn"></button>
 <button id="btnTug" class="btn"></button>
-<div id="menu" hidden><div id="hub"></div><div class="credits" data-credits></div></div>
-<script type="module" src="./js/game.js?v=mve5ctw5"></script>
+<div id="menu" hidden><div id="hub"></div></div>
+<script type="module" src="./js/game.js?v=mve5ghnh"></script>
 </body>
 </html>
