@@ -991,7 +991,13 @@ export function pushOut(h, cx, cz, r) {
   if (d >= min || d < 1e-4) return false;
   p.x = cx + (dx / d) * min; p.z = cz + (dz / d) * min;
   const into = -(Math.sin(h.yaw) * dx + Math.cos(h.yaw) * dz) / d; // доля скорости в стенку
-  if (into > 0) h.v *= 1 - into * 0.5;
+  if (into > 0) { // не встаёт, а скользит вдоль насыпи: курс поворачивается по касательной
+    const tx = -dz / d, tz = dx / d, s = Math.sin(h.yaw) * tx + Math.cos(h.yaw) * tz >= 0 ? 1 : -1;
+    const want = Math.atan2(tx * s, tz * s);
+    let dy = want - h.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    h.yaw += dy * 0.25;
+    h.v *= 1 - into * 0.08;
+  }
   return true;
 }
 

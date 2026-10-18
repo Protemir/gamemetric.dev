@@ -97,7 +97,7 @@ export class Rider {
     // чтобы поворачивать «вокруг оси всадника» без пересчёта матриц скелета каждый кадр
     this.base = new Map();
     const Mi = this.model.getWorldQuaternion(new THREE.Quaternion()).invert();
-    for (const n of ['Spine1', 'Spine2', 'Neck', 'RightArm', 'RightForeArm', 'LeftArm', 'LeftForeArm']) {
+    for (const n of ['Spine1', 'Spine2', 'Neck', 'RightArm', 'RightForeArm', 'LeftArm', 'LeftForeArm', 'LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg']) {
       const b = this.bone(n);
       if (b) this.base.set(n, { b, q: b.quaternion.clone(), wInv: b.getWorldQuaternion(new THREE.Quaternion()).premultiply(Mi).invert() });
     }
@@ -113,7 +113,46 @@ export class Rider {
     horse.tilt.add(this.root);
     this.root.updateMatrixWorld(true);
     sock.attach(this.root);
+    this.sock = sock;
+    this.home = { pos: this.root.position.clone(), quat: this.root.quaternion.clone() };
     this.lean = 0; this.reach = 0; this.side = -1;
+    this.fallen = null;
+  }
+  // падение с коня: всадник слетает с той скоростью, что была, кувыркается и ложится на землю
+  fall(scene, vx, vy, vz, sideSign) {
+    if (this.fallen) return;
+    this.root.updateMatrixWorld(true);
+    scene.attach(this.root);
+    this.fallen = { t: 0, vel: new THREE.Vector3(vx, vy, vz), spin: new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion).normalize(), w: 4.5 * sideSign, turned: 0, landed: false };
+    this.limp = 0;
+  }
+  // вернуться в седло (после того как отлежался)
+  remount() {
+    if (!this.fallen) return;
+    this.sock.add(this.root);
+    this.root.position.copy(this.home.pos);
+    this.root.quaternion.copy(this.home.quat);
+    this.fallen = null; this.limp = 0;
+  }
+  // физика падения: полёт, кувырок вокруг продольной оси, удар о землю, трение. Возвращает true в момент приземления
+  stepFall(dt) {
+    const f = this.fallen;
+    if (!f) return false;
+    f.t += dt;
+    let landedNow = false;
+    if (!f.landed) {
+      f.vel.y -= 9.8 * dt;
+      this.root.position.addScaledVector(f.vel, dt);
+      const step = f.w * dt;
+      if (Math.abs(f.turned) < 1.45) { f.turned += step; this.root.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, step)); }
+      if (this.root.position.y < 0.22) { this.root.position.y = 0.22; f.landed = true; landedNow = true; f.vel.multiplyScalar(0.35); f.vel.y = 0; }
+    } else {
+      this.root.position.addScaledVector(f.vel, dt);
+      f.vel.multiplyScalar(Math.exp(-dt * 5)); // скользит по траве и останавливается
+      if (Math.abs(f.turned) < 1.5) { const s = Math.sign(f.w) * dt * 3; f.turned += s; this.root.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, s)); }
+    }
+    this.limp = Math.min(1, this.limp + dt * 3);
+    return landedNow;
   }
   update(dt, speed, reach, side) {
     const k = 1 - Math.exp(-dt * 6);
@@ -129,6 +168,15 @@ export class Rider {
     const arm = this.side < 0 ? 'Right' : 'Left', s = this.side < 0 ? 1 : -1;
     this.turn(arm + 'Arm', AZ, this.reach * 0.5 * s);
     this.turn(arm + 'ForeArm', AY, this.reach * 0.9 * s);
+    if (this.limp > 0) { // упал: руки раскинуты, корпус расслаблен
+      const l = this.limp;
+      this.turn('LeftArm', AZ, 0.9 * l); this.turn('RightArm', AZ, -0.9 * l);
+      this.turn('LeftForeArm', AY, 0.8 * l); this.turn('RightForeArm', AY, -0.8 * l);
+      this.turn('Spine1', AX, -0.35 * l); this.turn('Neck', AX, -0.3 * l);
+      // ноги распрямляются и чуть разъезжаются, как у упавшего
+      this.turn('LeftUpLeg', AX, 0.85 * l); this.turn('RightUpLeg', AX, 0.6 * l);
+      this.turn('LeftLeg', AX, -1.1 * l); this.turn('RightLeg', AX, -0.7 * l);
+    }
   }
   // поворот кости вокруг оси всадника: local · R(осьВосяхКости, угол)
   turn(n, axis, ang) {
