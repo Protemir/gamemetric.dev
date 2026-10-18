@@ -706,7 +706,10 @@ function step(dt) {
   // гол: несущий у чужого казана
   if (state.phase === 'play' && sack.carrier) {
     const c = sack.carrier, k = kazans[c.team === 0 ? 1 : 0];
-    if (Math.hypot(c.h.obj.position.x - k.x, c.h.obj.position.z) < SCORE_R) goal(c.team, c);
+    // у самого казана всадник закидывает тушу руками — гол только когда она легла в казан
+    if (Math.hypot(c.h.obj.position.x - k.x, c.h.obj.position.z) < SCORE_R && (!c.throw || c.throw.aiming)) {
+      c.throw = { t: Math.max(c.throw?.t || 0, WIND * 0.5), to: new THREE.Vector3(k.x + (rnd() - 0.5) * 0.8, KAZAN_TOP - 0.05, (rnd() - 0.5) * 0.8), d: KAZAN_R, hit: true };
+    }
   }
   for (const e of ents) {
     e.r.throwT = e.throwT ?? -1; e.r.carrying = sack.carrier === e;
