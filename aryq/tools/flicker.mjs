@@ -11,7 +11,7 @@ const rnd = () => ((seedR = (Math.imul(seedR, 1103515245) + 12345) >>> 0) / 4294
 // a player who digs a lot: extra canals to random places, as in the screenshot of 18.10
 function spam(g) {
   if (g.dig < 6 || rnd() > 0.3) return;
-  const water = []; for (let i = 0; i < g.W * g.H; i++) if (g.kind[i] !== S.LAND) water.push(i);
+  const water = []; for (let i = 0; i < g.W * g.H; i++) if (S.isWater(g, i)) water.push(i);
   const from = water[Math.floor(rnd() * water.length)];
   const goal = Math.floor(rnd() * g.W * g.H);
   if (g.kind[goal] !== S.LAND || g.objAt[goal]) return;

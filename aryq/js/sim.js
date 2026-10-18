@@ -519,7 +519,8 @@ export function route(g, sources, goal, maxSteps = 80) {
   const n = g.W * g.H;
   const labels = Array.from({ length: n }, () => []);
   const queue = [];
-  for (const s of sources) queue.push({ c: s, bed: g.bed[s], steps: 0, prev: null });
+  // a start without a bed (ice) would make every path look new and the search would never end
+  for (const s of sources) if (Number.isFinite(g.bed[s])) queue.push({ c: s, bed: g.bed[s], steps: 0, prev: null });
   for (let qi = 0; qi < queue.length; qi++) {
     const node = queue[qi];
     if (node.steps > 0 && goal(node.c)) {
