@@ -225,7 +225,7 @@ function stepTug(dt) {
 }
 
 // ---------- боты ----------
-const GRIP = Number(P.get('grip') || 0.04);
+const GRIP = Number(P.get('grip') || 0.07); // ~45% тартысов выигрывает нападающий
 const DIFF = { pull: Number(P.get('pull') || 0.06), react: 0.45 }; // соперники чуть сильнее в тартысе
 let roleT = 0;
 function assignRoles() {
