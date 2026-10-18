@@ -186,59 +186,12 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Горы и река. Заилийский Алатау на юге (-Z): настоящий рельеф с освещением от солнца —
-// снег на вершинах, скалы на крутизне, ельник в среднем поясе, луга ниже. По остальному горизонту — холмы.
-// Из ущелья выходит горная река и течёт вдоль поля.
-// Река начинается высоко в ущелье Алатау, сбегает вниз и у подножия уходит на восток, в стороне от поля.
-const RIVER = new THREE.CatmullRomCurve3([
-  [160, -1900], [125, -1450], [95, -1050], [80, -760], [72, -540], [95, -390], [190, -300], [380, -290], [650, -240], [1000, -170], [1500, -120],
-].map(([x, z]) => new THREE.Vector3(x, 0, z)));
-// высота дна долины: у подножия 0, в горах поднимается — по ней река и течёт вниз
-function riverFloor(x, z) {
-  const r = Math.hypot(x, z);
-  return Math.pow(THREE.MathUtils.smoothstep(r, 420, 2000), 1.35) * 520;
-}
-const riverPts = RIVER.getSpacedPoints(400);
+// Река — Большая Алматинка по настоящему рельефу (models/alatau-river.json, загружается в loadTerrain).
+let riverPts = [];
 function riverDist(x, z) {
-  let m = 1e9;
-  for (const p of riverPts) { const d = (p.x - x) ** 2 + (p.z - z) ** 2; if (d < m) m = d; }
+  let m = 1e12;
+  for (const p of riverPts) { const d = (p[0] - x) ** 2 + (p[1] - z) ** 2; if (d < m) m = d; }
   return Math.sqrt(m);
-}
-const noise2 = (() => { // плавный шум 2D (value noise) с хэшем по решётке
-  const h = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
-  return (x, y) => {
-    const ix = Math.floor(x), iy = Math.floor(y); let fx = x - ix, fy = y - iy;
-    fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
-    const a = h(ix, iy), b = h(ix + 1, iy), c = h(ix, iy + 1), d = h(ix + 1, iy + 1);
-    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
-  };
-})();
-function ridged(x, z) { // острые гребни: перевёрнутый модуль шума, октавы с весом от предыдущей
-  let v = 0, amp = 0.55, f = 1 / 650, w = 1;
-  for (let o = 0; o < 5; o++) {
-    let n = 1 - Math.abs(noise2(x * f, z * f) * 2 - 1);
-    n *= n * w; w = Math.min(1, n * 1.8);
-    v += n * amp; amp *= 0.42; f *= 2.05;
-  }
-  return v;
-}
-function terrainH(x, z) {
-  const r = Math.hypot(x, z);
-  if (r < 230) return 0;
-  const south = THREE.MathUtils.smoothstep(-z / r, -0.15, 0.55); // горы — на юге
-  // главный хребет вдали: массив (крупный шум) × гребни, без игл
-  const mass = noise2(x / 1100, z / 1100) * 0.6 + noise2(x / 520, z / 520) * 0.4;
-  const big = south * THREE.MathUtils.smoothstep(r, 700, 1800) * Math.pow(mass * 0.55 + ridged(x, z) * 0.45, 1.25) * 1050;
-  const foot = south * THREE.MathUtils.smoothstep(r, 300, 750) * (noise2(x / 220, z / 220) * 0.65 + noise2(x / 70, z / 70) * 0.35) * 150; // адыры
-  const hills = THREE.MathUtils.smoothstep(r, 230, 520) * (noise2(x / 160, z / 160) * 0.7 + noise2(x / 60, z / 60) * 0.3) * 30;
-  let hgt = big + foot + hills;
-  // ущелье реки: дно долины на высоте русла, склоны поднимаются к хребту
-  const rd = riverDist(x, z);
-  if (rd < 600) {
-    const floor = riverFloor(x, z), above = Math.max(0, hgt - floor);
-    hgt = floor + above * THREE.MathUtils.smoothstep(rd, 10, 50 + above * 0.8);
-  }
-  return hgt;
 }
 
 // Пучки ковыля: один InstancedMesh, три скрещённые плоскости.
@@ -274,13 +227,11 @@ if (GRASS) {
   const grass = new THREE.InstancedMesh(geo, mat, GRASS);
   const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), s4 = new THREE.Vector3(), p4 = new THREE.Vector3();
   for (let i = 0; i < GRASS; i++) {
-    do p4.set((rnd() * 2 - 1) * (FIELD + 40), 0, (rnd() * 2 - 1) * (FIELD + 40)); while (riverDist(p4.x, p4.z) < 8.5); // не в реке
+    p4.set((rnd() * 2 - 1) * (FIELD + 40), 0, (rnd() * 2 - 1) * (FIELD + 40));
     q4.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * 6.28);
     const s = 0.6 + rnd() * 0.9;
     s4.set(s, s * (0.7 + rnd() * 0.6), s);
     grass.setMatrixAt(i, m4.compose(p4, q4, s4));
-    const wet = 1 - THREE.MathUtils.smoothstep(riverDist(p4.x, p4.z), 9, 22); // у воды трава зелёная
-    grass.setColorAt(i, new THREE.Color(1, 1, 1).lerp(new THREE.Color(0.55, 0.85, 0.45), wet));
   }
   grass.receiveShadow = true;
   if (!OFF.has('grass')) scene.add(grass);
@@ -304,58 +255,48 @@ function mergeQuads(list) {
   return out;
 }
 
-// Меши гор и реки (функции рельефа и кривая реки — выше, до травы).
-{
-  const [NA, RSTEP] = Q === 'high' ? [560, 1.022] : [340, 1.036]; // на слабом качестве сетка гор реже
-  const rs = [];
-  for (let r = 230; r < 2700; r *= RSTEP) rs.push(r);
-  const pos = [], idx = [];
-  for (let j = 0; j < rs.length; j++) for (let i = 0; i <= NA; i++) {
-    const a = (i / NA) * Math.PI * 2, x = Math.sin(a) * rs[j], z = -Math.cos(a) * rs[j];
-    pos.push(x, terrainH(x, z) - 0.6, z);
-  }
-  for (let j = 0; j < rs.length - 1; j++) for (let i = 0; i < NA; i++) {
-    const a = j * (NA + 1) + i, b = a + NA + 1;
-    idx.push(a, a + 1, b, b, a + 1, b + 1);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  // цвет по высоте и крутизне
-  const n = g.attributes.normal, col = [], c = new THREE.Color();
-  const steppe = new THREE.Color('#b29a5e'), meadow = new THREE.Color('#7d8a4a'), forest = new THREE.Color('#2f4a30'),
-    rock = new THREE.Color('#6d6458'), rockDark = new THREE.Color('#4a453f'), snow = new THREE.Color('#f3f5f8');
-  for (let k = 0; k < pos.length / 3; k++) {
-    const x = pos[k * 3], y = pos[k * 3 + 1], z = pos[k * 3 + 2], ny = n.getY(k), slope = 1 - ny;
-    const nz = noise2(x / 37, z / 37);
-    c.copy(steppe).lerp(meadow, THREE.MathUtils.smoothstep(y, 25, 120));
-    if (y > 140 && y < 470 && slope < 0.5) c.lerp(forest, THREE.MathUtils.smoothstep(nz, 0.3, 0.55) * (1 - THREE.MathUtils.smoothstep(y, 400, 470))); // ельник
-    c.lerp(nz > 0.5 ? rock : rockDark, THREE.MathUtils.smoothstep(slope, 0.28, 0.5));
-    const snowLine = 470 + nz * 90;
-    if (y > snowLine) c.lerp(snow, THREE.MathUtils.smoothstep(y, snowLine, snowLine + 40) * (1 - THREE.MathUtils.smoothstep(slope, 0.62, 0.85)));
-    col.push(c.r, c.g, c.b);
-  }
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  mat.onBeforeCompile = (sh) => { // дымка гуще у земли: вершины видны чище, чем подножия
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vH;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvH = (modelMatrix * vec4(transformed, 1.)).y;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vH;').replace('#include <fog_fragment>', `
-      #ifdef USE_FOG
-        float fogF = (1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth)) * (0.35 + 0.65 * exp(-max(vH, 0.) / 600.));
-        gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(fogColor, vec3(.62, .69, .78), smoothstep(400., 1600., vFogDepth)), fogF); // даль синеет
-      #endif`);
-  };
-  const m = new THREE.Mesh(g, mat);
-  m.receiveShadow = false;
-  if (!OFF.has('terrain')) scene.add(m);
+// ---------- настоящие горы: Заилийский Алатау ----------
+// Рельеф — AWS Terrain Tiles (SRTM), снимок — Sentinel-2 cloudless 2016 (EOX, CC BY 4.0); сшиты tools/blender/alatau.py.
+// Горы до 50 км: рисуем их отдельным «дальним» проходом со своей камерой (near 30 м, far 200 км),
+// потом очищаем глубину и рисуем поле с конями обычной камерой — так нет мерцания вблизи.
+const farScene = new THREE.Scene();
+const farCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 30, 200000);
+farScene.add(new THREE.HemisphereLight('#bcd6f5', '#7a5c32', 1.0));
+const farSun = new THREE.DirectionalLight('#ffe0ad', 2.6);
+farSun.position.copy(SUN_DIR).multiplyScalar(1000);
+farScene.add(farSun);
+scene.remove(skyMesh); farScene.add(skyMesh); skyMesh.scale.setScalar(140); // небо — за горами
+renderer.autoClear = false;
+function renderAll() {
+  farCam.position.copy(camera.position); farCam.quaternion.copy(camera.quaternion);
+  if (farCam.fov !== camera.fov || farCam.aspect !== camera.aspect) { farCam.fov = camera.fov; farCam.aspect = camera.aspect; farCam.updateProjectionMatrix(); }
+  renderer.clear();
+  renderer.render(farScene, farCam);
+  renderer.clearDepth();
+  renderer.render(scene, camera);
 }
 
-// Река: лента вдоль кривой, вода с бегущей рябью и отражением неба; мокрый берег шире воды.
+const EXAG = Number(P.get('exag') || 1.35);
+let dem = null; // { m, H } — сетка высот, м над уровнем моря
+// высота относительно поля; у поля (до ~2 км) рельеф уходит под землю — там своя степь с травой
+function demH(x, z) {
+  if (!dem) return -5;
+  const { m, H } = dem;
+  const fx = ((x - m.x0) / (m.x1 - m.x0)) * (m.w - 1), fz = ((m.z1 - z) / (m.z1 - m.z0)) * (m.h - 1);
+  const i = Math.max(0, Math.min(m.w - 2, Math.floor(fx))), j = Math.max(0, Math.min(m.h - 2, Math.floor(fz)));
+  const tx = Math.min(1, Math.max(0, fx - i)), tz = Math.min(1, Math.max(0, fz - j));
+  const a = H[j * m.w + i], b = H[j * m.w + i + 1], c = H[(j + 1) * m.w + i], d = H[(j + 1) * m.w + i + 1];
+  const e = a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
+  const k = THREE.MathUtils.smoothstep(Math.hypot(x, z), 1900, 4800);
+  const up = e - m.elev0;
+  return (up > 0 ? up * EXAG : up) * k - 6 * (1 - k); // горы чуть выше настоящих — глазу так ближе к ощущению вживую
+}
+function terrainH(x, z) { return demH(x, z); }
+
+// Река: вода с бегущей рябью, отражением неба, бликами и пеной на порогах.
 const riverMat = new THREE.ShaderMaterial({
-  transparent: true, fog: true, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, // поверх гальки при взгляде вскользь
-  uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { time: { value: 0 }, ripple: { value: null }, sky: { value: new THREE.Color('#8fb6dc') }, deep: { value: new THREE.Color('#1d5560') }, sunDir: { value: SUN_DIR } }]),
+  transparent: true, fog: true, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+  uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { time: { value: 0 }, ripple: { value: null }, sky: { value: new THREE.Color('#8fb6dc') }, deep: { value: new THREE.Color('#2a6470') }, sunDir: { value: SUN_DIR } }]),
   vertexShader: `varying vec2 vUv; varying vec3 vW; attribute float steep; varying float vSteep;
     #include <fog_pars_vertex>
     void main(){ vUv = uv; vSteep = steep; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
@@ -367,8 +308,7 @@ const riverMat = new THREE.ShaderMaterial({
       return texture2D(ripple, vec2(uv.x * .9, uv.y * 7. - flow * .5)).r * .6 + texture2D(ripple, vec2(uv.x * 2.1 + .4, uv.y * 17. - flow * 1.1)).r * .4;
     }
     void main(){
-      float flow = time * .6;
-      // рябь как карта высот → нормаль воды
+      float flow = time * (.6 + vSteep * 4.);
       float e = .004, h0 = rip(vUv, flow);
       float hx = rip(vUv + vec2(e, 0.), flow) - h0, hy = rip(vUv + vec2(0., e * .2), flow) - h0;
       vec3 n = normalize(vec3(-hx * 14., 1., -hy * 40.));
@@ -377,10 +317,10 @@ const riverMat = new THREE.ShaderMaterial({
       float fres = .04 + .96 * pow(1. - max(dot(n, V), 0.), 5.);
       vec3 refl = mix(sky * .85, sky * 1.15, clamp(R.y * 2., 0., 1.));
       vec3 col = mix(deep * (.85 + h0 * .3), refl, clamp(fres + .25, 0., 1.));
-      col += vec3(1., .92, .75) * pow(max(dot(R, sunDir), 0.), 180.) * 2.5; // солнечные блики
+      col += vec3(1., .92, .75) * pow(max(dot(R, sunDir), 0.), 180.) * 2.5;
       float edge = smoothstep(0., .14, vUv.x) * smoothstep(1., .86, vUv.x);
-      col = mix(vec3(.82, .85, .84), col, smoothstep(.0, .6, edge + (h0 - .5) * .4)); // пена у берегов
-      col = mix(col, vec3(.9, .93, .94), smoothstep(.04, .16, vSteep) * smoothstep(.35, .75, h0)); // пороги: белая пена на крутых участках
+      col = mix(vec3(.82, .85, .84), col, smoothstep(.0, .6, edge + (h0 - .5) * .4));
+      col = mix(col, vec3(.92, .94, .95), smoothstep(.02, .09, vSteep) * smoothstep(.3, .7, h0)); // пороги
       gl_FragColor = vec4(col, .95 * smoothstep(0., .05, vUv.x) * smoothstep(1., .95, vUv.x));
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -388,23 +328,22 @@ const riverMat = new THREE.ShaderMaterial({
     }`,
 });
 riverMat.uniforms.ripple.value = cloudTex;
-function ribbon(width, y, segs) {
-  const pts = RIVER.getSpacedPoints(segs), pos = [], uv = [], idx = [], steep = [];
+// лента вдоль русла; heightAt — высота воды, sel(x,z) — какие точки брать
+function ribbon(pts, width, heightAt, lift) {
+  const pos = [], uv = [], idx = [], steep = [];
   let len = 0;
-  for (let i = 0; i <= segs; i++) {
-    const p = pts[i], q = pts[Math.min(segs, i + 1)], o = pts[Math.max(0, i - 1)];
-    const dx = q.x - o.x, dz = q.z - o.z, l = Math.hypot(dx, dz) || 1;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[Math.min(pts.length - 1, i + 1)], o = pts[Math.max(0, i - 1)];
+    const dx = q[0] - o[0], dz = q[1] - o[1], l = Math.hypot(dx, dz) || 1;
     const nx = -dz / l, nz = dx / l;
-    const fy = riverFloor(p.x, p.z);
-    // в горах русло узкое, в степи шире
-    const w = width * (1 - 0.45 * Math.min(1, fy / 300)) * (1 + 0.25 * Math.sin(i * 0.37) + 0.15 * Math.sin(i * 1.3));
-    if (i) len += p.distanceTo(pts[i - 1]);
-    const yy = y + fy; // река лежит на дне долины и сбегает вниз
-    pos.push(p.x - nx * w / 2, yy, p.z - nz * w / 2, p.x + nx * w / 2, yy, p.z + nz * w / 2);
+    const y = heightAt(p[0], p[1]);
+    const w = width(y) * (1 + 0.22 * Math.sin(i * 0.37) + 0.12 * Math.sin(i * 1.3));
+    if (i) len += Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]);
+    pos.push(p[0] - nx * w / 2, y + lift, p[1] - nz * w / 2, p[0] + nx * w / 2, y + lift, p[1] + nz * w / 2);
     uv.push(0, len / 40, 1, len / 40);
-    const s = Math.abs(riverFloor(q.x, q.z) - riverFloor(o.x, o.z)) / (Math.hypot(q.x - o.x, q.z - o.z) || 1); // уклон → пороги и пена
+    const s = Math.abs(heightAt(q[0], q[1]) - heightAt(o[0], o[1])) / l;
     steep.push(s, s);
-    if (i < segs) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } // лицом вверх
+    if (i < pts.length - 1) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -414,29 +353,84 @@ function ribbon(width, y, segs) {
   g.computeVertexNormals();
   return g;
 }
-{
-  // мокрый берег: темнее к воде и сходит на нет к степи (прозрачные края)
-  const bankTex = canvasTex(256, 64, (g, w, h) => {
-    const gr = g.createLinearGradient(0, 0, w, 0);
-    gr.addColorStop(0, 'rgba(96,78,48,0)'); gr.addColorStop(0.25, 'rgba(96,78,48,0.8)'); gr.addColorStop(0.5, 'rgba(70,58,38,0.95)');
-    gr.addColorStop(0.75, 'rgba(96,78,48,0.8)'); gr.addColorStop(1, 'rgba(96,78,48,0)');
-    g.fillStyle = gr; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 600; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '60,50,32' : '130,112,78'},${Math.random() * 0.25})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
-  });
-  bankTex.wrapT = THREE.RepeatWrapping; bankTex.repeat.set(1, 6);
-  const bank = new THREE.Mesh(ribbon(20, 0.02, 600), new THREE.MeshLambertMaterial({ map: bankTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }));
-  bank.receiveShadow = true;
-  scene.add(bank);
-  const pebbles = new THREE.Mesh(ribbon(12.5, 0.035, 600), new THREE.MeshLambertMaterial({ map: canvasTex(128, 128, (g) => {
-    g.fillStyle = '#8d8578'; g.fillRect(0, 0, 128, 128);
-    for (let i = 0; i < 500; i++) { const v = 100 + Math.random() * 110; g.fillStyle = `rgb(${v},${v - 6},${v - 14})`; g.beginPath(); g.ellipse(Math.random() * 128, Math.random() * 128, 1 + Math.random() * 3, 1 + Math.random() * 2, Math.random() * 3, 0, 6.3); g.fill(); }
-  }), polygonOffset: true, polygonOffsetFactor: -2 }));
-  pebbles.material.map.repeat.set(2, 1); pebbles.material.map.wrapS = pebbles.material.map.wrapT = THREE.RepeatWrapping;
-  pebbles.receiveShadow = true;
-  scene.add(pebbles);
-  const water = new THREE.Mesh(ribbon(9, 0.06, 600), riverMat);
-  water.renderOrder = 1;
-  if (!OFF.has('river')) scene.add(water);
+
+async function loadTerrain() {
+  const [m, buf, river] = await Promise.all([
+    fetch('models/alatau.json').then((r) => r.json()),
+    fetch('models/alatau-h.bin').then((r) => r.arrayBuffer()),
+    fetch('models/alatau-river.json').then((r) => r.json()),
+  ]);
+  dem = { m, H: new Uint16Array(buf) };
+  riverPts = river;
+  const sat = await new THREE.TextureLoader().loadAsync(Q === 'high' ? 'models/alatau-sat.jpg' : 'models/alatau-sat-1k.jpg');
+  sat.colorSpace = THREE.SRGBColorSpace;
+  sat.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  // сетка: на high каждая вторая точка (~200 м), ниже — реже
+  const st = Q === 'high' ? 2 : Q === 'medium' ? 3 : 4;
+  const W = Math.floor((m.w - 1) / st) + 1, Hh = Math.floor((m.h - 1) / st) + 1;
+  const pos = new Float32Array(W * Hh * 3), uvs = new Float32Array(W * Hh * 2), idx = [];
+  for (let j = 0; j < Hh; j++) for (let i = 0; i < W; i++) {
+    const x = m.x0 + ((i * st) / (m.w - 1)) * (m.x1 - m.x0), z = m.z1 - ((j * st) / (m.h - 1)) * (m.z1 - m.z0);
+    const k = j * W + i;
+    pos[k * 3] = x; pos[k * 3 + 1] = demH(x, z); pos[k * 3 + 2] = z;
+    uvs[k * 2] = (x - m.x0) / (m.x1 - m.x0); uvs[k * 2 + 1] = (z - m.z0) / (m.z1 - m.z0);
+  }
+  for (let j = 0; j < Hh - 1; j++) for (let i = 0; i < W - 1; i++) {
+    const a = j * W + i, b = a + W;
+    idx.push(a, a + 1, b, a + 1, b + 1, b); // лицом вверх (строки идут с севера на юг)
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ map: sat, fog: false });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.elev0 = { value: m.elev0 };
+    sh.uniforms.exag = { value: EXAG };
+    sh.uniforms.haze = { value: new THREE.Color('#b9c7d8') };
+    sh.uniforms.horizon = { value: HORIZON };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vW;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vW; uniform float elev0; uniform float exag; uniform vec3 haze; uniform vec3 horizon;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        float elev = vW.y / exag + elev0; // настоящая высота (рельеф вытянут в EXAG раз)
+        float lum = dot(diffuseColor.rgb, vec3(.3, .59, .11));
+        // на равнине вместо города и пашен — выгоревшая степь (тон берём из снимка)
+        float plain = 1. - smoothstep(1250., 1650., elev);
+        vec3 steppe = mix(vec3(.42, .33, .17), vec3(.62, .52, .30), clamp(lum * 4., 0., 1.));
+        diffuseColor.rgb = mix(diffuseColor.rgb, steppe, plain * .9);
+        // снег и лёд на вершинах ярче и белее
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.93, .95, .98), smoothstep(3300., 3900., elev) * smoothstep(.18, .45, lum));`)
+      .replace('#include <fog_fragment>', `
+        float d = length(vW - cameraPosition);
+        float hz = (1. - exp(-d / 24000.)) * mix(1., .55, smoothstep(1500., 4500., vW.y / exag + elev0)); // дымка гуще внизу
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(horizon, haze, smoothstep(3000., 20000., d)), hz * .9);`);
+  };
+  const terrain = new THREE.Mesh(g, mat);
+  if (!OFF.has('terrain')) farScene.add(terrain);
+  // река: вдали — по склонам (дальний проход), у поля — по земле (ближний проход)
+  const nearPts = [], farPts = [];
+  for (const p of river) { const r = Math.hypot(p[0], p[1]); if (r < 2700) nearPts.push(p); if (r > 2300) farPts.push(p); }
+  const width = (y) => 14 + 10 * (1 - Math.min(1, Math.max(0, y) / 600)); // в горах уже
+  if (!OFF.has('river')) {
+    if (farPts.length > 1) farScene.add(new THREE.Mesh(ribbon(farPts, width, demH, 2.5), riverMat));
+    if (nearPts.length > 1) {
+      const flat = () => 0;
+      const bankTex = canvasTex(256, 64, (c, w, h) => {
+        const gr = c.createLinearGradient(0, 0, w, 0);
+        gr.addColorStop(0, 'rgba(96,78,48,0)'); gr.addColorStop(0.25, 'rgba(96,78,48,0.8)'); gr.addColorStop(0.5, 'rgba(70,58,38,0.95)');
+        gr.addColorStop(0.75, 'rgba(96,78,48,0.8)'); gr.addColorStop(1, 'rgba(96,78,48,0)');
+        c.fillStyle = gr; c.fillRect(0, 0, w, h);
+      });
+      const bank = new THREE.Mesh(ribbon(nearPts, () => 40, flat, 0.03), new THREE.MeshLambertMaterial({ map: bankTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }));
+      scene.add(bank);
+      const water = new THREE.Mesh(ribbon(nearPts, () => 22, flat, 0.08), riverMat);
+      water.renderOrder = 1;
+      scene.add(water);
+    }
+  }
+  return m;
 }
 
 // ---------- пыль из-под копыт ----------
@@ -1012,4 +1006,4 @@ function onResize() {
   for (const P of particleSets) P.pts.material.uniforms.scale.value = innerHeight / 2;
 }
 const getProto = () => proto;
-export { THREE, P, Q, renderer, scene, camera, sun, SUN_DIR, rnd, canvasTex, loadModel, getProto, Horse, GAITS, riverDist, terrainH, stepWorld, onResize, puff };
+export { THREE, P, Q, renderer, scene, camera, sun, SUN_DIR, rnd, canvasTex, loadModel, loadTerrain, renderAll, getProto, Horse, GAITS, riverDist, terrainH, stepWorld, onResize, puff };

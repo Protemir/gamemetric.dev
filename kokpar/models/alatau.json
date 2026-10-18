@@ -1,0 +1,18 @@
+{
+ "w": 832,
+ "h": 448,
+ "x0": -40389.07673715786,
+ "x1": 52282.92283632194,
+ "z0": -24791.639580395295,
+ "z1": 24727.636335979645,
+ "lat": 43.165,
+ "lon": 76.875,
+ "elev0": 1105.6948101423054,
+ "satW": 2048,
+ "satH": 1094,
+ "rows": "north-to-south",
+ "credits": [
+  "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016), CC BY 4.0",
+  "Terrain Tiles (AWS Open Data / Mapzen), SRTM data courtesy of the U.S. Geological Survey"
+ ]
+}

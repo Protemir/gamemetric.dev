@@ -104,10 +104,10 @@ export function neigh(x, z) {
   const t = ctx.currentTime, L = 1.5;
   const o = ctx.createOscillator(); o.type = 'sawtooth';
   const f = o.frequency;
-  f.setValueAtTime(520, t); f.exponentialRampToValueAtTime(1150, t + 0.12); f.exponentialRampToValueAtTime(900, t + 0.45); f.exponentialRampToValueAtTime(380, t + L);
+  f.setValueAtTime(260, t); f.exponentialRampToValueAtTime(560, t + 0.14); f.exponentialRampToValueAtTime(430, t + 0.5); f.exponentialRampToValueAtTime(170, t + L); // ниже — без писка
   const lfo = ctx.createOscillator(), lfoG = ctx.createGain(); // дрожь голоса
   lfo.frequency.setValueAtTime(14, t); lfo.frequency.linearRampToValueAtTime(19, t + L);
-  lfoG.gain.setValueAtTime(15, t); lfoG.gain.linearRampToValueAtTime(110, t + L);
+  lfoG.gain.setValueAtTime(8, t); lfoG.gain.linearRampToValueAtTime(45, t + L);
   lfo.connect(lfoG); lfoG.connect(f);
   const amp = ctx.createGain(); // огибающая + прерывистость к концу
   amp.gain.setValueAtTime(0.0001, t); amp.gain.exponentialRampToValueAtTime(vol * 0.32, t + 0.06);
@@ -116,11 +116,11 @@ export function neigh(x, z) {
   chopL.frequency.value = 9; chopG.gain.setValueAtTime(0, t); chopG.gain.linearRampToValueAtTime(0, t + 0.55); chopG.gain.linearRampToValueAtTime(0.5, t + 0.9);
   chop.gain.value = 0.5; chopL.connect(chopG); chopG.connect(chop.gain);
   const mix = ctx.createGain(); mix.gain.value = 1;
-  for (const [fr, q, g] of [[800, 5, 1], [1700, 6, 0.6], [2700, 7, 0.3]]) { // форманты конской глотки
+  for (const [fr, q, g] of [[520, 3, 1], [1150, 4, 0.55], [2100, 5, 0.2]]) { // форманты конской глотки
     const bp = filter('bandpass', fr, q), bg = ctx.createGain(); bg.gain.value = g;
     o.connect(bp); bp.connect(bg); bg.connect(mix);
   }
-  const s = ctx.createBufferSource(); s.buffer = noise; const nf = filter('bandpass', 1500, 0.8), ng = ctx.createGain(); ng.gain.value = 0.25; // хрип дыхания
+  const s = ctx.createBufferSource(); s.buffer = noise; const nf = filter('bandpass', 900, 0.7), ng = ctx.createGain(); ng.gain.value = 0.6; // хрип дыхания
   s.connect(nf); nf.connect(ng); ng.connect(mix);
   mix.connect(chop); chop.connect(amp); amp.connect(out(1, pan));
   for (const n of [o, lfo, chopL, s]) { n.start(t); n.stop(t + L + 0.05); }
