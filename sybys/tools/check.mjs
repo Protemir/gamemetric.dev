@@ -7,10 +7,10 @@ const N = +(process.argv[2] || 40);
 if (process.env.TUNE) Object.assign(S.TUNE, JSON.parse(process.env.TUNE));
 const DT = 0.1;
 
-function bestWordTarget(g) {
+function bestWordTarget(g, only) {
   let best = -1, bs = -Infinity;
   for (const r of g.map.regions) {
-    if (r.tribe < 0) continue;
+    if (r.tribe < 0 || (only && !only.includes(r.tribe))) continue;
     // pastures still undecided and willing to listen, plus their neighbours who will hear it next
     const rec = S.receptivity(g, r.id);
     let s = (1 - g.t[r.id]) * (0.5 + rec) - g.m[r.id] * 0.8;
@@ -43,6 +43,26 @@ const PLAYERS = {
       if (g.horses >= 2 && S.canAct(g, 'word')) S.act(g, 'word', bestWordTarget(g));
     },
     ev: { horse: 'council', well: 'aria', caravan: 'scouts', letter: 'trust', army: 'tribes', drought: 'sarman', plot: 'proof', truth: 'publish' }, end: 'reveal', catch: 0.6,
+  },
+  // courts two clans only, the warmest ones, and lets the third go
+  focus: {
+    act(g) {
+      if (!g.focus) g.focus = [0, 1, 2].sort((a, b) => S.tribeTrust(g, b) - S.tribeTrust(g, a)).slice(0, 2);
+      if (S.canAct(g, 'aria')) {
+        const t = [...g.marks].find((i) => !g.found.has(i) && g.focus.includes(g.map.regions[i].tribe));
+        if (t != null) { S.act(g, 'aria', t); return; }
+      }
+      if (S.canAct(g, 'word')) S.act(g, 'word', bestWordTarget(g, g.focus));
+    },
+    ev: { horse: 'council', well: 'share', caravan: 'pay', letter: 'trust', army: 'mixed', drought: 'share', plot: 'amnesty', truth: 'aria' }, end: 'council', catch: 0.3,
+  },
+  // taps any aul at random as fast as the horses allow, never thinks
+  spam: {
+    act(g) {
+      const all = g.map.regions.filter((x) => x.tribe >= 0);
+      if (S.canAct(g, 'word')) S.act(g, 'word', all[Math.floor(Math.random() * all.length)].id);
+    },
+    think: 0.3, ev: {}, end: 'council', catch: 0.3,
   },
   force: {
     act(g) {
@@ -84,7 +104,7 @@ for (const [name, P] of Object.entries(PLAYERS)) {
         // a rider Zaltyr has marked is easy to spot
         if (g.rand() < (r.seen ? Math.max(P.catch, 0.85) : P.catch)) S.intercept(g, r.id);
       }
-      if ((thinkT -= DT) <= 0) { thinkT = 1.2; P.act(g); }
+      if ((thinkT -= DT) <= 0) { thinkT = P.think || 1.2; P.act(g); }
     }
     ends[g.result.end] = (ends[g.result.end] || 0) + 1;
     yes[g.result.yes]++;

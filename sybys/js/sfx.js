@@ -53,6 +53,7 @@ if (typeof document !== 'undefined') {
 }
 
 // call from inside a tap or a click: browsers start sound only there
+const OUT = 0.8; // the master level; a compressor keeps the peaks in hand
 export function audioInit() {
   unlockMedia();
   if (sound.ctx) {
@@ -62,7 +63,7 @@ export function audioInit() {
   try {
     const c = new (window.AudioContext || window.webkitAudioContext)();
     const out = c.createGain();
-    out.gain.value = sound.on && !sound.held ? 0.55 : 0;
+    out.gain.value = sound.on && !sound.held ? OUT : 0;
     const comp = c.createDynamicsCompressor();
     comp.threshold.value = -14;
     comp.ratio.value = 4;
@@ -82,13 +83,13 @@ export function setSound(on) {
   sound.on = on;
   store.set('sybys.sound', on);
   if (on) audioInit();
-  if (sound.ctx) sound.out.gain.setTargetAtTime(on && !sound.held ? 0.55 : 0, sound.ctx.currentTime, 0.05);
+  if (sound.ctx) sound.out.gain.setTargetAtTime(on && !sound.held ? OUT : 0, sound.ctx.currentTime, 0.05);
 }
 
 // a portal's own mute wins over the in-game button
 export function holdAudio(on) {
   sound.held = on;
-  if (sound.ctx) sound.out.gain.setTargetAtTime(sound.on && !on ? 0.55 : 0, sound.ctx.currentTime, 0.05);
+  if (sound.ctx) sound.out.gain.setTargetAtTime(sound.on && !on ? OUT : 0, sound.ctx.currentTime, 0.05);
 }
 
 const ready = () => sound.on && !sound.held && sound.ctx && sound.ctx.state === 'running';
@@ -174,7 +175,7 @@ const PIECES = {
   tun: { bpm: 50, root: 69, mode: 'hijaz', drone: [38], strum: '........', form: 'ABACABDA', vol: 0.16, rest: 0.3,
     m: { A: [[4, 4], [2, 4]], B: [[3, 2], [2, 2], [0, 4]], C: [[5, 4], [4, 4]], D: [[2, 2], [1, 2], [0, 4]] } },
 };
-const MUSIC_GAIN = 0.15;
+const MUSIC_GAIN = 1.6;
 // a hall made of noise that dies away: enough to soften the strings, not to drown them
 function impulse(c, sec) {
   const len = Math.floor(c.sampleRate * sec), buf = c.createBuffer(2, len, c.sampleRate);

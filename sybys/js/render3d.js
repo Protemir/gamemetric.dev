@@ -28,6 +28,41 @@ const GRADE = {
     }`,
 };
 import { GW, GH, K } from './map.js';
+const TERR_HEAD = 'uniform sampler2D idTex;\nuniform sampler2D edgeTex;\nuniform sampler2D pal;\nuniform float uHR;\nuniform float uWash;\nuniform float uPhoto;\n';
+const TERR_BODY = `  {
+    float rid = floor(texture2D(idTex, vMapUv).r * 255.0 + 0.5);
+    vec4 ed = texture2D(edgeTex, vMapUv);
+    float dT = ed.r * 32.0 / uHR, dR = ed.g * 32.0 / uHR;
+    float pu = (rid + 0.5) / 32.0;
+    vec4 p0 = texture2D(pal, vec2(pu, 0.5 / 3.0));
+    vec4 p1 = texture2D(pal, vec2(pu, 1.5 / 3.0));
+    vec4 p2 = texture2D(pal, vec2(pu, 2.5 / 3.0));
+    vec3 ph = texture2D(grass, vMapUv * vec2(RX, 14.0)).rgb;
+    vec3 ph2 = texture2D(grass, vMapUv * vec2(2.3, 1.3) + 0.37).rgb;
+    vec3 photo = ph * 0.6 + ph2 * 0.4;
+    float pl = max(dot(photo, vec3(0.3, 0.59, 0.11)), 0.02);
+    vec3 ground = diffuseColor.rgb;
+    float gl0 = dot(ground, vec3(0.3, 0.59, 0.11));
+    ground = mix(ground, photo * 2.0 * clamp(gl0 / 0.3, 0.75, 1.2), uPhoto);
+    ground = mix(ground, ground * vec3(0.8, 1.0, 0.86), step(0.7, uPhoto) * (0.6 + 0.4 * smoothstep(0.1, 0.3, dot(ph2, vec3(0.3, 0.59, 0.11)))));
+    float gl = dot(ground, vec3(0.3, 0.59, 0.11));
+    vec3 tint = pow(p0.rgb, vec3(2.2));
+    vec3 col = mix(ground, tint * (0.25 + gl * 2.1), p0.a * uWash);
+    vec3 edgeC = pow(p1.rgb, vec3(2.2));
+    float band = 1.0 - smoothstep(0.0, 9.0, dT);
+    col = mix(col, edgeC * (0.3 + gl * 2.0), band * band * 0.72 * uWash);
+    float line = 1.0 - smoothstep(0.35, 1.1, dT);
+    col = mix(col, edgeC * 1.25 + 0.04, line * 0.95 * uWash);
+    float seam = 1.0 - smoothstep(0.1, 0.6, dR);
+    col *= 1.0 - seam * 0.32 * uWash;
+    col = mix(col, vec3(1.0, 0.8, 0.45), p1.a);
+    col = mix(col, col * 1.2 + vec3(0.03, 0.025, 0.012), p2.r);
+    col = mix(col, vec3(1.0, 0.78, 0.36), p2.r * (1.0 - smoothstep(0.25, 1.2, dR)) * 0.95);
+    col = mix(col, vec3(0.03, 0.022, 0.016), p2.g);
+    float cl0 = dot(col, vec3(0.3, 0.59, 0.11));
+    diffuseColor.rgb = max(mix(vec3(cl0), col, 1.1), 0.0);
+  }
+`;
 import { riderPos } from './sim.js';
 import { View, TRIBE_RGB, GOLD, tamga } from './render.js';
 import { clamp, rng, valueNoise } from './util.js';
@@ -161,6 +196,7 @@ export class View3D extends View {
   setCinema(on) {
     if (this.cinema === on) return;
     this.cinema = on;
+    if (this.terrWash) this.terrWash.value = on ? 0 : 1;
     const s = this.scene;
     if (on) {
       s.background = this.sky;
@@ -447,11 +483,9 @@ export class View3D extends View {
       pos.setY(k, this.height(x, y));
     }
     geo.computeVertexNormals();
-    this.tex = new THREE.CanvasTexture(this.off);
-    this.tex.colorSpace = THREE.SRGBColorSpace;
-    this.tex.anisotropy = 4;
+    this.buildTerritory(g);
     const mat = new THREE.MeshStandardMaterial({ map: this.tex, roughness: 0.95, metalness: 0 });
-    this.withGrass(mat);
+    this.withGrass(mat, true);
     this.terrain = new THREE.Mesh(geo, mat);
     this.terrain.receiveShadow = true;
     this.group.add(this.terrain);
@@ -482,7 +516,116 @@ export class View3D extends View {
 
   // the photo of grass and stones (Poly Haven, CC0) gives the ground its grain; only its light and dark
   // are used on the map, so the clans' colours stay true
-  withGrass(mat) {
+  buildTerritory(g) {
+    const map = g.map, HR = this.mobile ? 3 : 4, w = GW * HR, h = GH * HR;
+    const R = map.regions, cell = map.cell;
+    // the natural ground, as the 2D view coloured it
+    const gc = document.createElement('canvas');
+    gc.width = GW; gc.height = GH;
+    const gx = gc.getContext('2d'), gi = gx.createImageData(GW, GH);
+    for (let i = 0; i < GW * GH; i++) {
+      for (let k = 0; k < 3; k++) gi.data[i * 4 + k] = clamp(this.ter[i * 3 + k], 0, 255);
+      gi.data[i * 4 + 3] = 255;
+    }
+    gx.putImageData(gi, 0, 0);
+    this.tex = new THREE.CanvasTexture(gc);
+    this.tex.colorSpace = THREE.SRGBColorSpace;
+    this.tex.anisotropy = 4;
+    // whose pasture each fine point is: the same warped Voronoi as the map, read between the cells
+    const { pts, wx, wy, fine } = map.warp;
+    const at = (a, x, y) => {
+      const x0 = clamp(Math.floor(x), 0, GW - 1), y0 = clamp(Math.floor(y), 0, GH - 1);
+      const x1 = Math.min(GW - 1, x0 + 1), y1 = Math.min(GH - 1, y0 + 1);
+      const tx = clamp(x - x0, 0, 1), ty = clamp(y - y0, 0, 1);
+      return (a[y0 * GW + x0] * (1 - tx) + a[y0 * GW + x1] * tx) * (1 - ty) + (a[y1 * GW + x0] * (1 - tx) + a[y1 * GW + x1] * tx) * ty;
+    };
+    const id = new Uint8Array(w * h);
+    const cand = [];
+    for (let Y = 0; Y < h; Y++) {
+      const y = (Y + 0.5) / HR - 0.5, cy = clamp(Math.round(y), 0, GH - 1);
+      for (let X = 0; X < w; X++) {
+        const x = (X + 0.5) / HR - 0.5, cx = clamp(Math.round(x), 0, GW - 1);
+        const c0 = cell[cy * GW + cx];
+        cand.length = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const c = cell[clamp(cy + dy, 0, GH - 1) * GW + clamp(cx + dx, 0, GW - 1)];
+          if (c !== c0 && !cand.includes(c)) cand.push(c);
+        }
+        if (!cand.length) { id[Y * w + X] = c0; continue; }
+        cand.push(c0);
+        const f = at(fine, x, y);
+        const px = x + (at(wx, x, y) * 7 + f * 1.6) * K, py = y + (at(wy, x, y) * 7 + f * 1.6) * K;
+        let best = c0, bd = Infinity;
+        for (const c of cand) {
+          const dd = (px - pts[c][0]) ** 2 + (py - pts[c][1]) ** 2;
+          if (dd < bd) { bd = dd; best = c; }
+        }
+        id[Y * w + X] = best;
+      }
+    }
+    // how far each point is from a clan border and from any pasture border
+    const far = 1e4, dT = new Float32Array(w * h).fill(far), dR = new Float32Array(w * h).fill(far);
+    for (let Y = 0; Y < h; Y++) for (let X = 0; X < w; X++) {
+      const i = Y * w + X, a = id[i];
+      for (const j of [X + 1 < w ? i + 1 : -1, Y + 1 < h ? i + w : -1]) {
+        if (j < 0 || id[j] === a) continue;
+        dR[i] = dR[j] = 0.5;
+        if (R[id[j]].tribe !== R[a].tribe) dT[i] = dT[j] = 0.5;
+      }
+    }
+    for (const D of [dT, dR]) {
+      for (let Y = 0; Y < h; Y++) for (let X = 0; X < w; X++) {
+        const i = Y * w + X;
+        let v = D[i];
+        if (X > 0) v = Math.min(v, D[i - 1] + 1);
+        if (Y > 0) { v = Math.min(v, D[i - w] + 1); if (X > 0) v = Math.min(v, D[i - w - 1] + 1.414); if (X < w - 1) v = Math.min(v, D[i - w + 1] + 1.414); }
+        D[i] = v;
+      }
+      for (let Y = h - 1; Y >= 0; Y--) for (let X = w - 1; X >= 0; X--) {
+        const i = Y * w + X;
+        let v = D[i];
+        if (X < w - 1) v = Math.min(v, D[i + 1] + 1);
+        if (Y < h - 1) { v = Math.min(v, D[i + w] + 1); if (X < w - 1) v = Math.min(v, D[i + w + 1] + 1.414); if (X > 0) v = Math.min(v, D[i + w - 1] + 1.414); }
+        D[i] = v;
+      }
+    }
+    const mk = (fill, nearest) => {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const x = c.getContext('2d'), im = x.createImageData(w, h);
+      for (let i = 0; i < w * h; i++) { fill(im.data, i * 4, i); im.data[i * 4 + 3] = 255; }
+      x.putImageData(im, 0, 0);
+      const t = new THREE.CanvasTexture(c);
+      if (nearest) { t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; } else t.anisotropy = 4;
+      return t;
+    };
+    // distances in fine points, eight steps to a level, up to 32 points
+    this.idTex = mk((o, k, i) => { o[k] = id[i]; }, true);
+    this.edgeTex = mk((o, k, i) => { o[k] = Math.min(255, dT[i] * 8); o[k + 1] = Math.min(255, dR[i] * 8); }, false);
+    this.palTex = new THREE.DataTexture(new Uint8Array(32 * 3 * 4), 32, 3);
+    this.palTex.magFilter = this.palTex.minFilter = THREE.NearestFilter;
+    this.palTex.needsUpdate = true;
+    this.terrWash = this.terrWash || { value: this.cinema ? 0 : 1 };
+    this.terr = { idTex: { value: this.idTex }, edgeTex: { value: this.edgeTex }, pal: { value: this.palTex }, uHR: { value: HR }, uWash: this.terrWash, uPhoto: { value: { winter: 0.08, autumn: 0.4 }[this.style] ?? 0.78 } };
+  }
+
+  // each frame only the small table of pasture colours changes
+  paintMap(g) {
+    if (!this.palTex) return;
+    const { tint, glow } = this.regionColors(g);
+    const d = this.palTex.image.data;
+    for (const r of g.map.regions) {
+      const i = r.id, c = tint[i], won = g.t[i] >= 0.55;
+      d.set([c[0], c[1], c[2], 255 * (r.tribe < 0 ? 0.4 : won ? 0.42 : 0.1 + 0.25 * Math.max(0, g.t[i] - 0.3))], i * 4);
+      const e = r.tribe >= 0 ? TRIBE_RGB[r.tribe] : GOLD;
+      d.set([Math.min(255, e[0] * 1.2 + 25), Math.min(255, e[1] * 1.2 + 25), Math.min(255, e[2] * 1.2 + 25), 255 * glow[i]], (32 + i) * 4);
+      const burnt = g.burn && g.burn[i] != null ? Math.max(0, 1 - (g.time - g.burn[i]) / 40) * 0.35 : 0;
+      d.set([i === this.hover && i > 0 ? 255 : 0, 255 * burnt, 0, 255], (64 + i) * 4);
+    }
+    this.palTex.needsUpdate = true;
+  }
+
+  withGrass(mat, terr = false) {
     const tex = this.grassTex;
     const rx = (14 * W / D).toFixed(1);
     const clouds = this.cloudTexture();
@@ -492,14 +635,15 @@ export class View3D extends View {
       sh.uniforms.grass = { value: tex };
       sh.uniforms.clouds = { value: clouds };
       sh.uniforms.uTime = time;
-      sh.fragmentShader = 'uniform sampler2D grass;\nuniform sampler2D clouds;\nuniform float uTime;\n' + sh.fragmentShader.replace(
+      if (terr) Object.assign(sh.uniforms, this.terr);
+      sh.fragmentShader = 'uniform sampler2D grass;\nuniform sampler2D clouds;\nuniform float uTime;\n' + (terr ? TERR_HEAD : '') + sh.fragmentShader.replace(
         '#include <map_fragment>',
-        '#include <map_fragment>\n  diffuseColor.rgb *= 0.45 + 1.25 * dot(texture2D(grass, vMapUv * vec2(' + rx + ', 14.0)).rgb, vec3(0.3, 0.59, 0.11));' +
+        '#include <map_fragment>\n' + (terr ? TERR_BODY.replace('RX', rx) : '  diffuseColor.rgb *= 0.45 + 1.25 * dot(texture2D(grass, vMapUv * vec2(' + rx + ', 14.0)).rgb, vec3(0.3, 0.59, 0.11));') +
         '\n  float cl = texture2D(clouds, vMapUv * vec2(1.6, 0.9) + vec2(uTime * 0.006, uTime * 0.0025)).r;' +
         '\n  diffuseColor.rgb *= 1.0 - 0.28 * smoothstep(0.52, 0.72, cl);',
       );
     };
-    mat.customProgramCacheKey = () => 'grass-map-clouds';
+    mat.customProgramCacheKey = () => 'grass-map-clouds' + (terr ? '-terr' : '');
   }
 
   // the steppe beyond the map: low swells near it, mountains with snow far to the north and west,
@@ -1106,7 +1250,6 @@ export class View3D extends View {
     if (this.modelsLoaded && this.populated !== g.map) this.populate(g);
     if (this.frameNo % (this.lite ? 3 : 2) === 0 || !this.painted) {
       this.paintMap(g);
-      this.tex.needsUpdate = true;
       this.painted = true;
     }
     // the world moves

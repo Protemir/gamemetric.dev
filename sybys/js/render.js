@@ -223,9 +223,9 @@ export class View {
   }
 
   // —— the ground tinted every other frame by trust, talk and lies ——
-  paintMap(g) {
-    const { cell, river, border, regions } = g.map;
-    const d = this.img.data, ter = this.ter, lum = this.lum;
+  // each pasture's colour (its clan, gold with trust, brown in drought, purple with lies) and its glow
+  regionColors(g) {
+    const { regions } = g.map;
     const tint = regions.map((r) => {
       if (r.tribe < 0) return GOLD;
       const base = TRIBE_RGB[r.tribe];
@@ -245,6 +245,13 @@ export class View {
       const flash = f ? Math.max(0, 1 - (now - f) / 1100) * 0.6 : 0;
       return Math.max(flash, clamp(g.m[r.id] * 0.1, 0, 0.18));
     });
+    return { tint, glow };
+  }
+
+  paintMap(g) {
+    const { cell, river, border, regions } = g.map;
+    const d = this.img.data, ter = this.ter, lum = this.lum;
+    const { tint, glow } = this.regionColors(g);
     for (let i = 0; i < GW * GH; i++) {
       const o = i * 4, t3 = i * 3;
       if (river[i]) {

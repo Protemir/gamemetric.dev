@@ -529,7 +529,7 @@ function updateHud() {
   const left = Math.max(0, Math.ceil(S.SEASON - g.clock));
   const v = S.kurultai(g);
   const mm = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-  $('seasonLbl').textContent = g.hold ? t.clockHold : window.innerWidth < 900 ? (window.innerHeight < 500 ? t.clockTiny : t.clockShort)(mm, v.yes) : (g.season > 1 ? t.season2 + ' · ' : '') + t.clock(mm, v.yes);
+  $('seasonLbl').textContent = g.hold ? t.clockHold : window.innerHeight < 500 ? t.clockTiny(mm, v.yes) : window.innerWidth < 900 ? t.clockShort(mm, v.yes) : (g.season > 1 ? t.season2 + ' · ' : '') + t.clock(mm, v.yes);
   $('seasonChip').classList.toggle('win', v.yes >= 2);
   const chips = $('tribes').children;
   for (let k = 0; k < 3; k++) {
@@ -1004,7 +1004,7 @@ function frame(now) {
   }
   if (hintUntil && now > hintUntil) { hintEl.classList.remove('on'); hintUntil = 0; }
   // the dombra: full on the title and the cards, soft under play
-  const lvl = !g || g.demo || g.phase === 'end' ? 1 : g.phase === 'map' ? 0.45 : 0.7;
+  const lvl = !g || g.demo || g.phase === 'end' ? 1 : g.phase === 'map' ? 0.7 : 0.85;
   if (lvl !== lastMusic) { lastMusic = lvl; musicLevel(lvl); }
   // and which küi
   const mood = tourState ? 'kerbez' : !g || g.demo || g.phase !== 'map' ? 'dala' : g.raid ? 'shabuyl' : g.night ? 'tun' : 'play';

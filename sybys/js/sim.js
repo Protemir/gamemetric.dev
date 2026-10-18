@@ -35,6 +35,8 @@ export const TUNE = {
   pride: 0.42, prideRate: 0.028, follow: 0.015, settle: 0.02, // a tribe left alone drifts back to its own pride, not to the khan
   word: 1.15, lie: 1.35,
   chain: 0.1, goldNear: 0.08, // a word next to the last one, or next to a pasture already the khan's, goes a little further
+  jealous: 0.008, // each word to one clan stings the other two a little: the khan must choose his friends
+  deaf: 0.35, wasted: 0.3, // a pasture full of rumour hears a third of the word; one already loyal needs little
 };
 export const CLUES = { assassin: true, forged: true, stones: true, lair: true, scouts: true, letter: true, zaltyr: true, informant: false, arrest: false, zaltyrFalse: false };
 
@@ -267,8 +269,20 @@ function arrive(g, rider) {
     g.chain = near ? g.chain + 1 : 1;
     g.lastWord = { at: g.time, region: i };
     const gold = r.nb.some((e) => g.map.regions[e.to].tribe >= 0 && g.t[e.to] >= 0.55) ? TUNE.goldNear : 0;
-    g.m[i] = Math.min(2, g.m[i] + TUNE.word * (1 + TUNE.chain * Math.min(3, g.chain - 1)) + gold);
-    g.fx.push({ type: 'word', region: i, chain: g.chain });
+    // a rumour stops the ears: Aria must clear it first; a pasture already loyal needs little more
+    const deaf = r.tribe >= 0 && g.n[i] > 0.6;
+    const k = deaf ? TUNE.deaf : r.tribe >= 0 && g.t[i] >= 0.8 ? TUNE.wasted : 1;
+    g.m[i] = Math.min(2, g.m[i] + (TUNE.word * (1 + TUNE.chain * Math.min(3, g.chain - 1)) + gold) * k);
+    if (deaf && !(g.flags.deafTold > g.time - 40)) { g.flags.deafTold = g.time; toast(g, 'aria', 'tDeaf', i); }
+    if (r.tribe >= 0) {
+      g.tribes.forEach((tr, k) => {
+        if (k === r.tribe) return;
+        tr.mood = clamp(tr.mood - TUNE.jealous, 0, 1);
+        tr.jealous = (tr.jealous || 0) + TUNE.jealous;
+        if (tr.jealous > 0.1 && !tr.jealousTold) { tr.jealousTold = true; toast(g, k, 'tJealous', g.map.capitals[k], { tribe: k }); }
+      });
+    }
+    g.fx.push({ type: 'word', region: i, chain: g.chain, deaf });
   } else if (rider.kind === 'karasai') {
     const tr = g.tribes[r.tribe];
     g.t[i] = Math.max(g.t[i], 0.88);
