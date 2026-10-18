@@ -65,6 +65,20 @@ const clickText = (text) => B.js(`(() => { const b = [...document.querySelectorA
   check('a full valley: orchards keep coming or growing', grows > 0 && quiet <= 12, `${grows} grew, longest quiet ${quiet} days`);
 }
 
+// 0c. the valleys differ (18.10: "they all look the same"), and a game saved before keeps its ground
+{
+  const Sim = await import('../js/sim.js');
+  const old = Sim.newGame(18, 28, 77, 'wide', 1);
+  Sim.advance(old, 0.01);
+  const d = Sim.save(old);
+  delete d.gen; // saves from before 18.10 have no gen
+  const back = Sim.load(d);
+  const same = old.h.every((v, i) => v === back.h[i]);
+  const w = Sim.newGame(18, 28, 77, 'wide'), m = Sim.newGame(18, 28, 77, 'mountain'), gz = Sim.newGame(18, 28, 77, 'gorge');
+  check('an old saved game keeps its valley', same && back.gen === 1);
+  check('the wide valley has more water than the gorge', w.melt > m.melt && m.melt > gz.melt, `${w.melt} / ${m.melt} / ${gz.melt}`);
+}
+
 try {
   // 1. start screens in both languages
   await B.init('try { localStorage.clear(); } catch {}');

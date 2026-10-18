@@ -3,7 +3,7 @@
 // along an edge to a cell whose bed is lower. A canal bed drops a little with every dug cell,
 // so a canal always flows, but the ketmen can only cut so deep into a rise (MAX_CUT):
 // to reach a garden up on the valley side you have to take the water higher up the river.
-import { makeValley } from './terrain.js';
+import { makeValley, VALLEYS, GEN } from './terrain.js';
 import { rng, clamp } from './util.js';
 
 export const DAY_SEC = 3.2; // real seconds per day at ×1: a year is about six minutes
@@ -53,11 +53,11 @@ export function sourceFlow(day, year, melt = 1) {
   return q * melt * Math.max(0.5, 1 - 0.13 * (year - 1));
 }
 
-export function newGame(W, H, seed = 1, valley = 'mountain') {
-  const v = makeValley(W, H, seed, valley);
+export function newGame(W, H, seed = 1, valley = 'mountain', gen = GEN) {
+  const v = makeValley(W, H, seed, valley, gen);
   const n = W * H;
   const g = {
-    W, H, seed, valley,
+    W, H, seed, valley, gen,
     rand: rng(seed ^ 0x5bd1e995),
     h: v.h,
     bed: new Float32Array(n).fill(NaN),
@@ -77,7 +77,7 @@ export function newGame(W, H, seed = 1, valley = 'mountain') {
     river: v.river,
     dig: DIG_START,
     cap: CANAL_CAP, // grows with the "wider canals" reward
-    melt: 1, // grows with the "glacier" reward
+    melt: gen === 1 ? 1 : (VALLEYS[valley] || VALLEYS.mountain).melt, // grows with the "glacier" reward
     day: 0,
     year: 1,
     harvest: 0,
@@ -639,7 +639,16 @@ function spawn(g, type, gap = 2) {
   // a valley already dug all over still gets new orchards: one cell away from a canal
   if (!spots.length && g.gardensEver > 0) spots.push(...near);
   if (!spots.length) return null;
-  const p = spots[Math.floor(g.rand() * spots.length)];
+  let p = spots[Math.floor(g.rand() * spots.length)];
+  // the first orchard teaches digging: its real way (not the quick estimate) is a few cells long
+  if (g.gardensEver === 0 && type === 'garden') {
+    const order = spots.map((q) => [g.rand(), q]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+    const good = order.slice(0, 40).find((q) => {
+      const w = planFor(g, q);
+      return w && w.cells.length >= 3;
+    });
+    if (good) p = good;
+  }
   const o = {
     type, x: p.x, y: p.y,
     need: type === 'garden' ? GARDEN_NEED : HOUSE_NEED,
@@ -663,10 +672,10 @@ export function save(g) {
   const gates = [];
   for (let i = 0; i < g.W * g.H; i++) if (g.gate[i]) gates.push(i);
   return {
-    v: 1, W: g.W, H: g.H, seed: g.seed, valley: g.valley,
+    v: 1, W: g.W, H: g.H, seed: g.seed, valley: g.valley, gen: g.gen,
     strokes: g.strokes.map((s) => ({ from: s.from, cells: s.cells, join: s.join })),
     gates,
-    objects: g.objects.map(({ type, x, y, need, thirst, flood, born, tap, got }) => ({ type, x, y, need, thirst, flood, born, tap, got })),
+    objects: g.objects.map(({ type, x, y, need, thirst, flood, born, tap, got, grown }) => ({ type, x, y, need, thirst, flood, born, tap, got, grown })),
     flow: Array.from(g.flow, (v) => Math.round(v * 1000) / 1000),
     day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
     nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt,
@@ -674,7 +683,7 @@ export function save(g) {
 }
 
 export function load(d) {
-  const g = newGame(d.W, d.H, d.seed, d.valley);
+  const g = newGame(d.W, d.H, d.seed, d.valley, d.gen || 1);
   g.dig = 1e9;
   for (const s of d.strokes) {
     startStroke(g, s.from);

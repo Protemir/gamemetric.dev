@@ -5,6 +5,7 @@
 // On a landscape screen the valley is turned on its side (glacier on the left), the rules do not change.
 import * as S from './sim.js';
 import { clamp, lerp, rng, valueNoise } from './util.js';
+import { VALLEYS } from './terrain.js';
 
 const TOP = 58;
 const MAX_ZOOM = 2.5;
@@ -173,6 +174,8 @@ export class View {
   paintTerrain(g) {
     // painted sharper than the screen needs, so it still looks good brought closer
     const cs = this.cs0, dpr = Math.min(3, this.dpr * TERRAIN_SHARP);
+    // greener or rockier by the valley (games begun before 18.10 keep the old look)
+    const look = (g.gen !== 1 && VALLEYS[g.valley]) || { green: 1, rock: 1 };
     const { W, H } = g;
     const c = document.createElement('canvas');
     const Wp = Math.ceil(this.bw0 * dpr), Hp = Math.ceil(this.bh0 * dpr);
@@ -245,8 +248,8 @@ export class View {
         const fz = sample(fine, W * 6, H * 6, fx * 6, fy * 6);
         const pz = sample(patch, W * 2, H * 2, fx * 2, fy * 2);
         let col = mix(STEPPE, STEPPE_HIGH, t);
-        col = mix(col, mix(MEADOW, MEADOW_DARK, 0.5 + 0.5 * pz), clamp(moist * 1.1 + pz * 0.15, 0, 1));
-        col = mix(col, ROCK, clamp((slope - 1.5) * 0.45 + (t - 0.75) * 1.5, 0, 0.85));
+        col = mix(col, mix(MEADOW, MEADOW_DARK, 0.5 + 0.5 * pz), clamp((moist * 1.1 + pz * 0.15) * look.green, 0, 1));
+        col = mix(col, ROCK, clamp(((slope - 1.5) * 0.45 + (t - 0.75) * 1.5) * look.rock + (look.rock - 1) * 0.12, 0, 0.85));
         const ice = fy < 2 + pz * 0.5;
         if (ice) col = SNOW;
         // light and shade, plus a little grain so it does not look like plastic
