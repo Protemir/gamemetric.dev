@@ -246,7 +246,15 @@ function startScreen() {
   const lng = el('button', 'link', t.langBtn);
   lng.onclick = () => { setLang(lang === 'ru' ? 'en' : 'ru'); document.documentElement.lang = lang; startScreen(); };
   const gfx = el('button', 'link', view.is3d ? t.gfx2d : t.gfx3d);
-  gfx.onclick = () => { store.set('sybys.lite', view.is3d); location.search = view.is3d ? '?2d' : '?3d'; };
+  gfx.onclick = () => {
+    store.set('sybys.lite', view.is3d);
+    // keep the address's other settings (a portal's, the tests'), swap only the graphics
+    const p = new URLSearchParams(location.search);
+    p.delete('2d');
+    p.delete('3d');
+    p.set(view.is3d ? '2d' : '3d', '');
+    location.search = p.toString();
+  };
   row.append(chron, gfx, lng);
   box.append(row);
   // the look of the steppe: opened by glory
@@ -747,6 +755,7 @@ function pickEvent(key) {
   if (!S.choose(g, key)) return false;
   sfx.send();
   ui.replaceChildren();
+  if (g.phase === 'event') showEvent(); // one choice can bring the next scene at once
   updateHud();
   return true;
 }
@@ -986,6 +995,7 @@ function frame(now) {
       tribePulse(now);
     }
     if (coach.until && now > coach.until) hush();
+    if (g.phase === 'event' && shownPhase === 'event' && !ui.children.length) showEvent(); // never a scene without its screen
     if (g.phase !== shownPhase) {
       shownPhase = g.phase;
       if (g.phase === 'event') showEvent();

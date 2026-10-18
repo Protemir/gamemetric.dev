@@ -5,6 +5,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/three/loaders/GLTFLoader.js';
 import * as SkeletonUtils from '../vendor/three/utils/SkeletonUtils.js';
+import { EffectComposer } from '../vendor/three/postprocessing/EffectComposer.js';
+import { RenderPass } from '../vendor/three/postprocessing/RenderPass.js';
+import { OutputPass } from '../vendor/three/postprocessing/OutputPass.js';
 import { GW, GH, K } from './map.js';
 // how far a point lies past the edge of the khan's land (negative inside), with a ragged line
 const FAR_GLSL = (xz, muv, ph2) => `
@@ -95,7 +98,7 @@ export class View3D extends View {
     this.glCanvas = gl;
     const mobile = /Android|iPhone|iPad/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;
     this.mobile = mobile;
-    this.renderer = new THREE.WebGLRenderer({ canvas: gl, antialias: !mobile, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({ canvas: gl, antialias: false, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.AgXToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -107,7 +110,13 @@ export class View3D extends View {
     this.ray = new THREE.Raycaster();
     this.clock3 = 0;
     this.setupWorld();
-    // no post-processing: bloom halved the frame rate on a laptop's own graphics; the edges darken by a CSS veil
+    // the frame goes through a render target (with its own smoothing of edges): drawn straight to the screen,
+    // the animated horses and sheep vanished now and then on a laptop's own graphics. No bloom: it halved the
+    // frame rate there. The edges darken by a CSS veil.
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: mobile ? 0 : 4 });
+    this.composer = new EffectComposer(this.renderer, rt);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.composer.addPass(new OutputPass());
     this.veil();
     loading.then(() => { if (this.disposed) return; this.modelsLoaded = true; if (this.map) this.populate(this.lastG); });
   }
@@ -237,22 +246,20 @@ export class View3D extends View {
   // a slow device: sharpness down to 1, softer and cheaper shadows, no grass tufts, no walkers
   lighter() {
     this.lite = (this.lite || 0) + 1;
-    this.composer = null;
     this.veil();
     if (this.lite === 1) {
-      this.sun.shadow.mapSize.set(1024, 1024);
       if (this.grassMesh) this.grassMesh.visible = false;
       for (const f of this.folk || []) f.grp.visible = false;
       for (const s of this.sheep || []) s.traverse((m) => { if (m.isMesh) m.castShadow = false; });
       this.sharp = Math.min(this.sharp || 2, 1.5);
     } else {
-      this.sun.shadow.mapSize.set(512, 512);
       this.sharp = 1;
     }
-    this.sun.shadow.map?.dispose();
-    this.sun.shadow.map = null;
+    // the shadow map is never rebuilt here: rebuilding it lost every animated horse and sheep
     this.renderer.setPixelRatio(Math.min(this.sharp, window.devicePixelRatio || 1));
     this.renderer.setSize(this.w, this.h, false);
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(this.w, this.h);
   }
 
   paint3d() {
@@ -1124,7 +1131,7 @@ export class View3D extends View {
           o.root.position.set(toWorldX(h.x), this.height(h.x, h.y), toWorldZ(h.y));
           o.root.rotation.y = rand() * 6.28;
           o.root.scale.multiplyScalar(1.3);
-          o.play(rand() < 0.6 ? 'Eating' : 'Idle', rand());
+          o.play(rand() < 0.65 ? 'Eating' : 'Idle_Headlow', rand()); // not 'Idle': it rears up, and this model's hind legs go stiff as a stick
           this.group.add(o.root);
           this.mixers.push(o.mixer);
         }

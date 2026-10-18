@@ -79,13 +79,19 @@ async function burst(w, h) {
 async function campaign(w, h, label) {
   await B.init(`try { localStorage.clear(); ${Math.random() < 0.5 ? "localStorage.setItem('sybys.tutDone', 'true');" : ''} } catch {}`);
   await B.open(`${S.url}/sybys/?debug&lang=${Math.random() < 0.5 ? 'en' : 'ru'}&seed=${seed++}`, w, h);
-  await wait(600);
-  let last = '', same = 0, steps = 0;
+  // a cold start under load can take a while: wait for the title's buttons first
+  for (let k = 0; k < 100 && !(await B.js("!!document.querySelector('#ui button')")); k++) await wait(200);
+  let last = '', same = 0, steps = 0, missed = false;
   while (steps++ < 400) {
     const st = await probe();
+    // a scene's screen comes on the next frame: only a screen still missing at the next look is a fault
+    const noScreen = st.bad.filter((b) => / without its screen$/.test(b));
+    st.bad = st.bad.filter((b) => !noScreen.includes(b) || missed);
+    missed = noScreen.length > 0;
     if (st.bad.length) await note(`${label}: ${st.bad.join('; ')} (phase ${st.phase}, season ${st.season})`, true);
     const key = st.phase + st.season + Math.floor(st.clock / 5);
     same = key === last ? same + 1 : 0;
+    if (st.hold && st.started < 30000) same = 0; // the lesson stops the clock: give it real time
     last = key;
     if (same > 60) { await note(`${label}: stuck in ${st.phase} at ${st.clock}s, lesson ${st.lesson} (until ${st.until}, started ${st.started}, pause ${st.paused}), hold ${st.hold}, hand ${st.hand}, horses ${st.horses}, buttons: ${st.buttons.join(' | ')}`, true); break; }
     if (st.phase === 'none' || st.demo || st.phase === 'event' || st.phase === 'council' || st.phase === 'kurultai' || st.phase === 'end') {
