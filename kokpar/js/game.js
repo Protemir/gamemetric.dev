@@ -9,10 +9,32 @@ const MATCH_LEN = Number(P.get('len') || 180); // с
 const GOAL_X = 52, KAZAN_R = 3.0, SCORE_R = KAZAN_R + 1.5; // к казану надо подъехать вплотную
 const TUG_RANGE = 2.7, TUG_BREAK = 3.5, PICK_R = 1.8;
 const TEAMS = [
-  { name: 'Қызыл', color: '#b8262c', css: '#d23a3f', blanket: 0, attack: 1 },
-  { name: 'Көк', color: '#2456a8', css: '#3b74d1', blanket: 1, attack: -1 },
+  { key: 'red', color: '#b8262c', css: '#ff6a6e', grad: ['#ffb1b3', '#e0393e'], blanket: 0, attack: 1 },
+  { key: 'blue', color: '#2456a8', css: '#7fb0ff', grad: ['#b9d4ff', '#3a7be0'], blanket: 1, attack: -1 },
 ];
 const V = new THREE.Vector3(), V2 = new THREE.Vector3(), Qt = new THREE.Quaternion();
+
+// ---------- тексты: русский и английский ----------
+const TEXT = {
+  ru: {
+    red: 'Красные', blue: 'Синие', loading: 'Загрузка степи…', ready: 'Готовьтесь!', go: 'Вперёд!', goal: 'ГОЛ!', goalBy: (t) => t,
+    tug: 'Тартыс!', tugSub: 'Схватка за серке', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
+    fumble: 'Выронил серке!', win: 'Победа', lose: 'Поражение', draw: 'Ничья', again: 'Ещё раз', stamina: 'Сила коня',
+    btnTug: 'ВЫРВАТЬ', btnWhip: 'КАМЧА', mashKey: 'Жми E быстрее!', mashTap: 'Жми ВЫРВАТЬ быстрее!', canTug: '<kbd>E</kbd> — вырвать серке',
+    help: '<kbd>W</kbd> галоп · <kbd>S</kbd> тише · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке',
+    helpTouch: 'Палец слева — куда скакать · ВЫРВАТЬ — отнять серке · КАМЧА — рывок',
+  },
+  en: {
+    red: 'Red', blue: 'Blue', loading: 'Loading the steppe…', ready: 'Get ready!', go: 'Go!', goal: 'GOAL!', goalBy: (t) => t,
+    tug: 'Tug of war!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
+    fumble: 'Fumble!', win: 'Victory', lose: 'Defeat', draw: 'Draw', again: 'Play again', stamina: 'Horse stamina',
+    btnTug: 'GRAB', btnWhip: 'WHIP', mashKey: 'Mash E!', mashTap: 'Tap GRAB fast!', canTug: '<kbd>E</kbd> — grab the serke',
+    help: '<kbd>W</kbd> gallop · <kbd>S</kbd> slow · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke',
+    helpTouch: 'Left thumb — where to ride · GRAB — take the serke · WHIP — burst',
+  },
+};
+let lang = (() => { try { return localStorage.getItem('kokpar.lang'); } catch { return null; } })() || P.get('lang') || (/^ru|^kk|^ky|^uk|^be/i.test(navigator.language) ? 'ru' : 'en');
+const tr = (k) => TEXT[lang][k];
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = THREE.MathUtils.clamp;
 
@@ -142,7 +164,7 @@ function kickoff(first) {
   state.tug = null;
   state.phase = 'countdown';
   state.t = first ? 3.2 : 2.2;
-  banner(first ? '3' : 'Дайын!');
+  banner(first ? '3' : tr('ready'));
 }
 function dropSack(pos, vel) {
   sack.carrier = null; sack.flight = null; roleT = 0;
@@ -164,7 +186,7 @@ function goal(team, scorer) {
   // мешок летит на казан
   sack.carrier = null;
   sack.flight = { from: sack.pos.clone(), to: new THREE.Vector3(k.x, 1.25, 0), t: 0 };
-  banner(`ГОЛ! ${TEAMS[team].name}`, TEAMS[team].css);
+  banner(tr('goal'), TEAMS[team].grad, 2.4, tr(TEAMS[team].key));
   state.events.push({ t: 'goal', team });
   if (!SIM) cheer(team === me?.team);
 }
@@ -177,7 +199,7 @@ function canTug(att, car) {
 function startTug(att) {
   state.tug = { att, car: sack.carrier, bar: 0, t: 0 };
   state.events.push({ t: 'tug' });
-  if (!SIM && (att.me || sack.carrier.me)) banner('ТАРТЫС!', '#ffd23a', 0.9);
+  if (!SIM && (att.me || sack.carrier.me)) banner(tr('tug'), null, 1.1, tr('tugSub'));
 }
 function tugPress(e) { // игрок жмёт «тарт»: дёргает мешок на себя
   const T = state.tug;
@@ -214,11 +236,11 @@ function stepTug(dt) {
     T.car.tugCD = 1.6; T.car.pickCD = 1.0; T.car.stun = 0.3;
     T.att.stats.tugsWon++;
     giveSack(T.att);
-    if (!SIM && (T.att.me || T.car.me)) banner(T.att.me ? 'Тартып алдың!' : 'Тартып алды!', TEAMS[T.att.team].css, 1);
+    if (!SIM && (T.att.me || T.car.me)) banner(T.att.me ? tr('stoleMe') : tr('stoleThem'), TEAMS[T.att.team].grad, 1.1);
   } else {
     T.att.tugCD = 2.0; T.att.stun = 0.5;
     T.car.stats.tugsWon++;
-    if (!SIM && (T.att.me || T.car.me)) banner(T.car.me ? 'Ұстап қалдың!' : 'Ұстап қалды', TEAMS[T.car.team].css, 1);
+    if (!SIM && (T.att.me || T.car.me)) banner(T.car.me ? tr('heldMe') : tr('heldThem'), TEAMS[T.car.team].grad, 1.1);
   }
   state.events.push({ t: 'tugEnd', winner });
 }
@@ -418,7 +440,7 @@ function onHit(a, b, imp, nx, nz) {
       e.pickCD = 1.2;
       state.tug = null;
       state.events.push({ t: 'fumble' });
-      if (!SIM && (e.me || o.me)) banner('Түсіріп алды!', '#ffd23a', 0.9);
+      if (!SIM && (e.me || o.me)) banner(tr('fumble'), null, 1);
     }
   }
 }
@@ -426,8 +448,8 @@ function step(dt) {
   state.t -= dt;
   if (state.phase === 'countdown') {
     for (const e of ents) { e.h.gait = 0; e.h.steer = 0; }
-    if (!SIM) { const n = Math.ceil(state.t - 0.2); if (n > 0 && n <= 3 && el.banner.textContent !== String(n) && state.t < 3.2) banner(String(n)); }
-    if (state.t <= 0) { state.phase = 'play'; banner('Бастау!', '#ffd23a', 0.8); }
+    if (!SIM) { const n = Math.ceil(state.t - 0.2); if (n > 0 && n <= 3 && el.bigText.textContent !== String(n) && state.t < 3.2) banner(String(n)); }
+    if (state.t <= 0) { state.phase = 'play'; banner(tr('go'), null, 0.9); }
   } else if (state.phase === 'play') {
     state.clock -= dt;
     roleT -= dt;
@@ -472,8 +494,11 @@ function endMatch() {
   const [a, b] = state.score;
   if (SIM) return;
   const mine = me.team, won = state.score[mine] > state.score[1 - mine], draw = a === b;
-  el.endTitle.textContent = draw ? 'Тең ойын' : won ? 'Жеңіс!' : 'Жеңіліс';
-  el.endScore.innerHTML = `<b style="color:${TEAMS[0].css}">${a}</b> : <b style="color:${TEAMS[1].css}">${b}</b>`;
+  el.banner.classList.remove('on'); bannerT = 0; delete el.hint.dataset.keep; el.hint.textContent = ''; el.tug.hidden = true;
+  el.endTitle.textContent = draw ? tr('draw') : won ? tr('win') : tr('lose');
+  const g = won || draw ? ['#ffe58a', '#f0a01c'] : ['#d9d9d9', '#7d7d7d'];
+  el.endTitle.style.setProperty('--c1', g[0]); el.endTitle.style.setProperty('--c2', g[1]);
+  el.endScore.innerHTML = `<span style="color:${TEAMS[0].css}">${a}</span> : <span style="color:${TEAMS[1].css}">${b}</span>`;
   el.end.hidden = false;
 }
 
@@ -498,31 +523,47 @@ function updateCamera(dt, snap) {
 }
 
 // ---------- интерфейс ----------
-const el = Object.fromEntries(['score', 'clock', 'banner', 'stam', 'tug', 'tugbar', 'tugtip', 'hint', 'end', 'endTitle', 'endScore', 'again', 'load', 'stick', 'btnTug', 'btnWhip', 'arrow'].map((id) => [id, document.getElementById(id)]));
+const el = Object.fromEntries(['scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'end', 'endTitle', 'endScore', 'again', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
+el.bigText = el.banner.querySelector('.big'); el.subText = el.banner.querySelector('.small');
+const CREDITS = 'Рельеф / Terrain: SRTM (USGS), AWS Terrain Tiles · Снимок / Imagery: EOxCloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016), CC BY 4.0 · Конь / Horse: Warhorse Lite by Literock Studios';
+for (const c of document.querySelectorAll('[data-credits]')) c.textContent = CREDITS;
+function applyLang() {
+  document.documentElement.lang = lang;
+  el.nmR.textContent = tr('red'); el.nmB.textContent = tr('blue');
+  el.stamlbl.textContent = tr('stamina'); el.btnTug.textContent = tr('btnTug'); el.btnWhip.textContent = tr('btnWhip');
+  el.again.textContent = tr('again'); el.loadtxt.textContent = tr('loading');
+  el.lang.textContent = lang === 'ru' ? 'EN' : 'RU';
+  if (el.hint.dataset.keep) el.hint.innerHTML = touch ? tr('helpTouch') : tr('help');
+}
+el.lang.addEventListener('click', (e) => { e.stopPropagation(); lang = lang === 'ru' ? 'en' : 'ru'; try { localStorage.setItem('kokpar.lang', lang); } catch { /* приватный режим */ } applyLang(); });
+el.lang.addEventListener('pointerdown', (e) => e.stopPropagation());
 let bannerT = 0;
-function banner(text, color = '#fff', time = 1.2) {
+function banner(text, grad = null, time = 1.2, sub = '') {
   if (SIM) return;
-  el.banner.textContent = text; el.banner.style.color = color; el.banner.classList.add('on'); bannerT = time;
+  const [c1, c2] = grad || ['#ffe58a', '#f0a01c'];
+  el.bigText.textContent = text; el.subText.textContent = sub;
+  el.banner.style.setProperty('--c1', c1); el.banner.style.setProperty('--c2', c2);
+  el.banner.classList.remove('on'); void el.banner.offsetWidth; el.banner.classList.add('on'); bannerT = time;
 }
 function hud(dt) {
   bannerT -= dt;
   if (bannerT <= 0) el.banner.classList.remove('on');
-  el.score.innerHTML = `<span style="background:${TEAMS[0].css}">${TEAMS[0].name} ${state.score[0]}</span><span style="background:${TEAMS[1].css}">${state.score[1]} ${TEAMS[1].name}</span>`;
+  el.scR.textContent = state.score[0]; el.scB.textContent = state.score[1];
   const c = Math.ceil(state.clock);
   el.clock.textContent = `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
   el.stam.style.width = me.stamina + '%';
-  el.stam.style.background = me.stamina < 25 ? '#d9534f' : '#f0c040';
+  el.stam.style.background = me.stamina < 25 ? 'linear-gradient(90deg,#8f1418,#e0393e)' : '';
   const T = state.tug, mine = T && (T.att === me || T.car === me);
   el.tug.hidden = !mine;
   if (mine) {
     const v = clamp(T.att === me ? T.bar : -T.bar, -1, 1); // + — в мою пользу
     el.tugbar.style.left = `${50 + v * 50}%`;
-    el.tugtip.textContent = touch ? 'ТАРТ! басып тұр — жылдам бас!' : 'ТАРТ! E E E — жылдам бас!';
+    el.tugtip.textContent = touch ? tr('mashTap') : tr('mashKey');
   }
   // подсказка «можно тянуть»
   const can = !T && sack.carrier && canTug(me, sack.carrier);
   el.btnTug.classList.toggle('ready', !!(can || mine));
-  if (can && !touch) el.hint.textContent = 'E — тартыс: вырви серке!';
+  if (can && !touch) el.hint.innerHTML = tr('canTug');
   else if (!el.hint.dataset.keep) el.hint.textContent = '';
   // стрелка к цели по краю экрана: к мешку или к чужому казану
   const target = sack.carrier === me ? new THREE.Vector3(kazans[1 - me.team].x, 1, 0) : sack.carrier && sack.carrier.team === me.team ? null : sack.pos;
@@ -577,6 +618,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+if (!SIM) applyLang();
 await Promise.all([loadModel(), SIM ? null : loadTerrain()]);
 for (const team of [0, 1]) for (let i = 0; i < 3; i++) ents.push(makeEnt(team, i, team === 0 && i === 1));
 me = ents.find((e) => e.me);
@@ -606,7 +648,7 @@ if (SIM) {
   el.load.remove();
   updateCamera(0, true);
   el.hint.dataset.keep = '1';
-  el.hint.textContent = touch ? 'Палец слева — куда скакать. ТАРТ — вырвать серке, ҚАМШЫ — рывок' : 'W — галоп, S — тише, A/D — поворот, Shift — қамшы, E — тартыс';
+  el.hint.innerHTML = touch ? tr('helpTouch') : tr('help');
   setTimeout(() => { delete el.hint.dataset.keep; }, 9000);
   requestAnimationFrame(frame);
 }

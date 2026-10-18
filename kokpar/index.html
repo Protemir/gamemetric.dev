@@ -1,63 +1,92 @@
 <!doctype html>
-<html lang="kk">
+<html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Көкпар</title>
+<title>Kokpar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #cfc7b4; user-select: none; -webkit-user-select: none; touch-action: none; font: 15px/1.3 system-ui, 'Segoe UI', sans-serif; color: #fff; }
+  :root { --red: #e0393e; --red2: #8f1418; --blue: #3a7be0; --blue2: #13398a; --gold: #ffcf3a; --gold2: #e08a12; --ink: #140f08; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #cfc7b4; user-select: none; -webkit-user-select: none; touch-action: none; color: #fff; font: 600 15px/1.25 'Rubik', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   canvas { display: block; }
-  .ui { position: fixed; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
-  #top { top: 10px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  #score { display: flex; gap: 3px; font-weight: 800; font-size: 20px; }
-  #score span { padding: 4px 12px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
-  #clock { font-weight: 700; font-size: 16px; background: rgba(20,16,10,.5); padding: 2px 10px; border-radius: 6px; }
-  #banner { top: 32%; left: 50%; transform: translate(-50%, -50%) scale(.9); font-size: 56px; font-weight: 900; letter-spacing: 1px; opacity: 0; transition: opacity .15s, transform .15s; white-space: nowrap; }
+  .ui { position: fixed; pointer-events: none; }
+  .disp { font-family: 'Russo One', 'Rubik', system-ui, sans-serif; letter-spacing: .02em; }
+  /* табло */
+  #top { top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; filter: drop-shadow(0 4px 10px rgba(0,0,0,.35)); }
+  .team { display: flex; align-items: center; gap: 10px; padding: 6px 14px; min-width: 132px; }
+  .team.r { background: linear-gradient(180deg, var(--red), var(--red2)); clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%); justify-content: flex-end; border-radius: 10px 0 0 10px; }
+  .team.b { background: linear-gradient(180deg, var(--blue), var(--blue2)); clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%); border-radius: 0 10px 10px 0; }
+  .team .nm { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .92; }
+  .team .sc { font-size: 30px; line-height: 1; text-shadow: 0 2px 0 rgba(0,0,0,.25); }
+  #clock { background: linear-gradient(180deg, #2a2219, #120d08); padding: 6px 14px; font-size: 20px; display: grid; place-items: center; min-width: 64px; border-top: 2px solid rgba(255,207,58,.6); }
+  /* баннер */
+  #banner { top: 30%; left: 50%; transform: translate(-50%, -50%) scale(.6); opacity: 0; transition: transform .22s cubic-bezier(.2,1.6,.4,1), opacity .15s; white-space: nowrap; text-align: center; }
   #banner.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  #stamwrap { left: 16px; bottom: 16px; width: 180px; height: 10px; background: rgba(0,0,0,.35); border-radius: 5px; overflow: hidden; }
-  #stam { height: 100%; width: 100%; background: #f0c040; }
-  #stamlbl { left: 16px; bottom: 30px; font-size: 12px; opacity: .85; }
-  #tug { left: 50%; bottom: 22%; transform: translateX(-50%); width: min(420px, 80vw); text-align: center; }
-  #tugtrack { position: relative; height: 18px; border-radius: 9px; background: linear-gradient(90deg, #c33 0%, #c33 50%, #3a3 50%, #3a3 100%); box-shadow: 0 2px 8px rgba(0,0,0,.35); }
-  #tugbar { position: absolute; top: -6px; width: 6px; height: 30px; margin-left: -3px; background: #fff; border-radius: 3px; box-shadow: 0 0 6px #000; left: 50%; }
-  #tugtip { margin-top: 8px; font-weight: 800; font-size: 18px; color: #ffd23a; }
-  #hint { left: 50%; bottom: 14px; transform: translateX(-50%); background: rgba(20,16,10,.5); padding: 6px 12px; border-radius: 8px; white-space: nowrap; }
+  #banner .big { font-size: clamp(40px, 8vw, 84px); line-height: 1.05; background: linear-gradient(180deg, #fff 0%, var(--c1, #ffe58a) 45%, var(--c2, #f0a01c) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 2px rgba(20,12,4,.55); filter: drop-shadow(0 4px 0 rgba(0,0,0,.35)) drop-shadow(0 0 22px rgba(0,0,0,.25)); }
+  #banner .small { margin-top: 6px; font-size: clamp(14px, 2.2vw, 20px); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+  #banner .small:empty { display: none; }
+  /* силы */
+  #stamwrap { left: max(16px, env(safe-area-inset-left)); bottom: 18px; width: 200px; }
+  #stamlbl { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; text-shadow: 0 1px 3px rgba(0,0,0,.7); margin-bottom: 4px; }
+  #stamtrack { height: 12px; border-radius: 6px; background: rgba(10,8,5,.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); overflow: hidden; }
+  #stam { height: 100%; width: 100%; background: linear-gradient(90deg, var(--gold2), var(--gold)); border-radius: 6px; transition: width .1s; }
+  /* тартыс */
+  #tug { left: 50%; bottom: 20%; transform: translateX(-50%); width: min(460px, 82vw); text-align: center; }
+  #tug[hidden] { display: none; }
+  #tugtrack { position: relative; height: 22px; border-radius: 11px; background: linear-gradient(90deg, #6b0e10, var(--red) 49.5%, #2d8a3c 50.5%, #46c25a); box-shadow: 0 4px 14px rgba(0,0,0,.45), inset 0 0 0 2px rgba(255,255,255,.25); }
+  #tugbar { position: absolute; top: -8px; width: 10px; height: 38px; margin-left: -5px; background: #fff; border-radius: 5px; box-shadow: 0 0 0 2px var(--ink), 0 0 14px #fff; left: 50%; transition: left .06s linear; }
+  #tugtip { margin-top: 10px; font-size: 22px; color: var(--gold); text-shadow: 0 2px 0 rgba(0,0,0,.4), 0 0 14px rgba(0,0,0,.35); animation: pulse .5s ease-in-out infinite alternate; }
+  @keyframes pulse { to { transform: scale(1.08); } }
+  #hint { left: 50%; bottom: 16px; transform: translateX(-50%); background: rgba(14,10,6,.62); padding: 8px 16px; border-radius: 999px; white-space: nowrap; font-size: 14px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
   #hint:empty { display: none; }
-  #arrow { font-size: 34px; font-weight: 900; }
-  #stick { position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255,255,255,.6); background: rgba(0,0,0,.15); display: none; pointer-events: none; }
-  #stick i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(255,255,255,.75); }
-  .btn { position: fixed; border: 0; border-radius: 50%; color: #fff; font-weight: 900; display: none; touch-action: none; }
+  #hint kbd { font: 700 12px 'Rubik', sans-serif; background: #fff; color: var(--ink); border-radius: 4px; padding: 1px 5px; margin: 0 2px; box-shadow: 0 2px 0 #9a8f7a; }
+  #arrow { font-size: 34px; font-weight: 900; filter: drop-shadow(0 2px 4px rgba(0,0,0,.6)); }
+  /* язык */
+  #lang { position: fixed; top: max(10px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); font: 700 13px 'Rubik', sans-serif; color: #fff; background: rgba(14,10,6,.55); border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 6px 12px; cursor: pointer; letter-spacing: .06em; z-index: 5; }
+  /* телефон */
+  #stick { position: fixed; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; border: 2px solid rgba(255,255,255,.55); background: radial-gradient(rgba(0,0,0,.05), rgba(0,0,0,.25)); display: none; pointer-events: none; }
+  #stick i { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  .btn { position: fixed; border: 0; border-radius: 50%; color: #fff; display: none; touch-action: none; font-family: 'Russo One', sans-serif; text-shadow: 0 1px 2px rgba(0,0,0,.5); box-shadow: 0 4px 14px rgba(0,0,0,.35), inset 0 -4px 0 rgba(0,0,0,.25); }
   body.touch .btn { display: block; }
-  #btnTug { right: 22px; bottom: 34px; width: 96px; height: 96px; font-size: 18px; background: rgba(120,90,20,.75); }
-  #btnTug.ready { background: rgba(230,170,20,.95); box-shadow: 0 0 18px #ffd23a; }
-  #btnWhip { right: 132px; bottom: 26px; width: 72px; height: 72px; font-size: 13px; background: rgba(60,60,60,.7); }
-  body.touch #stamwrap, body.touch #stamlbl { left: auto; right: 22px; bottom: 142px; width: 96px; }
-  body.touch #stamlbl { bottom: 156px; }
-  #end { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(15,12,8,.55); }
+  #btnTug { right: max(22px, env(safe-area-inset-right)); bottom: 34px; width: 100px; height: 100px; font-size: 15px; background: radial-gradient(circle at 40% 30%, #b8862a, #6a4810); }
+  #btnTug.ready { background: radial-gradient(circle at 40% 30%, #ffe27a, #e08a12); box-shadow: 0 0 22px var(--gold), inset 0 -4px 0 rgba(0,0,0,.25); }
+  #btnWhip { right: 140px; bottom: 26px; width: 74px; height: 74px; font-size: 12px; background: radial-gradient(circle at 40% 30%, #6a6a6a, #2a2a2a); }
+  body.touch #stamwrap { left: auto; right: max(22px, env(safe-area-inset-right)); bottom: 150px; width: 100px; }
+  /* итог */
+  #end { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(rgba(10,8,5,.35), rgba(10,8,5,.75)); }
   #end[hidden] { display: none; }
-  #end div { text-align: center; }
-  #endTitle { font-size: 54px; font-weight: 900; }
-  #endScore { font-size: 40px; margin: 8px 0 18px; }
-  #again { pointer-events: auto; font: 800 20px system-ui; padding: 12px 28px; border: 0; border-radius: 10px; background: #e6aa14; color: #241a05; cursor: pointer; }
-  .credits { position: fixed; left: 0; right: 0; bottom: 8px; text-align: center; font: 11px system-ui; opacity: .7; color: inherit; padding: 0 12px; }
-  #load { position: fixed; inset: 0; display: grid; place-items: center; background: #e8d9b5; color: #4a3518; font-size: 20px; font-weight: 700; z-index: 9; }
+  #end .panel { text-align: center; }
+  #endTitle { font-size: clamp(48px, 10vw, 96px); line-height: 1.05; background: linear-gradient(180deg, #fff, var(--c1, #ffe58a) 50%, var(--c2, #f0a01c)); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 2px rgba(20,12,4,.55); filter: drop-shadow(0 5px 0 rgba(0,0,0,.35)); }
+  #endScore { font-size: 54px; margin: 12px 0 22px; text-shadow: 0 3px 0 rgba(0,0,0,.35); }
+  #again { font: 22px 'Russo One', sans-serif; padding: 14px 34px; border: 0; border-radius: 12px; background: linear-gradient(180deg, var(--gold), var(--gold2)); color: var(--ink); cursor: pointer; box-shadow: 0 6px 0 #8a4f06, 0 10px 24px rgba(0,0,0,.4); }
+  #again:active { transform: translateY(4px); box-shadow: 0 2px 0 #8a4f06; }
+  .credits { position: fixed; left: 0; right: 0; bottom: 8px; text-align: center; font: 500 11px 'Rubik', system-ui; opacity: .7; color: inherit; padding: 0 12px; }
+  #load { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(#3a2c1a, #120d08); z-index: 9; color: #fff; }
+  #load .t { font-size: clamp(44px, 9vw, 88px); background: linear-gradient(180deg, #fff, #ffe58a 50%, #f0a01c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #load .s { margin-top: 8px; text-align: center; letter-spacing: .2em; text-transform: uppercase; opacity: .8; }
 </style>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
 <body>
-<div id="load">Көкпар — жүктелуде…<div class="credits">Рельеф: SRTM (USGS), AWS Terrain Tiles · Снимок: EOxCloudless 2016 by EOX IT Services GmbH (Copernicus Sentinel data 2016), CC BY 4.0 · Конь: Warhorse Lite by Literock Studios</div></div>
-<div id="top" class="ui"><div id="score"></div><div id="clock"></div></div>
-<div id="banner" class="ui"></div>
-<div id="stamlbl" class="ui">Күш</div>
-<div id="stamwrap" class="ui"><div id="stam"></div></div>
-<div id="tug" class="ui" hidden><div id="tugtrack"><div id="tugbar"></div></div><div id="tugtip"></div></div>
+<div id="load"><div><div class="t disp">KOKPAR</div><div class="s" id="loadtxt">…</div></div><div class="credits" data-credits></div></div>
+<div id="top" class="ui">
+  <div class="team r"><span class="nm" id="nmR"></span><span class="sc disp" id="scR">0</span></div>
+  <div id="clock" class="disp"></div>
+  <div class="team b"><span class="sc disp" id="scB">0</span><span class="nm" id="nmB"></span></div>
+</div>
+<div id="banner" class="ui"><div class="big disp"></div><div class="small"></div></div>
+<div id="stamwrap" class="ui"><div id="stamlbl"></div><div id="stamtrack"><div id="stam"></div></div></div>
+<div id="tug" class="ui" hidden><div id="tugtrack"><div id="tugbar"></div></div><div id="tugtip" class="disp"></div></div>
 <div id="hint" class="ui"></div>
 <div id="arrow" class="ui" hidden>➤</div>
+<button id="lang">EN</button>
 <div id="stick"><i></i></div>
-<button id="btnWhip" class="btn">ҚАМШЫ</button>
-<button id="btnTug" class="btn">ТАРТ</button>
-<div id="end" class="ui" hidden><div><div id="endTitle"></div><div id="endScore"></div><button id="again">Тағы ойнау</button><div class="credits">Рельеф: SRTM (USGS), AWS Terrain Tiles · Снимок: EOxCloudless 2016 by EOX IT Services GmbH (Copernicus Sentinel data 2016), CC BY 4.0 · Конь: Warhorse Lite by Literock Studios</div></div></div>
-<script type="module" src="./js/game.js?v=7"></script>
+<button id="btnWhip" class="btn"></button>
+<button id="btnTug" class="btn"></button>
+<div id="end" hidden><div class="panel"><div id="endTitle" class="disp"></div><div id="endScore" class="disp"></div><button id="again"></button></div><div class="credits" data-credits></div></div>
+<script type="module" src="./js/game.js?v=10"></script>
 </body>
 </html>
