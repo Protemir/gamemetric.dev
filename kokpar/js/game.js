@@ -602,7 +602,12 @@ function stepSack(dt) {
   sack.pos.x = clamp(sack.pos.x, -BOUNDS.x, BOUNDS.x); sack.pos.z = clamp(sack.pos.z, -BOUNDS.z, BOUNDS.z);
   for (const k of kazans) { // с казана скатывается
     const dx = sack.pos.x - k.x, d = Math.hypot(dx, sack.pos.z);
-    if (d < KAZAN_R + 0.3) { sack.pos.x = k.x + (dx / (d || 1)) * (KAZAN_R + 0.3); sack.pos.z = (sack.pos.z / (d || 1)) * (KAZAN_R + 0.3); }
+    const out = KAZAN_R + 1.05; // за внешний край покрышек, чтобы туша не пряталась под ними
+    if (d < out) {
+      const ux = d > 0.01 ? dx / d : Math.cos(rnd() * 6.28), uz = d > 0.01 ? sack.pos.z / d : Math.sin(rnd() * 6.28);
+      sack.pos.x = k.x + ux * out; sack.pos.z = uz * out;
+      sack.vel.x = ux * 1.5; sack.vel.z = uz * 1.5; // скатывается наружу
+    }
   }
   sack.mesh.position.copy(sack.pos);
   // в полёте кувыркается, на земле ложится на бок
