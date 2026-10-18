@@ -30,8 +30,11 @@ export function initAudio() {
   fetch('sounds/horse-neigh.mp3').then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).then((buf) => { neighBuf = buf; }).catch(() => {});
 }
 let neighBuf = null;
+export const isMuted = () => muted;
+try { muted = localStorage.getItem('kokpar.mute') === '1'; } catch { /* приватный режим */ }
 export function toggleMute() {
   muted = !muted;
+  try { localStorage.setItem('kokpar.mute', muted ? '1' : '0'); } catch { /* приватный режим */ }
   if (master) master.gain.setTargetAtTime(muted ? 0 : 0.9, ctx.currentTime, 0.05);
   return muted;
 }

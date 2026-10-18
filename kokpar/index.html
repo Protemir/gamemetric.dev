@@ -175,13 +175,24 @@
   html.short .r-title { font-size: 34px; }
   html.short .r-score span { font-size: 36px; }
   @media (max-width: 520px) { .h-stat { grid-template-columns: 1fr auto; } .h-stat button { grid-column: 1 / -1; } }
+  #pauseBtn { position: fixed; top: max(10px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); width: 40px; height: 34px; font: 700 13px 'Rubik', sans-serif; color: #fff; background: rgba(14,10,6,.55); border: 1px solid rgba(255,255,255,.25); border-radius: 999px; cursor: pointer; z-index: 5; letter-spacing: 1px; font-weight: 900; }
+  #pause { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8,6,4,.6); z-index: 8; }
+  #pause[hidden] { display: none; }
+  .pausebox { width: min(420px, 92vw); }
+  .pausebox .big-btn { margin: 14px 0 10px; }
+  .p-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 4px; border-top: 1px solid rgba(255,255,255,.08); font-weight: 700; }
+  .p-tog, .p-seg button { border: 0; padding: 7px 14px; border-radius: 10px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); font-weight: 700; }
+  .p-tog.on, .p-seg button.on { background: linear-gradient(180deg, #ffd34d, #e8930f); color: #1d1206; box-shadow: none; }
+  .p-seg { display: flex; gap: 4px; }
+  .p-quit { display: block; width: 100%; margin-top: 12px; padding: 10px; border: 0; border-radius: 12px; background: rgba(224,57,62,.18); box-shadow: inset 0 0 0 1px rgba(224,57,62,.5); font-weight: 700; }
+  .p-quit small { display: block; font-weight: 500; font-size: 11px; opacity: .65; }
   html.rot, html.rot body { overflow: hidden; }
   /* низкий экран (телефон лёжа): меню компактнее */
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
   html.rot body { position: fixed; top: 0; left: 0; transform-origin: 0 0; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mve3r6dx","./js/career.js":"./js/career.js?v=mve3r6dx","./js/crowd.js":"./js/crowd.js?v=mve3r6dx","./js/flags.js":"./js/flags.js?v=mve3r6dx","./js/game.js":"./js/game.js?v=mve3r6dx","./js/kazan.js":"./js/kazan.js?v=mve3r6dx","./js/rider.js":"./js/rider.js?v=mve3r6dx","./js/serke.js":"./js/serke.js?v=mve3r6dx","./js/world.js":"./js/world.js?v=mve3r6dx"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mve3sppn","./js/career.js":"./js/career.js?v=mve3sppn","./js/crowd.js":"./js/crowd.js?v=mve3sppn","./js/flags.js":"./js/flags.js?v=mve3sppn","./js/game.js":"./js/game.js?v=mve3sppn","./js/kazan.js":"./js/kazan.js?v=mve3sppn","./js/rider.js":"./js/rider.js?v=mve3sppn","./js/serke.js":"./js/serke.js?v=mve3sppn","./js/world.js":"./js/world.js?v=mve3sppn"}}</script>
 </head>
 <body>
 <div id="load"><div><div class="t disp">KOKPAR</div><div class="s" id="loadtxt">…</div><div class="lbar"><i id="loadbar"></i></div></div><div class="credits" data-credits></div></div>
@@ -218,10 +229,12 @@
 <div id="hint" class="ui"></div>
 <div id="arrow" class="ui" hidden>➤</div>
 <button id="lang">EN</button>
+<button id="pauseBtn" class="ui" aria-label="Pause">II</button>
+<div id="pause" hidden></div>
 <div id="stick"><i></i></div>
 <button id="btnWhip" class="btn"></button>
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div><div class="credits" data-credits></div></div>
-<script type="module" src="./js/game.js?v=mve3r6dx"></script>
+<script type="module" src="./js/game.js?v=mve3sppn"></script>
 </body>
 </html>

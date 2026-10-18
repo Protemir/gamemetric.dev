@@ -7,7 +7,20 @@ import * as SkeletonUtils from '../vendor/utils/SkeletonUtils.js';
 import { hoof, snort, bump, neigh } from './audio.js';
 
 const P = new URLSearchParams(location.search);
-const Q = P.get('q') || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
+const Q = P.get('q') || (() => { try { return localStorage.getItem('kokpar.q'); } catch { return null; } })() || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
+const PR_MAX = Math.min(devicePixelRatio, Q === 'high' ? 2 : Q === 'medium' ? 1.5 : 1);
+// авто-разрешение: если кадров мало — рисуем в меньшем разрешении, стало легче — возвращаем
+const autoRes = { pr: PR_MAX, slow: 0, fast: 0 };
+function tuneRes(dt) {
+  if (P.has('fixres')) return;
+  const fps = 1 / Math.max(dt, 1e-3);
+  autoRes.slow = fps < 32 ? autoRes.slow + dt : 0;
+  autoRes.fast = fps > 56 ? autoRes.fast + dt : 0;
+  let pr = autoRes.pr;
+  if (autoRes.slow > 2.5) { pr = Math.max(0.6, pr - 0.15); autoRes.slow = 0; }
+  if (autoRes.fast > 6) { pr = Math.min(PR_MAX, pr + 0.1); autoRes.fast = 0; }
+  if (pr !== autoRes.pr) { autoRes.pr = pr; renderer.setPixelRatio(pr); renderer.setSize(view.w, view.h); }
+}
 const OFF = new Set((P.get('no') || '').split(',')); // ?no=terrain,river,grass,sky — для поиска тормозов
 if (P.has('clean')) document.body.classList.add('clean');
 
@@ -60,7 +73,7 @@ function measure() {
 measure();
 // ---------- рендер ----------
 const renderer = new THREE.WebGLRenderer({ antialias: Q !== 'low', powerPreference: 'high-performance', preserveDrawingBuffer: P.has('debug') }); // в отладке кадр можно снять скриншотом
-renderer.setPixelRatio(Math.min(devicePixelRatio, Q === 'high' ? 2 : Q === 'medium' ? 1.5 : 1));
+renderer.setPixelRatio(PR_MAX);
 renderer.setSize(view.w, view.h);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1111,4 +1124,4 @@ function onResize() {
   for (const P of particleSets) P.pts.material.uniforms.scale.value = view.h / 2;
 }
 const getProto = () => proto;
-export { THREE, P, Q, renderer, scene, camera, sun, SUN_DIR, rnd, canvasTex, loadModel, loadTerrain, renderAll, getProto, feltMat, setArena, followSun, Horse, GAITS, riverDist, terrainH, stepWorld, onResize, puff };
+export { THREE, P, Q, renderer, scene, camera, sun, SUN_DIR, rnd, canvasTex, loadModel, loadTerrain, renderAll, getProto, feltMat, setArena, followSun, tuneRes, Horse, GAITS, riverDist, terrainH, stepWorld, onResize, puff };

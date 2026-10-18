@@ -1,13 +1,13 @@
 // Көкпар — игра: 3×3, мешок-серке, два казана, тартыс (перетягивание мешка на скаку), боты.
 // ?debug — window.__kokpar; ?sim=N — N матчей ботов без картинки (проверка баланса); ?bots — игрок тоже бот.
-import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, setArena, followSun, view, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
+import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, setArena, followSun, tuneRes, Q, view, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
 import { Rider, loadRider } from './rider.js';
 import { makeSerke } from './serke.js';
 import { makeKazan } from './kazan.js';
 import * as career from './career.js';
 import { makeCrowd } from './crowd.js';
 import { flagCanvas } from './flags.js';
-import { initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
+import { isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
 if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
@@ -509,6 +509,7 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   initAudio();
   if (e.code === 'KeyM') toggleMute();
+  if ((e.code === 'Escape' || e.code === 'KeyP') && !SIM) togglePause();
   if (e.code === 'KeyE' || e.code === 'Space') { e.preventDefault(); if (me && canAim(me) && !AI_PLAYER) startAim(me); else tugTap = true; }
   if (e.code === 'KeyR' && canRear()) me.h.rear(); // свечка — только стоя
 });
@@ -745,7 +746,7 @@ function updateCamera(dt, snap) {
 }
 
 // ---------- интерфейс ----------
-const el = Object.fromEntries(['menu', 'pow', 'powbar', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
+const el = Object.fromEntries(['menu', 'pause', 'pauseBtn', 'pow', 'powbar', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
 el.bigText = el.banner.querySelector('.big'); el.subText = el.banner.querySelector('.small');
 const CREDITS = 'Рельеф / Terrain: SRTM (USGS), AWS Terrain Tiles · Снимок / Imagery: EOxCloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016), CC BY 4.0 · Конь / Horse: Warhorse Lite by Literock Studios · Всадник / Rider: Heraklios by A. Dizon (Mixamo)';
 for (const c of document.querySelectorAll('[data-credits]')) c.textContent = CREDITS;
@@ -850,6 +851,18 @@ function startMatch() {
   el.menu.hidden = true;
   state.score = [0, 0]; state.clock = MATCH_LEN; state.golden = false; kickoff(true);
 }
+el.pause.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-p]');
+  if (!b) return;
+  const [act, arg] = b.dataset.p.split(':');
+  if (act === 'resume') togglePause(false);
+  else if (act === 'mute') { toggleMute(); renderPause(); }
+  else if (act === 'q') { try { localStorage.setItem('kokpar.q', arg); } catch { /* приватный режим */ } location.reload(); }
+  else if (act === 'quit') { togglePause(false); state.tug = null; showMenu(); }
+});
+el.pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePause(); });
+el.pauseBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+addEventListener('blur', () => { if (!SIM && state.phase === 'play' && !P.has('debug')) togglePause(true); }); // ушёл со вкладки — пауза
 career.initCareer(document.getElementById('hub'), () => { initAudio(); goLandscape(); startMatch(); });
 function showMenu() {
   state.phase = 'menu';
@@ -862,10 +875,33 @@ addEventListener('resize', onResize);
 
 // ---------- запуск ----------
 let last = performance.now(), frozen = false;
+let paused = false;
+function togglePause(force) {
+  const on = force ?? !paused;
+  if (on && !['play', 'countdown', 'goal'].includes(state.phase)) return;
+  paused = on;
+  el.pause.hidden = !paused;
+  if (paused) renderPause();
+}
+const PT = {
+  ru: { title: 'Пауза', resume: 'Продолжить', sound: 'Звук', on: 'вкл', off: 'выкл', gfx: 'Графика', low: 'Низкая', medium: 'Средняя', high: 'Высокая', quit: 'Выйти в меню', note: 'Матч не засчитается', keys: 'Esc — пауза · M — звук' },
+  en: { title: 'Paused', resume: 'Resume', sound: 'Sound', on: 'on', off: 'off', gfx: 'Graphics', low: 'Low', medium: 'Medium', high: 'High', quit: 'Quit to menu', note: 'The match will not count', keys: 'Esc — pause · M — sound' },
+};
+function renderPause() {
+  const t = PT[lang];
+  el.pause.innerHTML = `<div class="hub pausebox"><div class="h-cup disp">${t.title}</div>
+    <button class="big-btn" data-p="resume">${t.resume}</button>
+    <div class="p-row"><span>${t.sound}</span><button data-p="mute" class="p-tog${isMuted() ? '' : ' on'}">${isMuted() ? t.off : t.on}</button></div>
+    <div class="p-row"><span>${t.gfx}</span><div class="p-seg">${['low', 'medium', 'high'].map((q) => `<button data-p="q:${q}" class="${q === Q ? 'on' : ''}">${t[q]}</button>`).join('')}</div></div>
+    <button class="p-quit" data-p="quit">${t.quit}<small>${t.note}</small></button>
+    <div class="h-season">${touch ? '' : t.keys}</div></div>`;
+}
 function frame(now) {
   if (frozen) return;
   let dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  if (!paused) tuneRes(dt);
+  if (paused) { renderAll(); requestAnimationFrame(frame); return; }
   if (state.phase === 'goal' && state.t > 2.1) dt *= 0.4; // гол — на мгновение замедленно
   step(dt);
   updateCamera(dt);
