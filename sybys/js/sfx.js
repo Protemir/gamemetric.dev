@@ -19,7 +19,7 @@ export function setSound(on) {
 
 function tone(freq, dur, type = 'triangle', vol = 0.12, when = 0, slide = 0) {
   const c = sound.ctx;
-  if (!sound.on || !c || c.state !== 'running') return;
+  if (!sound.on || sound.held || !c || c.state !== 'running') return; // held: the portal's mute
   const t = c.currentTime + when;
   const o = c.createOscillator(), gn = c.createGain();
   o.type = type;

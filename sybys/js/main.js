@@ -1,12 +1,15 @@
 import * as S from './sim.js';
 import { View, TRIBE_RGB } from './render.js';
-import { View3D, webglOK } from './render3d.js';
+import { View3D, webglOK, modelsReady } from './render3d.js';
 import { el, store } from './util.js';
 import { T, lang, setLang } from './text.js';
 import { sfx, audioInit, sound, setSound } from './sfx.js';
 import { avatar, elder, LONE_HORSE } from './avatars.js';
+import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute } from './portal.js';
 
 const q = new URLSearchParams(location.search);
+// on a portal its language wins unless the URL says otherwise
+if (PORTAL && !q.has('lang')) { const pl = portalLang(); if (pl) setLang(pl); }
 const DEBUG = q.has('debug');
 const SPEEDS = DEBUG ? [1, 2, 8] : [1, 2];
 
@@ -212,7 +215,10 @@ function startScreen() {
   const play = el('button', 'big play', T().play);
   play.onclick = () => { audioInit(); intro(store.get('sybys.tutDone', false) ? 3 : 1); };
   const lng = el('button', 'link', T().langBtn);
-  lng.onclick = () => { setLang(lang === 'ru' ? 'en' : 'ru'); document.documentElement.lang = lang; startScreen(); };
+  lng.onclick = () => { setLang(lang === 'ru' ? 'en' : 'ru'); document.documentElement.lang = lang; startScreen();
+// loading is over once the models are in (they are small; the 2D map needs none)
+modelsReady.then(() => loadingDone());
+onPortalMute((muted) => { sound.held = muted; }); };
   box.append(play, lng);
   const best = store.get('sybys.best', null);
   const seen = store.get('sybys.ends', []);
@@ -679,6 +685,7 @@ function showEnd() {
   view.setCinema?.(true);
   ui.replaceChildren(box);
   sfx[r.end === 'uniter' || r.end === 'mediator' ? 'clue' : 'bad']();
+  if (r.end === 'uniter' || r.end === 'mediator') happytime();
 }
 
 // —— the loop ——
@@ -728,6 +735,8 @@ function frame(now) {
     updateHud();
   }
   if (hintUntil && now > hintUntil) { hintEl.classList.remove('on'); hintUntil = 0; }
+  // the portal counts only real play: not the title, the cards, the scenes or a pause
+  gameplay(!!g && !g.demo && g.phase === 'map' && !paused && !document.hidden);
   view.draw(g && (g.phase !== 'end' || view.setCinema) ? g : null, now, look);
   requestAnimationFrame(frame);
 }
