@@ -3,7 +3,7 @@ import { View, TRIBE_RGB } from './render.js';
 import { View3D, webglOK, modelsReady } from './render3d.js';
 import { el, store } from './util.js';
 import { T, lang, setLang } from './text.js';
-import { sfx, audioInit, sound, setSound } from './sfx.js';
+import { sfx, audioInit, sound, setSound, holdAudio, musicLevel } from './sfx.js';
 import { avatar, elder, LONE_HORSE } from './avatars.js';
 import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute } from './portal.js';
 
@@ -40,7 +40,7 @@ function downgrade(fps) {
   view = new View(cv);
   view.hover = hover;
   fit();
-  if (DEBUG && window.__sybys) window.__sybys.view = view;
+  if (window.__sybys) window.__sybys.view = view;
   console.info('sybys: 3D too slow here (' + fps.toFixed(1) + ' fps), switched to 2D');
 }
 const $ = (id) => document.getElementById(id);
@@ -215,10 +215,7 @@ function startScreen() {
   const play = el('button', 'big play', T().play);
   play.onclick = () => { audioInit(); intro(store.get('sybys.tutDone', false) ? 3 : 1); };
   const lng = el('button', 'link', T().langBtn);
-  lng.onclick = () => { setLang(lang === 'ru' ? 'en' : 'ru'); document.documentElement.lang = lang; startScreen();
-// loading is over once the models are in (they are small; the 2D map needs none)
-modelsReady.then(() => loadingDone());
-onPortalMute((muted) => { sound.held = muted; }); };
+  lng.onclick = () => { setLang(lang === 'ru' ? 'en' : 'ru'); document.documentElement.lang = lang; startScreen(); };
   box.append(play, lng);
   const best = store.get('sybys.best', null);
   const seen = store.get('sybys.ends', []);
@@ -304,7 +301,7 @@ function start() {
     g.hold = true;
     lesson('send');
   }
-  if (DEBUG) window.__sybys = { g, S, view, coach, look, act: doAction, intercept: tapRider, choose: pickEvent, finish: pickEnd, step: (d) => S.step(g, d), lesson };
+  if (DEBUG || q.has('covers')) window.__sybys = { g, S, view, coach, look, act: doAction, intercept: tapRider, choose: pickEvent, finish: pickEnd, step: (d) => S.step(g, d), lesson };
 }
 
 // the first lesson points at an undecided pasture right next to the Orda
@@ -691,6 +688,7 @@ function showEnd() {
 // —— the loop ——
 
 let shownPhase = null;
+let lastMusic = -1;
 function frame(now) {
   const raw = (now - last) / 1000;
   const dt = Math.min(0.05, raw);
@@ -735,6 +733,9 @@ function frame(now) {
     updateHud();
   }
   if (hintUntil && now > hintUntil) { hintEl.classList.remove('on'); hintUntil = 0; }
+  // the dombra: full on the title and the cards, soft under play
+  const lvl = !g || g.demo || g.phase === 'end' ? 1 : g.phase === 'map' ? 0.45 : 0.7;
+  if (lvl !== lastMusic) { lastMusic = lvl; musicLevel(lvl); }
   // the portal counts only real play: not the title, the cards, the scenes or a pause
   gameplay(!!g && !g.demo && g.phase === 'map' && !paused && !document.hidden);
   view.draw(g && (g.phase !== 'end' || view.setCinema) ? g : null, now, look);
@@ -777,6 +778,10 @@ window.addEventListener('keydown', (e) => {
 
 document.documentElement.lang = lang;
 view.resize();
+if (q.has('covers')) window.__view = () => ({ view, g, S });
 startScreen();
+// loading is over once the models are in (they are small; the 2D map needs none)
+modelsReady.then(() => loadingDone());
+onPortalMute((muted) => holdAudio(muted));
 if (q.has('play')) start();
 requestAnimationFrame(frame);
