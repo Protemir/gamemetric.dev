@@ -152,20 +152,42 @@ export function grabSound(x, z) {
   s.connect(f); f.connect(g); g.connect(out(1, pan)); s.start(t, Math.random()); s.stop(t + 0.22);
 }
 // гол: гул толпы и дробь домбыры-барабана; свои — громче
-export function cheer(ours) {
+export function cheer(ours) { // гол: толпа кричит «уа-а!», бьёт дауылпаз, своим — ещё и карнай
   if (!ctx || muted) return;
-  const t = ctx.currentTime, L = 2.6;
+  const t = ctx.currentTime, L = 3.2, top = ours ? 0.3 : 0.15, o = out(1, 0);
+  // шум толпы
   const s = ctx.createBufferSource(); s.buffer = noise; s.loop = true;
-  const f1 = filter('bandpass', 700, 0.6), f2 = filter('bandpass', 1500, 0.8), g = ctx.createGain();
-  const top = ours ? 0.32 : 0.16;
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(top, t + 0.35); g.gain.setValueAtTime(top, t + 1.2); g.gain.exponentialRampToValueAtTime(0.001, t + L);
-  const trem = ctx.createOscillator(), tg = ctx.createGain(); trem.frequency.value = 6; tg.gain.value = top * 0.4; trem.connect(tg); tg.connect(g.gain);
-  s.connect(f1); f1.connect(f2); f2.connect(g); g.connect(out(1, 0));
-  s.start(t); s.stop(t + L); trem.start(t); trem.stop(t + L);
-  for (let i = 0; i < 6; i++) { // барабан
-    const o = ctx.createOscillator(), og = ctx.createGain(), tt = t + 0.1 + i * 0.16;
-    o.frequency.setValueAtTime(140, tt); o.frequency.exponentialRampToValueAtTime(60, tt + 0.12);
-    og.gain.setValueAtTime(0.4, tt); og.gain.exponentialRampToValueAtTime(0.001, tt + 0.15);
-    o.connect(og); og.connect(out(1, 0)); o.start(tt); o.stop(tt + 0.17);
+  const f1 = filter('bandpass', 650, 0.6), f2 = filter('bandpass', 1400, 0.7), g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(top * 0.7, t + 0.3); g.gain.setValueAtTime(top * 0.7, t + 1.4); g.gain.exponentialRampToValueAtTime(0.001, t + L);
+  s.connect(f1); f1.connect(f2); f2.connect(g); g.connect(o); s.start(t); s.stop(t + L);
+  // голоса: «а-а-а!» — пила через форманты гласной «а», каждый со своей высотой и вступлением
+  const fa = filter('bandpass', 800, 3), fb = filter('bandpass', 1250, 4), vg = ctx.createGain();
+  vg.gain.value = top * 0.5; fa.connect(vg); fb.connect(vg); vg.connect(o);
+  for (let i = 0; i < 12; i++) {
+    const v = ctx.createOscillator(), ag = ctx.createGain(), st = t + Math.random() * 0.3, f0 = 170 + Math.random() * 170, len = 1.2 + Math.random() * 1.4;
+    v.type = 'sawtooth';
+    v.frequency.setValueAtTime(f0 * 0.9, st); v.frequency.linearRampToValueAtTime(f0 * 1.12, st + 0.25); v.frequency.linearRampToValueAtTime(f0 * 0.95, st + len);
+    const vib = ctx.createOscillator(), vibG = ctx.createGain(); vib.frequency.value = 5 + Math.random() * 2; vibG.gain.value = f0 * 0.02; vib.connect(vibG); vibG.connect(v.frequency);
+    ag.gain.setValueAtTime(0.0001, st); ag.gain.exponentialRampToValueAtTime(0.09, st + 0.12); ag.gain.exponentialRampToValueAtTime(0.0001, st + len);
+    v.connect(ag); ag.connect(fa); ag.connect(fb);
+    v.start(st); v.stop(st + len + 0.05); vib.start(st); vib.stop(st + len + 0.05);
+  }
+  // дауылпаз: дробь с ускорением и удар в конце
+  for (let i = 0; i < 9; i++) {
+    const d = ctx.createOscillator(), dg = ctx.createGain(), tt = t + 0.05 + i * 0.13 - i * i * 0.004, last = i === 8;
+    d.frequency.setValueAtTime(last ? 120 : 150, tt); d.frequency.exponentialRampToValueAtTime(55, tt + (last ? 0.35 : 0.12));
+    dg.gain.setValueAtTime(last ? 0.6 : 0.35, tt); dg.gain.exponentialRampToValueAtTime(0.001, tt + (last ? 0.4 : 0.14));
+    d.connect(dg); dg.connect(o); d.start(tt); d.stop(tt + 0.45);
+  }
+  if (!ours) return;
+  // карнай: короткий победный клич — ре, ля, ре
+  const notes = [[293.7, 0.0, 0.16], [440, 0.18, 0.16], [587.3, 0.36, 0.7]];
+  const lp = filter('lowpass', 2400, 1), hg = ctx.createGain(); hg.gain.value = 0.16; lp.connect(hg); hg.connect(o);
+  for (const [fr, at, len] of notes) {
+    const h = ctx.createOscillator(), h2 = ctx.createOscillator(), ng = ctx.createGain(), st = t + 0.15 + at;
+    h.type = 'sawtooth'; h2.type = 'square'; h.frequency.value = fr; h2.frequency.value = fr * 1.003;
+    ng.gain.setValueAtTime(0.0001, st); ng.gain.exponentialRampToValueAtTime(0.5, st + 0.03); ng.gain.setValueAtTime(0.45, st + len * 0.7); ng.gain.exponentialRampToValueAtTime(0.0001, st + len);
+    h.connect(ng); h2.connect(ng); ng.connect(lp);
+    h.start(st); h.stop(st + len + 0.05); h2.start(st); h2.stop(st + len + 0.05);
   }
 }

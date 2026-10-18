@@ -645,7 +645,12 @@ function hoofBones(o) {
 const COATS = [[1.7, 1.7, 1.7], [2.9, 1.6, 0.95], [0.75, 0.72, 0.72], [3.1, 2.6, 1.7], [1.2, 1.1, 1.05], [3.3, 2.2, 1.3]];
 
 // Тоқым: красный, синий, зелёный войлок с золотым бордюром и «бараньими рогами» (қошқар мүйіз).
-const blanketMats = ['#a3242c', '#1f4f8f', '#2f6b3a', '#7a2a6e'].map((felt) => new THREE.MeshStandardMaterial({
+const feltCache = new Map();
+function feltMat(felt) { // тоқым любого цвета команды (кэш по цвету)
+  if (!feltCache.has(felt)) feltCache.set(felt, makeFelt(felt));
+  return feltCache.get(felt);
+}
+const makeFelt = (felt) => new THREE.MeshStandardMaterial({
   map: canvasTex(512, 256, (g, w, h) => {
     g.fillStyle = felt; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 3000; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } // ворс войлока
@@ -671,7 +676,8 @@ const blanketMats = ['#a3242c', '#1f4f8f', '#2f6b3a', '#7a2a6e'].map((felt) => n
     for (const cx of [w * 0.27, w * 0.73]) { horn(cx, h / 2 - 6, 44, 1); horn(cx, h / 2 + 6, 44, -1); g.beginPath(); g.arc(cx, h / 2, 7, 0, 6.283); g.fillStyle = gold; g.fill(); }
   }),
   roughness: 0.95, side: THREE.DoubleSide,
-}));
+});
+const blanketMats = ['#a3242c', '#1f4f8f', '#2f6b3a', '#7a2a6e'].map(feltMat);
 
 // Форма тоқыма по бокам коня: берём профиль туловища под седлом из позы покоя и отступаем на 1,5 см наружу.
 function buildBlanket(holder) {
@@ -1012,4 +1018,4 @@ function onResize() {
   for (const P of particleSets) P.pts.material.uniforms.scale.value = innerHeight / 2;
 }
 const getProto = () => proto;
-export { THREE, P, Q, renderer, scene, camera, sun, SUN_DIR, rnd, canvasTex, loadModel, loadTerrain, renderAll, getProto, Horse, GAITS, riverDist, terrainH, stepWorld, onResize, puff };
+export { THREE, P, Q, renderer, scene, camera, sun, SUN_DIR, rnd, canvasTex, loadModel, loadTerrain, renderAll, getProto, feltMat, Horse, GAITS, riverDist, terrainH, stepWorld, onResize, puff };

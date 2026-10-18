@@ -45,7 +45,7 @@ function bumpTexture(w, h) {
 
 export function makeSerke() {
   const g = new THREE.Group();
-  const hide = new THREE.MeshStandardMaterial({ map: furTexture(512, 256, '#3b2c20', '#8a7356'), normalMap: bumpTexture(256, 128), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95 });
+  const hide = new THREE.MeshStandardMaterial({ map: furTexture(512, 256, '#8a7258', '#cdbb9a'), normalMap: bumpTexture(256, 128), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95 });
   hide.map.repeat.set(2, 1); hide.normalMap.repeat.set(3, 2);
   const legHide = hide.clone(); legHide.map = hide.map.clone(); legHide.map.repeat.set(1, 0.5); legHide.map.needsUpdate = true;
   const rope = new THREE.MeshStandardMaterial({ color: '#7a6040', roughness: 0.9 });
@@ -73,7 +73,7 @@ export function makeSerke() {
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.11, 0.2, 14), hide);
   neck.rotation.z = -Math.PI / 2 + 0.35; neck.position.set(L / 2 + 0.04, 0.06, 0);
   neck.castShadow = true; g.add(neck);
-  const neckCap = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 8), new THREE.MeshStandardMaterial({ color: '#4a3826', roughness: 0.8 })); // зашитая кожа
+  const neckCap = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 8), new THREE.MeshStandardMaterial({ color: '#7a6248', roughness: 0.8 })); // зашитая кожа
   neckCap.position.set(L / 2 + 0.13, 0.1, 0); neckCap.scale.set(0.5, 1, 1); g.add(neckCap);
   const tie = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.014, 6, 16), rope);
   tie.rotation.y = Math.PI / 2; tie.rotation.x = 0.35; tie.position.set(L / 2 + 0.06, 0.07, 0); g.add(tie);

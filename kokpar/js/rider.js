@@ -63,6 +63,8 @@ function materialsFor(color) {
 
 // ---------- поза ----------
 const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), AZ = new THREE.Vector3(0, 0, 1);
+const Vs = new THREE.Vector3(), Vt = new THREE.Vector3();
+const Mm = new THREE.Matrix4(), Vm = new THREE.Vector3(), Qm = new THREE.Quaternion(), Sm = new THREE.Vector3();
 const Qa = new THREE.Quaternion(), Qb = new THREE.Quaternion(), Qr = new THREE.Quaternion(), V0 = new THREE.Vector3();
 // повернуть кость вокруг оси в осях всадника (model — корень персонажа)
 function rot(model, bone, axis, ang) {
@@ -88,8 +90,9 @@ export class Rider {
   constructor(horse, color) {
     const obj = horse.obj, sock = obj.getObjectByName('saddle_socket');
     this.model = SkeletonUtils.clone(proto);
-    const mats = materialsFor(color);
-    this.model.traverse((o) => { if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map((m) => mats.get(m) || m) : mats.get(o.material) || o.material; });
+    this.orig = [];
+    this.model.traverse((o) => { if (o.isMesh) this.orig.push([o, o.material]); });
+    this.setColor(color);
     this.bone = (n) => this.model.getObjectByName('mixamorig' + n);
     this.model.updateMatrixWorld(true);
     for (const [b, ax, a] of BASE) rot(this.model, this.bone(b), ax, a);
@@ -114,47 +117,103 @@ export class Rider {
     this.root.updateMatrixWorld(true);
     sock.attach(this.root);
     this.sock = sock;
-    this.home = { pos: this.root.position.clone(), quat: this.root.quaternion.clone() };
+    this.home = { pos: this.root.position.clone(), quat: this.root.quaternion.clone(), scale: this.root.scale.clone() };
     this.lean = 0; this.reach = 0; this.side = -1;
+    this.horse = horse;
+    // тело в седле на пружине: седло дёргается — корпус и голова догоняют с запаздыванием
+    this.sw = { p: 0, pv: 0, r: 0, rv: 0, pos: null, vel: new THREE.Vector3(), acc: new THREE.Vector3() };
     this.fallen = null;
   }
-  // падение с коня: всадник слетает с той скоростью, что была, кувыркается и ложится на землю
+  // падение с коня: слетает с той скоростью, что была, в полёте машет руками и поджимается,
+  // бьётся плечом о землю, чуть подпрыгивает, перекатывается на спину, а потом встаёт
   fall(scene, vx, vy, vz, sideSign) {
     if (this.fallen) return;
     this.root.updateMatrixWorld(true);
     scene.attach(this.root);
-    this.fallen = { t: 0, vel: new THREE.Vector3(vx, vy, vz), spin: new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion).normalize(), w: 4.5 * sideSign, turned: 0, landed: false };
-    this.limp = 0;
+    const up = new THREE.Euler().setFromQuaternion(this.root.quaternion, 'YXZ');
+    this.fallen = {
+      t: 0, vel: new THREE.Vector3(vx, vy, vz), side: sideSign,
+      spin: new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion).normalize(),
+      w: 4.5 * sideSign, turned: 0, landed: false, bounced: false, rolled: 0, tLand: 0,
+      qUp: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, up.y, 0, 'YXZ')), qLie: null, yLie: 0, rise: 0,
+    };
+    this.limp = 0; this.fly = 0; this.jolt = 0; this.stand = 0;
   }
-  // вернуться в седло (после того как отлежался)
+  // вернуться в седло: берётся за луку, подпрыгивает и перекидывает ногу (mount — 0..1)
+  startMount() {
+    const f = this.fallen;
+    if (!f || f.mount != null) return;
+    f.mount = 0; f.mFrom = this.root.position.clone(); f.mQ = this.root.quaternion.clone(); f.mS = this.root.scale.clone();
+  }
+  stepMount(dt) {
+    const f = this.fallen;
+    f.mount = Math.min(1, f.mount + dt / 0.6);
+    // где окажется таз в седле — в мировых координатах
+    this.sock.updateWorldMatrix(true, false);
+    Mm.compose(this.home.pos, this.home.quat, this.home.scale).premultiply(this.sock.matrixWorld).decompose(Vm, Qm, Sm);
+    const k = f.mount, e = k * k * (3 - 2 * k);
+    this.root.position.lerpVectors(f.mFrom, Vm, e);
+    this.root.position.y += Math.sin(k * Math.PI) * 0.35; // прыжок
+    this.root.quaternion.slerpQuaternions(f.mQ, Qm, e);
+    this.root.scale.lerpVectors(f.mS, Sm, e);
+    this.stand = 1 - e;
+    if (k >= 1) this.remount();
+  }
   remount() {
     if (!this.fallen) return;
     this.sock.add(this.root);
     this.root.position.copy(this.home.pos);
     this.root.quaternion.copy(this.home.quat);
-    this.fallen = null; this.limp = 0;
+    this.root.scale.copy(this.home.scale); // в мире всадник прежнего роста
+    this.fallen = null; this.limp = 0; this.fly = 0; this.jolt = 0; this.stand = 0;
   }
-  // физика падения: полёт, кувырок вокруг продольной оси, удар о землю, трение. Возвращает true в момент приземления
-  stepFall(dt) {
+  // физика падения. Возвращает true в момент удара о землю; getUp — пора вставать
+  stepFall(dt, getUp) {
     const f = this.fallen;
     if (!f) return false;
+    if (f.mount != null) { f.t += dt; this.stepMount(dt); return false; }
     f.t += dt;
     let landedNow = false;
+    const r = this.root;
     if (!f.landed) {
       f.vel.y -= 9.8 * dt;
-      this.root.position.addScaledVector(f.vel, dt);
+      r.position.addScaledVector(f.vel, dt);
       const step = f.w * dt;
-      if (Math.abs(f.turned) < 1.45) { f.turned += step; this.root.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, step)); }
-      if (this.root.position.y < 0.22) { this.root.position.y = 0.22; f.landed = true; landedNow = true; f.vel.multiplyScalar(0.35); f.vel.y = 0; }
-    } else {
-      this.root.position.addScaledVector(f.vel, dt);
-      f.vel.multiplyScalar(Math.exp(-dt * 5)); // скользит по траве и останавливается
-      if (Math.abs(f.turned) < 1.5) { const s = Math.sign(f.w) * dt * 3; f.turned += s; this.root.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, s)); }
+      if (Math.abs(f.turned) < 1.4) { f.turned += step; r.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, step)); }
+      this.fly = Math.min(1, this.fly + dt * 6);
+      if (r.position.y < 0.24) {
+        r.position.y = 0.24;
+        if (!f.bounced) { // удар: отскок, руки и голова дёргаются по инерции
+          f.bounced = true; landedNow = true; this.jolt = 1;
+          f.vel.set(f.vel.x * 0.45, Math.min(2.2, -f.vel.y * 0.3), f.vel.z * 0.45);
+        } else { f.landed = true; f.tLand = f.t; f.vel.y = 0; }
+      }
+    } else if (!getUp) {
+      r.position.addScaledVector(f.vel, dt);
+      f.vel.multiplyScalar(Math.exp(-dt * 4)); // скользит по траве и останавливается
+      if (Math.abs(f.turned) < 1.55) { const s = Math.sign(f.w) * dt * 2; f.turned += s; r.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, s)); }
+      // с бока перекатывается на спину — вокруг своего позвоночника, с затуханием
+      if (f.rolled < 1.25) {
+        const sp = Math.max(0.4, 3.2 * (1 - f.rolled / 1.25)) * dt;
+        f.rolled += sp;
+        r.quaternion.premultiply(Qa.setFromAxisAngle(V0.set(0, 1, 0).applyQuaternion(r.quaternion), sp * -f.side));
+        r.position.y = 0.24 - 0.1 * Math.min(1, f.rolled / 1.25); // на спине таз ниже, чем на боку
+      }
+      this.fly = Math.max(0, this.fly - dt * 3);
+    } else { // встаёт: садится, упирается, выпрямляется
+      if (!f.qLie) { f.qLie = r.quaternion.clone(); f.yLie = r.position.y; }
+      f.rise = Math.min(1, f.rise + dt / 0.85);
+      const e = f.rise * f.rise * (3 - 2 * f.rise);
+      r.quaternion.slerpQuaternions(f.qLie, f.qUp, e);
+      r.position.y = f.yLie + (0.98 - f.yLie) * Math.sin(e * Math.PI / 2);
+      this.stand = e;
     }
-    this.limp = Math.min(1, this.limp + dt * 3);
+    this.limp = f.landed ? Math.min(1, this.limp + dt * 2.5) * (1 - this.stand) : this.limp;
+    this.jolt = Math.max(0, this.jolt - dt * 3.5);
     return landedNow;
   }
   update(dt, speed, reach, side) {
+    if (this.fallen) speed = reach = 0;
     const k = 1 - Math.exp(-dt * 6);
     this.lean += (Math.min(speed / 9, 1) * 0.32 - this.lean) * k; // на галопе ложится вперёд
     this.reach += (reach - this.reach) * k;
@@ -164,19 +223,74 @@ export class Rider {
     this.turn('Spine2', AX, this.lean * 0.4);
     this.turn('Neck', AX, -this.lean * 0.7); // голова смотрит вперёд, а не в землю
     this.turn('Spine1', AZ, this.reach * 0.35 * -this.side); // корпус клонится к боку
+    if (!this.fallen && dt > 0) this.sway(dt);
     // рука тянется вниз и вбок: правая (side −1) или левая (+1)
     const arm = this.side < 0 ? 'Right' : 'Left', s = this.side < 0 ? 1 : -1;
     this.turn(arm + 'Arm', AZ, this.reach * 0.5 * s);
     this.turn(arm + 'ForeArm', AY, this.reach * 0.9 * s);
-    if (this.limp > 0) { // упал: руки раскинуты, корпус расслаблен
-      const l = this.limp;
-      this.turn('LeftArm', AZ, 0.9 * l); this.turn('RightArm', AZ, -0.9 * l);
-      this.turn('LeftForeArm', AY, 0.8 * l); this.turn('RightForeArm', AY, -0.8 * l);
-      this.turn('Spine1', AX, -0.35 * l); this.turn('Neck', AX, -0.3 * l);
-      // ноги распрямляются и чуть разъезжаются, как у упавшего
-      this.turn('LeftUpLeg', AX, 0.85 * l); this.turn('RightUpLeg', AX, 0.6 * l);
-      this.turn('LeftLeg', AX, -1.1 * l); this.turn('RightLeg', AX, -0.7 * l);
+    if (this.throwT >= 0 && !this.fallen) { // бросок: обе руки поднимают тушу над головой, корпус откидывается — и резко вперёд
+      const t = this.throwT, sm = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+      const fwd = sm((t - 0.3) / 0.16) * (1 - sm((t - 0.55) / 0.25));
+      const up = t < 0.32 ? sm(t / 0.3) : 1 - sm((t - 0.36) / 0.44);
+      this.turn('LeftArm', AZ, 1.75 * up); this.turn('RightArm', AZ, -1.75 * up);
+      this.turn('LeftForeArm', AY, 0.7 * up * (1 - fwd)); this.turn('RightForeArm', AY, -0.7 * up * (1 - fwd));
+      this.turn('Spine1', AX, -0.3 * up * (1 - fwd) + 0.6 * fwd);
+      this.turn('Spine2', AX, -0.15 * up * (1 - fwd) + 0.3 * fwd);
+      this.turn('Neck', AX, 0.25 * up - 0.4 * fwd);
     }
+    if (this.fallen) {
+      const f = this.fallen, t = f.t, fl = this.fly, l = this.limp, j = this.jolt, st = this.stand;
+      // в полёте: руки машут вразнобой, корпус поджимается, ноги выпрямляются из стремян
+      const wl = Math.sin(t * 13), wr = Math.sin(t * 11 + 1.7);
+      this.turn('LeftArm', AZ, fl * (0.7 + 0.6 * wl) + l * 0.9 - st * 0.3);
+      this.turn('RightArm', AZ, -fl * (0.7 + 0.6 * wr) - l * 0.9 + st * 0.3);
+      this.turn('LeftArm', AX, fl * 0.5 * wr);
+      this.turn('RightArm', AX, -fl * 0.5 * wl);
+      this.turn('LeftForeArm', AY, fl * (0.6 + 0.4 * wr) + l * 0.8);
+      this.turn('RightForeArm', AY, -fl * (0.6 + 0.4 * wl) - l * 0.8);
+      this.turn('Spine1', AX, fl * 0.45 - l * 0.35 + j * 0.3);
+      this.turn('Spine2', AX, fl * 0.2 - l * 0.15);
+      this.turn('Neck', AX, fl * 0.3 - l * 0.3 - j * 0.6);
+      this.turn('Spine1', AZ, j * 0.35 * f.side);
+      // ноги: в полёте разъезжаются и дрыгаются, лёжа — раскинуты, при вставании — прямые
+      const kick = Math.sin(t * 9);
+      this.turn('LeftUpLeg', AX, fl * (0.5 + 0.35 * kick) + l * 0.85 + st * 1.2);
+      this.turn('RightUpLeg', AX, fl * (0.3 - 0.35 * kick) + l * 0.6 + st * 1.2);
+      this.turn('LeftLeg', AX, -fl * 0.5 - l * 1.1 + st * 0.9);
+      this.turn('RightLeg', AX, -fl * 0.8 - l * 0.7 + st * 0.9);
+      this.turn('LeftUpLeg', AZ, fl * 0.25 + l * 0.15);
+      this.turn('RightUpLeg', AZ, -fl * 0.25 - l * 0.15);
+    }
+  }
+  // болтанка: ускорение седла (в осях коня) раскачивает пружину «корпус» по тангажу и крену
+  sway(dt) {
+    const w = this.sw, h = this.horse;
+    this.sock.getWorldPosition(Vs);
+    if (w.pos && dt < 0.1) {
+      Vt.subVectors(Vs, w.pos).divideScalar(dt);
+      w.acc.lerp(Vt.clone().sub(w.vel).divideScalar(dt), 0.5); // сглаживаем шум кадров
+      w.vel.copy(Vt);
+    } else w.pos = new THREE.Vector3();
+    w.pos.copy(Vs);
+    const fx = Math.sin(h.yaw), fz = Math.cos(h.yaw);
+    const af = THREE.MathUtils.clamp(w.acc.x * fx + w.acc.z * fz, -40, 40); // вперёд
+    const al = THREE.MathUtils.clamp(w.acc.x * fz - w.acc.z * fx, -40, 40); // вбок
+    const au = THREE.MathUtils.clamp(w.acc.y, -60, 60); // вверх
+    // разгон — корпус отстаёт назад, удар копыт снизу — сгибается вперёд; в повороте — наклон внутрь
+    const K = 70, C = 10;
+    w.pv += (-K * w.p - C * w.pv - af * 2 - au * 1.4) * dt; w.p += w.pv * dt;
+    w.rv += (-K * w.r - C * w.rv + al * 1.6) * dt; w.r += w.rv * dt;
+    w.p = THREE.MathUtils.clamp(w.p, -0.3, 0.3); w.r = THREE.MathUtils.clamp(w.r, -0.25, 0.25);
+    const into = -(h.turn || 0) * 0.18; // крен в поворот
+    this.turn('Spine1', AX, w.p * 0.55); this.turn('Spine2', AX, w.p * 0.35);
+    this.turn('Neck', AX, -w.p * 0.6); // голова держит горизонт — кивает навстречу
+    this.turn('Spine1', AZ, w.r * 0.6 + into); this.turn('Neck', AZ, -w.r * 0.4 - into * 0.5);
+    this.turn('LeftForeArm', AY, w.p * 0.25); this.turn('RightForeArm', AY, -w.p * 0.25); // руки с поводом пружинят
+  }
+  // перекрасить под команду (смена соперника в лиге)
+  setColor(color) {
+    const mats = materialsFor(color);
+    for (const [o, m0] of this.orig) o.material = Array.isArray(m0) ? m0.map((m) => mats.get(m) || m) : mats.get(m0) || m0;
   }
   // поворот кости вокруг оси всадника: local · R(осьВосяхКости, угол)
   turn(n, axis, ang) {

@@ -1,8 +1,10 @@
 // Көкпар — игра: 3×3, мешок-серке, два казана, тартыс (перетягивание мешка на скаку), боты.
 // ?debug — window.__kokpar; ?sim=N — N матчей ботов без картинки (проверка баланса); ?bots — игрок тоже бот.
-import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
+import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
 import { Rider, loadRider } from './rider.js';
 import { makeSerke } from './serke.js';
+import { makeKazan } from './kazan.js';
+import { flagCanvas } from './flags.js';
 import { initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
@@ -24,7 +26,8 @@ const TEXT = {
     tug: 'Тартыс!', tugSub: 'Схватка за серке', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
     fumble: 'Выронил серке!', win: 'Победа', lose: 'Поражение', draw: 'Ничья', again: 'Ещё раз', stamina: 'Сила коня',
     btnTug: 'ВЫРВАТЬ', btnWhip: 'КАМЧА', mashKey: 'Жми E быстрее!', mashTap: 'Жми ВЫРВАТЬ быстрее!', canTug: '<kbd>E</kbd> — вырвать серке',
-    help: '<kbd>W</kbd> галоп · <kbd>S</kbd> тише · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке',
+    help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
+    canPass: '<kbd>E</kbd> — взять серке у своего', passMe: 'Пас!',
     helpTouch: 'Палец слева — куда скакать · ВЫРВАТЬ — отнять серке · КАМЧА — рывок',
     home: 'Аксай', btnThrow: 'БРОСОК', canThrow: '<kbd>E</kbd> — бросить в казан', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!',
     league: 'Лига аулов Жетысу', vs: 'Соперник', play: 'В седло!', next: 'Дальше', retry: 'Ещё раз', champion: 'Чемпион Жетысу!',
@@ -35,7 +38,8 @@ const TEXT = {
     tug: 'Tug of war!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
     fumble: 'Fumble!', win: 'Victory', lose: 'Defeat', draw: 'Draw', again: 'Play again', stamina: 'Horse stamina',
     btnTug: 'GRAB', btnWhip: 'WHIP', mashKey: 'Mash E!', mashTap: 'Tap GRAB fast!', canTug: '<kbd>E</kbd> — grab the serke',
-    help: '<kbd>W</kbd> gallop · <kbd>S</kbd> slow · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke',
+    help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
+    canPass: '<kbd>E</kbd> — take the serke from a teammate', passMe: 'Pass!',
     helpTouch: 'Left thumb — where to ride · GRAB — take the serke · WHIP — burst',
     home: 'Aksay', btnThrow: 'THROW', canThrow: '<kbd>E</kbd> — throw into the kazan', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!',
     league: 'Zhetysu village league', vs: 'Opponent', play: 'Ride!', next: 'Next', retry: 'Try again', champion: 'Zhetysu champion!',
@@ -48,15 +52,17 @@ const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = THREE.MathUtils.clamp;
 
 // ---------- лига аулов: 8 соперников, каждый сильнее ----------
+const HOME = { color: '#b8262c', css: '#ff6a6e', grad: ['#ffb1b3', '#e0393e'], hud: ['#e0393e', '#8f1418'], sign: 'shanyrak' }; // Аксай — свои
 const LEAGUE = [
-  { ru: 'Кайнар', en: 'Kainar', pull: -0.05, react: 0.8, speed: 0.92 },
-  { ru: 'Таусамалы', en: 'Tausamaly', pull: -0.03, react: 0.68, speed: 0.95 },
-  { ru: 'Каскелен', en: 'Kaskelen', pull: -0.01, react: 0.58, speed: 0.97 },
-  { ru: 'Талгар', en: 'Talgar', pull: 0.02, react: 0.5, speed: 0.99 },
-  { ru: 'Иссык', en: 'Yesik', pull: 0.04, react: 0.45, speed: 1.0 },
-  { ru: 'Шелек', en: 'Shelek', pull: 0.06, react: 0.4, speed: 1.02 },
-  { ru: 'Кеген', en: 'Kegen', pull: 0.08, react: 0.35, speed: 1.03 },
-  { ru: 'Нарынкол', en: 'Narynkol', pull: 0.1, react: 0.3, speed: 1.05 },
+  { ru: 'Кайнар', en: 'Kainar', pull: -0.05, react: 0.8, speed: 0.92, color: '#2f7a3a', css: '#86e596', grad: ['#c3f0c9', '#3aa64c'], hud: ['#3aa64c', '#15501f'], sign: 'spring' },
+  { ru: 'Таусамалы', en: 'Tausamaly', pull: -0.03, react: 0.68, speed: 0.95, color: '#2456a8', css: '#7fb0ff', grad: ['#b9d4ff', '#3a7be0'], hud: ['#3a7be0', '#13398a'], sign: 'mountain' },
+  { ru: 'Каскелен', en: 'Kaskelen', pull: -0.01, react: 0.58, speed: 0.97, color: '#c0601c', css: '#ffb070', grad: ['#ffd9b0', '#e0782a'], hud: ['#e0782a', '#8a3c0c'], sign: 'sun' },
+  { ru: 'Уштерек', en: 'Ushterek', pull: 0.0, react: 0.54, speed: 0.98, color: '#1f8a86', css: '#6fe0dc', grad: ['#bff2ef', '#2aa8a3'], hud: ['#2aa8a3', '#0d5a58'], sign: 'poplars' },
+  { ru: 'Талгар', en: 'Talgar', pull: 0.02, react: 0.5, speed: 0.99, color: '#6a3a9a', css: '#c49bff', grad: ['#e2cfff', '#8a52c8'], hud: ['#8a52c8', '#3e1f63'], sign: 'star' },
+  { ru: 'Иссык', en: 'Yesik', pull: 0.04, react: 0.45, speed: 1.0, color: '#2a86c8', css: '#8fd0ff', grad: ['#c8eaff', '#3aa0e0'], hud: ['#3aa0e0', '#145c8a'], sign: 'wave' },
+  { ru: 'Шелек', en: 'Shelek', pull: 0.06, react: 0.4, speed: 1.02, color: '#b8901e', css: '#ffe07a', grad: ['#fff0b8', '#e0b83a'], hud: ['#d4a82e', '#7a5a0c'], sign: 'tamga' },
+  { ru: 'Кеген', en: 'Kegen', pull: 0.08, react: 0.35, speed: 1.03, color: '#2e2e2e', css: '#e0e0e0', grad: ['#f2f2f2', '#7a7a7a'], hud: ['#5a5a5a', '#1a1a1a'], sign: 'horns' },
+  { ru: 'Нарынкол', en: 'Narynkol', pull: 0.1, react: 0.3, speed: 1.05, color: '#1e3366', css: '#9fb6ff', grad: ['#d0dbff', '#3a5aa8'], hud: ['#3a5aa8', '#0f1a3a'], sign: 'khan' },
 ];
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* приватный режим */ } } };
 let stage = Math.min(LEAGUE.length - 1, Number(P.get('stage') ?? store.get('kokpar.stage', 0)) || 0);
@@ -68,29 +74,18 @@ const SWAP = P.has('swap') ? -1 : 1; // ?swap — команды меняютс�
 const kazans = [-GOAL_X * SWAP, GOAL_X * SWAP].map((x, t) => {
   const g = new THREE.Group();
   g.position.set(x, 0, 0);
-  const earth = new THREE.MeshLambertMaterial({
-    map: canvasTex(256, 64, (c, w, h) => {
-      c.fillStyle = '#8a6d45'; c.fillRect(0, 0, w, h);
-      for (let i = 0; i < 900; i++) { c.fillStyle = `rgba(${Math.random() < 0.5 ? '60,45,28' : '170,140,95'},${Math.random() * 0.35})`; c.fillRect(Math.random() * w, Math.random() * h, 3, 2); }
-    }),
-  });
-  const mound = new THREE.Mesh(new THREE.CylinderGeometry(KAZAN_R * 0.82, KAZAN_R, 1.0, 40), earth);
-  mound.position.y = 0.5; mound.castShadow = mound.receiveShadow = true;
-  g.add(mound);
-  const top = new THREE.Mesh(new THREE.CircleGeometry(KAZAN_R * 0.78, 40), new THREE.MeshLambertMaterial({ color: '#6b5132' }));
-  top.rotation.x = -Math.PI / 2; top.position.y = 1.01; g.add(top);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(KAZAN_R * 0.82, 0.09, 8, 48), new THREE.MeshLambertMaterial({ color: TEAMS[t].color }));
-  rim.rotation.x = Math.PI / 2; rim.position.y = 1.02; g.add(rim);
+  const body = makeKazan(TEAMS[t].color, KAZAN_R); // покрышки, насыпь, вытоптанная земля
+  g.add(body);
   // флаг команды
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 5.5, 8), new THREE.MeshLambertMaterial({ color: '#d8cdb5' }));
   pole.position.set(0, 3.7, -KAZAN_R - 0.4); g.add(pole);
   const flagGeo = new THREE.PlaneGeometry(1.6, 1.0, 12, 4);
   flagGeo.translate(0.8, 0, 0);
-  const flag = new THREE.Mesh(flagGeo, new THREE.MeshLambertMaterial({ color: TEAMS[t].color, side: THREE.DoubleSide }));
+  const flag = new THREE.Mesh(flagGeo, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }));
   flag.position.set(0, 5.9, -KAZAN_R - 0.4); g.add(flag);
   flag.userData.base = flagGeo.attributes.position.array.slice();
   scene.add(g);
-  return { x, team: t, g, flag };
+  return { x, team: t, g, flag, body };
 });
 // флажки по краю поля
 {
@@ -170,12 +165,15 @@ function kickoff(first) {
   state.t = first ? 3.2 : 2.2;
   banner(first ? '3' : tr('ready'));
 }
+const Qc = new THREE.Quaternion();
 function dropSack(pos, vel) {
+  for (const e of ents) e.throw = null;
   sack.lie = (rnd() < 0.5 ? 1 : -1) * Math.PI / 2; // упадёт на левый или правый бок
   sack.carrier = null; sack.flight = null; roleT = 0;
   sack.pos.copy(pos); sack.vel.copy(vel);
 }
 function giveSack(e) {
+  for (const o of ents) o.throw = null;
   sack.carrier = e; sack.flight = null; roleT = 0;
   e.pickCD = 0;
   state.events.push({ t: 'pick', team: e.team });
@@ -206,15 +204,22 @@ function throwInfo(e) { // расстояние до чужого казана, 
   const chance = clamp(1.25 - (d - 4) / 7, 0, 1) * clamp(1.3 - ang / 0.5, 0, 1) * (e.h.v > 9 ? 0.85 : 1);
   return { k, d, ang, chance };
 }
+const WIND = 0.32; // замах, с
 function throwSack(e) {
+  if (e.throw) return;
   const { k, d, chance } = throwInfo(e);
   const hit = rnd() < chance;
   let to;
   if (hit) to = new THREE.Vector3(k.x + (rnd() - 0.5) * 1.2, 1.2, (rnd() - 0.5) * 1.2);
   else { const a = rnd() * 6.283, r = KAZAN_R + 1.4 + rnd() * 2.2; to = new THREE.Vector3(k.x + Math.cos(a) * r, GROUND_Y, Math.sin(a) * r); }
+  e.throw = { t: 0, to, d, hit };
+}
+function releaseSack(e) { // руки выпрямились — туша летит
+  const { to, d, hit } = e.throw;
+  e.throw = null;
   sack.carrier = null; roleT = 0;
-  sack.flight = { kind: 'throw', from: sack.pos.clone(), to, t: 0, T: 0.55 + d * 0.04, arc: 2 + d * 0.22, hit, team: e.team, scorer: e };
-  e.pickCD = 1; e.reach = 1; e.reachSide = -1;
+  sack.flight = { kind: 'throw', from: sack.pos.clone(), to, t: 0, T: 0.5 + d * 0.04, arc: 1.2 + d * 0.2, hit, team: e.team, scorer: e };
+  e.pickCD = 1;
   state.events.push({ t: 'throw', hit });
   if (!SIM && e.me) banner(tr('thrown'), null, 0.7);
   if (!SIM) whip();
@@ -228,19 +233,29 @@ function fallRider(e, nx, nz) {
   const hv = e.h.v, fx = Math.sin(e.h.yaw), fz = Math.cos(e.h.yaw);
   const side = Math.sign(fz * nx - fx * nz) || 1;
   e.r.fall(scene, fx * hv * 0.7 + nx * 2.5, 2.4, fz * hv * 0.7 + nz * 2.5, side);
-  e.down = 2.6; e.stun = 3; e.pickCD = 3.2; e.tugCD = 3.2;
+  e.down = 3; e.wait = 0; e.stun = 3.3; e.pickCD = 3.5; e.tugCD = 3.5;
   state.events.push({ t: 'fall', team: e.team });
   if (!SIM) neigh(e.h.obj.position.x, e.h.obj.position.z);
   if (!SIM && (e.me || e.team === me?.team)) banner(tr('unhorsed'), e.me ? null : TEAMS[e.team].grad, 1.1);
 }
 function stepFallen(e, dt) {
   if (!e.r.fallen) return;
-  e.h.gait = 1; e.h.steer = 0; // конь без всадника сбавляет ход
-  if (e.r.stepFall(dt) && !SIM) puff(e.r.root.position, 6, 0, 0);
-  e.down -= dt;
-  if (e.down <= 0) e.r.remount();
+  // конь без всадника сбавляет ход, разворачивается и подходит к хозяину
+  const hp = e.h.obj.position, rp = e.r.root.position, d = Math.hypot(rp.x - hp.x, rp.z - hp.z);
+  if (e.r.fallen.landed && d > 1.8 && e.down > 0) steerTo(e, rp.x, rp.z, d > 9 ? 3 : 1);
+  else { e.h.gait = 0; e.h.steer = 0; }
+  if (e.r.stepFall(dt, e.down < 0.95) && !SIM) puff(rp, 6, 0, 0);
+  // встаёт, только когда конь рядом (или если ждать слишком долго)
+  e.wait = (e.wait || 0) + dt;
+  if (e.down > 0.95 || d < 2.6 || e.wait > 7) e.down -= dt;
+  if (e.down <= 0) { e.r.startMount(); e.stun = Math.min(e.stun, 0.8); } // запрыгивает в седло
 }
 
+// пас: свой несущий рядом отдаёт серке из рук в руки
+function canPass(e) {
+  const c = sack.carrier;
+  return c && c !== e && c.team === e.team && !state.tug && e.pickCD <= 0 && !e.r.fallen && e.h.obj.position.distanceTo(c.h.obj.position) < TUG_RANGE + 0.6;
+}
 // ---------- тартыс ----------
 function canTug(att, car) {
   if (!car || att.team === car.team || att.tugCD > 0 || att.stun > 0 || state.tug) return false;
@@ -298,8 +313,34 @@ function stepTug(dt) {
 // ---------- боты ----------
 const GRIP = Number(P.get('grip') || 0.07); // ~45% тартысов выигрывает нападающий
 const DIFF = { pull: Number(P.get('pull') || 0.06), react: 0.45, speed: 1 }; // сила соперника — из лиги (applyStage)
+// перекрасить команду: всадники, тоқымы, кольца, казан, флаг, табло
+const painted = ['', ''];
+function paintTeam(t, def) {
+  Object.assign(TEAMS[t], { color: def.color, css: def.css, grad: def.grad, sign: def.sign });
+  if (painted[t] === def.color) return;
+  painted[t] = def.color;
+  for (const e of ents) if (e.team === t) {
+    e.r.setColor(def.color);
+    if (e.h.blanket) e.h.blanket.material = feltMat(def.color);
+    if (!e.me) e.ring.material.color.set(def.css);
+  }
+  const k = kazans.find((q) => q.team === t);
+  if (k) {
+    k.g.remove(k.body); k.body = makeKazan(def.color, KAZAN_R); k.g.add(k.body);
+    const tex = new THREE.CanvasTexture(flagCanvas(def)); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    k.flag.material.map?.dispose(); k.flag.material.map = tex; k.flag.material.needsUpdate = true;
+  }
+  if (!SIM) {
+    const side = t === 0 ? 'red' : 'blue', root = document.documentElement.style;
+    root.setProperty('--' + side, def.hud[0]); root.setProperty('--' + side + '2', def.hud[1]);
+    if (t === 1) root.setProperty('--foe', def.css);
+    const img = document.getElementById(t === 0 ? 'flR' : 'flB');
+    if (img) img.src = flagCanvas(def, 96, 60).toDataURL();
+  }
+}
 function applyStage() {
   const L = LEAGUE[stage];
+  paintTeam(0, HOME); paintTeam(1, L);
   if (!SIM && !P.has('pull')) { DIFF.pull = L.pull; DIFF.react = L.react; DIFF.speed = L.speed; }
 }
 let roleT = 0;
@@ -420,6 +461,7 @@ addEventListener('keydown', (e) => {
   initAudio();
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyE' || e.code === 'Space') { tugTap = true; e.preventDefault(); }
+  if (e.code === 'KeyR' && me && state.phase !== 'menu' && !me.r.fallen && sack.carrier !== me) me.h.rear(); // свечка — только стоя или шагом
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 function playerInput(dt) {
@@ -428,10 +470,12 @@ function playerInput(dt) {
     const camYaw = cam.yaw;
     const want = camYaw + Math.atan2(-stick.dx, -stick.dy);
     const mag = Math.min(1, Math.hypot(stick.dx, stick.dy));
-    if (mag > 0.2) { h.steer = clamp(wrap(want - h.yaw) * 2.2, -1, 1); h.gait = mag > 0.75 ? 4 : mag > 0.45 ? 3 : 2; } else { h.steer = 0; h.gait = 1; }
+    if (mag > 0.2) { h.steer = clamp(wrap(want - h.yaw) * 2.2, -1, 1); h.gait = mag > 0.75 ? 4 : mag > 0.45 ? 3 : 2; } else { h.steer = 0; h.gait = 0; }
   } else {
     h.steer = (keys.KeyA || keys.ArrowLeft || keys.KeyQ ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
-    h.gait = keys.KeyW || keys.ArrowUp || keys.KeyZ ? 4 : keys.KeyS || keys.ArrowDown ? 1 : 3;
+    // без клавиш конь останавливается; только поворот — идёт шагом
+    h.gait = keys.KeyW || keys.ArrowUp || keys.KeyZ ? 4 : keys.KeyS || keys.ArrowDown ? 0 : h.steer ? 1 : 0;
+    if (h.rearClock != null) h.gait = 0; // во время свечки стоит
   }
   me.wantSprint = keys.ShiftLeft || keys.ShiftRight || whipHeld;
   if (tugTap) {
@@ -439,6 +483,7 @@ function playerInput(dt) {
     if (state.tug && (state.tug.att === me || state.tug.car === me)) tugPress(me);
     else if (sack.carrier === me && throwInfo(me).d < THROW_MAX) throwSack(me);
     else if (sack.carrier && canTug(me, sack.carrier)) startTug(me);
+    else if (canPass(me)) { giveSack(me); banner(tr('passMe'), null, 0.8); }
   }
 }
 
@@ -474,7 +519,9 @@ function stepSack(dt) {
   if (c) {
     // висит у правого бедра всадника; в тартысе тянется к сопернику
     c.h.obj.updateMatrixWorld(true); // без рендера (прогон ботов) матрицы сами не обновляются
-    V.set(-0.5, -0.5, 0.05); // туша зажата под правой ногой всадника, ноги свисают
+    // туша лежит поперёк холки перед всадником, ноги свисают по бокам; при замахе — над головой
+    const w = c.throw ? Math.min(1, c.throw.t / WIND) : 0, we = w * w * (3 - 2 * w);
+    V.set(-0.08 + 0.08 * we, -0.12 + 1.15 * we, 0.4 - 0.25 * we);
     c.r.root.localToWorld(V);
     if (state.tug && state.tug.car === c) {
       state.tug.att.h.obj.updateMatrixWorld(true);
@@ -485,8 +532,8 @@ function stepSack(dt) {
     sack.pos.copy(V);
     sack.mesh.position.copy(V);
     c.r.root.getWorldQuaternion(Qt);
-    sack.mesh.quaternion.copy(Qt).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2));
-    c.reach = Math.max(c.reach, 0.35); c.reachSide = -1;
+    sack.mesh.quaternion.copy(Qt).multiply(Qc.setFromAxisAngle(V2.set(0, 0, 1), -0.25 * (1 - we))); // правый край ниже
+    if (c.throw && c.throw.t >= WIND) releaseSack(c);
     return;
   }
   // лежит или катится
@@ -559,7 +606,11 @@ function step(dt) {
   } else if (state.phase === 'end' || state.phase === 'menu') {
     for (const e of ents) { e.h.gait = 0; e.h.steer = 0; }
   }
-  for (const e of ents) { e.reach *= Math.exp(-dt * 4); stepFallen(e, dt); stepEnt(e, dt); }
+  for (const e of ents) {
+    e.reach *= Math.exp(-dt * 4); stepFallen(e, dt); stepEnt(e, dt);
+    if (e.throw) e.throw.t += dt;
+    e.throwT = e.throw ? e.throw.t : e.throwT >= 0 && e.throwT < 0.8 ? e.throwT + dt : -1; // для позы: замах и доводка рук
+  }
   stepTug(dt);
   for (const e of ents) e.h.update(dt);
   collide(ents.map((e) => e.h), onHit);
@@ -571,6 +622,7 @@ function step(dt) {
     if (Math.hypot(c.h.obj.position.x - k.x, c.h.obj.position.z) < SCORE_R) goal(c.team, c);
   }
   for (const e of ents) {
+    e.r.throwT = e.throwT ?? -1; e.r.carrying = sack.carrier === e;
     e.r.update(dt, e.h.v, e.reach, e.reachSide);
     e.ring.position.x = e.h.obj.position.x; e.ring.position.z = e.h.obj.position.z;
   }
@@ -665,9 +717,10 @@ function hud(dt) {
   // подсказка «можно тянуть»
   const nearKazan = sack.carrier === me && throwInfo(me).d < THROW_MAX;
   el.btnTug.textContent = nearKazan ? tr('btnThrow') : tr('btnTug');
-  const can = !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan);
+  const pass = !T && canPass(me);
+  const can = !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan || pass);
   el.btnTug.classList.toggle('ready', !!(can || mine));
-  if (can && !touch) el.hint.innerHTML = nearKazan ? tr('canThrow') : tr('canTug');
+  if (can && !touch) el.hint.innerHTML = nearKazan ? tr('canThrow') : pass ? tr('canPass') : tr('canTug');
   else if (!el.hint.dataset.keep) el.hint.textContent = '';
   if (state.phase === 'menu') el.hint.textContent = ''; // под меню подсказок нет
   // стрелка к цели по краю экрана: к мешку или к чужому казану
@@ -715,10 +768,11 @@ function startMatch() {
 el.again.addEventListener('click', startMatch);
 el.playBtn.addEventListener('click', () => { initAudio(); startMatch(); });
 function ladder(box) { // ступени лиги: пройденные, текущая, закрытые
-  box.innerHTML = LEAGUE.map((L, i) => '<span class="' + (i < stage ? 'done' : i === stage ? 'cur' : 'lock') + '">' + (i < stage ? '✓ ' : i > stage ? '🔒 ' : '') + L[lang] + '</span>').join('');
+  box.innerHTML = LEAGUE.map((L, i) => '<span class="' + (i < stage ? 'done' : i === stage ? 'cur' : 'lock') + '"><img src="' + flagCanvas(L, 96, 60).toDataURL() + '" alt="">' + (i < stage ? '✓ ' : '') + L[lang] + '</span>').join('');
 }
 function showMenu() {
   state.phase = 'menu';
+  applyStage(); // команда соперника в своих цветах уже в меню
   el.banner.classList.remove('on'); bannerT = 0;
   el.menuTitle.textContent = tr('league'); el.menuSub.textContent = tr('menuSub');
   el.menuVs.innerHTML = tr('stageOf')(stage + 1, LEAGUE.length) + ' · ' + tr('vs') + ': <b>' + foeName() + '</b>';
@@ -776,4 +830,4 @@ if (SIM) {
   setTimeout(() => { delete el.hint.dataset.keep; }, 9000);
   requestAnimationFrame(frame);
 }
-if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };
+if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };
