@@ -154,8 +154,10 @@ function kickoff(first) {
   dropSack(new THREE.Vector3(0, GROUND_Y, 0), new THREE.Vector3());
   state.tug = null;
   state.phase = 'countdown';
-  state.t = first ? 3.2 : 2.2;
-  banner(first ? '3' : tr('ready'));
+  state.intro = first && !SIM && !AI_PLAYER && !!fx;
+  state.t = state.intro ? 5.6 : first ? 3.2 : 2.2;
+  if (state.intro) banner(fx.label, ['#fff3c0', '#f0a01c'], 2.3, teamName(0) + '  —  ' + teamName(1));
+  else banner(first ? '3' : tr('ready'));
 }
 const Qc = new THREE.Quaternion();
 function dropSack(pos, vel) {
@@ -728,6 +730,14 @@ function updateCamera(dt, snap) {
     return;
   }
   if (state.cine && state.phase !== 'goal') { state.cine = null; cam.yaw = h.yaw; }
+  if (state.intro && state.phase === 'countdown' && state.t > 3.0 && !snap) { // облёт поля перед стартом
+    const k = (5.6 - state.t) / 2.6, a = -0.9 + k * 1.3;
+    V.set(Math.sin(a) * 34, 12 - k * 4, Math.cos(a) * 34);
+    cam.pos.copy(V); cam.look.set(0, 1, 0);
+    camera.position.copy(cam.pos); camera.lookAt(cam.look);
+    followSun(0, 0);
+    return;
+  }
   let dy = wrap(h.yaw - cam.yaw);
   cam.yaw = snap ? h.yaw : cam.yaw + dy * (1 - Math.exp(-dt * 2.8));
   const fx = Math.sin(cam.yaw), fz = Math.cos(cam.yaw);

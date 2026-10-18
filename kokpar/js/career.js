@@ -291,6 +291,7 @@ export function showHub() {
       <button class="big-btn" data-act="season">${tr('newSeason')}</button>`;
   }
   root.innerHTML = `<div class="hub">${head()}
+    <div class="h-logo disp">KOKPAR</div>
     <div class="h-cup disp">${tr('cup')}</div><div class="h-season">${tr('season')(S.season)}${S.titles ? ' · ' + tr('titles')(S.titles) : ''}</div>
     ${body}
     <div class="h-tabs"><button data-act="table">${tr('table')}</button><button data-act="stable">${tr('stable')}</button></div>
