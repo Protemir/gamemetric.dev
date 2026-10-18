@@ -30,7 +30,7 @@ const TEXT = {
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
     canPass: '<kbd>E</kbd> — взять серке у своего', passMe: 'Пас!',
     helpTouch: 'Палец слева — куда скакать · ВЫРВАТЬ — отнять серке · КАМЧА — рывок',
-    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: '<kbd>E</kbd> — бросить в казан', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!',
+    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!',
     league: 'Лига аулов Жетысу', vs: 'Соперник', play: 'В седло!', next: 'Дальше', retry: 'Ещё раз', champion: 'Чемпион Жетысу!',
     stageOf: (a, b) => 'Аул ' + a + ' из ' + b, unlocked: 'Следующий соперник', menuSub: 'Командная скачка за тушу в предгорьях Алатау · 3 на 3',
   },
@@ -42,7 +42,7 @@ const TEXT = {
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
     canPass: '<kbd>E</kbd> — take the serke from a teammate', passMe: 'Pass!',
     helpTouch: 'Left thumb — where to ride · GRAB — take the serke · WHIP — burst',
-    home: 'Aksay', btnThrow: 'THROW', canThrow: '<kbd>E</kbd> — throw into the kazan', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!',
+    home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!',
     league: 'Zhetysu village league', vs: 'Opponent', play: 'Ride!', next: 'Next', retry: 'Try again', champion: 'Zhetysu champion!',
     stageOf: (a, b) => 'Village ' + a + ' of ' + b, unlocked: 'Next opponent', menuSub: 'Team horseback fight for the carcass in the Alatau foothills · 3 vs 3',
   },
@@ -202,6 +202,53 @@ function throwSack(e) {
   if (hit) to = new THREE.Vector3(k.x + (rnd() - 0.5) * 1.2, 1.2, (rnd() - 0.5) * 1.2);
   else { const a = rnd() * 6.283, r = KAZAN_R + 1.4 + rnd() * 2.2; to = new THREE.Vector3(k.x + Math.cos(a) * r, GROUND_Y, Math.sin(a) * r); }
   e.throw = { t: 0, to, d, hit };
+}
+// ---------- прицел игрока: сила качается 0→1→0, точка падения видна на земле ----------
+const AIM_MAX = THROW_MAX + 5;
+const aim = { p: 0, dir: 1, L: new THREE.Vector3(), hit: false };
+const aimDots = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(26 * 3), 3)),
+  new THREE.PointsMaterial({ color: '#ffe58a', size: 0.38, transparent: true, opacity: 0.9, depthWrite: false }));
+const aimRing = new THREE.Mesh(new THREE.RingGeometry(0.7, 1.05, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, depthWrite: false, depthTest: false }));
+aimDots.visible = aimRing.visible = false; aimDots.frustumCulled = false; aimRing.renderOrder = aimDots.renderOrder = 5; aimDots.material.depthTest = false;
+scene.add(aimDots, aimRing);
+const canAim = (e) => sack.carrier === e && !e.throw && !state.tug && throwInfo(e).d < AIM_MAX;
+function startAim(e) { e.throw = { t: 0, aiming: true }; aim.p = 0; aim.dir = 1; }
+function aimPoint(e) { // куда упадёт: вперёд по ходу коня, у казана чуть доворачивает на него
+  const { k } = throwInfo(e), p = e.h.obj.position;
+  let yaw = e.h.yaw;
+  const want = Math.atan2(k.x - p.x, -p.z), dA = wrap(want - yaw);
+  if (Math.abs(dA) < 0.22) yaw += dA * 0.85;
+  const dist = 4 + aim.p * 15;
+  aim.L.set(p.x + Math.sin(yaw) * dist, 0, p.z + Math.cos(yaw) * dist);
+  aim.hit = Math.hypot(aim.L.x - k.x, aim.L.z) < KAZAN_R + 0.2;
+  return dist;
+}
+function stepAim(dt) {
+  const e = me, on = e && e.throw?.aiming;
+  aimDots.visible = aimRing.visible = !!on;
+  if (!on) return;
+  aim.p += aim.dir * dt * 1.15;
+  if (aim.p >= 1) { aim.p = 1; aim.dir = -1; } else if (aim.p <= 0) { aim.p = 0; aim.dir = 1; }
+  const dist = aimPoint(e), top = aim.hit ? 1.25 : 0.05;
+  aimRing.position.set(aim.L.x, top, aim.L.z);
+  aimRing.material.color.set(aim.hit ? '#5dff7a' : '#ffffff');
+  // дуга полёта точками: от рук над головой до точки падения
+  const a = aimDots.geometry.attributes.position, s = sack.pos, arc = 1.2 + dist * 0.2;
+  for (let i = 0; i < 26; i++) {
+    const t = i / 25;
+    a.setXYZ(i, s.x + (aim.L.x - s.x) * t, s.y + (top - s.y) * t + Math.sin(t * Math.PI) * arc, s.z + (aim.L.z - s.z) * t);
+  }
+  a.needsUpdate = true;
+  aimDots.material.color.set(aim.hit ? '#5dff7a' : '#ffe58a');
+}
+function releaseAim(e) {
+  if (!e.throw?.aiming) return;
+  const dist = aimPoint(e), { k } = throwInfo(e);
+  // на скаку рука дрожит: разброс растёт со скоростью
+  const n = 0.35 + e.h.v * 0.05, nx = (rnd() - 0.5) * 2 * n, nz = (rnd() - 0.5) * 2 * n;
+  const lx = aim.L.x + nx, lz = aim.L.z + nz, hit = Math.hypot(lx - k.x, lz) < KAZAN_R + 0.2;
+  const to = hit ? new THREE.Vector3(k.x + (lx - k.x) * 0.3, 1.2, lz * 0.3) : new THREE.Vector3(lx, GROUND_Y, lz);
+  Object.assign(e.throw, { aiming: false, to, d: dist, hit, t: Math.max(e.throw.t, WIND * 0.7) });
 }
 function releaseSack(e) { // руки выпрямились — туша летит
   const { to, d, hit } = e.throw;
@@ -455,10 +502,10 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   initAudio();
   if (e.code === 'KeyM') toggleMute();
-  if (e.code === 'KeyE' || e.code === 'Space') { tugTap = true; e.preventDefault(); }
+  if (e.code === 'KeyE' || e.code === 'Space') { e.preventDefault(); if (me && canAim(me) && !AI_PLAYER) startAim(me); else tugTap = true; }
   if (e.code === 'KeyR' && canRear()) me.h.rear(); // свечка — только стоя
 });
-addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('keyup', (e) => { keys[e.code] = false; if ((e.code === 'KeyE' || e.code === 'Space') && me) releaseAim(me); });
 function playerInput(dt) {
   const h = me.h;
   if (stick) { // телефон: куда тянешь палец относительно камеры — туда и скачет; дальше — быстрее
@@ -476,7 +523,6 @@ function playerInput(dt) {
   if (tugTap) {
     tugTap = false;
     if (state.tug && (state.tug.att === me || state.tug.car === me)) tugPress(me);
-    else if (sack.carrier === me && throwInfo(me).d < THROW_MAX) throwSack(me);
     else if (sack.carrier && canTug(me, sack.carrier)) startTug(me);
     else if (canPass(me)) { giveSack(me); banner(tr('passMe'), null, 0.8); }
   }
@@ -610,7 +656,7 @@ function step(dt) {
   }
   for (const e of ents) {
     e.reach *= Math.exp(-dt * 4); stepFallen(e, dt); stepEnt(e, dt);
-    if (e.throw) e.throw.t += dt;
+    if (e.throw) e.throw.t = e.throw.aiming ? Math.min(WIND * 0.95, e.throw.t + dt) : e.throw.t + dt;
     e.throwT = e.throw ? e.throw.t : e.throwT >= 0 && e.throwT < 0.8 ? e.throwT + dt : -1; // для позы: замах и доводка рук
   }
   stepTug(dt);
@@ -618,6 +664,7 @@ function step(dt) {
   collide(ents.map((e) => e.h), onHit);
   for (const e of ents) for (const k of kazans) pushOut(e.h, k.x, 0, KAZAN_R);
   stepSack(dt);
+  if (!SIM) stepAim(dt);
   // гол: несущий у чужого казана
   if (state.phase === 'play' && sack.carrier) {
     const c = sack.carrier, k = kazans[c.team === 0 ? 1 : 0];
@@ -670,7 +717,7 @@ function updateCamera(dt, snap) {
 }
 
 // ---------- интерфейс ----------
-const el = Object.fromEntries(['menu', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
+const el = Object.fromEntries(['menu', 'pow', 'powbar', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
 el.bigText = el.banner.querySelector('.big'); el.subText = el.banner.querySelector('.small');
 const CREDITS = 'Рельеф / Terrain: SRTM (USGS), AWS Terrain Tiles · Снимок / Imagery: EOxCloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016), CC BY 4.0 · Конь / Horse: Warhorse Lite by Literock Studios · Всадник / Rider: Heraklios by A. Dizon (Mixamo)';
 for (const c of document.querySelectorAll('[data-credits]')) c.textContent = CREDITS;
@@ -709,13 +756,17 @@ function hud(dt) {
     el.tugtip.textContent = touch ? tr('mashTap') : tr('mashKey');
   }
   // подсказка «можно тянуть»
-  const nearKazan = sack.carrier === me && throwInfo(me).d < THROW_MAX;
+  const nearKazan = sack.carrier === me && throwInfo(me).d < AIM_MAX;
+  const aiming = !!me.throw?.aiming;
+  el.pow.hidden = !aiming;
+  if (aiming) { el.powbar.style.height = (aim.p * 100).toFixed(1) + '%'; el.pow.classList.toggle('hit', aim.hit); }
   el.btnTug.textContent = nearKazan ? tr('btnThrow') : tr('btnTug');
   const pass = !T && canPass(me);
   if (touch) { const lbl = canRear() ? tr('btnRear') : tr('btnWhip'); if (el.btnWhip.textContent !== lbl) el.btnWhip.textContent = lbl; }
   const can = !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan || pass);
   el.btnTug.classList.toggle('ready', !!(can || mine));
-  if (can && !touch) el.hint.innerHTML = nearKazan ? tr('canThrow') : pass ? tr('canPass') : tr('canTug');
+  if (can && nearKazan) el.hint.innerHTML = touch ? tr('aimTouch') : tr('canThrow');
+  else if (can && !touch) el.hint.innerHTML = pass ? tr('canPass') : tr('canTug');
   else if (!el.hint.dataset.keep) el.hint.textContent = '';
   if (state.phase === 'menu') el.hint.textContent = ''; // под меню подсказок нет
   // стрелка к цели по краю экрана: к мешку или к чужому казану
@@ -762,7 +813,8 @@ addEventListener('pointermove', (e) => {
 const endStick = (e) => { if (stick && e.pointerId === stick.id) { stick = null; el.stick.style.display = 'none'; } };
 addEventListener('pointerup', endStick);
 addEventListener('pointercancel', endStick);
-el.btnTug.addEventListener('pointerdown', (e) => { e.preventDefault(); initAudio(); tugTap = true; });
+el.btnTug.addEventListener('pointerdown', (e) => { e.preventDefault(); initAudio(); if (me && canAim(me)) startAim(me); else tugTap = true; });
+for (const ev of ['pointerup', 'pointercancel']) el.btnTug.addEventListener(ev, () => { if (me) releaseAim(me); });
 el.btnWhip.addEventListener('pointerdown', (e) => { e.preventDefault(); if (canRear()) me.h.rear(); else whipHeld = true; });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.btnWhip.addEventListener(ev, () => { whipHeld = false; });
 function startMatch() {

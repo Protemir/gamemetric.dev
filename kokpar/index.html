@@ -36,6 +36,12 @@
   #stamtrack { height: 12px; border-radius: 6px; background: rgba(10,8,5,.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); overflow: hidden; }
   #stam { height: 100%; width: 100%; background: linear-gradient(90deg, var(--gold2), var(--gold)); border-radius: 6px; transition: width .1s; }
   /* тартыс */
+  #pow { right: 26%; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  #pow[hidden] { display: none; }
+  #powtrack { position: relative; width: 18px; height: min(200px, 34vh); border-radius: 9px; background: rgba(0,0,0,.45); box-shadow: inset 0 0 0 2px rgba(255,255,255,.35), 0 4px 14px rgba(0,0,0,.4); overflow: hidden; }
+  #powbar { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(0deg, #ffe58a, #f0a01c 60%, #e0393e); }
+  #pow.hit #powbar { background: linear-gradient(0deg, #b8ffc4, #3fd264); box-shadow: 0 0 16px #3fd264; }
+  #pow b { font-size: 18px; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
   #tug { left: 50%; bottom: 20%; transform: translateX(-50%); width: min(460px, 82vw); text-align: center; }
   #tug[hidden] { display: none; }
   #tugtrack { position: relative; height: 22px; border-radius: 11px; background: linear-gradient(90deg, #6b0e10, var(--red) 49.5%, #2d8a3c 50.5%, #46c25a); box-shadow: 0 4px 14px rgba(0,0,0,.45), inset 0 0 0 2px rgba(255,255,255,.25); }
@@ -175,7 +181,7 @@
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
   html.rot body { position: fixed; top: 0; left: 0; transform-origin: 0 0; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mve3e6po","./js/career.js":"./js/career.js?v=mve3e6po","./js/flags.js":"./js/flags.js?v=mve3e6po","./js/game.js":"./js/game.js?v=mve3e6po","./js/kazan.js":"./js/kazan.js?v=mve3e6po","./js/rider.js":"./js/rider.js?v=mve3e6po","./js/serke.js":"./js/serke.js?v=mve3e6po","./js/world.js":"./js/world.js?v=mve3e6po"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mve3gkpv","./js/career.js":"./js/career.js?v=mve3gkpv","./js/flags.js":"./js/flags.js?v=mve3gkpv","./js/game.js":"./js/game.js?v=mve3gkpv","./js/kazan.js":"./js/kazan.js?v=mve3gkpv","./js/rider.js":"./js/rider.js?v=mve3gkpv","./js/serke.js":"./js/serke.js?v=mve3gkpv","./js/world.js":"./js/world.js?v=mve3gkpv"}}</script>
 </head>
 <body>
 <div id="load"><div><div class="t disp">KOKPAR</div><div class="s" id="loadtxt">…</div><div class="lbar"><i id="loadbar"></i></div></div><div class="credits" data-credits></div></div>
@@ -207,6 +213,7 @@
 </div>
 <div id="banner" class="ui"><div class="big disp"></div><div class="small"></div></div>
 <div id="stamwrap" class="ui"><div id="stamlbl"></div><div id="stamtrack"><div id="stam"></div></div></div>
+<div id="pow" class="ui" hidden><div id="powtrack"><div id="powbar"></div></div><b>⚡</b></div>
 <div id="tug" class="ui" hidden><div id="tugtrack"><div id="tugbar"></div></div><div id="tugtip" class="disp"></div></div>
 <div id="hint" class="ui"></div>
 <div id="arrow" class="ui" hidden>➤</div>
@@ -215,6 +222,6 @@
 <button id="btnWhip" class="btn"></button>
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div><div class="credits" data-credits></div></div>
-<script type="module" src="./js/game.js?v=mve3e6po"></script>
+<script type="module" src="./js/game.js?v=mve3gkpv"></script>
 </body>
 </html>
