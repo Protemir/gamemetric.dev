@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Көкпар — проба коня</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #c9d8e6; user-select: none; -webkit-user-select: none; touch-action: none; font: 14px/1.35 system-ui, sans-serif; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 10px; top: 10px; padding: 8px 10px; background: rgba(20, 16, 10, .55); color: #fff; border-radius: 8px; white-space: pre; font: 12px/1.4 ui-monospace, Consolas, monospace; pointer-events: none; }
+  #hint { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 6px 12px; background: rgba(20, 16, 10, .5); color: #fff; border-radius: 8px; pointer-events: none; text-align: center; }
+  #load { position: fixed; inset: 0; display: grid; place-items: center; background: #e8d9b5; color: #4a3518; font-size: 18px; z-index: 9; }
+  #stick { position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255,255,255,.6); background: rgba(0,0,0,.15); display: none; pointer-events: none; }
+  #stick i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(255,255,255,.75); }
+  #stop { position: fixed; right: 22px; bottom: 60px; width: 84px; height: 84px; border-radius: 50%; border: 0; background: rgba(170, 40, 30, .8); color: #fff; font-weight: 700; font-size: 15px; display: none; }
+  body.touch #stop { display: block; }
+  body.clean #hud, body.clean #hint, body.clean #stop { display: none !important; }
+</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+</head>
+<body>
+<div id="load">Загружаю коня…</div>
+<div id="hud"></div>
+<div id="hint">W / S — аллюр быстрее / медленнее · A / D — поворот · Пробел — резкий стоп</div>
+<div id="stick"><i></i></div>
+<button id="stop">СТОП</button>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
