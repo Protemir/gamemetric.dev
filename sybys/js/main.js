@@ -91,6 +91,7 @@ function glowButton(key) {
 function lesson(step) {
   const t = T().c;
   coach.step = step;
+  coach.stepStarted = performance.now();
   look.hand = -1;
   glowButton(null);
   if (step === 'send') { look.hand = bestFirstTarget(); advise('aria', t.send); }
@@ -133,6 +134,8 @@ function lessonTick(now) {
       coach.stepUntil = now + 4200;
     }
   }
+  // a lesson the player does not follow moves on by itself, so the season never stays frozen
+  if ((st === 'more' || st === 'aria') && now - coach.stepStarted > 20000) lesson(st === 'more' ? 'false' : 'karasai');
   if (st === 'afterFalse' && now > coach.stepUntil) lesson(g.marks.size ? 'aria' : 'karasai');
   if (st === 'karasai' && now > coach.stepUntil) lesson('goal');
 }
@@ -301,7 +304,7 @@ function start() {
     g.hold = true;
     lesson('send');
   }
-  if (DEBUG || q.has('covers')) window.__sybys = { g, S, view, coach, look, act: doAction, intercept: tapRider, choose: pickEvent, finish: pickEnd, step: (d) => S.step(g, d), lesson };
+  if (DEBUG || q.has('covers')) window.__sybys = { get g() { return g; }, S, view, coach, look, act: doAction, intercept: tapRider, choose: pickEvent, finish: pickEnd, step: (d) => S.step(g, d), lesson, autumn: goAutumn };
 }
 
 // the first lesson points at an undecided pasture right next to the Orda
@@ -327,10 +330,9 @@ function buildHud() {
     tr.append(c);
   }
   actionsEl.replaceChildren();
-  for (const [key, who] of [['word', 'temir'], ['aria', 'aria'], ['karasai', 'karasai']]) {
+  for (const [key, who] of [['word', 'temir'], ['aria', 'aria'], ['zaltyr', 'zaltyr'], ['karasai', 'karasai']]) {
     const b = el('button', 'act');
     b.dataset.key = key;
-    b.title = T()[key + 'Tip'];
     const ava = el('span', 'ai');
     ava.innerHTML = face(who);
     b.append(ava, el('span', 'an', T()[key]), el('span', 'as', T()[key + 'Sub']), el('span', 'ac', '🐎'.repeat(S.COST[key])));
@@ -392,7 +394,7 @@ function updateHud() {
   $('seasonBar').style.width = `${Math.min(100, (g.clock / S.SEASON) * 100)}%`;
   const left = Math.max(0, Math.ceil(S.SEASON - g.clock));
   const v = S.kurultai(g);
-  $('seasonLbl').textContent = g.hold ? t.clockHold : t.clock(`${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`, v.yes);
+  $('seasonLbl').textContent = g.hold ? t.clockHold : (g.season > 1 ? t.season2 + ' · ' : '') + t.clock(`${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`, v.yes);
   $('seasonChip').classList.toggle('win', v.yes >= 2);
   const chips = $('tribes').children;
   for (let k = 0; k < 3; k++) {
@@ -404,6 +406,8 @@ function updateHud() {
   for (const b of actionsEl.children) {
     b.classList.toggle('sel', b.dataset.key === action);
     b.classList.toggle('off', !S.canAct(g, b.dataset.key));
+    // Zaltyr rides with the khan from autumn on
+    if (b.dataset.key === 'zaltyr') b.hidden = g.season < 2 || !!g.flags.noScout;
   }
   $('speedBtn').textContent = '×' + speed;
   $('pauseBtn').textContent = paused ? '▶' : '❚❚';
@@ -548,8 +552,16 @@ function showEvent() {
   const ev = t.ev[e.id];
   hush();
   const box = el('div', 'screen event');
-  const names = e.id === 'well' ? [tribeName(e.strong), tribeName(e.weak)] : e.id === 'caravan' ? [tribeName(e.accused)] : [];
-  const who = e.id === 'well' ? [e.strong, e.weak] : e.id === 'caravan' ? ['merchants', e.accused] : e.id === 'letter' ? ['aria'] : ['aria', 'karasai'];
+  const names = e.id === 'well' ? [tribeName(e.strong), tribeName(e.weak)] : e.accused != null ? [tribeName(e.accused)] : [];
+  const who = {
+    well: [e.strong, e.weak],
+    caravan: ['sarman', e.accused],
+    letter: ['aria'],
+    army: ['karasai', 'orazbai'],
+    drought: [e.accused, 'sarman'],
+    plot: ['zaltyr', e.accused],
+    truth: ['orazbai', 'aria'],
+  }[e.id] || ['aria', 'karasai'];
   const faces = el('div', 'faces');
   for (const w of who) {
     const a = el('div', 'ava');
@@ -599,11 +611,11 @@ function journal() {
 
 // —— the kurultai: whips go up one by one ——
 
-function showKurultai() {
+function showKurultai(council = false) {
   const t = T();
   const v = g.vote;
   const box = el('div', 'screen kurultai');
-  box.append(el('h2', null, t.kTitle), el('p', 'line', t.kLine));
+  box.append(el('h2', null, council ? t.councilTitle : t.kTitle), el('p', 'line', council ? t.councilLine : t.kLine));
   const ring = el('div', 'ring');
   const seats = v.votes.map((x) => {
     const s = el('div', 'seat');
@@ -620,7 +632,7 @@ function showKurultai() {
   ui.replaceChildren(box);
   let k = 0;
   const next = () => {
-    if (g.phase !== 'kurultai') return;
+    if (g.phase !== (council ? 'council' : 'kurultai')) return;
     if (k < seats.length) {
       const yes = v.votes[k].yes;
       seats[k].classList.add(yes ? 'yes' : 'no');
@@ -628,7 +640,7 @@ function showKurultai() {
       seats[k].append(el('em', null, yes ? t.kYes : t.kNo));
       if (!yes) {
         const tr = g.tribes[v.votes[k].tribe];
-        const why = v.votes[k].trust < S.VOTE_AT ? t.whyLow : tr.grievance ? t.whyGrudge : t.whyTalks;
+        const why = v.votes[k].trust < v.votes[k].line ? t.whyLow : tr.grievance ? t.whyGrudge : t.whyTalks;
         seats[k].append(el('small', 'why', why));
       }
       sfx.whip(yes);
@@ -636,6 +648,26 @@ function showKurultai() {
       setTimeout(next, DEBUG ? 50 : 900);
       return;
     }
+    if (council) {
+      // who joins the khan for autumn
+      const row = el('div', 'faces');
+      for (const w of ['zaltyr', 'sarman', 'orazbai']) {
+        const a = el('div', 'ava');
+        a.innerHTML = face(w);
+        row.append(a);
+      }
+      const go = el('button', 'big', t.councilGo);
+      go.onclick = goAutumn;
+      rest.append(row, el('p', 'small', t.councilNews), go);
+      return;
+    }
+    const oz = el('div', 'speaker');
+    const oa = el('div', 'ava');
+    oa.innerHTML = face('orazbai');
+    const os = el('div', 'said');
+    os.append(el('b', null, t.who.orazbai), el('p', null, t.kOrazbai(v.orazbai)));
+    oz.append(oa, os);
+    rest.append(oz);
     if (v.karasai) { rest.append(el('p', 'warn', t.kKarasai)); sfx.force(); }
     rest.append(el('p', 'line', t.kChoose + ' · ' + t.kClues(g.clues.length)));
     const row = el('div', 'choices');
@@ -650,6 +682,23 @@ function showKurultai() {
     rest.append(row);
   };
   setTimeout(next, DEBUG ? 50 : 700);
+}
+
+// autumn: the same steppe, three more people, the great kurultai at the end
+function goAutumn() {
+  if (!S.nextSeason(g)) return false;
+  ui.replaceChildren();
+  hud.hidden = false;
+  actionsEl.hidden = false;
+  shownPhase = 'map';
+  buildHud();
+  fit();
+  const t = T().c;
+  action = 'word';
+  glowButton('zaltyr');
+  advise('zaltyr', t.zaltyr, 7000);
+  setTimeout(() => { if (g && g.phase === 'map' && !g.demo) advise('sarman', t.caravan, 6000); glowButton(null); }, 7500);
+  return true;
 }
 
 function pickEnd(key) {
@@ -668,7 +717,7 @@ function pickEnd(key) {
 function showEnd() {
   const t = T();
   const r = g.result;
-  const [title, ...lines] = t.end[r.end];
+  const [title, ...lines] = t.end[r.variant === 'left' ? 'vanishLeft' : r.end];
   const box = el('div', 'screen end ' + r.end);
   box.append(el('p', 'small', t.endHead), el('h2', null, title));
   for (const l of lines) box.append(el('p', 'line', l));
@@ -710,6 +759,7 @@ function frame(now) {
       if (f.type === 'lie') sfx.lie();
       if (f.type === 'force') sfx.force();
       if (f.type === 'clue') sfx.clue();
+      if (f.type === 'trade') sfx.word();
     }
     for (const tt of g.toasts.splice(0)) showToast(tt);
     if (!g.demo) {
@@ -721,13 +771,13 @@ function frame(now) {
     if (g.phase !== shownPhase) {
       shownPhase = g.phase;
       if (g.phase === 'event') showEvent();
-      if (g.phase === 'kurultai') {
+      if (g.phase === 'kurultai' || g.phase === 'council') {
         hud.hidden = true;
         actionsEl.hidden = true;
         hintEl.classList.remove('on');
         toastsEl.replaceChildren();
         hush();
-        showKurultai();
+        showKurultai(g.phase === 'council');
       }
     }
     updateHud();
@@ -754,6 +804,9 @@ function showToast(tt) {
   said.append(el('b', null, who), el('span', null, text));
   n.append(ava, said);
   toastsEl.append(n);
+  // never a wall of news: the oldest goes when there are too many
+  const max = window.innerWidth < 700 || window.innerHeight < 500 ? 2 : 3;
+  while (toastsEl.children.length > max) toastsEl.firstChild.remove();
   setTimeout(() => n.classList.add('out'), 4200);
   setTimeout(() => n.remove(), 4800);
 }
@@ -771,7 +824,8 @@ window.addEventListener('keydown', (e) => {
   if (!g || g.phase !== 'map') return;
   if (e.key === '1') action = 'word';
   if (e.key === '2') action = 'aria';
-  if (e.key === '3') action = 'karasai';
+  if (e.key === '3' && g.season > 1) action = 'zaltyr';
+  if (e.key === (g.season > 1 ? '4' : '3')) action = 'karasai';
   if (e.key === ' ') togglePause();
   updateHud();
 });

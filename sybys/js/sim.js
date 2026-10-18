@@ -5,23 +5,26 @@
 // people retell it where they are willing to hear it and it dies where they are not.
 // The word lifts trust, a lie eats it. Somebody hidden sends riders with forged khan's orders;
 // the player sends riders with the word, Aria to look into things, Karasai to take by force.
-// At the end of the season the kurultai: each tribe's bi raises his whip, or does not.
+// Two seasons: spring–summer ends with a small council, autumn–winter with the great kurultai,
+// where each tribe's bi raises his whip, or does not. In autumn three more people join:
+// Zaltyr the scout (marks strange riders, not always rightly), Sarman the merchant (caravans bring
+// horses), Orazbai the elder (the kurultai listens to him).
 import { makeMap, route, GW } from './map.js';
 import { rng, clamp } from './util.js';
 
 export const SEASON = 330; // seconds of map time at ×1 (plus the scenes, about 7 minutes)
 export const HORSE_MAX = 5;
 export const HORSE_EVERY = 6;
-export const COST = { word: 1, aria: 1, karasai: 2 };
+export const COST = { word: 1, aria: 1, karasai: 2, zaltyr: 1 };
+export const ZALTYR_STAY = 30;
 export const KARASAI_CD = 25;
 export const ARIA_STAY = 12;
 export const VOTE_AT = 0.55;
-export const EVENTS = [
-  ['horse', 20],
-  ['well', 85],
-  ['caravan', 165],
-  ['letter', 245],
-];
+export const SEASONS = {
+  1: [['horse', 20], ['well', 85], ['caravan', 165], ['letter', 245]],
+  2: [['army', 30], ['drought', 100], ['plot', 180], ['truth', 250]],
+};
+export const EVENTS = SEASONS[1];
 // what each clue really is: true ones point at the plot, false ones at innocent people
 // the knobs tools/check.mjs is tuned with
 export const TUNE = {
@@ -32,7 +35,7 @@ export const TUNE = {
   pride: 0.42, prideRate: 0.028, follow: 0.015, settle: 0.02, // a tribe left alone drifts back to its own pride, not to the khan
   word: 1.15, lie: 1.35,
 };
-export const CLUES = { forged: true, stones: true, lair: true, scouts: true, letter: true, informant: false, arrest: false };
+export const CLUES = { forged: true, stones: true, lair: true, scouts: true, letter: true, zaltyr: true, informant: false, arrest: false, zaltyrFalse: false };
 
 export function newGame(seed = 1) {
   const map = makeMap(seed);
@@ -57,8 +60,15 @@ export function newGame(seed = 1) {
     pending: [],
     evIdx: 0, event: null,
     phase: 'map',
+    season: 1,
     plotT: 26, plotEvery: 23,
-    lair, lairKnown: false,
+    lair, lairKnown: false, lairShown: lair,
+    zaltyr: { at: -1, busy: 0, trust: true },
+    orazbai: 0.5,
+    karasaiAngry: false,
+    caravan: null,
+    drought: null,
+    council: null,
     marks: new Set(), found: new Set(),
     flags: {},
     acted: 0, caught: 0, wrongCatch: 0,
@@ -83,7 +93,8 @@ export function receptivity(g, i) {
   const r = g.map.regions[i];
   if (r.tribe < 0) return 1;
   const tr = g.tribes[r.tribe];
-  return clamp(0.2 + 0.75 * tr.mood - 0.45 * tr.fear + (g.t[i] - 0.5) * 0.45, 0.05, 1);
+  const dry = g.drought && g.drought.tribe === r.tribe && g.clock < g.drought.until ? 0.15 : 0;
+  return clamp(0.2 + 0.75 * tr.mood - 0.45 * tr.fear + (g.t[i] - 0.5) * 0.45 - dry, 0.05, 1);
 }
 
 function addClue(g, kind, region = -1) {
@@ -109,7 +120,7 @@ function later(g, delay, kind, args = {}) {
 function spawnRider(g, kind, from, to, extra = {}) {
   const rt = route(g.map, from, to);
   if (!rt) return null;
-  const speed = kind === 'karasai' ? 1.5 : kind === 'aria' ? 0.85 : kind === 'false' ? 1.05 : 1;
+  const speed = kind === 'karasai' ? 1.5 : kind === 'aria' ? 0.85 : kind === 'false' ? 1.05 : kind === 'zaltyr' ? 1.3 : kind === 'caravan' ? 0.55 : 1;
   const rider = { id: g.uid++, kind, from, to, path: rt.path, seg: 0, p: 0, speed, ...extra };
   if (rt.path.length === 1) rider.seg = 0;
   g.riders.push(rider);
@@ -132,6 +143,7 @@ export function canAct(g, kind) {
   if (g.horses < COST[kind]) return false;
   if (kind === 'karasai' && g.karasaiCD > 0) return false;
   if (kind === 'aria' && (g.aria.busy > 0 || g.aria.riding || g.aria.trust < 0.3)) return false;
+  if (kind === 'zaltyr' && (g.season < 2 || g.flags.noScout || g.zaltyr.busy > 0 || g.zaltyr.riding)) return false;
   return true;
 }
 
@@ -143,6 +155,7 @@ export function act(g, kind, target) {
   if (kind === 'word') rider = spawnRider(g, 'word', sourceFor(g, target), target);
   else if (kind === 'karasai') { rider = spawnRider(g, 'karasai', 0, target); g.karasaiCD = KARASAI_CD; }
   else if (kind === 'aria') { rider = spawnRider(g, 'aria', g.aria.at >= 0 ? g.aria.at : 0, target); g.aria.riding = true; g.aria.at = -1; }
+  else if (kind === 'zaltyr') { rider = spawnRider(g, 'zaltyr', 0, target); g.zaltyr.riding = true; }
   if (!rider) return null;
   g.horses -= COST[kind];
   g.acted++;
@@ -164,6 +177,7 @@ export function intercept(g, id) {
   if (rider.kind === 'tribe') {
     g.riders.splice(k, 1);
     g.wrongCatch++;
+    if (rider.seen) g.zaltyr.trust = false; // you believed Zaltyr's mark and it was wrong
     const tr = g.tribes[rider.tribe];
     tr.mood = clamp(tr.mood - 0.08, 0, 1);
     toast(g, rider.tribe, 'tInsulted', riderRegion(g, rider), { tribe: rider.tribe });
@@ -209,10 +223,23 @@ function arrive(g, rider) {
   } else if (rider.kind === 'tribe') {
     if (rider.load > 0) g.m[i] = Math.min(2, g.m[i] + rider.load);
     else if (rider.load < 0) g.n[i] = Math.min(2, g.n[i] - rider.load);
+  } else if (rider.kind === 'zaltyr') {
+    g.zaltyr.riding = false;
+    g.zaltyr.at = i;
+    g.zaltyr.busy = ZALTYR_STAY;
+    g.fx.push({ type: 'aria', region: i });
+  } else if (rider.kind === 'caravan') {
+    // Sarman's caravan pays in horses, unless he has taken his privileges
+    if (!(g.flags.sarmanUntil > g.time)) {
+      g.horses = Math.min(HORSE_MAX + 2, g.horses + 1);
+      g.fx.push({ type: 'trade', region: i });
+    }
+    if (g.caravan) g.caravan.next = g.time + 4;
   } else if (rider.kind === 'false') {
     g.n[i] = Math.min(2, g.n[i] + TUNE.lie);
     if (r.tribe >= 0) g.tribes[r.tribe].mood = clamp(g.tribes[r.tribe].mood - 0.035, 0, 1);
     g.marks.add(i);
+    (g.markAt || (g.markAt = {}))[i] = g.time;
     g.fx.push({ type: 'lie', region: i });
   }
 }
@@ -221,7 +248,7 @@ function ariaDone(g) {
   const i = g.aria.at;
   let got = false;
   if (g.marks.has(i)) { got = addClue(g, 'stones', i) || got; g.found.add(i); }
-  if (i === g.lair) { got = addClue(g, 'lair', i) || got; g.lairKnown = true; }
+  if (i === g.lair) { got = addClue(g, 'lair', i) || got; g.lairKnown = true; g.lairShown = g.lair; }
   toast(g, 'aria', got ? 'tAriaFound' : 'tAriaNothing', i);
 }
 
@@ -279,8 +306,10 @@ function stepTribes(g, dt) {
       if (to != null) spawnRider(g, 'tribe', from.id, to, { tribe: k, load });
     }
   }
+  const dry = g.drought && g.clock < g.drought.until ? g.drought.tribe : -1;
   for (const r of regions) {
     if (r.tribe < 0) continue;
+    if (r.tribe === dry) g.t[r.id] -= 0.006 * dt;
     g.t[r.id] += (g.tribes[r.tribe].mood - g.t[r.id]) * TUNE.settle * dt;
     g.t[r.id] = clamp(g.t[r.id], 0, 1);
   }
@@ -299,6 +328,7 @@ export function spawnPlot(g) {
   const { regions } = g.map;
   // forged orders start at the hideout or next to it and go where the khan is trusted most
   const starts = [g.lair, ...regions[g.lair].nb.map((e) => e.to)].filter((id) => regions[id].tribe >= 0);
+  if (!starts.length) return null;
   const from = starts[Math.floor(g.rand() * starts.length)];
   const fromTribe = regions[from].tribe;
   const targets = regions.filter((r) => r.tribe >= 0 && r.tribe !== fromTribe).sort((a, b) => g.t[b.id] - g.t[a.id]).slice(0, 6);
@@ -347,6 +377,19 @@ const LATER = {
   merchants(g) {
     toast(g, 'merchants', 'tMerchants', 0);
   },
+  karasaiExtend(g) {
+    g.karasai++;
+    g.karasaiAngry = g.karasai >= 4;
+    toast(g, 'karasai', 'tKarasaiExtend', 0);
+  },
+  sarmanDemands(g) {
+    g.flags.sarmanUntil = g.time + 60;
+    toast(g, 'sarman', 'tSarmanDemands', 0);
+  },
+  truthSurfaces(g) {
+    for (const tr of g.tribes) tr.mood = clamp(tr.mood - 0.04, 0, 1);
+    toast(g, 'orazbai', 'tTruthSurfaces', 0);
+  },
 };
 
 export function step(g, dt) {
@@ -370,6 +413,10 @@ export function step(g, dt) {
     }
   }
   if (g.aria.busy > 0 && (g.aria.busy -= dt) <= 0) { g.aria.busy = 0; ariaDone(g); }
+  stepWatch(g, dt);
+  stepCaravan(g);
+  // the trace of a lie fades after a while if nobody looks into it
+  if (g.markAt) for (const i of g.marks) if (!g.found.has(i) && g.markAt[i] != null && g.time - g.markAt[i] > 75) g.marks.delete(i);
 
   stepRumor(g, dt);
   stepTribes(g, dt);
@@ -377,9 +424,71 @@ export function step(g, dt) {
   stepPending(g);
 
   if (!g.hold) g.clock += dt;
-  if (g.evIdx < EVENTS.length && g.clock >= EVENTS[g.evIdx][1]) openEvent(g, EVENTS[g.evIdx++][0]);
-  else if (g.clock >= SEASON) { g.phase = 'kurultai'; g.riders = []; g.vote = kurultai(g); }
+  const evs = SEASONS[g.season];
+  if (g.evIdx < evs.length && g.clock >= evs[g.evIdx][1]) openEvent(g, evs[g.evIdx++][0]);
+  else if (g.clock >= SEASON) {
+    g.riders = [];
+    g.vote = kurultai(g);
+    g.phase = g.season === 1 ? 'council' : 'kurultai';
+  }
 }
+
+// Zaltyr watches the roads round his pasture: forged riders there get his mark and slow down;
+// now and then he marks an honest messenger too
+function stepWatch(g, dt) {
+  const z = g.zaltyr;
+  if (z.busy <= 0) return;
+  z.busy -= dt;
+  if (z.busy <= 0) { z.busy = 0; z.at = -1; return; }
+  const near = new Set([z.at, ...g.map.regions[z.at].nb.map((e) => e.to)]);
+  for (const r of g.riders) {
+    if (r.judged || !near.has(riderRegion(g, r))) continue;
+    r.judged = true;
+    if (r.kind === 'false') { r.seen = true; r.speed *= 0.55; }
+    else if (r.kind === 'tribe' && g.rand() < 0.22) r.seen = true;
+  }
+}
+
+function stepCaravan(g) {
+  const c = g.caravan;
+  if (!c || g.hold || g.time < c.next || g.riders.some((r) => r.kind === 'caravan')) return;
+  c.next = Infinity;
+  const [from, to] = c.out ? [c.b, c.a] : [c.a, c.b];
+  c.out = !c.out;
+  spawnRider(g, 'caravan', from, to);
+}
+
+// —— between the seasons ——
+
+// the small council at the end of summer: who stood with the khan feels it, who did not feels strong
+export function nextSeason(g) {
+  if (g.phase !== 'council') return false;
+  const v = g.vote;
+  g.council = v.votes.map((x) => x.yes);
+  v.votes.forEach((x) => {
+    const tr = g.tribes[x.tribe];
+    tr.mood = clamp(tr.mood + (x.yes ? 0.05 : -0.04), 0, 1);
+  });
+  g.season = 2;
+  g.clock = 0;
+  g.evIdx = 0;
+  g.event = null;
+  g.horses = HORSE_MAX;
+  g.plotEvery *= 0.9;
+  g.plotT = 18;
+  g.aria.busy = 0;
+  g.aria.riding = false;
+  g.aria.at = -1;
+  // Sarman's caravan runs between the Orda and the great aul of the happiest clan
+  const best = [0, 1, 2].sort((a, b) => tribeAvg(g, b) - tribeAvg(g, a))[0];
+  g.caravan = { a: 0, b: g.map.capitals[best], out: false, next: g.time + 6 };
+  toast(g, 'orazbai', 'tOrazbaiJoins', 0);
+  g.phase = 'map';
+  return true;
+}
+
+// the line a clan's trust must cross at the kurultai: lower when the elder Orazbai trusts the khan
+export const voteAt = (g) => clamp(VOTE_AT + (0.5 - g.orazbai) * 0.12, 0.48, 0.62);
 
 // —— the four situations of the first season (from «Хан: когда молчит степь») ——
 
@@ -402,6 +511,19 @@ function openEvent(g, id) {
     ctx = { region: r.id, accused: r.tribe };
   }
   if (id === 'letter') ctx = { region: 0 };
+  if (id === 'army') ctx = { region: 0 };
+  if (id === 'drought') {
+    const k = [0, 1, 2].sort((a, b) => tribeAvg(g, a) - tribeAvg(g, b))[0];
+    ctx = { region: g.map.capitals[k], accused: k };
+    g.drought = { tribe: k, until: g.clock + 120 };
+  }
+  if (id === 'plot') {
+    // the clans that whisper about another khan; if none, the coldest one
+    let k = [0, 1, 2].filter((x) => g.tribes[x].talks);
+    if (!k.length) k = [[0, 1, 2].sort((a, b) => tribeAvg(g, a) - tribeAvg(g, b))[0]];
+    ctx = { region: g.map.capitals[k[0]], accused: k[0], talks: k };
+  }
+  if (id === 'truth') ctx = { region: 0, proven: trueClues(g) >= 3 };
   g.event = { id, ...ctx };
   g.phase = 'event';
 }
@@ -414,6 +536,10 @@ export function eventChoices(g) {
     well: [['strong', 0], ['share', 2], ['aria', 0]],
     caravan: [['arrest', 0], ['scouts', 1], ['pay', 2]],
     letter: [['demand', 0], ['spy', 0], ['trust', 0]],
+    army: [['agree', 0], ['tribes', 0], ['mixed', 1], ['season', 0]],
+    drought: [['neighbor', 0], ['share', 0], ['sarman', 0], ['war', 2]],
+    plot: [['amnesty', 0], ['proof', 0], ['trap', 0], ['council', 1]],
+    truth: [['publish', 0], ['aria', 0], ['blackmail', 0], ['bury', 0]],
   }[e.id];
   return list.map(([key, cost]) => ({ key, cost, ok: g.horses >= cost && !(e.id === 'well' && key === 'aria' && g.aria.trust < 0.3) }));
 }
@@ -426,7 +552,109 @@ export function choose(g, key) {
   const T = g.tribes;
   const pick = `${e.id}.${key}`;
   g.log.push({ key: 'd.' + pick, at: g.time, args: { tribe: e.strong ?? e.accused, weak: e.weak } });
+  const all = (d) => { for (const tr of T) tr.mood = clamp(tr.mood + d, 0, 1); };
+  const talks = (e.talks || []).map((k) => T[k]);
   switch (pick) {
+    // Karasai wants a standing army that answers only to the khan
+    case 'army.agree':
+      g.karasai += 2;
+      g.flags.army = true;
+      for (const tr of T) tr.fear = clamp(tr.fear + 0.15, 0, 1);
+      g.orazbai = clamp(g.orazbai - 0.15, 0, 1);
+      break;
+    case 'army.tribes':
+      all(0.05);
+      g.orazbai = clamp(g.orazbai + 0.1, 0, 1);
+      g.karasaiAngry = true;
+      toast(g, 'karasai', 'tKarasaiAngry', 0);
+      break;
+    case 'army.mixed':
+      g.karasai++;
+      break;
+    case 'army.season':
+      g.karasai++;
+      later(g, 140, 'karasaiExtend');
+      break;
+    // the great drought: the driest clan wants its neighbours' grass
+    case 'drought.neighbor':
+      g.horses = Math.min(HORSE_MAX + 2, g.horses + 3);
+      g.drought.until = g.clock + 40;
+      g.flags.concession = true;
+      g.orazbai = clamp(g.orazbai - 0.1, 0, 1);
+      break;
+    case 'drought.share':
+      T[e.accused].mood = clamp(T[e.accused].mood + 0.12, 0, 1);
+      for (let k = 0; k < 3; k++) if (k !== e.accused) T[k].mood = clamp(T[k].mood - 0.06, 0, 1);
+      g.drought.until = g.clock + 50;
+      break;
+    case 'drought.sarman':
+      g.horses = Math.min(HORSE_MAX + 2, g.horses + 2);
+      g.drought.until = g.clock + 30;
+      later(g, 70, 'sarmanDemands');
+      break;
+    case 'drought.war':
+      if (g.rand() < 0.5) {
+        T[e.accused].mood = clamp(T[e.accused].mood + 0.15, 0, 1);
+        g.karasai++;
+        g.drought.until = g.clock;
+        toast(g, 'karasai', 'tWarWon', 0);
+      } else {
+        all(-0.08);
+        toast(g, 'karasai', 'tWarLost', 0);
+      }
+      break;
+    // Zaltyr: some clans quietly talk about another khan
+    case 'plot.amnesty':
+      for (const tr of talks) { tr.talks = false; tr.mood = clamp(tr.mood + 0.08, 0, 1); }
+      g.plotEvery *= 0.9;
+      break;
+    case 'plot.proof':
+      if (g.rand() < 0.6) {
+        addClue(g, 'zaltyr', g.lair);
+        g.lairKnown = true;
+        g.lairShown = g.lair;
+      } else {
+        // Zaltyr was fed a lie: he points at the wrong pasture
+        const wrong = g.map.regions.filter((r) => r.tribe >= 0 && r.id !== g.lair);
+        g.lairShown = wrong[Math.floor(g.rand() * wrong.length)].id;
+        g.lairKnown = true;
+        addClue(g, 'zaltyrFalse', g.lairShown);
+      }
+      break;
+    case 'plot.trap':
+      for (const tr of talks) { tr.grievance++; tr.mood = clamp(tr.mood - 0.1, 0, 1); }
+      g.flags.noScout = true; // everyone hides now, Zaltyr hears nothing
+      g.zaltyr.busy = 0;
+      g.zaltyr.at = -1;
+      break;
+    case 'plot.council':
+      g.orazbai = clamp(g.orazbai + 0.15, 0, 1);
+      for (const tr of talks) tr.talks = false;
+      // the plotters are warned and move
+      {
+        const far = g.map.regions.filter((r) => r.tribe >= 0 && r.id !== g.lair && !g.map.capitals.includes(r.id));
+        g.lair = far[Math.floor(g.rand() * far.length)].id;
+        g.lairKnown = false;
+        g.lairShown = g.lair;
+      }
+      break;
+    // the truth: the old khan was preparing a reform — a council of the whole steppe
+    case 'truth.publish':
+      if (e.proven) { all(0.1); g.flags.reform = true; g.orazbai = clamp(g.orazbai + 0.1, 0, 1); }
+      else all(-0.05);
+      break;
+    case 'truth.aria':
+      g.aria.trust = clamp(g.aria.trust + 0.2, 0, 1);
+      g.flags.ariaKnows = true;
+      break;
+    case 'truth.blackmail':
+      for (let k = 0; k < 3; k++) if (T[k].talks || tribeAvg(g, k) < voteAt(g)) { T[k].fear = clamp(T[k].fear + 0.3, 0, 1); T[k].forced = true; }
+      g.orazbai = clamp(g.orazbai - 0.15, 0, 1);
+      break;
+    case 'truth.bury':
+      g.flags.buried = true;
+      later(g, 50, 'truthSurfaces');
+      break;
     case 'horse.karasai':
       g.karasai++;
       g.horses = Math.min(HORSE_MAX + 2, g.horses + 2);
@@ -511,24 +739,28 @@ export function choose(g, key) {
 export function kurultai(g) {
   const votes = g.tribes.map((tr, k) => {
     const avg = tribeAvg(g, k);
-    return { tribe: k, trust: avg, yes: avg >= VOTE_AT && (tr.grievance === 0 || avg >= 0.68) && !(tr.talks && avg < 0.62) };
+    const line = voteAt(g);
+    const yes = tr.forced || (avg >= line && (tr.grievance === 0 || avg >= line + 0.13) && !(tr.talks && avg < line + 0.07));
+    return { tribe: k, trust: avg, yes, line };
   });
-  return { votes, yes: votes.filter((v) => v.yes).length, karasai: g.karasai >= 3 };
+  return { votes, yes: votes.filter((v) => v.yes).length, karasai: g.karasai >= 3, orazbai: g.orazbai };
 }
 
 export const ENDINGS = ['uniter', 'mediator', 'ironHorde', 'noPeople', 'truthBreaks', 'vanish'];
 
 export function finish(g, choice) {
   const v = g.vote || kurultai(g);
-  const yes = Math.min(3, v.yes + (choice === 'council' && g.flags.council ? 1 : 0));
+  const yes = Math.min(3, v.yes + (choice === 'council' && (g.flags.council || g.orazbai >= 0.65) ? 1 : 0));
   const tc = trueClues(g), fc = falseClues(g);
-  let end;
-  if (g.karasai >= 3 && g.aria.trust < 0.35) end = 'vanish';
-  else if (choice === 'reveal') end = tc >= 3 && tc > fc ? (yes >= 2 ? 'uniter' : 'mediator') : 'truthBreaks';
+  const proven = tc >= (g.flags.buried ? 4 : 3) && tc > fc;
+  let end, variant = null;
+  if (g.karasai >= 3 && (g.aria.trust < 0.35 || g.karasaiAngry) && choice !== 'leave') end = 'vanish';
+  else if (choice === 'leave') { end = 'vanish'; variant = 'left'; }
+  else if (choice === 'reveal') end = proven ? (yes >= (g.flags.reform ? 1 : 2) ? 'uniter' : 'mediator') : 'truthBreaks';
   else if (choice === 'council') end = yes >= 2 ? 'mediator' : 'noPeople';
   else end = g.karasai >= 2 ? 'ironHorde' : 'noPeople';
   const score = Math.round(unity(g) * 100);
-  g.result = { end, choice, yes, tc, fc, score };
+  g.result = { end, variant, choice, yes, tc, fc, score };
   g.phase = 'end';
   return g.result;
 }
@@ -555,6 +787,7 @@ export const choicesAtKurultai = (g) => [
   { key: 'council', ok: true },
   { key: 'force', ok: g.karasai >= 1 },
   { key: 'reveal', ok: g.clues.length > 0 },
+  { key: 'leave', ok: true },
 ];
 
 export { GW };

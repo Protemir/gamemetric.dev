@@ -185,6 +185,8 @@ export class View {
       const t = g.t[r.id];
       const k = t < 0.55 ? Math.pow(t / 0.55, 3) * 0.3 : 0.72 + (t - 0.55) * 0.62;
       let c = [base[0] + (GOLD[0] - base[0]) * k, base[1] + (GOLD[1] - base[1]) * k, base[2] + (GOLD[2] - base[2]) * k];
+      // a clan in drought: its land goes brown
+      if (g.drought && g.drought.tribe === r.tribe && g.clock < g.drought.until) c = c.map((v, j) => v + ([150, 112, 62][j] - v) * 0.45);
       const lie = clamp(g.n[r.id] * 0.3, 0, 0.5);
       if (lie) c = c.map((v, j) => v + (LIE[j] - v) * lie);
       return c;
@@ -254,6 +256,7 @@ export class View {
     this.drawMarks(g, now);
     this.drawRiders(g, now, dt, look);
     this.drawParts(g, dt, 'over');
+    this.drawSeen(g, now);
     this.drawClouds(dt);
     this.drawHand(g, now, look);
     this.drawFx(g, now);
@@ -459,7 +462,7 @@ export class View {
       ctx.fillText(g.found.has(i) ? '✓' : '✕', px, py);
     }
     if (g.lairKnown) {
-      const r = R[g.lair];
+      const r = R[g.lairShown ?? g.lair];
       const [x, y] = this.toScreen(r.x, r.y);
       const p = 1 + Math.sin(now / 300) * 0.1;
       ctx.strokeStyle = '#d0304a';
@@ -469,6 +472,18 @@ export class View {
       ctx.setLineDash([]);
       ctx.font = `${Math.round(u * 2)}px system-ui, sans-serif`;
       ctx.fillText('👁', x + u * 3.6, y - u * 3.4);
+    }
+    // Zaltyr on watch: an amber ring round his pasture, closing as his time runs out
+    if (g.zaltyr && g.zaltyr.busy > 0) {
+      const r = R[g.zaltyr.at];
+      const [x, y] = this.toScreen(r.x, r.y);
+      ctx.strokeStyle = 'rgba(255,170,60,0.95)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.arc(x, y, u * 7, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(x, y, u * 3.6, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * g.zaltyr.busy) / 30); ctx.stroke();
     }
     if (g.aria.at >= 0 && g.aria.busy > 0) {
       const r = R[g.aria.at];
@@ -574,9 +589,9 @@ export class View {
     for (const { r, x, y, face } of list) {
       // dust behind the hooves
       if (Math.random() < dt * 14) this.parts.push({ kind: 'dust', x: x - face * u * 1.4, y: y + u * 1.1, vx: -face * 6, vy: -4, life: 0.8, age: 0, layer: 'under' });
-      const flag = r.kind === 'tribe' ? css(TRIBE_RGB[r.tribe]) : r.kind === 'karasai' ? '#c43a2c' : r.kind === 'aria' ? null : css(GOLD);
-      const coat = r.kind === 'aria' ? '#efe8dc' : r.kind === 'karasai' ? '#2b1d14' : r.kind === 'false' ? '#5a3a22' : '#8a5a32';
-      const cloth = r.kind === 'aria' ? '#8a5cd6' : r.kind === 'karasai' ? '#7a1f18' : r.kind === 'tribe' ? css(TRIBE_RGB[r.tribe].map((v) => v * 0.7)) : '#2f5a7a';
+      const flag = r.kind === 'tribe' ? css(TRIBE_RGB[r.tribe]) : r.kind === 'karasai' ? '#c43a2c' : r.kind === 'aria' || r.kind === 'caravan' || r.kind === 'zaltyr' ? null : css(GOLD);
+      const coat = r.kind === 'aria' ? '#efe8dc' : r.kind === 'karasai' ? '#2b1d14' : r.kind === 'false' ? '#5a3a22' : r.kind === 'caravan' ? '#b08a5a' : '#8a5a32';
+      const cloth = r.kind === 'aria' ? '#8a5cd6' : r.kind === 'karasai' ? '#7a1f18' : r.kind === 'tribe' ? css(TRIBE_RGB[r.tribe].map((v) => v * 0.7)) : r.kind === 'caravan' ? '#6a4a2a' : r.kind === 'zaltyr' ? '#2c3622' : '#2f5a7a';
       this.horse(x, y, face, now + r.id * 137, coat, cloth, flag, r.kind === 'karasai');
       if (look.pulse === r.id) {
         const k = (now % 900) / 900;
@@ -686,9 +701,32 @@ export class View {
     }
   }
 
+  // the riders Zaltyr has marked: a red "!" over them
+  drawSeen(g, now) {
+    const { ctx, u } = this;
+    for (const r of g.riders) {
+      if (!r.seen) continue;
+      const p = riderPos(g, r);
+      const [x, y] = this.toScreen(p.x, p.y);
+      const by = y - u * 4.2 + Math.sin(now / 160) * u * 0.3;
+      ctx.beginPath();
+      ctx.arc(x, by, Math.max(9, u * 1.1), 0, Math.PI * 2);
+      ctx.fillStyle = '#d0302a';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#fff3e0';
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = `900 ${Math.round(Math.max(12, u * 1.5))}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('!', x, by + 1);
+    }
+  }
+
   pushFx(f, now) {
     if (f.type === 'word' || f.type === 'force') this.flash.set(f.region, now);
-    const look = { word: ['+', '#ffe7a0', true], lie: ['−', '#e0b0ff', true], force: ['⚔', '#ff8f7a', true], clue: ['🔍', '#fff', false], caught: ['✋', '#fff', true], aria: ['👁', '#d9c4ff', false] }[f.type];
+    const look = { trade: ['🐎', '#ffe7a0', false], word: ['+', '#ffe7a0', true], lie: ['−', '#e0b0ff', true], force: ['⚔', '#ff8f7a', true], clue: ['🔍', '#fff', false], caught: ['✋', '#fff', true], aria: ['👁', '#d9c4ff', false] }[f.type];
     if (look) this.fx.push({ region: f.region, text: look[0], color: look[1], ring: look[2], t0: now });
   }
 }

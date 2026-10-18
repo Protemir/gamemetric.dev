@@ -157,9 +157,24 @@ try {
   await B.shot(path.join(out, 'tip.png'));
   await B.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 640, y: 300 });
 
-  // 6. the rest of the season, the kurultai, an ending
-  await B.js(`(() => { const s = ${A}; let n = 0; while (s.g.phase !== 'kurultai' && n++ < 20000) { if (s.g.phase === 'event') { const c = s.S.eventChoices(s.g).find((c) => c.ok); s.choose(c.key); } else s.step(0.1); } })()`);
+  // 6. the rest of summer, the small council, autumn with Zaltyr and Sarman, the great kurultai, an ending
+  const playTo = (phase) => B.js(`(() => { const s = ${A}; let n = 0; while (s.g.phase !== '${phase}' && n++ < 20000) { if (s.g.phase === 'event') { const c = s.S.eventChoices(s.g).find((c) => c.ok); s.choose(c.key); } else s.step(0.1); } return s.g.phase; })()`);
+  await playTo('council');
   await wait(1200);
+  t = await uiText();
+  check('the small council at the end of summer', t.includes('small council') && t.includes('Autumn'), t.slice(0, 50).replace(/\n/g, ' '));
+  await B.shot(path.join(out, 'council.png'));
+  await clickText('Autumn');
+  await wait(300);
+  const au = await B.js(`JSON.stringify({ season: ${A}.g.season, phase: ${A}.g.phase, zaltyrBtn: !document.querySelector('.act[data-key="zaltyr"]').hidden, caravan: !!${A}.g.caravan })`).then(JSON.parse);
+  check('autumn: Zaltyr joins, Sarman sends caravans', au.season === 2 && au.phase === 'map' && au.zaltyrBtn && au.caravan, JSON.stringify(au));
+  // Zaltyr on watch marks a forged rider near him
+  const zw = await B.js(`(() => { const s = ${A}; s.g.horses = 5; const f = s.S.spawnPlot(s.g); if (!f) return 'no rider'; const at = f.path[Math.min(1, f.path.length - 1)]; s.act('zaltyr', at); for (let k = 0; k < 120 && !f.seen && s.g.riders.includes(f); k++) s.step(0.1); return f.seen ? 'seen' : 'missed'; })()`);
+  check('Zaltyr marks a forged rider', zw === 'seen', zw);
+  await wait(200);
+  await B.shot(path.join(out, 'autumn.png'));
+  await playTo('kurultai');
+  await wait(1500);
   t = await uiText();
   check('the kurultai shows three elders and the choices', t.includes('Kurultai') && t.includes('Kokzhal') && t.includes('Arkar') && t.includes('Sit on the white felt'), t.slice(0, 60).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'kurultai.png'));

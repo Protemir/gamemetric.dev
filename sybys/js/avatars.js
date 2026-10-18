@@ -36,6 +36,30 @@ const PEOPLE = {
     <path d="M22 42q10 10 20 0q-1 7-10 8q-9-1-10-8z" fill="#3a2416"/>
     <path d="M17 30q2-16 15-17q13 1 15 17z" fill="#a8582a"/>
     <path d="M16 31q16-6 32 0" stroke="#e8d2a8" stroke-width="5" stroke-linecap="round" fill="none"/>`),
+  // Zaltyr: a hood, a sharp look, a scar
+  zaltyr: frame(['#5a6a4a', '#1e2618'], `
+    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#3d4a30"/>
+    ${face('#c99472')}
+    <path d="M14 40q0-26 18-28q18 2 18 28q-4-14-18-16q-14 2-18 16z" fill="#2c3622"/>
+    <path d="M24 33l6 1M34 34l6-1" stroke="#2a1a10" stroke-width="1.6"/>
+    <path d="M38 38l3 6" stroke="#8a4a3a" stroke-width="1.2"/>
+    <path d="M27 44q5 2 10 0" stroke="#3a2416" stroke-width="1.4" fill="none"/>`),
+  // Sarman: a white turban, a rich chapan, a trimmed beard
+  sarman: frame(['#c9a06a', '#5a3a12'], `
+    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#7a2a4a"/>
+    <path d="M24 50l8 14 8-14" fill="#d8b04a"/>
+    ${face()}
+    <path d="M23 43q9 9 18 0q-2 6-9 6q-7 0-9-6z" fill="#3a2416"/>
+    <path d="M17 30q0-14 15-15q15 1 15 15q-15-6-30 0z" fill="#f4efe2" stroke="#c9b48a"/>
+    <circle cx="32" cy="20" r="2.4" fill="#2a7a6a"/>`),
+  // Orazbai: the elder, a tall fur hat, a long white beard, a staff
+  orazbai: frame(['#8a7a5a', '#2e2618'], `
+    <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#4a3a6a"/>
+    ${face('#d9a882')}
+    <path d="M21 40q11 26 22 0q-3 5-11 5q-8 0-11-5z" fill="#f4f2ec"/>
+    <path d="M20 31q1-20 12-21q11 1 12 21q-12-5-24 0z" fill="#7a5232"/>
+    <path d="M19 31q13-6 26 0" stroke="#e8d8b8" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <path d="M52 64V22" stroke="#6a4a2a" stroke-width="2.4"/>`),
   scouts: frame(['#6a7a5a', '#2a3420'], `
     <path d="M12 64c2-13 10-18 20-18s18 5 20 18z" fill="#4a5a3a"/>${face('#c99472')}
     <path d="M18 31q14-14 28 0q-14-5-28 0z" fill="#3a3020"/>`),
@@ -55,7 +79,10 @@ export function elder(rgb) {
     <path d="M19 31q13-5 26 0" stroke="#2a1a10" stroke-width="2" fill="none"/>`);
 }
 
-export const avatar = (who) => PEOPLE[who] || PEOPLE.temir;
+// each copy on the page gets its own gradient id: a hidden copy would otherwise own the shared one
+let copy = 0;
+const fresh = (svg) => { const k = ++copy; return svg.replace(/av(\d+)/g, (_, n) => `av${n}_${k}`); };
+export const avatar = (who) => fresh(PEOPLE[who] || PEOPLE.temir);
 
 // the opening picture: a saddled horse alone on the steppe at dusk
 export const LONE_HORSE = `<svg viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="loneSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b2a4a"/><stop offset=".55" stop-color="#d7834a"/><stop offset="1" stop-color="#f2c06a"/></linearGradient></defs>

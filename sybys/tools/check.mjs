@@ -22,10 +22,10 @@ function bestWordTarget(g) {
 }
 
 const PLAYERS = {
-  idle: { act() {}, ev: { horse: 'karasai', well: 'strong', caravan: 'arrest', letter: 'demand' }, end: 'council', catch: 0 },
+  idle: { act() {}, ev: { horse: 'karasai', well: 'strong', caravan: 'arrest', letter: 'demand', army: 'agree', drought: 'neighbor', plot: 'trap', truth: 'bury' }, end: 'council', catch: 0 },
   word: {
     act(g) { if (S.canAct(g, 'word')) S.act(g, 'word', bestWordTarget(g)); },
-    ev: { horse: 'council', well: 'share', caravan: 'pay', letter: 'trust' }, end: 'council', catch: 0.3,
+    ev: { horse: 'council', well: 'share', caravan: 'pay', letter: 'trust', army: 'mixed', drought: 'share', plot: 'amnesty', truth: 'aria' }, end: 'council', catch: 0.3,
   },
   careful: {
     act(g) {
@@ -34,9 +34,15 @@ const PLAYERS = {
         const t = g.lairKnown && !g.clues.some((c) => c.kind === 'lair') ? g.lair : [...g.marks].find((i) => !g.found.has(i));
         if (t != null && g.map.regions[t].tribe >= 0) { S.act(g, 'aria', t); return; }
       }
+      // Zaltyr watches the roads out of the hideout once it is known, else the coldest great aul
+      if (S.canAct(g, 'zaltyr')) {
+        const k = [0, 1, 2].sort((a, b) => S.tribeTrust(g, a) - S.tribeTrust(g, b))[0];
+        S.act(g, 'zaltyr', g.lairKnown ? g.lairShown : g.map.capitals[k]);
+        return;
+      }
       if (g.horses >= 2 && S.canAct(g, 'word')) S.act(g, 'word', bestWordTarget(g));
     },
-    ev: { horse: 'council', well: 'aria', caravan: 'scouts', letter: 'trust' }, end: 'reveal', catch: 0.6,
+    ev: { horse: 'council', well: 'aria', caravan: 'scouts', letter: 'trust', army: 'tribes', drought: 'sarman', plot: 'proof', truth: 'publish' }, end: 'reveal', catch: 0.6,
   },
   force: {
     act(g) {
@@ -45,12 +51,12 @@ const PLAYERS = {
         S.act(g, 'karasai', r.id);
       } else if (g.horses >= 3 && S.canAct(g, 'word')) S.act(g, 'word', bestWordTarget(g));
     },
-    ev: { horse: 'karasai', well: 'strong', caravan: 'arrest', letter: 'demand' }, end: 'force', catch: 0.3,
+    ev: { horse: 'karasai', well: 'strong', caravan: 'arrest', letter: 'demand', army: 'agree', drought: 'war', plot: 'trap', truth: 'blackmail' }, end: 'force', catch: 0.3,
   },
 };
 
 for (const [name, P] of Object.entries(PLAYERS)) {
-  const ends = {}, yes = [0, 0, 0, 0];
+  const ends = {}, yes = [0, 0, 0, 0], council = [0, 0, 0, 0];
   let unity = 0, clues = 0, caught = 0, lies = 0, actions = 0;
   for (let s = 1; s <= N; s++) {
     const g = S.newGame(s * 101);
@@ -58,6 +64,7 @@ for (const [name, P] of Object.entries(PLAYERS)) {
     let thinkT = 0;
     while (g.phase !== 'end') {
       if (g.phase === 'event') { S.choose(g, P.ev[g.event.id]) || S.choose(g, S.eventChoices(g).find((c) => c.ok).key); continue; }
+      if (g.phase === 'council') { council[g.vote.yes]++; S.nextSeason(g); continue; }
       if (g.phase === 'kurultai') {
         const ok = S.choicesAtKurultai(g).find((c) => c.key === P.end && c.ok);
         S.finish(g, ok ? P.end : 'council');
@@ -69,7 +76,8 @@ for (const [name, P] of Object.entries(PLAYERS)) {
         if (r.kind !== 'false' || seen.has(r.id) || r.seg + r.p < 0.6) continue;
         seen.add(r.id);
         lies++;
-        if (g.rand() < P.catch) S.intercept(g, r.id);
+        // a rider Zaltyr has marked is easy to spot
+        if (g.rand() < (r.seen ? Math.max(P.catch, 0.85) : P.catch)) S.intercept(g, r.id);
       }
       if ((thinkT -= DT) <= 0) { thinkT = 1.2; P.act(g); }
     }
@@ -80,5 +88,5 @@ for (const [name, P] of Object.entries(PLAYERS)) {
     caught += g.caught;
     actions += g.acted;
   }
-  console.log(`${name.padEnd(8)} unity ${(unity / N).toFixed(0)}%  votes 0/1/2/3: ${yes.join('/')}  true clues ${(clues / N).toFixed(1)}  forged ${(lies / N).toFixed(1)} (caught ${(caught / N).toFixed(1)})  actions ${(actions / N).toFixed(0)}  ends ${JSON.stringify(ends)}`);
+  console.log(`${name.padEnd(8)} unity ${(unity / N).toFixed(0)}%  summer ${council.join('/')}  final 0/1/2/3: ${yes.join('/')}  true clues ${(clues / N).toFixed(1)}  forged ${(lies / N).toFixed(1)} (caught ${(caught / N).toFixed(1)})  actions ${(actions / N).toFixed(0)}  ends ${JSON.stringify(ends)}`);
 }
