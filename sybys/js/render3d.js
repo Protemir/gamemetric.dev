@@ -5,6 +5,28 @@
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/three/loaders/GLTFLoader.js';
 import * as SkeletonUtils from '../vendor/three/utils/SkeletonUtils.js';
+import { EffectComposer } from '../vendor/three/postprocessing/EffectComposer.js';
+import { RenderPass } from '../vendor/three/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../vendor/three/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from '../vendor/three/postprocessing/ShaderPass.js';
+import { OutputPass } from '../vendor/three/postprocessing/OutputPass.js';
+
+// the film look: a touch more contrast and warmth, a soft dark edge
+const GRADE = {
+  uniforms: { tDiffuse: { value: null }, strength: { value: 1 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec3 col = c.rgb;
+      float l = dot(col, vec3(0.299, 0.587, 0.114));
+      col = mix(vec3(l), col, 1.0 + 0.08 * strength);
+      col *= vec3(1.0 + 0.03 * strength, 1.0, 1.0 - 0.03 * strength);
+      float d = distance(vUv, vec2(0.5, 0.52));
+      col *= 1.0 - 0.32 * strength * smoothstep(0.42, 0.9, d);
+      gl_FragColor = vec4(col, c.a);
+    }`,
+};
 import { GW, GH, K } from './map.js';
 import { riderPos } from './sim.js';
 import { View, TRIBE_RGB, GOLD } from './render.js';
@@ -58,6 +80,15 @@ export class View3D extends View {
     this.ray = new THREE.Raycaster();
     this.clock3 = 0;
     this.setupWorld();
+    // glow and grading where the device can afford it
+    if (!mobile) {
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.55, 0.86);
+      this.composer.addPass(this.bloom);
+      this.composer.addPass(new ShaderPass(GRADE));
+      this.composer.addPass(new OutputPass());
+    }
     loading.then(() => { if (this.disposed) return; this.modelsLoaded = true; if (this.map) this.populate(this.lastG); });
   }
 
@@ -177,6 +208,7 @@ export class View3D extends View {
 
   // a slow device: sharpness down to 1, softer and cheaper shadows, no grass tufts, no walkers
   lighter() {
+    this.composer = null;
     this.renderer.setPixelRatio(1);
     this.sun.shadow.mapSize.set(512, 512);
     this.sun.shadow.map?.dispose();
@@ -184,6 +216,11 @@ export class View3D extends View {
     if (this.grassMesh) this.grassMesh.visible = false;
     for (const f of this.folk || []) f.grp.visible = false;
     this.lite = true;
+  }
+
+  paint3d() {
+    if (this.composer) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
   }
 
   // give the screen back to the 2D map
@@ -200,6 +237,10 @@ export class View3D extends View {
     const w = this.w, h = this.h;
     this.renderer.setPixelRatio(Math.min(this.mobile ? 1.5 : 2, window.devicePixelRatio || 1));
     this.renderer.setSize(w, h, false);
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
     this.glCanvas.style.width = w + 'px';
     this.glCanvas.style.height = h + 'px';
     const cam = this.camera;
@@ -1081,10 +1122,10 @@ export class View3D extends View {
     }
     if (this.cinema) {
       this.cinemaCam(g, dt);
-      this.renderer.render(this.scene, this.camera);
+      this.paint3d();
       return;
     }
-    this.renderer.render(this.scene, this.camera);
+    this.paint3d();
 
     // what the player reads, on top
     this.drawRoutes(g, now);
