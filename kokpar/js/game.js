@@ -7,9 +7,10 @@ import { makeKazan } from './kazan.js';
 import * as career from './career.js';
 import { makeCrowd } from './crowd.js';
 import { IC } from './icons.js';
+import * as portal from './portal.js';
 import { Net, cleanCode, netSupported } from './net.js';
 import { flagCanvas } from './flags.js';
-import { crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
+import { setPortalMute, crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
 if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
@@ -51,7 +52,7 @@ const TEXT = {
     stageOf: (a, b) => 'Village ' + a + ' of ' + b, unlocked: 'Next opponent', menuSub: 'Team horseback fight for the carcass in the Alatau foothills · 3 vs 3',
   },
 };
-let lang = (() => { try { return localStorage.getItem('kokpar.lang'); } catch { return null; } })() || P.get('lang') || (/^ru|^kk|^ky|^uk|^be/i.test(navigator.language) ? 'ru' : 'en');
+let lang = (() => { try { return localStorage.getItem('kokpar.lang'); } catch { return null; } })() || P.get('lang') || portal.portalLang() || (/^ru|^kk|^ky|^uk|^be/i.test(navigator.language) ? 'ru' : 'en');
 const tr = (k) => TEXT[lang][k];
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = THREE.MathUtils.clamp;
@@ -767,7 +768,7 @@ function endMatch() {
   el.banner.classList.remove('on'); bannerT = 0; delete el.hint.dataset.keep; el.hint.textContent = ''; el.tug.hidden = true;
   career.showResult(sum);
   el.menu.hidden = false;
-  if (sum.res === 'win') cheer(true);
+  if (sum.res === 'win') { cheer(true); portal.happytime(); }
 }
 
 // ---------- камера ----------
@@ -1212,6 +1213,7 @@ function frame(now) {
   let dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (!paused) tuneRes(dt);
+  portal.gameplay(!paused && el.menu.hidden && el.pause.hidden && ['countdown', 'play', 'goal'].includes(state.phase)); // для портала: идёт ли сам матч
   if (paused) { renderAll(); requestAnimationFrame(frame); return; }
   if (state.phase === 'goal' && state.t > 2.1) dt *= 0.4; // гол — на мгновение замедленно
   if (online.role === 'guest') guestStep(dt);
@@ -1252,6 +1254,8 @@ if (SIM) {
   document.title = 'SIM DONE';
 } else {
   window.__loadDone?.(); setTimeout(() => el.load.remove(), 250);
+  portal.loadingDone();
+  portal.onPortalMute(setPortalMute);
   if ((P.has('bots') || P.has('debug')) && !P.has('menu')) applyStage(); else showMenu();
   const roomCode = cleanCode((location.hash.match(/room=([A-Za-z0-9]{6})/) || [])[1]);
   if (roomCode.length === 6) onlineJoin(roomCode); // открыл ссылку друга

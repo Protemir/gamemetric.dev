@@ -22,7 +22,7 @@ function filter(type, freq, q = 0.7) { const f = ctx.createBiquadFilter(); f.typ
 export function initAudio() {
   if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
   ctx = new (window.AudioContext || window.webkitAudioContext)();
-  master = ctx.createGain(); master.gain.value = muted ? 0 : vol.master; master.connect(ctx.destination);
+  master = ctx.createGain(); master.gain.value = muted || portalMuted ? 0 : vol.master; master.connect(ctx.destination);
   noise = makeNoise(ctx);
   initCrowd();
   windG = ctx.createGain(); windG.gain.value = 0.05; loop([filter('lowpass', 420)], windG); // ровный степной ветер
@@ -42,10 +42,15 @@ export function setVolume(k, v) {
   if (ctx) { master.gain.setTargetAtTime(muted ? 0 : vol.master, ctx.currentTime, 0.05); crowdBus.gain.setTargetAtTime(vol.crowd, ctx.currentTime, 0.05); }
 }
 try { muted = localStorage.getItem('kokpar.mute') === '1'; } catch { /* приватный режим */ }
+let portalMuted = false;
+export function setPortalMute(m) { // кнопка звука портала: глушит поверх наших настроек
+  portalMuted = m;
+  if (master) master.gain.setTargetAtTime(muted || portalMuted ? 0 : vol.master, ctx.currentTime, 0.05);
+}
 export function toggleMute() {
   muted = !muted;
   try { localStorage.setItem('kokpar.mute', muted ? '1' : '0'); } catch { /* приватный режим */ }
-  if (master) master.gain.setTargetAtTime(muted ? 0 : vol.master, ctx.currentTime, 0.05);
+  if (master) master.gain.setTargetAtTime(muted || portalMuted ? 0 : vol.master, ctx.currentTime, 0.05);
   return muted;
 }
 document.addEventListener('visibilitychange', () => { if (ctx) document.hidden ? ctx.suspend() : ctx.resume(); });

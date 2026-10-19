@@ -4,8 +4,9 @@ import { flagCanvas, SIGN_LIST } from './flags.js';
 import { IC } from './icons.js';
 
 const KEY = 'kokpar.career';
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } };
-const save = (s) => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* приватный режим */ } };
+const box = () => window.KOKPAR_DATA || localStorage; // на портале прогресс хранится в аккаунте игрока
+const load = () => { try { return JSON.parse(box().getItem(KEY)); } catch { return null; } };
+const save = (s) => { try { box().setItem(KEY, JSON.stringify(s)); } catch { /* приватный режим */ } };
 
 // ---------- клубы ----------
 export const CLUBS = [
@@ -365,7 +366,7 @@ export function showHub(skipDaily) {
       </div>
       <div class="h-arena">${arenaName(f.arena)}</div>
       <button class="big-btn" data-act="play">${tr('play')}</button>
-      <button class="h-friend" data-act="online">${IC.crowd}<span>${L() === 'ru' ? 'С другом по сети' : 'Play a friend online'}</span></button>`;
+      ${window.KOKPAR_SDK || window.top !== window.self ? '' : `<button class="h-friend" data-act="online">${IC.crowd}<span>${L() === 'ru' ? 'С другом по сети' : 'Play a friend online'}</span></button>`}`; // на портале игру по сети не показываем
   } else {
     const r = c.result;
     const msg = r === 'champion' ? tr('champion') : r === 'final' ? tr('runnerUp') : r === 'semi' ? tr('outSemi') : tr('outGroup');
@@ -373,7 +374,7 @@ export function showHub(skipDaily) {
       <button class="big-btn" data-act="season">${tr('newSeason')}</button>`;
   }
   root.innerHTML = `<div class="hub">${head()}
-    <div class="h-logo disp">KOKPAR</div>
+    <div class="h-logo disp">KOKPAR</div><div class="h-logo2 disp">STEPPE CHAMPIONS</div>
     <div class="h-cup disp">${tr('cup')}</div><div class="h-season">${tr('season')(S.season)}${S.titles ? ' · ' + tr('titles')(S.titles) : ''}</div>
     ${body}
     ${tabs('hub')}
