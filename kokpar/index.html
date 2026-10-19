@@ -264,7 +264,10 @@
   .big-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
   .big-btn .ic { width: 20px; height: 20px; }
   /* настройки */
-  .pausebox { width: min(460px, calc(var(--vw, 100vw) * 0.94)); text-align: left; }
+  .pausebox { width: min(860px, calc(var(--vw, 100vw) * 0.96)); text-align: left; }
+  .s-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; } /* две колонки — окно помещается целиком */
+  .s-cols .s-keys { grid-template-columns: 1fr 1fr; }
+  .onl.pausebox { width: min(460px, calc(var(--vw, 100vw) * 0.94)); }
   .s-head { display: flex; align-items: center; justify-content: space-between; }
   .s-head .h-cup { margin: 0; }
   .s-x { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 12px; background: rgba(255,255,255,.08); }
@@ -321,7 +324,11 @@
   html.short .h-icon { width: 34px; height: 34px; }
   html.short .s-sec { margin-top: 6px; padding: 4px 10px; }
   html.short .s-row { padding: 4px 0; }
-  html.short .pausebox { width: min(640px, calc(var(--vw, 100vw) * 0.94)); }
+  html.short .pausebox { width: min(860px, calc(var(--vw, 100vw) * 0.96)); }
+  html.short .s-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+  html.short .s-cols .s-keys { grid-template-columns: 1fr 1fr; }
+  html.short .pausebox > .big-btn { margin: 6px 0 2px; padding: 8px 20px; font-size: 17px; }
+  html.short .p-quit { margin-top: 6px; padding: 7px 12px !important; }
   html.short .s-keys { grid-template-columns: repeat(4, 1fr); }
   html.short .d-box { padding: 10px 14px; }
   html.short .d-tiles { margin: 6px 0 4px; }
@@ -370,7 +377,7 @@
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
   html.rot body { position: fixed; top: 0; left: 0; transform-origin: 0 0; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvetn80m","./js/boot.js":"./js/boot.js?v=mvetn80m","./js/career.js":"./js/career.js?v=mvetn80m","./js/crowd.js":"./js/crowd.js?v=mvetn80m","./js/flags.js":"./js/flags.js?v=mvetn80m","./js/game.js":"./js/game.js?v=mvetn80m","./js/icons.js":"./js/icons.js?v=mvetn80m","./js/kazan.js":"./js/kazan.js?v=mvetn80m","./js/net.js":"./js/net.js?v=mvetn80m","./js/portal.js":"./js/portal.js?v=mvetn80m","./js/rider.js":"./js/rider.js?v=mvetn80m","./js/serke.js":"./js/serke.js?v=mvetn80m","./js/trees.js":"./js/trees.js?v=mvetn80m","./js/world.js":"./js/world.js?v=mvetn80m"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvetww47","./js/boot.js":"./js/boot.js?v=mvetww47","./js/career.js":"./js/career.js?v=mvetww47","./js/crowd.js":"./js/crowd.js?v=mvetww47","./js/flags.js":"./js/flags.js?v=mvetww47","./js/game.js":"./js/game.js?v=mvetww47","./js/icons.js":"./js/icons.js?v=mvetww47","./js/kazan.js":"./js/kazan.js?v=mvetww47","./js/net.js":"./js/net.js?v=mvetww47","./js/portal.js":"./js/portal.js?v=mvetww47","./js/rider.js":"./js/rider.js?v=mvetww47","./js/serke.js":"./js/serke.js?v=mvetww47","./js/trees.js":"./js/trees.js?v=mvetww47","./js/world.js":"./js/world.js?v=mvetww47"}}</script>
 </head>
 <body>
 <div id="load"><div><div class="t disp">KOKPAR</div><div class="s2 disp">STEPPE CHAMPIONS</div><div class="s" id="loadtxt">…</div><div class="lbar"><i id="loadbar"></i></div></div></div>
@@ -422,6 +429,6 @@
 <button id="btnWhip" class="btn"></button>
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
-<script type="module" src="./js/game.js?v=mvetn80m"></script>
+<script type="module" src="./js/game.js?v=mvetww47"></script>
 </body>
 </html>

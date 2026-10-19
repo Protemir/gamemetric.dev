@@ -984,14 +984,14 @@ function renderPause() {
   el.pause.innerHTML = `<div class="hub pausebox">
     <div class="s-head"><div class="h-cup disp">${inMatch ? t.title : t.settings}</div>${inMatch ? '' : `<button class="s-x" data-p="close" aria-label="${t.close}">${IC.close}</button>`}</div>
     ${inMatch ? `<button class="big-btn" data-p="resume">${IC.play}${t.resume}</button>` : ''}
-    <div class="s-sec"><div class="s-t">${t.sound}</div>
+    <div class="s-cols"><div class="s-col"><div class="s-sec"><div class="s-t">${t.sound}</div>
       ${slider('master', t.master, IC.sound)}${slider('crowd', t.crowdVol, IC.crowd)}${tog('mute', isMuted(), t.mute, '')}</div>
     <div class="s-sec"><div class="s-t">${t.gfx}</div>
       <div class="s-row"><span class="s-l">${IC.screen}${t.gfx}</span><div class="p-seg">${['low', 'medium', 'high'].map((q) => `<button data-p="q:${q}" class="${q === Q ? 'on' : ''}">${t[q]}</button>`).join('')}</div></div>
       ${canFull ? tog('full', !!document.fullscreenElement, t.full, IC.full) : ''}
       <div class="s-row"><span class="s-l">${IC.globe}${t.lang}</span><div class="p-seg"><button data-p="lang:ru" class="${lang === 'ru' ? 'on' : ''}">Русский</button><button data-p="lang:en" class="${lang === 'en' ? 'on' : ''}">English</button></div></div></div>
-    <div class="s-sec"><div class="s-t">${t.controls}</div><div class="s-keys">${keys}</div></div>
-    <details class="s-sec s-cred"><summary class="s-t">${lang === 'ru' ? 'Авторы' : 'Credits'}</summary><p>${CREDITS}</p></details>
+    </div><div class="s-col"><div class="s-sec"><div class="s-t">${t.controls}</div><div class="s-keys">${keys}</div></div>
+    <details class="s-sec s-cred"><summary class="s-t">${lang === 'ru' ? 'Авторы' : 'Credits'}</summary><p>${CREDITS}</p></details></div></div>
     ${inMatch ? `<button class="p-quit" data-p="quit">${IC.exit}<span>${t.quit}<small>${t.note}</small></span></button>` : `<button class="big-btn" data-p="close">${t.close}</button>`}
   </div>`;
 }

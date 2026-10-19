@@ -70,7 +70,7 @@ function measure() {
   document.documentElement.classList.toggle('portrait', PORTAL && touchDev && innerHeight > innerWidth);
   view.w = view.rot ? innerHeight : innerWidth; view.h = view.rot ? innerWidth : innerHeight;
   document.documentElement.classList.toggle('rot', view.rot);
-  document.documentElement.classList.toggle('short', view.h < 520);
+  document.documentElement.classList.toggle('short', view.h < 600); // окна порталов ~500–560 px — компактный режим
   document.documentElement.style.setProperty('--vh', view.h + 'px'); document.documentElement.style.setProperty('--vw', view.w + 'px'); // высота экрана игры (в повёрнутом виде — ширина телефона)
   Object.assign(document.body.style, view.rot ? { width: view.w + 'px', height: view.h + 'px', transform: `translateX(${innerWidth}px) rotate(90deg)` } : { width: '', height: '', transform: '' });
 }
