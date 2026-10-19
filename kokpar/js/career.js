@@ -222,7 +222,7 @@ export function fixture() {
     label: c.phase === 'group' ? tr('group')('A', c.round + 1) : c.phase === 'semi' ? tr('semi') : tr('final'),
     arena: c.phase === 'group' ? GROUP_ARENA[c.round] : c.phase === 'semi' ? 'evening' : 'night',
     // сила ботов соперника: тянут в тартысе, реакция, скорость
-    diff: { pull: -0.06 + r * 0.009, react: Math.max(0.25, 0.85 - r * 0.035), speed: 0.91 + r * 0.0085 },
+    diff: { pull: -0.06 + r * 0.009, react: Math.max(0.25, 0.85 - r * 0.035), speed: 0.96 + r * 0.006 },
     stars: Math.max(1, Math.min(5, Math.round((r + 2) / 3.6))),
   };
 }

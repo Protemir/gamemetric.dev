@@ -367,14 +367,21 @@
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
   html.rot body { position: fixed; top: 0; left: 0; transform-origin: 0 0; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mve80n76","./js/career.js":"./js/career.js?v=mve80n76","./js/crowd.js":"./js/crowd.js?v=mve80n76","./js/flags.js":"./js/flags.js?v=mve80n76","./js/game.js":"./js/game.js?v=mve80n76","./js/icons.js":"./js/icons.js?v=mve80n76","./js/kazan.js":"./js/kazan.js?v=mve80n76","./js/net.js":"./js/net.js?v=mve80n76","./js/rider.js":"./js/rider.js?v=mve80n76","./js/serke.js":"./js/serke.js?v=mve80n76","./js/trees.js":"./js/trees.js?v=mve80n76","./js/world.js":"./js/world.js?v=mve80n76"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvetgfyy","./js/career.js":"./js/career.js?v=mvetgfyy","./js/crowd.js":"./js/crowd.js?v=mvetgfyy","./js/flags.js":"./js/flags.js?v=mvetgfyy","./js/game.js":"./js/game.js?v=mvetgfyy","./js/icons.js":"./js/icons.js?v=mvetgfyy","./js/kazan.js":"./js/kazan.js?v=mvetgfyy","./js/net.js":"./js/net.js?v=mvetgfyy","./js/rider.js":"./js/rider.js?v=mvetgfyy","./js/serke.js":"./js/serke.js?v=mvetgfyy","./js/trees.js":"./js/trees.js?v=mvetgfyy","./js/world.js":"./js/world.js?v=mvetgfyy"}}</script>
 </head>
 <body>
 <div id="load"><div><div class="t disp">KOKPAR</div><div class="s" id="loadtxt">…</div><div class="lbar"><i id="loadbar"></i></div></div></div>
 <script>
 // полоса загрузки: сначала движок (без данных о байтах — ползёт до 15%), потом кони и всадники по байтам
 (() => {
-  const ru = !/[?&]lang=en/.test(location.search) && (/[?&]lang=ru/.test(location.search) || /^(ru|kk)/i.test(navigator.language));
+  // телефон вертикально — сразу кладём страницу набок (как потом сделает игра), чтобы загрузка не переворачивалась посреди
+  if (matchMedia('(pointer: coarse)').matches && innerHeight > innerWidth && window.top === window.self && !/[?&]cg/.test(location.search)) {
+    document.documentElement.classList.add('rot', 'short');
+    Object.assign(document.body.style, { width: innerHeight + 'px', height: innerWidth + 'px', transform: 'translateX(' + innerWidth + 'px) rotate(90deg)' });
+  }
+  let saved = null; try { saved = localStorage.getItem('kokpar.lang'); } catch { /* приватный режим */ }
+  const q = (location.search.match(/[?&]lang=(ru|en)/) || [])[1];
+  const ru = (saved || q || (/^(ru|kk|ky|uk|be)/i.test(navigator.language) ? 'ru' : 'en')) === 'ru'; // как в самой игре: сначала выбор игрока
   const L = ru ? ['Загружаем степь', 'Седлаем коней', 'Зовём всадников', 'Выводим на поле'] : ['Loading the steppe', 'Saddling the horses', 'Calling the riders', 'Heading to the field'];
   const got = { horse: 0, rider: 0 }, TOTAL = 2.55e6;
   let shown = 0.03, target = 0.03, label = L[0];
@@ -412,6 +419,6 @@
 <button id="btnWhip" class="btn"></button>
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
-<script type="module" src="./js/game.js?v=mve80n76"></script>
+<script type="module" src="./js/game.js?v=mvetgfyy"></script>
 </body>
 </html>

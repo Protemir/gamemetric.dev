@@ -213,7 +213,7 @@ function throwSack(e) {
   e.throw = { t: 0, to, d, hit };
 }
 // ---------- прицел игрока: сила качается 0→1→0, точка падения видна на земле ----------
-const AIM_MAX = THROW_MAX + 5;
+const AIM_MAX = 13; // тушу в 30 кг дальше ~12 м не бросить — к казану надо прорваться
 const aim = { p: 0, dir: 1, L: new THREE.Vector3(), hit: false };
 const aimDots = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(26 * 3), 3)),
   new THREE.PointsMaterial({ color: '#ffe58a', size: 0.38, transparent: true, opacity: 0.9, depthWrite: false }));
@@ -227,7 +227,7 @@ function aimPoint(e) { // куда упадёт: вперёд по ходу ко
   let yaw = e.h.yaw;
   const want = Math.atan2(k.x - p.x, -p.z), dA = wrap(want - yaw);
   if (Math.abs(dA) < 0.22) yaw += dA * 0.85;
-  const dist = 4 + aim.p * 15;
+  const dist = 3 + aim.p * 9;
   aim.L.set(p.x + Math.sin(yaw) * dist, 0, p.z + Math.cos(yaw) * dist);
   aim.hit = Math.hypot(aim.L.x - k.x, aim.L.z) < KAZAN_R + 0.2;
   return dist;
@@ -236,7 +236,7 @@ function stepAim(dt) {
   const e = me, on = e && e.throw?.aiming;
   aimDots.visible = aimRing.visible = !!on;
   if (!on) return;
-  aim.p += aim.dir * dt * 1.15;
+  aim.p += aim.dir * dt * 1.45;
   if (aim.p >= 1) { aim.p = 1; aim.dir = -1; } else if (aim.p <= 0) { aim.p = 0; aim.dir = 1; }
   const dist = aimPoint(e), top = aim.hit ? KAZAN_TOP : 0.05;
   aimRing.position.set(aim.L.x, top, aim.L.z);
@@ -427,6 +427,7 @@ function think(e, dt) {
     tx = sack.pos.x + sack.vel.x * 0.4; tz = sack.pos.z + sack.vel.z * 0.4;
     const d = Math.hypot(tx - p.x, tz - p.z);
     gait = d > 10 ? 4 : d > 4 ? 3 : 2;
+    sprint = d > 6 && d < 30 && e.stamina > 30; // к ничьей туше — на камче, кто первый
   } else if (b.role === 'support') {
     const s = Math.sign(b.foe.x);
     tx = sack.pos.x + s * 12; tz = sack.pos.z + (b.slot - 1) * 8;
@@ -462,7 +463,8 @@ function think(e, dt) {
     tx = cp.x + Math.sin(cy) * (carrier.h.v * 0.35 + 0.5) + Math.cos(cy) * 1.9 * side;
     tz = cp.z + Math.cos(cy) * (carrier.h.v * 0.35 + 0.5) - Math.sin(cy) * 1.9 * side;
     const d = Math.hypot(cp.x - p.x, cp.z - p.z);
-    gait = 4; sprint = d > 4 && d < 16;
+    gait = 4; sprint = d < 16 && e.stamina > 15; // догоняет на камче и таранит несущего
+    e.boost = carrier.me && d < 22 ? 1.04 : 1; // за игроком скачут во весь опор
     if (canTug(e, carrier)) { b.react += dt; if (b.react > DIFF.react + rnd() * 0.4) { startTug(e); b.react = 0; } } else b.react = 0;
   } else if (b.role === 'guard') {
     const cp = carrier.h.obj.position;
@@ -575,7 +577,7 @@ function stepEnt(e, dt) {
   e.sprint = Math.max(0, e.sprint - dt);
   e.tugCD = Math.max(0, e.tugCD - dt); e.pickCD = Math.max(0, e.pickCD - dt); e.stun = Math.max(0, e.stun - dt);
   const tugging = state.tug && (state.tug.car === e || state.tug.att === e);
-  e.h.speedMul = (e.sprint > 0 ? 1.22 : 1) * (sack.carrier === e ? 0.9 : 1) * (e.stun > 0 ? 0.6 : 1) * (tugging ? 0.75 : 1) * (e.tired ? 0.82 : 1) * (e.team === 1 ? DIFF.speed : HB.speed);
+  e.h.speedMul = (e.sprint > 0 ? 1.22 : 1) * (sack.carrier === e ? 0.9 : 1) * (e.stun > 0 ? 0.6 : 1) * (tugging ? 0.75 : 1) * (e.tired ? 0.82 : 1) * (e.team === 1 ? DIFF.speed : HB.speed) * (e.bot?.role === "chase" && !e.me ? e.boost || 1 : 1);
 }
 function stepSack(dt) {
   if (sack.flight) { // летит: после гола на казан или брошена
