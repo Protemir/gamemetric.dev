@@ -113,8 +113,19 @@ export class View {
     this.bh = this.bh0;
     this.ox = Math.round((w - this.bw) / 2);
     this.oy = Math.round(TOP + (h - TOP - BOTTOM - this.bh) / 2);
+    // the first look at a valley is painted at screen sharpness (half the work, the game starts at once);
+    // the sharper one for zooming in follows in the background. On a resize (turning the phone, its
+    // address bar) the old painting is stretched until the new one is ready
+    const same = this.g === g && this.terrain && this.paintedRot === this.rot;
     this.g = g;
-    this.terrain = this.paintTerrain(g);
+    this.paintJob = (this.paintJob || 0) + 1;
+    if (!same) this.terrain = this.paintTerrain(g, 1);
+    this.paintedRot = this.rot;
+    const job = this.paintJob;
+    clearTimeout(this.sharpTimer);
+    this.sharpTimer = setTimeout(() => {
+      if (job === this.paintJob) this.paintTerrain(g, TERRAIN_SHARP, (c) => { if (job === this.paintJob) this.terrain = c; });
+    }, same ? 250 : 600);
     if (keep && keep.rot === this.rot) {
       this.zoomAt(keep.z, this.ox, this.oy);
       this.pan(w / 2 - (this.ox + keep.bx * this.cs), h / 2 - (this.oy + keep.by * this.cs));
@@ -171,9 +182,11 @@ export class View {
   }
 
   // the relief, drawn once per layout
-  paintTerrain(g) {
-    // painted sharper than the screen needs, so it still looks good brought closer
-    const cs = this.cs0, dpr = Math.min(3, this.dpr * TERRAIN_SHARP);
+  // sharp: pixels per screen pixel. With done(canvas) it paints in short slices between frames
+  // and hands the canvas over when it is ready (a few million pixels would freeze the game)
+  paintTerrain(g, sharp = TERRAIN_SHARP, done = null) {
+    const cs = this.cs0, dpr = Math.min(3, this.dpr * sharp);
+    const rot = this.rot, job = this.paintJob;
     // greener or rockier by the valley (games begun before 18.10 keep the old look)
     const look = (g.gen !== 1 && VALLEYS[g.valley]) || { green: 1, rock: 1 };
     const { W, H } = g;
@@ -215,11 +228,15 @@ export class View {
     }
     const fine = valueNoise(rng(g.seed ^ 0x77), W * 6, H * 6, 1);
     const patch = valueNoise(rng(g.seed ^ 0x99), W * 2, H * 2, 2);
+    // bilinear sample, written out: this runs a dozen times for each of a few million pixels
     const sample = (arr, aw, ah, fx, fy) => {
-      const x = clamp(fx, 0, aw - 1.001), y = clamp(fy, 0, ah - 1.001);
-      const ix = Math.floor(x), iy = Math.floor(y), tx = x - ix, ty = y - iy;
-      const k = (i, j) => arr[Math.min(iy + j, ah - 1) * aw + Math.min(ix + i, aw - 1)];
-      return lerp(lerp(k(0, 0), k(1, 0), tx), lerp(k(0, 1), k(1, 1), tx), ty);
+      const x = fx < 0 ? 0 : fx > aw - 1.001 ? aw - 1.001 : fx;
+      const y = fy < 0 ? 0 : fy > ah - 1.001 ? ah - 1.001 : fy;
+      const ix = x | 0, iy = y | 0, tx = x - ix, ty = y - iy;
+      const r0 = iy * aw, r1 = (iy + 1 < ah ? iy + 1 : ah - 1) * aw, ix1 = ix + 1 < aw ? ix + 1 : aw - 1;
+      const a = arr[r0 + ix] + (arr[r0 + ix1] - arr[r0 + ix]) * tx;
+      const b = arr[r1 + ix] + (arr[r1 + ix1] - arr[r1 + ix]) * tx;
+      return a + (b - a) * ty;
     };
     let lo = Infinity, hi = -Infinity;
     for (const v of g.h) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
@@ -227,17 +244,18 @@ export class View {
     // sun from the north-west of the screen
     const L = [-0.55, -0.62, 0.56];
     const unit = cs * dpr;
-    for (let y = 0; y < Hp; y++) {
+    const rows = (y0, y1) => {
+    for (let y = y0; y < y1; y++) {
       for (let x = 0; x < Wp; x++) {
         const sx = x / unit, sy = y / unit;
-        const fx = this.rot ? W - sy : sx; // valley coordinates, in cells
-        const fy = this.rot ? sx : sy;
+        const fx = rot ? W - sy : sx; // valley coordinates, in cells
+        const fy = rot ? sx : sy;
         const gi = fx * R, gj = fy * R;
         const h = sample(hf, GW, GH, gi, gj);
         // slope in valley axes, then turned to screen axes for the light
         const vx = (sample(hf, GW, GH, gi + 1, gj) - sample(hf, GW, GH, gi - 1, gj)) * R * 0.5;
         const vy = (sample(hf, GW, GH, gi, gj + 1) - sample(hf, GW, GH, gi, gj - 1)) * R * 0.5;
-        const hx = this.rot ? vy : vx, hy = this.rot ? -vx : vy;
+        const hx = rot ? vy : vx, hy = rot ? -vx : vy;
         const slope = Math.hypot(hx, hy);
         const nx = -hx * 0.55, ny = -hy * 0.55;
         const nl = Math.hypot(nx, ny, 1);
@@ -247,34 +265,64 @@ export class View {
         const moist = Math.exp(-d / 2.2);
         const fz = sample(fine, W * 6, H * 6, fx * 6, fy * 6);
         const pz = sample(patch, W * 2, H * 2, fx * 2, fy * 2);
-        let col = mix(STEPPE, STEPPE_HIGH, t);
-        col = mix(col, mix(MEADOW, MEADOW_DARK, 0.5 + 0.5 * pz), clamp((moist * 1.1 + pz * 0.15) * look.green, 0, 1));
-        col = mix(col, ROCK, clamp(((slope - 1.5) * 0.45 + (t - 0.75) * 1.5) * look.rock + (look.rock - 1) * 0.12, 0, 0.85));
+        // the colour in plain numbers (no arrays per pixel: that was most of the time)
         const ice = fy < 2 + pz * 0.5;
-        if (ice) col = SNOW;
+        let r, gg, b;
+        if (ice) {
+          [r, gg, b] = SNOW;
+        } else {
+          r = STEPPE[0] + (STEPPE_HIGH[0] - STEPPE[0]) * t;
+          gg = STEPPE[1] + (STEPPE_HIGH[1] - STEPPE[1]) * t;
+          b = STEPPE[2] + (STEPPE_HIGH[2] - STEPPE[2]) * t;
+          const mk = 0.5 + 0.5 * pz;
+          const mr = MEADOW[0] + (MEADOW_DARK[0] - MEADOW[0]) * mk, mg = MEADOW[1] + (MEADOW_DARK[1] - MEADOW[1]) * mk, mb = MEADOW[2] + (MEADOW_DARK[2] - MEADOW[2]) * mk;
+          const gk = clamp((moist * 1.1 + pz * 0.15) * look.green, 0, 1);
+          r += (mr - r) * gk;
+          gg += (mg - gg) * gk;
+          b += (mb - b) * gk;
+          const rk = clamp(((slope - 1.5) * 0.45 + (t - 0.75) * 1.5) * look.rock + (look.rock - 1) * 0.12, 0, 0.85);
+          r += (ROCK[0] - r) * rk;
+          gg += (ROCK[1] - gg) * rk;
+          b += (ROCK[2] - b) * rk;
+        }
         // light and shade, plus a little grain so it does not look like plastic
-        let k = 0.74 + 0.58 * light + fz * 0.06;
-        if (ice) k = 0.78 + 0.3 * light + fz * 0.03;
-        col = col.map((v) => v * k);
+        let k = ice ? 0.78 + 0.3 * light + fz * 0.03 : 0.74 + 0.58 * light + fz * 0.06;
         // contour lines, one layer apart, about one pixel wide whatever the slope
         if (!ice) {
           const v = h / LAYER;
           const f = Math.abs(v - Math.round(v));
           const wpx = (slope / LAYER / unit) * 1.3;
-          if (f < wpx) {
-            const a = 0.34 * (1 - f / wpx);
-            col = col.map((u) => u * (1 - a));
-          }
+          if (f < wpx) k *= 1 - 0.34 * (1 - f / wpx);
         }
         const p = (y * Wp + x) * 4;
-        px[p] = col[0];
-        px[p + 1] = col[1];
-        px[p + 2] = col[2];
+        px[p] = r * k;
+        px[p + 1] = gg * k;
+        px[p + 2] = b * k;
         px[p + 3] = 255;
       }
     }
-    x2.putImageData(img, 0, 0);
-    return c;
+    };
+    if (!done) {
+      rows(0, Hp);
+      x2.putImageData(img, 0, 0);
+      return c;
+    }
+    let y = 0;
+    const slice = () => {
+      if (job !== this.paintJob) return; // the screen changed again: a newer painting is on its way
+      const t0 = performance.now();
+      while (y < Hp && performance.now() - t0 < 8) {
+        rows(y, Math.min(Hp, y + 6));
+        y += 6;
+      }
+      if (y < Hp) setTimeout(slice, 0);
+      else {
+        x2.putImageData(img, 0, 0);
+        done(c);
+      }
+    };
+    setTimeout(slice, 0);
+    return null;
   }
 
   draw(g, now, ui) {

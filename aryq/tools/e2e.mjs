@@ -564,6 +564,24 @@ try {
   }
 
 
+  // a 320 px phone: the season card keeps its words next to the buttons (19.10: it showed "Ле")
+  await B.open(page('&lang=ru&seed=1004'), 320, 568);
+  await clickText('Играть');
+  await wait(250);
+  r = await B.js(`(() => { const s = document.querySelector('.hud-season').getBoundingClientRect(), n = document.getElementById('seasonName').getBoundingClientRect(); return JSON.stringify({ card: Math.round(s.width), nameRight: Math.round(n.right), cardRight: Math.round(s.right) }); })()`).then(JSON.parse);
+  check('the season card is readable on a 320 px phone', r.card >= 60 && r.nameRight <= r.cardRight, JSON.stringify(r));
+
+  // a phone with 2x pixels: Play starts the game quickly (19.10: 2.3 s while the terrain painted)
+  await B.open(page('&lang=en&seed=1004'), 390, 844);
+  await B.cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await B.js(`location.reload()`);
+  await wait(1200);
+  r = await B.js(`(() => { const t = performance.now(); [...document.querySelectorAll('button')].find((x) => x.className === 'btn').click(); return Math.round(performance.now() - t); })()`);
+  await wait(2500);
+  const sharp = await B.js(`${A}.view.terrain.width`);
+  check('Play starts in under a second on a 2x phone, the sharp ground follows', r < 1000 && sharp >= 1000, `${r} ms, ground ${sharp} px wide`);
+  await B.cdp('Emulation.clearDeviceMetricsOverride');
+
   // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads
   //     even if the cache keeps giving the old code (the loop of 17.10)
   await B.init(`try { localStorage.clear(); sessionStorage.removeItem('x'); } catch {}
