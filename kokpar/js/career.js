@@ -198,7 +198,7 @@ function untilMidnight() {
 // ---------- для игры ----------
 const L = () => (globalThis.__kokparLang === 'en' ? 'en' : 'ru');
 const tr = (k) => T[L()][k];
-export const clubName = (id, short) => (id === 'me' ? S.club?.name || tr('defName') : short ? byId(id)[L()][0] : byId(id)[L()].join(' ') );
+export const clubName = (id, short) => (id === 'me' ? (S.club?.auto ? tr('defName') : S.club?.name || tr('defName')) : short ? byId(id)[L()][0] : byId(id)[L()].join(' ') );
 const fullName = (id) => (id === 'me' ? clubName('me') : `${byId(id)[L()][0]} «${byId(id)[L()][1]}»`);
 export function myKit() { return makeKit(S.club?.color || PALETTE[0], S.club?.sign || 'shanyrak'); }
 function oppId() {

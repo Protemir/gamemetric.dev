@@ -65,6 +65,8 @@ const REAR_LEN = 3.0, REAR_UP = 0.85, REAR_DOWN = 0.9; // длительност
 export const view = { w: innerWidth, h: innerHeight, rot: false };
 const touchDev = matchMedia('(pointer: coarse)').matches;
 export const PORTAL = P.has('cg') || window.top !== window.self;
+// iPhone: палец не должен прокручивать и тянуть страницу (только списки в меню)
+addEventListener('touchmove', (e) => { if (!e.target.closest?.('.hub, .pausebox')) e.preventDefault(); }, { passive: false });
 function measure() {
   view.rot = touchDev && innerHeight > innerWidth && !PORTAL; // на портале не крутим — просим повернуть телефон
   document.documentElement.classList.toggle('portrait', PORTAL && touchDev && innerHeight > innerWidth);
@@ -72,7 +74,7 @@ function measure() {
   document.documentElement.classList.toggle('rot', view.rot);
   document.documentElement.classList.toggle('short', view.h < 600); // окна порталов ~500–560 px — компактный режим
   document.documentElement.style.setProperty('--vh', view.h + 'px'); document.documentElement.style.setProperty('--vw', view.w + 'px'); // высота экрана игры (в повёрнутом виде — ширина телефона)
-  Object.assign(document.body.style, view.rot ? { width: view.w + 'px', height: view.h + 'px', transform: `translateX(${innerWidth}px) rotate(90deg)` } : { width: '', height: '', transform: '' });
+  Object.assign((document.getElementById('stage') || document.body).style, view.rot ? { width: view.w + 'px', height: view.h + 'px', transform: `translateX(${innerWidth}px) rotate(90deg)` } : { width: '', height: '', transform: '' });
 }
 measure();
 // ---------- рендер ----------
@@ -84,7 +86,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = Q !== 'low';
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
+(document.getElementById('stage') || document.body).appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color('#dcd8cc');

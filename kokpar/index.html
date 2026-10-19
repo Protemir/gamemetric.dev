@@ -386,15 +386,17 @@
   .o-jb { border: 0; padding: 10px 18px; border-radius: 10px; background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); font-weight: 700; }
   .o-code { font-size: 54px; letter-spacing: .18em; color: #ffe58a; margin: 10px 0 4px; text-shadow: 0 0 20px rgba(255,190,40,.4); }
   html.short .hub > .h-friend { margin-top: 6px; padding: 5px 12px; }
-  html.rot, html.rot body { overflow: hidden; }
+  html, body { position: fixed; inset: 0; overscroll-behavior: none; } /* iPhone: страницу нельзя утащить пальцем */
+  #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
+  html.rot #stage { transform-origin: 0 0; }
   /* низкий экран (телефон лёжа): меню компактнее */
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
-  html.rot body { position: fixed; top: 0; left: 0; transform-origin: 0 0; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mveyjg80","./js/boot.js":"./js/boot.js?v=mveyjg80","./js/career.js":"./js/career.js?v=mveyjg80","./js/crowd.js":"./js/crowd.js?v=mveyjg80","./js/flags.js":"./js/flags.js?v=mveyjg80","./js/game.js":"./js/game.js?v=mveyjg80","./js/icons.js":"./js/icons.js?v=mveyjg80","./js/kazan.js":"./js/kazan.js?v=mveyjg80","./js/net.js":"./js/net.js?v=mveyjg80","./js/portal.js":"./js/portal.js?v=mveyjg80","./js/rider.js":"./js/rider.js?v=mveyjg80","./js/serke.js":"./js/serke.js?v=mveyjg80","./js/trees.js":"./js/trees.js?v=mveyjg80","./js/world.js":"./js/world.js?v=mveyjg80"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvfnn72f","./js/boot.js":"./js/boot.js?v=mvfnn72f","./js/career.js":"./js/career.js?v=mvfnn72f","./js/crowd.js":"./js/crowd.js?v=mvfnn72f","./js/flags.js":"./js/flags.js?v=mvfnn72f","./js/game.js":"./js/game.js?v=mvfnn72f","./js/icons.js":"./js/icons.js?v=mvfnn72f","./js/kazan.js":"./js/kazan.js?v=mvfnn72f","./js/net.js":"./js/net.js?v=mvfnn72f","./js/portal.js":"./js/portal.js?v=mvfnn72f","./js/rider.js":"./js/rider.js?v=mvfnn72f","./js/serke.js":"./js/serke.js?v=mvfnn72f","./js/trees.js":"./js/trees.js?v=mvfnn72f","./js/world.js":"./js/world.js?v=mvfnn72f"}}</script>
 </head>
 <body>
+<div id="stage">
 <div id="load"><div><div class="t disp">KOKPAR</div><div class="s2 disp">STEPPE CHAMPIONS</div><div class="s" id="loadtxt">…</div><div class="lbar"><i id="loadbar"></i></div></div></div>
 <script>
 // полоса загрузки: сначала движок (без данных о байтах — ползёт до 15%), потом кони и всадники по байтам
@@ -402,7 +404,7 @@
   // телефон вертикально — сразу кладём страницу набок (как потом сделает игра), чтобы загрузка не переворачивалась посреди
   if (matchMedia('(pointer: coarse)').matches && innerHeight > innerWidth && window.top === window.self && !/[?&]cg/.test(location.search)) {
     document.documentElement.classList.add('rot', 'short');
-    Object.assign(document.body.style, { width: innerHeight + 'px', height: innerWidth + 'px', transform: 'translateX(' + innerWidth + 'px) rotate(90deg)' });
+    Object.assign(document.getElementById('stage').style, { width: innerHeight + 'px', height: innerWidth + 'px', transform: 'translateX(' + innerWidth + 'px) rotate(90deg)' });
   }
   let saved = null; try { saved = localStorage.getItem('kokpar.lang'); } catch { /* приватный режим */ }
   const q = (location.search.match(/[?&]lang=(ru|en)/) || [])[1];
@@ -444,6 +446,7 @@
 <button id="btnWhip" class="btn"></button>
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
-<script type="module" src="./js/game.js?v=mveyjg80"></script>
+</div>
+<script type="module" src="./js/game.js?v=mvfnn72f"></script>
 </body>
 </html>

@@ -19,8 +19,20 @@ function loop(filters, gain) {
 }
 function filter(type, freq, q = 0.7) { const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; return f; }
 
+let unlockEl = null;
+function unlockIOS() { // тихая дорожка через <audio> переводит iPhone в «медиа», Web Audio перестаёт молчать
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    if (!unlockEl) {
+      unlockEl = new Audio('data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA=='); // 0,1 с тишины, без зацикливания
+      unlockEl.volume = 0.01; unlockEl.setAttribute('playsinline', '');
+    }
+    if (unlockEl.paused) unlockEl.play().catch(() => {});
+  } catch { /* не iPhone */ }
+}
 export function initAudio() {
-  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  unlockIOS();
+  if (ctx) { if (ctx.state !== 'running') ctx.resume().catch(() => {}); return; }
   ctx = new (window.AudioContext || window.webkitAudioContext)();
   master = ctx.createGain(); master.gain.value = muted || portalMuted ? 0 : vol.master; master.connect(ctx.destination);
   noise = makeNoise(ctx);
@@ -53,7 +65,9 @@ export function toggleMute() {
   if (master) master.gain.setTargetAtTime(muted || portalMuted ? 0 : vol.master, ctx.currentTime, 0.05);
   return muted;
 }
-document.addEventListener('visibilitychange', () => { if (ctx) document.hidden ? ctx.suspend() : ctx.resume(); });
+document.addEventListener('visibilitychange', () => { if (ctx) document.hidden ? ctx.suspend() : ctx.resume().catch(() => {}); });
+// звук оживает от любого касания или клика (iPhone требует жест; после блокировки экрана — снова)
+for (const ev of ['touchend', 'click', 'keydown']) addEventListener(ev, () => { if (!ctx || ctx.state !== 'running') initAudio(); }, { capture: true, passive: true });
 
 // слушатель — камера: громкость по расстоянию, панорама по стороне
 export function setListener(x, z, yaw) { listener.x = x; listener.z = z; listener.yaw = yaw; }

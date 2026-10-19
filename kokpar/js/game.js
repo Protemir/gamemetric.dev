@@ -62,7 +62,7 @@ const crowd = SIM || (P.get('no') || '').includes('crowd') ? null : makeCrowd(sc
 let fx = null; // текущий матч: { name, kit, diff, ko, final, arena }
 const DEFAULT_FX = { id: 'kainar', name: 'Kainar', ko: false, final: false, arena: 'day', kit: career.makeKit('#2456a8', 'mountain'), diff: { pull: 0.06, react: 0.45, speed: 1 } };
 let HB = { speed: 1, drain: 1, pull: 0, turn: 1, coat: [1.7, 1.7, 1.7] }; // прокачка коней клуба
-const teamName = (t) => (t === 0 ? career.clubName('me') : (fx || DEFAULT_FX).name);
+const teamName = (t) => (t === 0 ? career.clubName('me') : fx && fx.id !== 'friend' && fx.id !== 'kainar-def' && career.CLUBS.some((k) => k.id === fx.id) ? career.clubName(fx.id, true) : (fx || DEFAULT_FX).name); // имя соперника — на текущем языке
 
 // ---------- поле: казаны, флажки, разметка ----------
 const SWAP = P.has('swap') ? -1 : 1; // ?swap — команды меняются сторонами (проверка перекоса)
