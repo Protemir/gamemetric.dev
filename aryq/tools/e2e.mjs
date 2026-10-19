@@ -368,7 +368,8 @@ try {
     await B.size(w, h);
     await wait(150);
     r = await B.js(`(() => { const v = ${A}.view; return { cs: v.cs, x0: v.ox, y0: v.oy, x1: v.ox + v.bw, y1: v.oy + v.bh, rot: v.rot }; })()`);
-    const ok = r.x0 >= 0 && r.y0 >= 56 && r.x1 <= w && r.y1 <= h - 30 && r.cs >= 16;
+    // a phone on its side lets the board run under the tip line (19.10), elsewhere the line has room
+    const ok = r.x0 >= 0 && r.y0 >= 56 && r.x1 <= w && r.y1 <= h - (h < 500 && w > h ? 8 : 30) && r.cs >= 16;
     check(`layout ${w}x${h}`, ok, JSON.stringify(r));
     await B.shot(path.join(out, `layout-${w}x${h}.png`));
   }
@@ -623,6 +624,50 @@ try {
     const g1 = Sim.load(d);
     check('a save is cleaned on load', g1.valley === 'mountain' && g1.objects.length <= 1 && g1.objects.every((o) => o.x < 16 && o.y < 26), `${g1.valley}, ${g1.objects.length} objects`);
   }
+  await B.init('');
+
+  // 10e. the full bug pass of 19.10
+  // the first game: "start here" does not sit on a first-game label
+  for (const [w, h] of [[844, 390], [924, 520], [390, 844]]) {
+    await B.init('try { localStorage.clear(); } catch {}');
+    await B.open(page('&lang=ru&seed=1004'), w, h);
+    await clickText('Играть');
+    await wait(300);
+    r = await B.js(`JSON.stringify({ labels: ${A}.view.labelRects || [], ghost: !!${A}.state.ghost })`).then(JSON.parse);
+    // where the tag went: drawGhost picks the side; read it back from a frame drawn with a hook
+    const tag = await B.js(`new Promise((ok) => { const v = ${A}.view; const cx = v.cx; const orig = cx.fillText.bind(cx); let box = null;
+      cx.fillText = (txt, x, y, ...rest) => { if (txt === 'начни тут') box = [x - 5, y - 10, cx.measureText(txt).width + 10, 20]; return orig(txt, x, y, ...rest); };
+      requestAnimationFrame(() => requestAnimationFrame(() => { cx.fillText = orig; ok(JSON.stringify(box)); })); })`).then(JSON.parse);
+    const hit = tag && r.labels.some(([x, y, bw, bh]) => x < tag[0] + tag[2] && x + bw > tag[0] && y < tag[1] + tag[3] && y + bh > tag[1]);
+    check(`"start here" clears the first-game labels at ${w}x${h}`, r.ghost && tag && !hit, JSON.stringify({ tag, labels: r.labels.length }));
+    if (w === 844) {
+      const cs = await B.js(`${A}.view.cs0`);
+      check('a phone on its side gets a bigger board (cell ≥ 19 px)', cs >= 19, `${cs} px`);
+    }
+  }
+  // a game closed on the year gift panel gets its gift back
+  await B.init('try { localStorage.clear(); } catch {}');
+  await B.open(page('&lang=ru&seed=1004'), 924, 520);
+  await clickText('Играть');
+  await wait(200);
+  await B.js(`${A}.g.day = 119.97`);
+  await wait(700);
+  await B.js(`document.dispatchEvent(new Event('visibilitychange'))`); // saved as the tab goes
+  await B.init('');
+  await B.js(`location.reload()`).catch(() => {});
+  await wait(900);
+  await clickText('Продолжить');
+  await wait(400);
+  r = await B.js(`JSON.stringify({ panel: document.getElementById('ui').innerText.split(String.fromCharCode(10))[0], gifts: document.querySelectorAll('#ui .choice').length })`).then(JSON.parse);
+  check('a game closed on the gift panel gets its gift back', /пережит/.test(r.panel) && r.gifts === 3, JSON.stringify(r));
+  // the CrazyGames build shows up even when their SDK never answers
+  await B.init(`try { localStorage.clear(); } catch {}
+    Object.defineProperty(window, 'CrazyGames', { configurable: false, writable: false, value: { SDK: { environment: 'crazygames', init: () => new Promise(() => {}), game: {}, data: null } } });`);
+  await B.open(`${S.url}/dist/aryq-crazygames/index.html`, 924, 520);
+  await wait(6500);
+  r = await B.js(`document.getElementById('ui').innerText.slice(0, 4)`);
+  B.errors.splice(0); // the real SDK script cannot replace the pinned stand-in
+  check('the portal build starts even if its SDK hangs', r.length > 0, JSON.stringify(r));
   await B.init('');
 
   // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads

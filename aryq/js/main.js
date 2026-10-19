@@ -55,7 +55,8 @@ function start(m = mode, restored = null) {
     state.labels = {
       until: performance.now() + 9000,
       list: [
-        { i: Math.floor(g.W / 2), text: t('lblGlacier') },
+        // the glacier is the whole top row: point at the side away from the first dashed path
+        { i: state.ghost && state.ghost.from % g.W < g.W / 2 ? g.W - 3 : 2, text: t('lblGlacier') },
         { i: g.river[Math.floor(g.river.length * 0.55)], text: t('lblRiver') },
         ...(first ? [{ i: first.y * g.W + first.x, text: t('lblOrchard') }] : []),
       ],
@@ -63,6 +64,8 @@ function start(m = mode, restored = null) {
   }
   updateHud();
   if (DEBUG) window.__aryq = { g, S, view, state, step: (d) => S.advance(g, d) };
+  // a game closed on the gift panel gets its gift back
+  if (restored && g.giftDue) showYear({ year: g.giftDue });
 }
 
 // some tips are worth saying only the first few times in a game

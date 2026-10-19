@@ -5,7 +5,8 @@ const sdk = window.CrazyGames && window.CrazyGames.SDK;
 let ready = null;
 if (sdk) {
   try {
-    await sdk.init();
+    // an SDK that never answers must not keep the game from showing (19.10: a black screen)
+    await Promise.race([sdk.init(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 5000))]);
     if (sdk.environment !== 'disabled') ready = sdk;
   } catch {
     ready = null;

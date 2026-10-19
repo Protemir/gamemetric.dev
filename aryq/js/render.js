@@ -100,7 +100,10 @@ export class View {
     this.lastRot = this.rot;
     this.lastW = w;
     this.lastH = h;
-    const cs = Math.floor(Math.min((w - 20) / cols, (h - TOP - BOTTOM) / rows));
+    // a phone on its side is short: there the board may run under the tip line at the bottom
+    // (19.10: a third of the height went to margins and a cell was 17 px)
+    this.bottom = h < 500 && w > h ? 10 : BOTTOM;
+    const cs = Math.floor(Math.min((w - 20) / cols, (h - TOP - this.bottom) / rows));
     // the whole valley at zoom 1; pinch or the mouse wheel can bring it closer (zoomAt, pan)
     this.cols = cols;
     this.rows = rows;
@@ -112,7 +115,7 @@ export class View {
     this.bw = this.bw0;
     this.bh = this.bh0;
     this.ox = Math.round((w - this.bw) / 2);
-    this.oy = Math.round(TOP + (h - TOP - BOTTOM - this.bh) / 2);
+    this.oy = Math.round(TOP + (h - TOP - this.bottom - this.bh) / 2);
     // the first look at a valley is painted at screen sharpness (half the work, the game starts at once);
     // the sharper one for zooming in follows in the background. On a resize (turning the phone, its
     // address bar) the old painting is stretched until the new one is ready
@@ -154,7 +157,7 @@ export class View {
   // a board smaller than the screen sits in the middle; a bigger one cannot be dragged off it
   keepInView() {
     const w = window.innerWidth, h = window.innerHeight;
-    const left = 10, right = w - 10, top = TOP, bottom = h - BOTTOM;
+    const left = 10, right = w - 10, top = TOP, bottom = h - (this.bottom ?? BOTTOM);
     this.ox = this.bw <= right - left ? (w - this.bw) / 2 : clamp(this.ox, right - this.bw, left);
     this.oy = this.bh <= bottom - top ? top + (bottom - top - this.bh) / 2 : clamp(this.oy, bottom - this.bh, top);
   }
@@ -483,6 +486,7 @@ export class View {
     this.drawBits(now);
     this.drawStroke(g);
     this.startLabel = ui.startLabel;
+    this.labelRects = [];
     if (ui.labels) this.drawLabels(ui.labels, now);
     if (ui.ghost) this.drawGhost(ui.ghost, now);
     if (ui.hintPath) this.drawGhost(ui.hintPath, now);
@@ -589,6 +593,7 @@ export class View {
   // names on the field the first time: a tag above the thing with a short stem to it
   drawLabels(labels, now) {
     const { cx, cs } = this;
+    this.labelRects = [];
     const fade = clamp((labels.until - now) / 600, 0, 1);
     cx.save();
     cx.globalAlpha = fade;
@@ -599,6 +604,7 @@ export class View {
       const tw = cx.measureText(text).width + 14, th = Math.max(20, Math.min(26, cs * 0.6));
       const lx = Math.min(Math.max(px - tw / 2, this.ox + 4), this.ox + this.bw - tw - 4);
       const ly = Math.max(this.oy + 4, py - cs * 0.9 - th);
+      this.labelRects.push([lx, ly, tw, th]);
       cx.strokeStyle = 'rgba(255,248,234,0.9)';
       cx.lineWidth = 2;
       cx.beginPath();
@@ -822,7 +828,11 @@ export class View {
       // (18.10: in the gorge the tag sat right on the orchard it pointed to)
       const keep = (lx, ly) => [Math.min(Math.max(lx, this.ox + 2), this.ox + this.bw - tw - 2), Math.min(Math.max(ly, this.oy + 2), this.oy + this.bh - th - 2)];
       const things = [...this.g.objects.map((o) => [...this.center(o.y * this.g.W + o.x), cs * 0.6]), ...pts.slice(1).map(([x, y]) => [x, y, cs * 0.3])];
-      const covers = ([lx, ly]) => things.reduce((n, [x, y, r]) => n + (x + r > lx && x - r < lx + tw && y + r > ly && y - r < ly + th ? 1 : 0), 0);
+      // ... nor a first-game label (19.10: "start here" sat on "Glacier — all the water comes from here")
+      const boxes = this.labelRects || [];
+      const covers = ([lx, ly]) =>
+        things.reduce((n, [x, y, r]) => n + (x + r > lx && x - r < lx + tw && y + r > ly && y - r < ly + th ? 1 : 0), 0) +
+        boxes.reduce((n, [bx, by, bw, bh]) => n + (bx < lx + tw && bx + bw > lx && by < ly + th && by + bh > ly ? 2 : 0), 0);
       const [nx] = pts[1] || pts[0];
       const away = nx >= sx ? -1 : 1; // the side the path does not go
       const tries = [

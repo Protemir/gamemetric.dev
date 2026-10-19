@@ -474,6 +474,7 @@ function tick(g, dt) {
     g.nextGarden = 0;
     g.nextHouse = 6;
     g.events.push({ type: 'year', year: g.year });
+    g.giftDue = g.year; // until a gift is picked (it is saved: a game closed on the gift panel gets it back)
   }
 }
 
@@ -681,7 +682,7 @@ export function save(g) {
     objects: g.objects.map(({ type, x, y, need, thirst, flood, born, tap, got, grown }) => ({ type, x, y, need, thirst, flood, born, tap, got, grown })),
     flow: Array.from(g.flow, (v) => Math.round(v * 1000) / 1000),
     day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
-    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt,
+    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0,
   };
 }
 
@@ -710,6 +711,7 @@ export function load(d) {
   }
   rebuildNear(g);
   for (const k of ['day', 'year', 'dig', 'harvest', 'lost', 'gardensEver', 'nextGarden', 'nextHouse', 'cap', 'melt']) g[k] = d[k];
+  g.giftDue = d.giftDue === g.year ? g.year : 0;
   g.rand = rng((d.seed ^ (d.year * 7919) ^ (d.gardensEver * 104729)) >>> 0);
   g.order = null;
   g.events = [];
@@ -722,6 +724,7 @@ export function load(d) {
 // the reward picked at the end of a year
 export const REWARDS = ['dig', 'cap', 'melt'];
 export function reward(g, kind) {
+  g.giftDue = 0;
   if (kind === 'dig') g.dig += 15;
   if (kind === 'cap') g.cap += 0.6;
   if (kind === 'melt') g.melt *= 1.12;

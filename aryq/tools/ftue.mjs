@@ -10,6 +10,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const secs = +(process.argv[2] || 120);
 const [w, h] = (process.argv[3] || '924x520').split('x').map(Number);
 const lang = process.argv[4] || 'en';
+const valley = process.argv[5] || ''; // wide, mountain, gorge: start that valley instead of Play
 const out = path.join(repo, 'dist', 'aryq-ftue');
 fs.mkdirSync(out, { recursive: true });
 const S = await serve(repo);
@@ -21,7 +22,8 @@ try {
   await B.init('try { localStorage.clear(); } catch {}');
   await B.open(`${S.url}/aryq/?debug&lang=${lang}`, w, h);
   const t0 = Date.now();
-  await B.js(`[...document.querySelectorAll('button')].find((x) => x.className === 'btn').click()`);
+  if (valley) await B.js(`[...document.querySelectorAll('#ui .choice')][${['wide', 'mountain', 'gorge'].indexOf(valley)}].click()`);
+  else await B.js(`[...document.querySelectorAll('button')].find((x) => x.className === 'btn').click()`);
   let last = '', seenGhost = 0, idleFrom = Date.now(), idle = [], shots = 0;
   while (Date.now() - t0 < secs * 1000) {
     const s = await B.js(`JSON.stringify((() => { const { g, state, view } = ${A}; return {

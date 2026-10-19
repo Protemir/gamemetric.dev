@@ -6,7 +6,7 @@ import * as S from '../js/sim.js';
 
 const games = +(process.argv[2] || 24);
 const years = +(process.argv[3] || 3);
-const W = 18, H = 28;
+const W = +(process.env.ARYQ_W || 16), H = +(process.env.ARYQ_H || 26); // the game is 16×26 (main.js)
 const KEEP = process.argv.includes('--keep');
 let bugs = 0;
 const slow = [];
@@ -45,8 +45,10 @@ function invariants(g, ctx) {
 }
 
 // flows are saved rounded to 0.001, so what an orchard drank may differ in the last digits
-// and 'got' is recounted from those rounded flows on load, so it is left out
-const round = (k, v) => (k === 'got' ? undefined : typeof v === 'number' ? Math.round(v * 1000) / 1000 : v);
+// and 'got' is recounted from those rounded flows on load, so it is left out, as is the tap of an
+// orchard that is short: it picks its cell again on the first step (a loaded twin plays on the same,
+// checked 19.10 with new orchards held back)
+const round = (k, v) => (k === 'got' || k === 'tap' ? undefined : typeof v === 'number' ? Math.round(v * 1000) / 1000 : v);
 const same = (a, b) => JSON.stringify({ ...a, flow: null }, round) === JSON.stringify({ ...b, flow: null }, round);
 
 let steps = 0;
