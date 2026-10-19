@@ -66,6 +66,15 @@ try {
   const handXY = () => B.js(`(() => { const s = ${A}; const r = s.g.map.regions[s.look.hand]; return r ? s.view.toScreen(r.x, r.y) : null; })()`);
   let st = await B.js(`JSON.stringify({ step: ${A}.coach.step, hold: ${A}.g.hold, said: document.getElementById('coach').innerText })`).then(JSON.parse);
   check('lesson 1: Aria points at a pasture', st.step === 'send' && st.hold && st.said.includes('tap by the hand'), st.step);
+  // the bubble thins out over a pasture it would hide
+  const thin = await B.js(`(async () => { const s = ${A}; const b = document.getElementById('coach').getBoundingClientRect(); const was = s.look.hand;
+    const id = s.g.map.regions.findIndex((r) => { const [x, y] = s.view.toScreen(r.x, r.y); return x > b.left && x < b.right && y > b.top && y < b.bottom; });
+    if (id < 0) return 'none';
+    const c = document.getElementById('coach'), until = async (want) => { for (let k = 0; k < 30 && c.classList.contains('thin') !== want; k++) await new Promise((f) => setTimeout(f, 100)); return c.classList.contains('thin') === want; };
+    s.look.hand = id; const on = await until(true);
+    s.look.hand = was; const off = await until(false);
+    return on && off ? 'ok' : JSON.stringify({ on, off, id, hand: s.look.hand, cls: document.getElementById('coach').className, phase: s.g.phase, b: [b.left, b.top, b.right, b.bottom].map(Math.round), p: s.view.toScreen(s.g.map.regions[id].x, s.g.map.regions[id].y).map(Math.round) }); })()`);
+  check('the advisor thins out over what he hides', thin === 'ok' || thin === 'none', thin);
   let xy = await handXY();
   await click(xy[0], xy[1]);
   await wait(100);

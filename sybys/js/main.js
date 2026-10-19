@@ -91,6 +91,21 @@ function hush() {
   coachEl.classList.remove('on');
   coach.until = 0;
 }
+// the advisor never hides what he is talking about: over the arrow, the ringed rider or the cursor the bubble thins out
+function coachSeeThrough() {
+  let thin = false;
+  if (coachEl.classList.contains('on') && g && g.phase === 'map') {
+    const b = coachEl.getBoundingClientRect(), pad = 36;
+    const pts = [];
+    const hand = look.hand >= 0 && g.map.regions[look.hand];
+    if (hand) pts.push(view.toScreen(hand.x, hand.y));
+    const r = look.pulse != null && g.riders.find((x) => x.id === look.pulse);
+    if (r) { const p = S.riderPos(g, r); pts.push(view.toScreen(p.x, p.y)); }
+    if (look.mouse) pts.push(look.mouse);
+    thin = pts.some(([x, y]) => x > b.left - pad && x < b.right + pad && y > b.top - pad * 1.5 && y < b.bottom + pad);
+  }
+  coachEl.classList.toggle('thin', thin);
+}
 function glowButton(key) {
   coach.glow = key;
   for (const b of actionsEl.children) b.classList.toggle('glow', b.dataset.key === key);
@@ -1027,6 +1042,7 @@ function frame(now) {
       tribePulse(now);
     }
     if (coach.until && now > coach.until) hush();
+    coachSeeThrough();
     if (g.phase === 'event' && shownPhase === 'event' && !ui.children.length) showEvent(); // never a scene without its screen
     if (g.phase !== shownPhase) {
       shownPhase = g.phase;

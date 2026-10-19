@@ -236,6 +236,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   pointer-events: none;
 }
 .coach.on { opacity: 1; transform: none; }
+.coach.on.thin { opacity: 0.2; }
 .coach .ava { width: 72px; height: 72px; flex: none; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5)); }
 .coach .said {
   position: relative;
