@@ -213,3 +213,5 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .panel.menu { width: min(580px, calc(100vw - 32px)); }
   .panel.menu .choices { grid-template-columns: 1fr 1fr; }
 }
+/* the help is long on a short screen: its button stays in sight at the bottom while the list scrolls */
+.panel.help > .btn { position: sticky; bottom: -12px; box-shadow: 0 4px 0 #9c4325, 0 -16px 14px var(--paper); }

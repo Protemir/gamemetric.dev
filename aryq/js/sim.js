@@ -288,8 +288,10 @@ export function flowStep(g) {
     // it keeps the cell it drinks from while that cell gives enough; when it does not, it moves to
     // the neighbour that had the most water last tick (in a mesh of canals one cell can run short)
     const kept = o.tap != null && linked[o.tap] && Math.max(Math.abs((o.tap % g.W) - o.x), Math.abs(((o.tap / g.W) | 0) - o.y)) === 1;
-    if (kept && o.gotBefore >= o.need * 0.99) best = o.tap;
-    else if (o.gotBefore != null && o.gotBefore < o.need * 0.99) {
+    // in winter nobody drinks, so nobody is short: the tap stays put (it hopped every tick between two
+    // canals, the spill at their ends hopped with it and the water blinked: 18.10 "it blinks after the season")
+    if (kept && (sleeping || o.gotBefore >= o.need * 0.99)) best = o.tap;
+    else if (!sleeping && o.gotBefore != null && o.gotBefore < o.need * 0.99) {
       let most = kept ? before[o.tap] : -1;
       for (const [dx, dy] of N8) {
         const x = o.x + dx, y = o.y + dy;

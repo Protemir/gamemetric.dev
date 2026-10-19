@@ -548,6 +548,22 @@ try {
     check(`the menu fits a ${w}x${h} screen`, r.top >= 0 && r.bottom <= r.vh, JSON.stringify(r));
   }
 
+  // the help on a phone on its side: the button to close it is in sight without scrolling
+  await B.open(page('&lang=ru'), 844, 390);
+  await clickText('Как играть');
+  r = await B.js(`(() => { const b = [...document.querySelectorAll('#ui .panel.help button')].pop().getBoundingClientRect(); return JSON.stringify({ top: Math.round(b.top), bottom: Math.round(b.bottom), vh: innerHeight }); })()`).then(JSON.parse);
+  check('the help button is in sight on a phone on its side', r.top >= 0 && r.bottom <= r.vh, JSON.stringify(r));
+  // a careless player for five years against the rules: water downhill and adding up, saves that
+  // load back the same, and taps that stay put in winter (the water blinked, 18.10)
+  {
+    const { execFileSync } = await import('node:child_process');
+    let res = '';
+    try { res = execFileSync(process.execPath, [path.join(repo, 'aryq/tools/chaos.mjs'), '3', '5', '--keep'], { encoding: 'utf8' }); } catch (e) { res = (e.stdout || '') + (e.message || ''); }
+    const last = res.trim().split(/\r?\n/).pop();
+    check('a careless player breaks no rule in five years', / 0 bugs/.test(last), last);
+  }
+
+
   // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads
   //     even if the cache keeps giving the old code (the loop of 17.10)
   await B.init(`try { localStorage.clear(); sessionStorage.removeItem('x'); } catch {}
