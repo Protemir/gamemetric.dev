@@ -594,6 +594,11 @@ cv.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 function release() {
+  // the tip about light cells is for while digging; once the finger is up it is only in the way
+  if (hintEl.textContent === t('lit')) {
+    hintEl.textContent = '';
+    hintUntil = 0;
+  }
   if (!press || !g) return;
   state.reach = null;
   if (!press.moved && press.obj) {
@@ -867,11 +872,15 @@ function pickGhost(now, force) {
       store.set('aryq.taught', store.get('aryq.taught', 0) + 1);
     }
   }
-  const learning = store.get('aryq.taught', 0) < 3;
+  const taught = store.get('aryq.taught', 0);
+  const learning = taught < 3;
+  // for the next few orchards the path still comes soon, not only when it is nearly dry
+  // (19.10: a new player waited ~20 s at the 4th orchard with only a drop to go by)
+  const soon = taught < 8 ? 0.12 : 0.45;
   let target = null;
   if (g.day < S.WINTER) {
     for (const o of g.objects) {
-      if (o.got > 0.01 || (!learning && o.thirst < 0.45)) continue;
+      if (o.got > 0.01 || (!learning && o.thirst < soon)) continue;
       const k = o.thirst + (o.type === 'garden' ? 0.01 : 0);
       if (!target || k > target.k) target = { o, k };
     }
