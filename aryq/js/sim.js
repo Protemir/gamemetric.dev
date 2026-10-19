@@ -685,8 +685,14 @@ export function save(g) {
   };
 }
 
+// a save worth offering: written by this game for this size of valley (a cut-off write in a portal's
+// cloud or an older format is not; 19.10 one opened as a 5×5 valley, another drew an orchard off the map)
+export function usable(d, W, H) {
+  return !!d && typeof d === 'object' && d.W === W && d.H === H && Number.isFinite(d.seed) && Array.isArray(d.strokes) && Array.isArray(d.objects) && Array.isArray(d.gates) && Number.isFinite(d.day) && Number.isFinite(d.year);
+}
+
 export function load(d) {
-  const g = newGame(d.W, d.H, d.seed, d.valley, d.gen || 1);
+  const g = newGame(d.W, d.H, d.seed, VALLEYS[d.valley] ? d.valley : 'mountain', d.gen || 1);
   g.dig = 1e9;
   for (const s of d.strokes) {
     startStroke(g, s.from);
@@ -694,8 +700,10 @@ export function load(d) {
     if (s.join) extend(g, s.join[1]);
     endStroke(g);
   }
-  for (const i of d.gates) g.gate[i] = 1;
+  for (const i of d.gates) if (g.kind[i] === CANAL) g.gate[i] = 1;
   for (const o of d.objects) {
+    // only what stands on dry land inside the valley, on a cell of its own
+    if (!inside(g, o.x, o.y) || g.kind[o.y * g.W + o.x] !== LAND || g.objAt[o.y * g.W + o.x] || !(o.need > 0)) continue;
     const obj = { ...o, got: o.got || 0, s: 1 };
     g.objects.push(obj);
     g.objAt[o.y * g.W + o.x] = obj;

@@ -279,24 +279,29 @@ const TEXT = {
     bestShort: 'best {b}',
   },
 };
-const lang = (() => {
+let lang = (() => {
   const want = q.get('lang') || store.get('aryq.lang', null) || (PORTAL ? portalLang() : null);
   if (want && TEXT[want]) return want;
   const nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
   return /^(ru|kk|ky|be|uz|tg|uk)\b/i.test(nav) ? 'ru' : 'en';
 })();
 const t = (k, v) => (TEXT[lang][k] || TEXT.en[k] || k).replace(/\{(\w+)\}/g, (_, n) => (v && v[n] != null ? v[n] : ''));
-const WHY = { high: t('high'), up: t('up'), ice: t('ice'), object: t('object'), tired: t('tired') };
-document.documentElement.lang = lang;
-// on portals the game is listed under its full English name
-document.title = PORTAL ? 'Aryk: Water the Valley' : t('title');
-$('dig').parentElement.title = t('dig');
-$('harvest').parentElement.title = t('harvest');
-$('undoBtn').setAttribute('aria-label', t('undo'));
-$('speedBtn').setAttribute('aria-label', t('speed'));
-$('pauseBtn').setAttribute('aria-label', t('pause'));
-$('soundBtn').setAttribute('aria-label', t('sound'));
-cv.setAttribute('aria-label', t('title'));
+let WHY = {};
+// everything written once rather than every frame; called again when the player switches language
+function applyLang() {
+  WHY = { high: t('high'), up: t('up'), ice: t('ice'), object: t('object'), tired: t('tired') };
+  document.documentElement.lang = lang;
+  // on portals the game is listed under its full English name
+  document.title = PORTAL ? 'Aryk: Water the Valley' : t('title');
+  $('dig').parentElement.title = t('dig');
+  $('harvest').parentElement.title = t('harvest');
+  $('undoBtn').setAttribute('aria-label', t('undo'));
+  $('speedBtn').setAttribute('aria-label', t('speed'));
+  $('pauseBtn').setAttribute('aria-label', t('pause'));
+  $('soundBtn').setAttribute('aria-label', t('sound'));
+  cv.setAttribute('aria-label', t('title'));
+}
+applyLang();
 
 // small drawn icons, so they look the same on every phone
 const ICON = {
@@ -343,6 +348,8 @@ function startPinch() {
   if (!store.get('aryq.pinchSeen', false)) store.set('aryq.pinchSeen', true);
 }
 cv.addEventListener('pointerdown', (e) => {
+  // only the main mouse button digs (the right one dug too, under the browser's menu)
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
   const rr = cv.getBoundingClientRect();
   if (e.pointerType === 'touch') fingers.set(e.pointerId, { x: e.clientX - rr.left, y: e.clientY - rr.top });
   if (fingers.size >= 2) {
@@ -647,6 +654,18 @@ function release() {
 }
 cv.addEventListener('pointerup', lift);
 cv.addEventListener('pointercancel', lift);
+cv.addEventListener('contextmenu', (e) => e.preventDefault());
+// a button let go outside the window, or the window left mid-drag: no pointerup ever comes, and the
+// open canal kept the days stopped and the next stroke started on top of it (19.10)
+cv.addEventListener('lostpointercapture', (e) => {
+  if (press) lift(e);
+});
+window.addEventListener('blur', () => {
+  fingers.clear();
+  pinch = null;
+  state.loupe = null;
+  if (press) release();
+});
 
 window.addEventListener('keydown', (e) => {
   if (!g) return;
@@ -803,15 +822,17 @@ function showStart() {
   // on portals the game is listed as "Aryk: Water the Valley": the start screen says the same
   if (PORTAL) box.append(el('p', 'logo-sub', 'Water the Valley'));
   box.append(el('p', null, t('tag')));
-  const saved = store.get('aryq.save', null);
+  const raw = store.get('aryq.save', null);
+  const saved = S.usable(raw, W, H) ? raw : null;
+  const savedMode = saved && ['wide', 'mountain', 'gorge', 'daily'].includes(saved.mode) ? saved.mode : 'mountain';
   if (saved && saved.v === 1) {
     const cont = el('button', 'btn');
-    cont.append(el('span', null, t('resumeGame')), el('small', null, t('resumeSub', { v: t(saved.mode || 'mountain'), y: saved.year })));
+    cont.append(el('span', null, t('resumeGame')), el('small', null, t('resumeSub', { v: t(savedMode), y: saved.year })));
     cont.addEventListener('click', () => {
       sfx.audioInit();
       try {
         const old = S.load(saved);
-        start(saved.mode || 'mountain', old);
+        start(savedMode, old);
       } catch {
         store.set('aryq.save', null);
         start();
@@ -846,11 +867,14 @@ function showStart() {
   const langs = el('p', 'langs');
   for (const code of ['ru', 'en']) {
     const a = el('button', code === lang ? 'on' : '', code.toUpperCase());
+    // switched in place: on CrazyGames a reload came back before their Data module had saved the
+    // choice, so the language never changed (19.10)
     a.addEventListener('click', () => {
+      if (code === lang) return;
       store.set('aryq.lang', code);
-      const u = new URL(location.href);
-      u.searchParams.delete('lang');
-      location.href = u.toString();
+      lang = code;
+      applyLang();
+      showStart();
     });
     langs.append(a);
   }

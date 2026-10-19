@@ -582,6 +582,49 @@ try {
   check('Play starts in under a second on a 2x phone, the sharp ground follows', r < 1000 && sharp >= 1000, `${r} ms, ground ${sharp} px wide`);
   await B.cdp('Emulation.clearDeviceMetricsOverride');
 
+  // 10d. input and saves the 19.10 bug hunt found
+  await B.init('try { localStorage.clear(); } catch {}');
+  await B.open(page('&lang=ru&seed=1004'), 924, 520);
+  // the language buttons switch in place (on CrazyGames a reload came back in the old language)
+  await B.js(`[...document.querySelectorAll('.langs button')].find((b) => b.innerText === 'EN').click()`);
+  await wait(200);
+  r = await B.js(`JSON.stringify({ btn: document.querySelector('#ui .btn').innerText.split(String.fromCharCode(10))[0], html: document.documentElement.lang, loads: performance.getEntriesByType('navigation').length })`).then(JSON.parse);
+  check('the language switches at once', r.btn === 'Play' && r.html === 'en', JSON.stringify(r));
+  await clickText('Play');
+  await wait(250);
+  {
+    const gh = await B.js(`JSON.stringify(${A}.state.ghost)`).then(JSON.parse);
+    const pp = await centers([gh.from, ...gh.cells]);
+    const rm = (type, x, y) => B.cdp('Input.dispatchMouseEvent', { type, x, y, button: 'right', buttons: type === 'mouseReleased' ? 0 : 2, clickCount: 1 });
+    await B.js(`window.__menu = 0; window.addEventListener('contextmenu', (e) => { if (!e.defaultPrevented) window.__menu++; })`);
+    await rm('mousePressed', ...pp[0]);
+    for (const p of pp.slice(1)) await rm('mouseMoved', ...p);
+    await rm('mouseReleased', ...pp[pp.length - 1]);
+    r = await B.js(`JSON.stringify({ strokes: ${A}.g.strokes.length, menu: window.__menu })`).then(JSON.parse);
+    check('the right mouse button does not dig or open a menu', r.strokes === 0 && r.menu === 0, JSON.stringify(r));
+    // a drag whose button is let go outside the window still ends the canal
+    await mouse('mousePressed', ...pp[0]);
+    await mouse('mouseMoved', ...pp[1]);
+    await B.js(`document.getElementById('game').dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1, pointerType: 'mouse' }))`);
+    await wait(50);
+    r = await B.js(`JSON.stringify({ open: !!${A}.g.cur, strokes: ${A}.g.strokes.length })`).then(JSON.parse);
+    await mouse('mouseReleased', ...pp[1]);
+    check('a drag that loses the mouse still ends its canal', !r.open && r.strokes === 1, JSON.stringify(r));
+  }
+  // a broken save is not offered, and an orchard off the map in a save is dropped
+  await B.init(`try { localStorage.clear(); localStorage.setItem('aryq.save', JSON.stringify({ v: 1, W: 5, H: 5, seed: 1, strokes: [], gates: [], objects: [], day: 1, year: 1 })); } catch {}`);
+  await B.open(page('&lang=en'), 924, 520);
+  r = await B.js(`document.querySelector('#ui .btn').innerText.split(String.fromCharCode(10))[0]`);
+  check('a save of the wrong size is not offered', r === 'Play', r);
+  {
+    const Sim = await import('../js/sim.js');
+    const g0 = Sim.newGame(16, 26, 5, 'wide');
+    const d = { ...Sim.save(g0), valley: 'moon', objects: [{ type: 'garden', x: 99, y: 99, need: 0.3 }, { type: 'garden', x: 3, y: 20, need: 0.3 }], gates: [99999] };
+    const g1 = Sim.load(d);
+    check('a save is cleaned on load', g1.valley === 'mountain' && g1.objects.length <= 1 && g1.objects.every((o) => o.x < 16 && o.y < 26), `${g1.valley}, ${g1.objects.length} objects`);
+  }
+  await B.init('');
+
   // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads
   //     even if the cache keeps giving the old code (the loop of 17.10)
   await B.init(`try { localStorage.clear(); sessionStorage.removeItem('x'); } catch {}
