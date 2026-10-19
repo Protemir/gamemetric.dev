@@ -13,46 +13,52 @@ function bounce(mat) { // общий для тела и головы сдвиг 
   };
   return mat;
 }
-function person() {
+function person(near) { // near — с лицом и плавнее; дальние зрители (лица не видно) — втрое проще
+  const k = near ? 1 : 0;
   const parts = [];
   const add = (geo, color, part, x = 0, y = 0, z = 0, rz = 0) => {
-    geo = geo.toNonIndexed(); if (rz) geo.rotateZ(rz); geo.translate(x, y, z);
+    if (rz) geo.rotateZ(rz); geo.translate(x, y, z); // с индексами: общие вершины не считаются по 3 раза (600 человек — полтора миллиона вершин было)
     const n = geo.attributes.position.count, c = new THREE.Color(color), col = new Float32Array(n * 3), pa = new Float32Array(n);
     for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; pa[i] = part; }
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setAttribute('part', new THREE.BufferAttribute(pa, 1));
     geo.deleteAttribute('uv'); parts.push(geo);
   };
   for (const sx of [-0.09, 0.09]) {
-    add(new THREE.CylinderGeometry(0.07, 0.065, 0.62, 6), '#2b2622', 0, sx, 0.5, 0); // штаны
-    add(new THREE.CylinderGeometry(0.075, 0.085, 0.24, 6), '#1a1512', 0, sx, 0.12, 0.01); // сапоги
+    add(new THREE.CylinderGeometry(0.07, 0.065, 0.62, 4 + k * 2), '#2b2622', 0, sx, 0.5, 0); // штаны
+    add(new THREE.CylinderGeometry(0.075, 0.085, 0.24, 4 + k * 2), '#1a1512', 0, sx, 0.12, 0.01); // сапоги
   }
   // чапан: от подола до плеч, в талии уже, с плечами
   const prof = [[0.001, 0.42], [0.27, 0.42], [0.25, 0.62], [0.2, 0.95], [0.22, 1.2], [0.23, 1.32], [0.16, 1.42], [0.06, 1.46], [0.001, 1.46]].map(([r, y]) => new THREE.Vector2(r, y));
-  const coat = new THREE.LatheGeometry(prof, 10); coat.scale(1, 1, 0.72); add(coat, '#ffffff', 1);
-  add(new THREE.CylinderGeometry(0.205, 0.205, 0.05, 10).scale(1, 1, 0.74), '#3a2a1c', 0, 0, 0.98, 0); // кушак
+  const coat = new THREE.LatheGeometry(near ? prof : prof.filter((_, i) => i !== 2 && i !== 5), 6 + k * 4); coat.scale(1, 1, 0.72); add(coat, '#ffffff', 1);
+  add(new THREE.CylinderGeometry(0.205, 0.205, 0.05, 6 + k * 4, 1, !near).scale(1, 1, 0.74), '#3a2a1c', 0, 0, 0.98, 0); // кушак
   for (const [sx, p] of [[-0.25, 2], [0.25, 3]]) {
-    add(new THREE.CapsuleGeometry(0.058, 0.48, 2, 6), '#ffffff', p, sx, 1.08, 0, sx < 0 ? -0.08 : 0.08); // рукав
-    add(new THREE.SphereGeometry(0.05, 6, 4), '#c79a76', p, sx * 1.07, 0.78, 0.01); // кисть
+    add(new THREE.CapsuleGeometry(0.058, 0.48, 1, 4 + k), '#ffffff', p, sx, 1.08, 0, sx < 0 ? -0.08 : 0.08); // рукав
+    add(new THREE.SphereGeometry(0.05, 4 + k, 2 + k), '#c79a76', p, sx * 1.07, 0.78, 0.01); // кисть
   }
-  add(new THREE.CylinderGeometry(0.05, 0.055, 0.08, 6), '#c79a76', 0, 0, 1.5, 0); // шея
-  add(new THREE.SphereGeometry(0.11, 10, 8).scale(0.92, 1.08, 0.98), '#c79a76', 0, 0, 1.63, 0.005); // голова
+  add(new THREE.CylinderGeometry(0.05, 0.055, 0.08, 4 + k * 2, 1, !near), '#c79a76', 0, 0, 1.5, 0); // шея
+  add(new THREE.SphereGeometry(0.11, 6 + k * 3, 4 + k * 2).scale(0.92, 1.08, 0.98), '#c79a76', 0, 0, 1.63, 0.005); // голова
   // лицо (смотрит в +Z, на поле): глаза, брови, нос, усы, рот
-  for (const sx of [-0.036, 0.036]) {
-    add(new THREE.SphereGeometry(0.014, 6, 4), '#1b1410', 0, sx, 1.655, 0.098); // глаз
+  if (near) for (const sx of [-0.036, 0.036]) {
+    add(new THREE.SphereGeometry(0.014, 4, 2), '#1b1410', 0, sx, 1.655, 0.098); // глаз
     add(new THREE.BoxGeometry(0.04, 0.009, 0.012), '#2a1d14', 0, sx, 1.683, 0.096, sx > 0 ? -0.15 : 0.15); // бровь
   }
+  if (near) {
   add(new THREE.ConeGeometry(0.016, 0.045, 5).rotateX(Math.PI / 2), '#b88a68', 0, 0, 1.628, 0.115); // нос
   add(new THREE.BoxGeometry(0.06, 0.012, 0.012), '#2a1d14', 0, 0, 1.6, 0.104); // усы
   add(new THREE.BoxGeometry(0.035, 0.007, 0.01), '#7a3f32', 0, 0, 1.585, 0.1); // рот
-  add(new THREE.SphereGeometry(0.02, 6, 4), '#b88a68', 0, -0.103, 1.635, 0); add(new THREE.SphereGeometry(0.02, 6, 4), '#b88a68', 0, 0.103, 1.635, 0); // уши
+  add(new THREE.SphereGeometry(0.02, 4, 2), '#b88a68', 0, -0.103, 1.635, 0); add(new THREE.SphereGeometry(0.02, 4, 2), '#b88a68', 0, 0.103, 1.635, 0); // уши
+  }
   // склеиваем
-  let n = 0; for (const g of parts) n += g.attributes.position.count;
+  let n = 0, ni = 0; for (const g of parts) { n += g.attributes.position.count; ni += g.index.count; }
   const out = new THREE.BufferGeometry();
   for (const name of ['position', 'normal', 'color', 'part']) {
     const size = parts[0].attributes[name].itemSize, arr = new Float32Array(n * size);
     let o = 0; for (const g of parts) { arr.set(g.attributes[name].array, o); o += g.attributes[name].array.length; }
     out.setAttribute(name, new THREE.BufferAttribute(arr, size));
   }
+  const idx = new Uint16Array(ni); let o = 0, base = 0;
+  for (const g of parts) { for (const i of g.index.array) idx[o++] = i + base; base += g.attributes.position.count; }
+  out.setIndex(new THREE.BufferAttribute(idx, 1));
   return out;
 }
 // материал: чапан — цвет экземпляра, остальное — свой; руки на гол поднимаются и машут
@@ -106,7 +112,7 @@ function yurt() {
   return g;
 }
 
-export function makeCrowd(scene, { lenX = 60, rowZ = 43 } = {}) {
+export function makeCrowd(scene, { lenX = 60, rowZ = 43, camera = null } = {}) {
   const root = new THREE.Group();
   const people = [];
   // ряды по длинным сторонам и за казанами, с просветами
@@ -120,8 +126,24 @@ export function makeCrowd(scene, { lenX = 60, rowZ = 43 } = {}) {
   }
   const N = people.length;
   // шапки: қалпақ (войлочный конус с полями) и тымақ (меховая шапка)
-  const kalpak = new THREE.LatheGeometry([[0.001, 0], [0.16, 0], [0.15, 0.03], [0.115, 0.05], [0.08, 0.2], [0.001, 0.25]].map(([r, y]) => new THREE.Vector2(r, y)), 10); kalpak.translate(0, 1.7, 0);
-  const bodies = new THREE.InstancedMesh(person(), personMat(), N);
+  const kalpak = new THREE.LatheGeometry([[0.001, 0], [0.16, 0], [0.15, 0.03], [0.115, 0.05], [0.08, 0.2], [0.001, 0.25]].map(([r, y]) => new THREE.Vector2(r, y)), 8); kalpak.translate(0, 1.7, 0);
+  const mat = personMat();
+  const near = new THREE.InstancedMesh(person(true), mat, N), far = new THREE.InstancedMesh(person(false), mat, N);
+  const mats = [], cols = [];
+  // кто ближе 30 м к камере — подробный, остальные — простые; пересчёт раз в 0,4 с
+  let lodT = 0;
+  const relod = () => {
+    let a = 0, b = 0;
+    const cp = camera?.position;
+    for (let i = 0; i < N; i++) {
+      const e = mats[i].elements, d2 = cp ? (e[12] - cp.x) ** 2 + (e[14] - cp.z) ** 2 : 1e9;
+      const im = d2 < 900 ? near : far, j = im === near ? a++ : b++;
+      im.setMatrixAt(j, mats[i]); im.setColorAt(j, cols[i]);
+    }
+    near.count = a; far.count = b;
+    for (const im of [near, far]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
+  };
+  const bodies = { setMatrixAt: (i, m) => { mats[i] = m.clone(); }, setColorAt: (i, c) => { cols[i] = c.clone(); } };
   const hats = new THREE.InstancedMesh(kalpak, bounce(new THREE.MeshLambertMaterial()), N);
   const heads = { setMatrixAt() {}, setColorAt() {} }; // голова теперь часть человека
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
@@ -135,7 +157,8 @@ export function makeCrowd(scene, { lenX = 60, rowZ = 43 } = {}) {
     bodies.setColorAt(i, c.set('#555'));
     hats.setColorAt(i, c.set(Math.random() < 0.6 ? '#f0ece2' : Math.random() < 0.5 ? '#2a2420' : '#6b4a2a'));
   });
-  for (const im of [bodies, hats]) { im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false; root.add(im); }
+  relod();
+  for (const im of [near, far, hats]) { im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false; root.add(im); }
   // верёвка на столбиках вдоль поля
   const postMat = new THREE.MeshLambertMaterial({ color: '#8a6a44' }), ropeMat = new THREE.LineBasicMaterial({ color: '#e8dcc0' });
   for (const side of [-1, 1]) {
@@ -162,11 +185,12 @@ export function makeCrowd(scene, { lenX = 60, rowZ = 43 } = {}) {
         const col = r < 0.18 ? teamA : r < 0.34 ? teamB : CLOTHES[(Math.random() * CLOTHES.length) | 0];
         bodies.setColorAt(i, c.set(col).offsetHSL(0, -0.05, (Math.random() - 0.5) * 0.08));
       });
-      bodies.instanceColor.needsUpdate = true;
+      relod();
     },
     cheer(sec = 3) { cheerT = sec; },
     update(dt) {
       time.value += dt;
+      if ((lodT -= dt) < 0) { lodT = 0.4; relod(); }
       cheerT = Math.max(0, cheerT - dt);
       excite.value += ((cheerT > 0 ? 1 : 0.06) - excite.value) * (1 - Math.exp(-dt * 4));
     },

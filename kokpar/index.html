@@ -77,6 +77,7 @@
   #arrow { font-size: 34px; font-weight: 900; text-shadow: 0 2px 4px rgba(0,0,0,.6); }
   /* язык */
   #lang { position: fixed; top: max(10px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); font: 700 13px 'Rubik', sans-serif; color: #fff; background: rgba(14,10,6,.55); border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 6px 12px; cursor: pointer; letter-spacing: .06em; z-index: 5; }
+  #stage:has(#menu:not([hidden])) #lang, #stage:has(#pause:not([hidden])) #lang { display: none; } /* в меню язык — в настройках, кнопка не торчит из-под панели */
   /* телефон */
   #stick { position: fixed; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; border: 2px solid rgba(255,255,255,.55); background: radial-gradient(rgba(0,0,0,.05), rgba(0,0,0,.25)); display: none; pointer-events: none; }
   #stick i { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
@@ -130,7 +131,9 @@
   .h-vs { font-size: 36px; color: #ffcf3a; text-shadow: 0 0 18px rgba(255,180,40,.6), 0 3px 0 rgba(0,0,0,.5); }
   .h-stars { color: #ffcf3a; letter-spacing: 2px; font-size: 14px; }
   .h-stars i { font-style: normal; color: rgba(255,255,255,.2); }
-  .h-arena { font-size: 13px; opacity: .75; margin: 6px 0 14px; }
+  .h-arena { font-size: 13px; opacity: .75; margin: 6px 0 4px; }
+  .h-stake { display: table; margin-left: auto !important; margin-right: auto !important; font-size: 12px; font-weight: 700; letter-spacing: .04em; color: #ffe58a; background: rgba(255,207,58,.1); border-radius: 999px; padding: 3px 12px; margin: 0 0 12px; }
+  html.short .h-stake { margin: 0 0 4px; font-size: 11px; padding: 2px 10px; }
   .h-arena::before { content: '⛰ '; }
   .h-tabs { display: flex; justify-content: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
   .h-tabs button, .h-stat button { border: 0; padding: 10px 20px; border-radius: 12px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); font-weight: 700; font-size: 14px; letter-spacing: .04em; }
@@ -186,6 +189,10 @@
   .r-score { display: flex; justify-content: center; align-items: center; gap: 18px; margin: 6px 0 10px; }
   .r-score img { width: min(96px, calc(var(--vw, 100vw) * 0.2)); aspect-ratio: 8 / 5; border-radius: 5px; box-shadow: 0 0 0 2px rgba(255,255,255,.8), 0 8px 18px rgba(0,0,0,.5); }
   .r-score span { font-size: 52px; text-shadow: 0 3px 0 rgba(0,0,0,.4); }
+  .r-stats { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; font-size: 13px; }
+  .r-stats span { background: rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); border-radius: 999px; padding: 3px 12px; }
+  .r-stats b { color: #ffe58a; margin-left: 4px; }
+  html.short .r-stats { margin: 0 0 4px; font-size: 11px; }
   .r-prize { max-width: 360px; margin: 0 auto 6px; }
   .r-prize > div:not(.h-gt) { display: flex; justify-content: space-between; padding: 4px 2px; font-size: 14px; border-top: 1px solid rgba(255,255,255,.06); }
   .r-prize b { color: #ffe58a; }
@@ -212,6 +219,7 @@
   html.short .h-stat { padding: 6px 10px; gap: 10px; }
   html.short .h-coat { padding: 6px 4px; }
   html.short .h-coat i { width: 24px; height: 24px; }
+  html.short .h-coat b { font-size: 12px; white-space: nowrap; }
   html.short .h-coats { grid-template-columns: repeat(6, 1fr); gap: 5px; }
   html.short .r-score { margin: 2px 0 4px; }
   .r-mini .h-group { margin: 0 auto; }
@@ -303,7 +311,8 @@
   .s-sw.on i { transform: translateX(22px); }
   .s-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; padding: 4px 0 6px; }
   .s-key { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  .s-key kbd { min-width: 30px; padding: 3px 7px; border-radius: 6px; background: rgba(255,255,255,.12); box-shadow: inset 0 -2px 0 rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.18); font: 700 11px 'Rubik', sans-serif; text-align: center; }
+  body.touch .s-keys { grid-template-columns: 1fr !important; } /* на телефоне подписи длинные — в один столбец */
+  .s-key kbd { flex: none; white-space: nowrap; min-width: 30px; padding: 3px 7px; border-radius: 6px; background: rgba(255,255,255,.12); box-shadow: inset 0 -2px 0 rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.18); font: 700 11px 'Rubik', sans-serif; text-align: center; }
   .p-quit { display: flex !important; align-items: center; gap: 12px; text-align: left; padding: 12px 14px !important; }
   .p-quit span { display: block; }
   /* награда дня */
@@ -393,7 +402,7 @@
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvfnn72f","./js/boot.js":"./js/boot.js?v=mvfnn72f","./js/career.js":"./js/career.js?v=mvfnn72f","./js/crowd.js":"./js/crowd.js?v=mvfnn72f","./js/flags.js":"./js/flags.js?v=mvfnn72f","./js/game.js":"./js/game.js?v=mvfnn72f","./js/icons.js":"./js/icons.js?v=mvfnn72f","./js/kazan.js":"./js/kazan.js?v=mvfnn72f","./js/net.js":"./js/net.js?v=mvfnn72f","./js/portal.js":"./js/portal.js?v=mvfnn72f","./js/rider.js":"./js/rider.js?v=mvfnn72f","./js/serke.js":"./js/serke.js?v=mvfnn72f","./js/trees.js":"./js/trees.js?v=mvfnn72f","./js/world.js":"./js/world.js?v=mvfnn72f"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvfpgubb","./js/boot.js":"./js/boot.js?v=mvfpgubb","./js/career.js":"./js/career.js?v=mvfpgubb","./js/crowd.js":"./js/crowd.js?v=mvfpgubb","./js/flags.js":"./js/flags.js?v=mvfpgubb","./js/game.js":"./js/game.js?v=mvfpgubb","./js/icons.js":"./js/icons.js?v=mvfpgubb","./js/kazan.js":"./js/kazan.js?v=mvfpgubb","./js/net.js":"./js/net.js?v=mvfpgubb","./js/portal.js":"./js/portal.js?v=mvfpgubb","./js/rider.js":"./js/rider.js?v=mvfpgubb","./js/serke.js":"./js/serke.js?v=mvfpgubb","./js/trees.js":"./js/trees.js?v=mvfpgubb","./js/world.js":"./js/world.js?v=mvfpgubb"}}</script>
 </head>
 <body>
 <div id="stage">
@@ -447,6 +456,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvfnn72f"></script>
+<script type="module" src="./js/game.js?v=mvfpgubb"></script>
 </body>
 </html>

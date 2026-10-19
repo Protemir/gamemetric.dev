@@ -72,7 +72,7 @@ export function makeKazan(teamColor, R) {
   for (let i = 0; i <= 4; i++) { const a = (i / 4) * Math.PI / 2; prof.push(new THREE.Vector2(ro - rr + Math.cos(a) * rr, hh - rr + Math.sin(a) * rr)); }
   prof.push(new THREE.Vector2(ri + 0.03, hh * 0.8), new THREE.Vector2(ri, hh * 0.3), new THREE.Vector2(ri, -hh * 0.3), new THREE.Vector2(ri + 0.03, -hh * 0.8));
   prof.push(prof[0].clone());
-  const tire = new THREE.LatheGeometry(prof, 28);
+  const tire = new THREE.LatheGeometry(prof, 18);
   const n = Math.floor((2 * Math.PI * ring) / (TR * 2.05));
   const team = new THREE.Color(teamColor).lerp(new THREE.Color('#9a8a70'), 0.25).getStyle();
   const mats = [rubber(), rubber('#d8d2c4'), rubber(team)];

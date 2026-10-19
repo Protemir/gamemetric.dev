@@ -1,5 +1,6 @@
 // Көкпар — игра: 3×3, мешок-серке, два казана, тартыс (перетягивание мешка на скаку), боты.
 // ?debug — window.__kokpar; ?sim=N — N матчей ботов без картинки (проверка баланса); ?bots — игрок тоже бот.
+import { setCoat } from './world.js';
 import { THREE, P, renderer, scene, camera, rnd, canvasTex, loadModel, loadTerrain, renderAll, puff, feltMat, setArena, followSun, tuneRes, Q, view, PORTAL, Horse, stepWorld, onResize, collide, pushOut, BOUNDS, riverDist, getProto } from './world.js';
 import { Rider, loadRider } from './rider.js';
 import { makeSerke } from './serke.js';
@@ -57,7 +58,7 @@ const tr = (k) => TEXT[lang][k];
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = THREE.MathUtils.clamp;
 
-const crowd = SIM || (P.get('no') || '').includes('crowd') ? null : makeCrowd(scene); // зрители и аул вокруг поля
+const crowd = SIM || (P.get('no') || '').includes('crowd') ? null : makeCrowd(scene, { camera }); // зрители и аул вокруг поля
 // ---------- матч карьеры: соперник, его форма и сила (career.js) ----------
 let fx = null; // текущий матч: { name, kit, diff, ko, final, arena }
 const DEFAULT_FX = { id: 'kainar', name: 'Kainar', ko: false, final: false, arena: 'day', kit: career.makeKit('#2456a8', 'mountain'), diff: { pull: 0.06, react: 0.45, speed: 1 } };
@@ -182,6 +183,7 @@ function goal(team, scorer, landed) {
   scorer.celebrate = true;
   state.lastGoal = team;
   state.phase = 'goal';
+  state.tug = null; // гол — тартыс окончен (иначе полоса «жми быстрее» висела поверх гола)
   state.t = 2.8;
   const k = kazans[team === 0 ? 1 : 0];
   // мешок летит на казан
@@ -309,7 +311,7 @@ function canTug(att, car) {
   return att.h.obj.position.distanceTo(car.h.obj.position) < TUG_RANGE;
 }
 function startTug(att) {
-  state.tug = { att, car: sack.carrier, bar: 0, t: 0 };
+  state.tug = { att, car: sack.carrier, bar: 0, t: 0, ra: (rnd() - 0.5) * 0.5, rc: (rnd() - 0.5) * 0.5 }; // удача на весь тартыс (раньше бралась каждый кадр и усреднялась в ноль — нападающий-бот не вырывал никогда)
   state.events.push({ t: 'tug' });
   if (!SIM && (att.me || sack.carrier.me)) banner(tr('tug'), null, 1.1, tr('tugSub'));
 }
@@ -324,7 +326,7 @@ function stepTug(dt) {
   if (!T) return;
   T.t += dt;
   const d = T.att.h.obj.position.distanceTo(T.car.h.obj.position);
-  const pull = (e) => ((e.me && !AI_PLAYER ? 0.42 : 0.42 + (e.team === 1 && !SIM ? DIFF.pull : 0) + (rnd() - 0.5) * 0.5) + (e.team === 0 ? HB.pull : 0)) * (0.65 + 0.35 * e.stamina / 100);
+  const pull = (e) => ((e.me && !AI_PLAYER ? 0.42 : 0.42 + (e.team === 1 && !SIM ? DIFF.pull : 0) + (e === T.att ? T.ra : T.rc)) + (e.team === 0 ? HB.pull : 0)) * (0.65 + 0.35 * e.stamina / 100);
   // всадники держат один мешок — кони сцеплены: не разбегаются, несущий притормаживает
   if (d > 2.3) {
     V.subVectors(T.car.h.obj.position, T.att.h.obj.position).setY(0).multiplyScalar((d - 2.3) / d * 0.5);
@@ -397,7 +399,7 @@ function applyStage() {
   for (const e of ents) if (e.team === 0) e.h.turnMul = HB.turn;
   paintCoat();
 }
-function paintCoat() { if (me) me.h.obj.traverse((o) => { if (o.isSkinnedMesh) o.material.color.setRGB(...HB.coat); }); }
+function paintCoat() { if (me) setCoat(me.h.obj, HB.coat); }
 globalThis.__kokparCoat = () => { HB = career.horse(); paintCoat(); };
 let roleT = 0;
 function assignRoles() {
@@ -835,51 +837,56 @@ function banner(text, grad = null, time = 1.2, sub = '') {
   el.banner.style.setProperty('--c1', c1); el.banner.style.setProperty('--c2', c2);
   el.banner.classList.remove('on'); void el.banner.offsetWidth; el.banner.classList.add('on'); bannerT = time;
 }
+// табло пишет в страницу только то, что поменялось: каждая запись текста/стиля — пересчёт страницы, на телефоне это заметно
+const txt = (n, v) => { v = String(v); if (n.textContent !== v) n.textContent = v; };
+const html = (n, v) => { if (n._h !== v || n.innerHTML !== n._hr) { n.innerHTML = v; n._h = v; n._hr = n.innerHTML; } };
+const sty = (n, p, v) => { const k = '_s' + p; if (n[k] !== v) { n[k] = v; n.style[p] = v; } }; // браузер переписывает значение по-своему — сравниваем с тем, что ставили сами
+const hid = (n, v) => { v = !!v; if (n.hidden !== v) n.hidden = v; };
 function hud(dt) {
   bannerT -= dt;
   if (bannerT <= 0) el.banner.classList.remove('on');
-  el.scR.textContent = state.score[0]; el.scB.textContent = state.score[1];
+  txt(el.scR, state.score[0]); txt(el.scB, state.score[1]);
   const c = Math.ceil(state.clock);
-  el.clock.textContent = `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`;
-  if (state.golden) el.clock.textContent = '⚡';
-  el.stam.style.width = me.stamina + '%';
-  el.stam.style.background = me.stamina < 25 ? 'linear-gradient(90deg,#8f1418,#e0393e)' : '';
+  txt(el.clock, `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`);
+  if (state.golden) txt(el.clock, '⚡');
+  sty(el.stam, 'width', me.stamina + '%');
+  sty(el.stam, 'background', me.stamina < 25 ? 'linear-gradient(90deg,#8f1418,#e0393e)' : '');
   const T = state.tug, mine = T && (T.att === me || T.car === me);
-  el.tug.hidden = !mine;
+  hid(el.tug, !mine);
   if (mine) {
     const v = clamp(T.att === me ? T.bar : -T.bar, -1, 1); // + — в мою пользу
-    el.tugbar.style.left = `${50 + v * 50}%`;
-    el.tugtip.textContent = touch ? tr('mashTap') : tr('mashKey');
+    sty(el.tugbar, 'left', `${50 + v * 50}%`);
+    txt(el.tugtip, touch ? tr('mashTap') : tr('mashKey'));
   }
   // подсказка «можно тянуть»
   const nearKazan = sack.carrier === me && throwInfo(me).d < AIM_MAX;
   const aiming = !!me.throw?.aiming;
-  el.pow.hidden = !aiming;
-  if (aiming) { el.powbar.style.height = (aim.p * 100).toFixed(1) + '%'; el.pow.classList.toggle('hit', aim.hit); }
-  el.btnTug.textContent = nearKazan ? tr('btnThrow') : tr('btnTug');
+  hid(el.pow, !aiming);
+  if (aiming) { sty(el.powbar, 'height', (aim.p * 100).toFixed(1) + '%'); el.pow.classList.toggle('hit', aim.hit); }
+  txt(el.btnTug, nearKazan ? tr('btnThrow') : tr('btnTug'));
   const pass = !T && canPass(me);
-  if (touch) { const lbl = canRear() ? tr('btnRear') : tr('btnWhip'); if (el.btnWhip.textContent !== lbl) el.btnWhip.textContent = lbl; }
+  if (touch) { const lbl = canRear() ? tr('btnRear') : tr('btnWhip'); txt(el.btnWhip, lbl); }
   const can = !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan || pass);
   el.btnTug.classList.toggle('ready', !!(can || mine));
-  if (tut.on && !el.tut.hidden) { if (!el.hint.dataset.keep) el.hint.textContent = ''; }
-  else if (can && nearKazan) el.hint.innerHTML = touch ? tr('aimTouch') : tr('canThrow');
-  else if (can && !touch) el.hint.innerHTML = pass ? tr('canPass') : tr('canTug');
-  else if (!el.hint.dataset.keep) el.hint.textContent = '';
-  if (state.phase === 'menu') el.hint.textContent = ''; // под меню подсказок нет
+  if (tut.on && !el.tut.hidden) { if (!el.hint.dataset.keep) txt(el.hint, ''); }
+  else if (can && nearKazan) html(el.hint, touch ? tr('aimTouch') : tr('canThrow'));
+  else if (can && !touch) html(el.hint, pass ? tr('canPass') : tr('canTug'));
+  else if (!el.hint.dataset.keep) txt(el.hint, '');
+  if (state.phase === 'menu') txt(el.hint, ''); // под меню подсказок нет
   // стрелка к цели по краю экрана: к мешку или к чужому казану
   const target = sack.carrier === me ? new THREE.Vector3(kazans[1 - me.team].x, 1, 0) : sack.carrier && sack.carrier.team === me.team ? null : sack.pos;
   if (target) {
     V.copy(target).project(camera);
     const off = V.z > 1 || Math.abs(V.x) > 0.95 || Math.abs(V.y) > 0.95;
-    el.arrow.hidden = !off;
+    hid(el.arrow, !off);
     if (off) {
       let x = V.x, y = V.y; if (V.z > 1) { x = -x; y = -y; }
       const a = Math.atan2(y, x), r = 0.82;
-      el.arrow.style.left = `${50 + Math.cos(a) * r * 50}%`; el.arrow.style.top = `${50 - Math.sin(a) * r * 50}%`;
-      el.arrow.style.transform = `translate(-50%,-50%) rotate(${-a}rad)`;
-      el.arrow.style.color = sack.carrier === me ? '#ffd23a' : '#fff';
+      sty(el.arrow, 'left', `${50 + Math.cos(a) * r * 50}%`); sty(el.arrow, 'top', `${50 - Math.sin(a) * r * 50}%`);
+      sty(el.arrow, 'transform', `translate(-50%,-50%) rotate(${-a}rad)`);
+      sty(el.arrow, 'color', sack.carrier === me ? '#ffd23a' : '#fff');
     }
-  } else el.arrow.hidden = true;
+  } else hid(el.arrow, true);
 }
 // телефон: стик слева, кнопки справа
 let whipHeld = false;
@@ -1231,8 +1238,8 @@ for (const team of [0, 1]) for (let i = 0; i < 3; i++) ents.push(makeEnt(team, i
 me = ents.find((e) => e.me);
 // масти: игроку — гнедой, остальным разные
 {
-  const coats = [[1.7, 1.7, 1.7], [2.9, 1.6, 0.95], [0.75, 0.72, 0.72], [3.1, 2.6, 1.7], [1.2, 1.1, 1.05], [3.3, 2.2, 1.3]];
-  ents.forEach((e, i) => e.h.obj.traverse((o) => { if (o.isSkinnedMesh) o.material.color.setRGB(...coats[e.me ? 0 : (i + 1) % coats.length]); }));
+  const coats = [[1.7, 1.7, 1.7], [2.9, 1.6, 0.95], [0.3, 0.28, 0.28], [3.1, 2.6, 1.7], [1.7, 1.7, 1.7], [3.3, 2.2, 1.3]];
+  ents.forEach((e, i) => setCoat(e.h.obj, coats[e.me ? 0 : (i + 1) % coats.length]));
   if (!SIM) globalThis.__kokparCoat();
 }
 kickoff(true);
@@ -1265,4 +1272,4 @@ if (SIM) {
   setTimeout(() => { delete el.hint.dataset.keep; }, 9000);
   requestAnimationFrame(frame);
 }
-if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };
+if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };

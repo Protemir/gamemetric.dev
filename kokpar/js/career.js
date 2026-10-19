@@ -63,7 +63,7 @@ const COSTS = [1500, 3000, 5000, 8000, 12000];
 export const COATS = [ // множитель к текстуре гнедого коня
   { k: [1.7, 1.7, 1.7], ru: 'Гнедой', en: 'Bay', price: 0 },
   { k: [2.9, 1.6, 0.95], ru: 'Рыжий', en: 'Chestnut', price: 800 },
-  { k: [0.75, 0.72, 0.72], ru: 'Вороной', en: 'Black', price: 1200 },
+  { k: [0.3, 0.28, 0.28], ru: 'Вороной', en: 'Black', price: 1200 },
   { k: [3.1, 2.6, 1.7], ru: 'Саврасый', en: 'Dun', price: 1200 },
   { k: [3.3, 2.2, 1.3], ru: 'Светло-рыжий', en: 'Sorrel', price: 1500 },
   { k: [3.6, 3.5, 3.35], ru: 'Ақбоз', en: 'Grey', price: 2500 },
@@ -90,7 +90,9 @@ const T = {
     stats: { speed: ['Скорость', 'Быстрее галоп'], stamina: ['Выносливость', 'Дольше скачет без усталости'], strength: ['Сила', 'Крепче держит и тянет в тартысе'], agility: ['Ловкость', 'Круче поворачивает'] },
     upgrade: 'Улучшить', max: 'Максимум', coat: 'Масть вашего коня', buy: 'Купить', chosen: 'Выбрана', choose: 'Выбрать',
     stableSub: 'Улучшения действуют на всех коней клуба', rating: 'Сила', bracket: 'Плей-офф', tbd: '—', you: 'вы',
-    goldenGoal: 'Ничья в плей-офф — играем до золотого гола',
+    sGoals: 'Твои голы', sTugs: 'Выиграно тартысов', sFalls: 'Сбито соперников',
+    goldenGoal: 'Ничья в плей-офф — играем до золотого гола', stake: (w, g) => 'Победа +' + w + ' · гол +' + g,
+    bonus: (v) => 'сейчас +' + v + '%',
     quests: 'Задания', settings: 'Настройки', daily: 'Награда дня', dayN: (n) => 'День ' + n, claim: 'Забрать', streakNote: 'Заходи каждый день — награда растёт. Пропустишь день — начнёшь с первого.',
     questsTitle: 'Задания дня', questDone: 'Выполнено', questReward: 'Задание', newIn: (h) => 'Новые задания через ' + h, allDone: 'Все задания на сегодня выполнены!',
     q: { win: 'Выиграй матч', goals: (n) => 'Забей командой ' + n + ' голов', my: (n) => 'Забей сам ' + n + ' гола', throw: 'Забей броском в казан', tugs: (n) => 'Выиграй ' + n + ' тартыса', falls: (n) => 'Сбей с коня ' + n + ' соперников', matches: (n) => 'Сыграй ' + n + ' матча', clean: 'Выиграй, пропустив не больше 1 гола' },
@@ -106,7 +108,9 @@ const T = {
     stats: { speed: ['Speed', 'Faster gallop'], stamina: ['Stamina', 'Gallops longer before tiring'], strength: ['Strength', 'Holds and pulls harder in a tug'], agility: ['Agility', 'Turns tighter'] },
     upgrade: 'Upgrade', max: 'Max', coat: 'Your horse coat', buy: 'Buy', chosen: 'Selected', choose: 'Select',
     stableSub: 'Upgrades apply to every horse of the club', rating: 'Strength', bracket: 'Play-offs', tbd: '—', you: 'you',
-    goldenGoal: 'Draw in a knockout — golden goal decides',
+    sGoals: 'Your goals', sTugs: 'Tugs won', sFalls: 'Riders unhorsed',
+    goldenGoal: 'Draw in a knockout — golden goal decides', stake: (w, g) => 'Win +' + w + ' · goal +' + g,
+    bonus: (v) => 'now +' + v + '%',
     quests: 'Quests', settings: 'Settings', daily: 'Daily reward', dayN: (n) => 'Day ' + n, claim: 'Claim', streakNote: 'Come back every day and the reward grows. Miss a day and you start over.',
     questsTitle: 'Daily quests', questDone: 'Done', questReward: 'Quest', newIn: (h) => 'New quests in ' + h, allDone: 'All quests done for today!',
     q: { win: 'Win a match', goals: (n) => 'Score ' + n + ' team goals', my: (n) => 'Score ' + n + ' goals yourself', throw: 'Score with a throw into the kazan', tugs: (n) => 'Win ' + n + ' tugs of war', falls: (n) => 'Unhorse ' + n + ' rivals', matches: (n) => 'Play ' + n + ' matches', clean: 'Win conceding at most 1 goal' },
@@ -224,9 +228,11 @@ export function fixture() {
     arena: c.phase === 'group' ? GROUP_ARENA[c.round] : c.phase === 'semi' ? 'evening' : 'night',
     // сила ботов соперника: тянут в тартысе, реакция, скорость
     diff: { pull: -0.06 + r * 0.009, react: Math.max(0.25, 0.85 - r * 0.035), speed: 0.96 + r * 0.006 },
-    stars: Math.max(1, Math.min(5, Math.round((r + 2) / 3.6))),
+    stars: starsOf(r),
+    myStars: starsOf(rating('me')),
   };
 }
+const starsOf = (r) => Math.max(1, Math.min(5, Math.round((r + 2) / 3.6)));
 export function horse() { // прокачка коней клуба
   const u = S.upg;
   return { speed: 1 + 0.025 * u.speed, drain: 1 - 0.13 * u.stamina, pull: 0.012 * u.strength, turn: 1 + 0.06 * u.agility, coat: COATS[S.coat].k };
@@ -274,7 +280,7 @@ export function report(my, their, st = {}) {
   S.money += total;
   S.played = (S.played || 0) + 1;
   save(S);
-  return { res, my, their, opp: id, lines, total, note, quests: quests.length, champion: c.result === 'champion' && c.phase === 'done' };
+  return { res, my, their, st, opp: id, lines, total, note, quests: quests.length, champion: c.result === 'champion' && c.phase === 'done' };
 }
 
 // ---------- экраны ----------
@@ -336,7 +342,7 @@ function head() {
 function tabs(active) { // нижние вкладки с иконками; у заданий — счётчик невыполненных
   const left = questsToday().filter((q) => !q.done).length;
   const t = (act, icon, label, badge) => `<button class="h-tab${act === active ? ' on' : ''}" data-act="${act}">${icon}<span>${label}</span>${badge ? `<i class="h-badge">${badge}</i>` : ''}</button>`;
-  return `<nav class="h-tabs">${t('hub', IC.trophy, L() === 'ru' ? 'Кубок' : 'Cup')}${t('table', IC.cal.replace('M9 15l2 2 4-4', 'M7 14h10M7 17h6'), tr('table'))}${t('stable', IC.horse, tr('stable'))}${t('quests', IC.cal, tr('quests'), left)}</nav>`;
+  return `<nav class="h-tabs">${t('hub', IC.trophy, L() === 'ru' ? 'Кубок' : 'Cup')}${t('table', IC.list, tr('table'))}${t('stable', IC.horse, tr('stable'))}${t('quests', IC.target, tr('quests'), left)}</nav>`;
 }
 function dailyModal() {
   const d = dailyState();
@@ -351,6 +357,7 @@ export function showQuests() {
     <div class="h-season">${list.every((q) => q.done) ? tr('allDone') + ' · ' : ''}${tr('newIn')(untilMidnight())}</div>
     <div class="q-list">${rows}</div>${tabs('quests')}</div>`;
 }
+const stars = (n) => `<span class="h-stars" title="${tr('rating')}">${'★'.repeat(n)}<i>${'★'.repeat(5 - n)}</i></span>`;
 export function showHub(skipDaily) {
   if (!S.club) { S.club = { name: tr('defName'), color: PALETTE[0], sign: 'shanyrak', auto: true }; save(S); } // в игру — сразу, клуб назовёт потом
   if (!S.cup) { S.cup = newCup(); save(S); }
@@ -360,11 +367,12 @@ export function showHub(skipDaily) {
     const k = myKit();
     body = `<div class="h-stage">${f.label}</div>
       <div class="h-match">
-        <div class="h-side"><img src="${flag(k, 192, 120)}" alt=""><b>${esc(clubName('me'))}</b></div>
+        <div class="h-side"><img src="${flag(k, 192, 120)}" alt=""><b>${esc(clubName('me'))}</b>${stars(f.myStars)}</div>
         <div class="h-vs disp">VS</div>
-        <div class="h-side"><img src="${flag(f.kit, 192, 120)}" alt=""><b>${esc(f.full)}</b><span class="h-stars" title="${tr('rating')}">${'★'.repeat(f.stars)}<i>${'★'.repeat(5 - f.stars)}</i></span></div>
+        <div class="h-side"><img src="${flag(f.kit, 192, 120)}" alt=""><b>${esc(f.full)}</b>${stars(f.stars)}</div>
       </div>
       <div class="h-arena">${arenaName(f.arena)}</div>
+      <div class="h-stake">${tr('stake')(money(PRIZE.win), money(PRIZE.goal))}${f.final ? ' · ' + tr('forTitle') + ' +' + money(PRIZE.title) : c.phase === 'semi' ? ' · ' + tr('forSemi') + ' +' + money(PRIZE.semi) : ''}</div>
       <button class="big-btn" data-act="play">${tr('play')}</button>
       ${window.KOKPAR_SDK || window.top !== window.self ? '' : `<button class="h-friend" data-act="online">${IC.crowd}<span>${L() === 'ru' ? 'С другом по сети' : 'Play a friend online'}</span></button>`}`; // на портале игру по сети не показываем
   } else {
@@ -413,11 +421,12 @@ export function showStable() {
     const l = S.upg[k], [nm, desc] = tr('stats')[k], cost = COSTS[l];
     const pips = Array.from({ length: 5 }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('');
     const btn = l >= 5 ? `<button disabled>${tr('max')}</button>` : `<button data-act="up:${k}" ${S.money < cost ? 'disabled' : ''}>${tr('upgrade')} · ${money(cost)}</button>`;
-    return `<div class="h-stat"><div><b>${nm}</b><small>${desc}</small></div><div class="h-pips">${pips}</div>${btn}</div>`;
+    const pct = Math.round({ speed: 2.5, stamina: 13, strength: 3, agility: 6 }[k] * l);
+    return `<div class="h-stat"><div><b>${nm}</b><small>${desc}${l ? ' · ' + tr('bonus')(pct) : ''}</small></div><div class="h-pips">${pips}</div>${btn}</div>`;
   }).join('');
   const coats = COATS.map((c, i) => {
     const own = S.coats.includes(i), sel = S.coat === i;
-    const col = `rgb(${c.k.map((v) => Math.min(255, v * 52) | 0).join(',')})`;
+    const col = i === 0 ? '#6a3e22' : `rgb(${c.k.map((v) => Math.min(255, 255 * Math.pow(v * 0.2, 1 / 2.2)) | 0).join(',')})`; // как на коне: цвет масти × яркость текстуры
     const btn = sel ? tr('chosen') : own ? tr('choose') : money(c.price);
     return `<button class="h-coat${sel ? ' sel' : ''}" data-act="coat:${i}" ${!own && S.money < c.price ? 'disabled' : ''}><i style="background:${col}"></i><b>${c[L()]}</b><small>${btn}</small></button>`;
   }).join('');
@@ -447,6 +456,7 @@ export function showResult(sum) {
   root.innerHTML = `<div class="hub result ${sum.res}">
     <div class="h-cup disp r-title">${sum.champion ? '🏆 ' : ''}${title}</div>
     <div class="r-score"><img src="${flag(k, 144, 90)}" alt=""><span class="disp">${sum.my} : ${sum.their}</span><img src="${flag(f, 144, 90)}" alt=""></div>
+    <div class="r-stats"><span>${tr('sGoals')} <b>${sum.st?.myGoals || 0}</b></span><span>${tr('sTugs')} <b>${sum.st?.tugs || 0}</b></span><span>${tr('sFalls')} <b>${sum.st?.falls || 0}</b></span></div>
     ${sum.note ? `<div class="h-stage big">${sum.note}</div>` : ''}
     <div class="r-cols"><div class="r-prize"><div class="h-gt">${tr('prize')}</div>${lines}<div class="tot"><span>${tr('total')}</span><b>+${money(sum.total)}</b></div></div>
     <div class="r-mini">${mini}</div></div>

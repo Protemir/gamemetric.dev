@@ -2,10 +2,10 @@
 // Правила, боты и управление — в game.js. ?q=low|medium|high  ?no=terrain,river,grass  ?debug
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
-import { FBXLoader } from '../vendor/loaders/FBXLoader.js';
+// FBXLoader (с fflate и NURBS, ~330 КБ) грузится только если модель .fbx — для .glb не тянем
 import * as SkeletonUtils from '../vendor/utils/SkeletonUtils.js';
 import { hoof, snort, bump, neigh } from './audio.js';
-import { makeTrees } from './trees.js';
+import { makeTrees, makeBirds } from './trees.js';
 
 const P = new URLSearchParams(location.search);
 const Q = P.get('q') || (() => { try { return localStorage.getItem('kokpar.q'); } catch { return null; } })() || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
@@ -85,7 +85,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = Q !== 'low';
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = Q === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; // мягкие тени дороги — только на высокой
 (document.getElementById('stage') || document.body).appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -215,10 +215,11 @@ const groundMat = new THREE.MeshLambertMaterial({ map: groundTex });
 groundMat.onBeforeCompile = (sh) => {
   sh.uniforms.macro = { value: macroTex };
   sh.uniforms.snow = ENV.snow;
+  sh.uniforms.clouds = { value: cloudTex }; sh.uniforms.time = wind; sh.uniforms.stars = ENV.stars; // тени облаков медленно бегут по степи (днём)
   sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vW;')
     .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvW = (modelMatrix * vec4(transformed, 1.)).xz;');
-  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D macro; uniform float snow; varying vec2 vW;')
-    .replace('#include <map_fragment>', '#include <map_fragment>\nfloat mc = texture2D(macro, vW / 140.).r * .6 + texture2D(macro, vW / 37. + .3).r * .4;\ndiffuseColor.rgb *= mix(.78, 1.2, mc);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(.84, .87, .93) * mix(.86, 1.06, mc) * (.9 + diffuseColor.g * .25), snow);');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D macro; uniform float snow; uniform sampler2D clouds; uniform float time; uniform float stars; varying vec2 vW;')
+    .replace('#include <map_fragment>', '#include <map_fragment>\nfloat mc = texture2D(macro, vW / 140.).r * .6 + texture2D(macro, vW / 37. + .3).r * .4;\ndiffuseColor.rgb *= mix(.78, 1.2, mc);\nfloat far = smoothstep(115., 190., max(abs(vW.x) * .85, abs(vW.y)));\nvec3 meadow = mix(vec3(.27, .26, .08), vec3(.16, .21, .06), smoothstep(.45, .7, mc));\ndiffuseColor.rgb = mix(diffuseColor.rgb, meadow * mix(.85, 1.1, mc), far * .85);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(.84, .87, .93) * mix(.86, 1.06, mc) * (.9 + diffuseColor.g * .25), snow);\nfloat cs = texture2D(clouds, vW / 650. + vec2(time * .0042, time * .0016)).r * .75 + texture2D(clouds, vW / 230. + vec2(time * .0075, .3)).r * .25;\ndiffuseColor.rgb *= mix(1., .7, smoothstep(.52, .66, cs) * (1. - stars));');
 };
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), groundMat);
 ground.rotation.x = -Math.PI / 2;
@@ -234,9 +235,10 @@ function riverDist(x, z) {
 }
 
 // Пучки ковыля: один InstancedMesh, три скрещённые плоскости.
-const GRASS = { low: 0, medium: 7000, high: 18000 }[Q] ?? 7000;
+const GRASS = { low: 0, medium: 9500, high: 20000 }[Q] ?? 9500; // дальние (>70 м от камеры) шейдер не рисует — можно гуще
 const wind = { value: 0 }; // время для ветра в траве
 if (!OFF.has('trees')) makeTrees(scene, { snow: ENV.snow, time: wind }); // тополя, карагачи, ели вокруг поля
+if (!OFF.has('birds')) makeBirds(scene, wind); // коршуны кружат над степью
 if (GRASS) {
   const bladeTex = canvasTex(64, 64, (g, w, h) => {
     for (let i = 0; i < 14; i++) {
@@ -264,7 +266,8 @@ if (GRASS) {
       vec2 ip = vec2(instanceMatrix[3].x, instanceMatrix[3].z);
       float k = position.y * position.y * 3.;
       float w = sin(time * 1.6 + ip.x * .18 + ip.y * .11) * .6 + sin(time * 3.1 + ip.x * .7) * .25;
-      transformed.x += w * .09 * k; transformed.z += w * .05 * k;`);
+      transformed.x += w * .09 * k; transformed.z += w * .05 * k;
+      transformed *= 1. - smoothstep(60., 80., distance(cameraPosition.xz, ip)); // дальние пучки не рисуем — их не видно, а заливка дорогая`);
   };
   const grass = new THREE.InstancedMesh(geo, mat, GRASS);
   const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), s4 = new THREE.Vector3(), p4 = new THREE.Vector3();
@@ -612,7 +615,7 @@ let proto = null; // { scene, clips, native: {walk: м/с...}, fix }
 
 async function loadModel() {
   const isFbx = M.file.toLowerCase().endsWith('.fbx');
-  const res = await (isFbx ? new FBXLoader() : new GLTFLoader()).loadAsync(M.file, (e) => window.__loadProg?.('horse', e.loaded));
+  const res = await (isFbx ? new (await import('../vendor/loaders/FBXLoader.js')).FBXLoader() : new GLTFLoader()).loadAsync(M.file, (e) => window.__loadProg?.('horse', e.loaded));
   const root = isFbx ? res : res.scene;
   const clips = {};
   for (const [k, name] of Object.entries(M.clips)) {
@@ -696,7 +699,24 @@ function hoofBones(o) {
 }
 
 // Масти (множитель к текстуре гнедого коня): гнедой, рыжий, вороной, саврасый, тёмно-гнедой, светло-рыжий.
-const COATS = [[1.7, 1.7, 1.7], [2.9, 1.6, 0.95], [0.75, 0.72, 0.72], [3.1, 2.6, 1.7], [1.2, 1.1, 1.05], [3.3, 2.2, 1.3]];
+const COATS = [[1.7, 1.7, 1.7], [2.9, 1.6, 0.95], [0.3, 0.28, 0.28], [3.1, 2.6, 1.7], [1.2, 1.1, 1.05], [3.3, 2.2, 1.3]];
+// Масть. Текстура коня — тёмно-гнедая, простое умножение цвета даёт тот же гнедой (рыжий, серый — не получались).
+// Поэтому шейдер берёт светотень текстуры (яркость) и красит её в цвет масти; гнедой [1.7×3] — родная текстура.
+function coatMat(m) {
+  m = m.clone();
+  const u = { value: 0 };
+  m.userData.coat = u;
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.coatMix = u;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float coatMix;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\n{ vec3 tx = diffuseColor.rgb / max(diffuse, vec3(1e-3)); float l = dot(tx, vec3(.299, .587, .114)); diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * l * 2.3, coatMix); }');
+  };
+  return m;
+}
+export function setCoat(obj, k) {
+  const bay = Math.abs(k[0] - 1.7) + Math.abs(k[1] - 1.7) + Math.abs(k[2] - 1.7) < 0.01;
+  obj.traverse((o) => { if (o.isMesh && o.material?.userData.coat) { o.material.color.setRGB(...k); o.material.userData.coat.value = bay ? 0 : 1; } });
+}
 
 // Тоқым: красный, синий, зелёный войлок с золотым бордюром и «бараньими рогами» (қошқар мүйіз).
 const feltCache = new Map();
@@ -818,7 +838,8 @@ class Horse {
     this.brain = { t: 0, target: new THREE.Vector3() };
     // Масть: у каждого коня своя (гнедой, рыжий, вороной, саврасый…), у игрока — гнедой.
     const coat = COATS[i % COATS.length];
-    this.obj.traverse((o) => { if (o.isMesh && o !== this.blanket && o.material?.color) { o.material = o.material.clone(); o.material.color.setRGB(...coat); } });
+    this.obj.traverse((o) => { if (o.isMesh && o !== this.blanket && o.material?.color) o.material = coatMat(o.material); });
+    setCoat(this.obj, coat);
     // Тоқым — войлочный потник с орнаментом под седлом; держится за кость седла и качается вместе с ним.
     const sock = this.obj.getObjectByName('saddle_socket');
     if (proto.blanket && sock) {
