@@ -793,7 +793,7 @@ function showOver() {
 
 function showStart() {
   hud.hidden = true;
-  const box = el('div', 'panel');
+  const box = el('div', 'panel menu');
   box.append(el('h1', null, t('title')));
   // on portals the game is listed as "Aryk: Water the Valley": the start screen says the same
   if (PORTAL) box.append(el('p', 'logo-sub', 'Water the Valley'));

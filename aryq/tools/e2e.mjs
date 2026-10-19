@@ -540,6 +540,14 @@ try {
     check('the loupe shows the cell under the finger on a phone', lp.loupe && lp.cs < 36, JSON.stringify(lp));
   } else check('the loupe shows the cell under the finger on a phone', false, 'no place to dig');
 
+  // 10c. the CrazyGames frame on a laptop is 924x520: the whole menu fits in it (19.10: it was cut off)
+  await B.init('try { localStorage.clear(); } catch {}');
+  for (const [w, h] of [[924, 520], [390, 844]]) {
+    await B.open(page('&lang=en'), w, h);
+    r = await B.js(`(() => { const p = document.querySelector('#ui .panel').getBoundingClientRect(); return JSON.stringify({ top: Math.round(p.top), bottom: Math.round(p.bottom), vh: innerHeight }); })()`).then(JSON.parse);
+    check(`the menu fits a ${w}x${h} screen`, r.top >= 0 && r.bottom <= r.vh, JSON.stringify(r));
+  }
+
   // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads
   //     even if the cache keeps giving the old code (the loop of 17.10)
   await B.init(`try { localStorage.clear(); sessionStorage.removeItem('x'); } catch {}
