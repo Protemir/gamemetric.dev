@@ -66,6 +66,7 @@ const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), AZ = new
 const Vs = new THREE.Vector3(), Vt = new THREE.Vector3();
 const Mm = new THREE.Matrix4(), Vm = new THREE.Vector3(), Qm = new THREE.Quaternion(), Sm = new THREE.Vector3();
 const Qa = new THREE.Quaternion(), Qb = new THREE.Quaternion(), Qr = new THREE.Quaternion(), V0 = new THREE.Vector3();
+const STAND_Y = 0.85; // высота таза стоящего на земле всадника (0.98 было выше — ноги не доставали до земли, «летал»)
 // повернуть кость вокруг оси в осях всадника (model — корень персонажа)
 function rot(model, bone, axis, ang) {
   if (!bone || !ang) return;
@@ -154,7 +155,7 @@ export class Rider {
     // точка у левого бока коня, на земле: туда он подходит
     const hq = this.horse.obj.getWorldQuaternion(Qb);
     V0.set(0.85, 0, 0).applyQuaternion(hq);
-    const sx = Vm.x + V0.x, sz = Vm.z + V0.z, standY = 0.98;
+    const sx = Vm.x + V0.x, sz = Vm.z + V0.z, standY = STAND_Y;
     const k = f.mount, sm = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
     if (k < 0.45) { // подходит и разворачивается по ходу коня, ровно стоя
       const e = sm(k / 0.45);
@@ -216,7 +217,7 @@ export class Rider {
       f.rise = Math.min(1, f.rise + dt / 0.85);
       const e = f.rise * f.rise * (3 - 2 * f.rise);
       r.quaternion.slerpQuaternions(f.qLie, f.qUp, e);
-      r.position.y = f.yLie + (0.98 - f.yLie) * Math.sin(e * Math.PI / 2);
+      r.position.y = f.yLie + (STAND_Y - f.yLie) * Math.sin(e * Math.PI / 2);
       this.stand = e;
     }
     this.limp = f.landed ? Math.min(1, this.limp + dt * 2.5) * (1 - this.stand) : this.limp;
@@ -276,12 +277,14 @@ export class Rider {
       this.turn('Spine1', AZ, j * 0.35 * f.side);
       // ноги: в полёте разъезжаются и дрыгаются, лёжа — раскинуты, при вставании — прямые
       const kick = Math.sin(t * 9);
-      this.turn('LeftUpLeg', AX, fl * (0.5 + 0.35 * kick) + l * 0.85 + st * 1.2);
-      this.turn('RightUpLeg', AX, fl * (0.3 - 0.35 * kick) + l * 0.6 + st * 1.2);
-      this.turn('LeftLeg', AX, -fl * 0.5 - l * 1.1 + st * 0.9);
-      this.turn('RightLeg', AX, -fl * 0.8 - l * 0.7 + st * 0.9);
-      this.turn('LeftUpLeg', AZ, fl * 0.25 + l * 0.15);
-      this.turn('RightUpLeg', AZ, -fl * 0.25 - l * 0.15);
+      // стоя: бедро вниз, колено выпрямлено, ноги сведены (из седла они согнуты и разведены)
+      const LG = [0.9, -1.4], AD = -0.3;
+      this.turn('LeftUpLeg', AX, fl * (0.5 + 0.35 * kick) + l * 0.85 + st * LG[0]);
+      this.turn('RightUpLeg', AX, fl * (0.3 - 0.35 * kick) + l * 0.6 + st * LG[0]);
+      this.turn('LeftLeg', AX, -fl * 0.5 - l * 1.1 + st * LG[1]);
+      this.turn('RightLeg', AX, -fl * 0.8 - l * 0.7 + st * LG[1]);
+      this.turn('LeftUpLeg', AZ, fl * 0.25 + l * 0.15 + st * AD);
+      this.turn('RightUpLeg', AZ, -fl * 0.25 - l * 0.15 - st * AD);
     }
   }
   // болтанка: ускорение седла (в осях коня) раскачивает пружину «корпус» по тангажу и крену

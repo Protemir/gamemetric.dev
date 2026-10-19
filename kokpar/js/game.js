@@ -306,24 +306,28 @@ function canPass(e) {
   return c && c !== e && c.team === e.team && !state.tug && e.pickCD <= 0 && !e.r.fallen && e.h.obj.position.distanceTo(c.h.obj.position) < TUG_RANGE + 0.6;
 }
 // ---------- тартыс ----------
-function canTug(att, car) {
+function canTug(att, car, range = TUG_RANGE) {
   if (!car || att.team === car.team || att.tugCD > 0 || att.stun > 0 || state.tug) return false;
-  return att.h.obj.position.distanceTo(car.h.obj.position) < TUG_RANGE;
+  return att.h.obj.position.distanceTo(car.h.obj.position) < range;
 }
 function startTug(att) {
-  state.tug = { att, car: sack.carrier, bar: 0, t: 0, ra: (rnd() - 0.5) * 0.5, rc: (rnd() - 0.5) * 0.5 }; // удача на весь тартыс (раньше бралась каждый кадр и усреднялась в ноль — нападающий-бот не вырывал никогда)
+  const human = (e) => (e.me && !AI_PLAYER) || e.remote, car = sack.carrier; // друг по сети — тоже живой
+  // удача на весь тартыс; живому игроку удачи нет — тянет только тем, как часто жмёт (раньше полоса сама ползла в его пользу)
+  const luck = (e, o) => (human(e) ? 0 : human(o) ? Math.abs(rnd() - 0.5) * 0.4 : (rnd() - 0.5) * 0.5);
+  state.tug = { att, car, bar: 0, t: 0, ra: luck(att, car), rc: luck(car, att) }; // удача на весь тартыс (раньше бралась каждый кадр и усреднялась в ноль — нападающий-бот не вырывал никогда)
   state.events.push({ t: 'tug' });
   if (!SIM && (att.me || sack.carrier.me)) banner(tr('tug'), null, 1.1, tr('tugSub'));
 }
 function tugPress(e) { // игрок жмёт «тарт»: дёргает мешок на себя
   const T = state.tug;
   if (!T) return;
-  if (T.att === e) T.bar += 0.13;
+  if (T.att === e) { T.bar += 0.13; T.presses = (T.presses || 0) + 1; }
   else if (T.car === e) T.bar -= 0.13;
 }
 function stepTug(dt) {
   const T = state.tug;
   if (!T) return;
+  if (sack.carrier !== T.car) { state.tug = null; return; } // туша ушла из рук (бросок, удар) — тартыс окончен
   T.t += dt;
   const d = T.att.h.obj.position.distanceTo(T.car.h.obj.position);
   const pull = (e) => ((e.me && !AI_PLAYER ? 0.42 : 0.42 + (e.team === 1 && !SIM ? DIFF.pull : 0) + (e === T.att ? T.ra : T.rc)) + (e.team === 0 ? HB.pull : 0)) * (0.65 + 0.35 * e.stamina / 100);
@@ -341,13 +345,14 @@ function stepTug(dt) {
     a.reachSide = Math.sign(Math.cos(a.h.yaw) * V.x - Math.sin(a.h.yaw) * V.z) || 1;
   }
   let winner = null;
+  if (((T.att.me && !AI_PLAYER) || T.att.remote) && (T.presses || 0) < 3) T.bar = Math.min(T.bar, 0); // игрок-нападающий не жмёт — сама не вырвется
   if (T.bar >= 1) winner = 'att';
   else if (T.bar <= -1) winner = 'car';
   else if (T.t > 3.6) winner = T.bar > 0.05 ? 'att' : 'car';
   if (!winner) return;
   state.tug = null;
   if (winner === 'att') {
-    T.car.tugCD = 1.6; T.car.pickCD = 1.0; T.car.stun = 0.3;
+    T.car.tugCD = T.att.me ? 1.0 : 1.6; T.car.pickCD = 1.0; T.car.stun = 0.3; // у игрока вырвали — бот сразу снова лезет
     T.att.stats.tugsWon++;
     giveSack(T.att);
     if (!SIM) crowdShout('ah');
@@ -450,7 +455,7 @@ function think(e, dt) {
       if (d < 6) sprint = true;
     }
     const ti = throwInfo(e);
-    if (ti.d < 11 && ti.d > SCORE_R + 0.5 && ti.chance > 0.6) {
+    if (!state.tug && ti.d < 11 && ti.d > SCORE_R + 0.5 && ti.chance > 0.6) { // в тартысе не бросает
       const pressed = ents.some((o) => o.team !== e.team && o.h.obj.position.distanceTo(p) < 6);
       if (pressed || rnd() < dt * 0.9) throwSack(e);
     }
@@ -462,17 +467,21 @@ function think(e, dt) {
   } else if (b.role === 'chase') {
     const cp = carrier.h.obj.position, cy = carrier.h.yaw;
     const side = Math.sign(Math.cos(cy) * (p.x - cp.x) - Math.sin(cy) * (p.z - cp.z)) || 1;
-    // целимся в бок несущего, чуть впереди — чтобы встать стремя в стремя
-    tx = cp.x + Math.sin(cy) * (carrier.h.v * 0.35 + 0.5) + Math.cos(cy) * 1.9 * side;
-    tz = cp.z + Math.cos(cy) * (carrier.h.v * 0.35 + 0.5) - Math.sin(cy) * 1.9 * side;
-    const d = Math.hypot(cp.x - p.x, cp.z - p.z);
-    gait = 4; sprint = d < 16 && e.stamina > 15; // догоняет на камче и таранит несущего
-    e.boost = carrier.me && d < 22 ? 1.04 : 1; // за игроком скачут во весь опор
-    if (canTug(e, carrier)) { b.react += dt; if (b.react > DIFF.react + rnd() * 0.4) { startTug(e); b.react = 0; } } else b.react = 0;
+    // целимся в бок несущего, чуть впереди — чтобы встать стремя в стремя; вблизи — без упреждения, иначе на повороте проскакивает мимо
+    const d = Math.hypot(cp.x - p.x, cp.z - p.z), lead = d < 8 ? 0.4 : carrier.h.v * 0.35 + 0.5;
+    tx = cp.x + Math.sin(cy) * lead + Math.cos(cy) * 1.9 * side;
+    tz = cp.z + Math.cos(cy) * lead - Math.sin(cy) * 1.9 * side;
+    gait = d < 6 && e.h.v > carrier.h.v + 1.5 ? 3 : 4; sprint = d < 12 && d > 4 && e.stamina > 12; // рывок на камче — уже вблизи, иначе выдыхается и отстаёт
+    // за игроком с тушей скачут во весь опор: чем дальше отстали, тем злее (раньше догоняли по 12–25 с)
+    e.boost = carrier.me ? 1.14 + Math.min(0.12, d * 0.005) : 1;
+    if (canTug(e, carrier, carrier.me ? TUG_RANGE + 0.6 : TUG_RANGE)) { b.react += dt; if (b.react > (carrier.me ? Math.min(DIFF.react, 0.5) : DIFF.react) + rnd() * 0.3) { startTug(e); b.react = 0; } } else b.react = 0;
   } else if (b.role === 'guard') {
     const cp = carrier.h.obj.position;
-    tx = b.own.x + (cp.x - b.own.x) * 0.3; tz = cp.z * 0.5;
+    // третий встаёт на пути несущего к своему казану; против игрока — выходит навстречу
+    const k = carrier.me ? 0.6 : 0.3;
+    tx = b.own.x + (cp.x - b.own.x) * k; tz = cp.z * (carrier.me ? 0.85 : 0.5);
     gait = Math.hypot(tx - p.x, tz - p.z) > 5 ? 4 : 2;
+    if (carrier.me && canTug(e, carrier, TUG_RANGE + 0.6)) { b.react += dt; if (b.react > 0.6 + rnd() * 0.3) { startTug(e); b.react = 0; } }
   }
   // не толпиться со своими
   for (const o of ents) {
@@ -891,7 +900,7 @@ function hud(dt) {
 // телефон: стик слева, кнопки справа
 let whipHeld = false;
 const pt = (e) => (view.rot ? { x: e.clientY, y: innerWidth - e.clientX } : { x: e.clientX, y: e.clientY }); // палец → координаты игры
-const canRear = () => me && me.h.v < 1.5 && !me.r.fallen && sack.carrier !== me && state.phase !== 'menu';
+const canRear = () => me && me.h.v < 1.5 && !me.r.fallen && !state.tug && state.phase !== 'menu'; // свечка — и с тушей в руке, только не в тартысе
 // на Android: во весь экран и закрепить горизонталь (на iPhone — поворот страницы выше)
 function goLandscape() {
   if (!touch || PORTAL || matchMedia('(display-mode: fullscreen)').matches) return;
@@ -1272,4 +1281,4 @@ if (SIM) {
   setTimeout(() => { delete el.hint.dataset.keep; }, 9000);
   requestAnimationFrame(frame);
 }
-if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };
+if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };

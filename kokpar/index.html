@@ -395,6 +395,57 @@
   .o-jb { border: 0; padding: 10px 18px; border-radius: 10px; background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); font-weight: 700; }
   .o-code { font-size: 54px; letter-spacing: .18em; color: #ffe58a; margin: 10px 0 4px; text-shadow: 0 0 20px rgba(255,190,40,.4); }
   html.short .hub > .h-friend { margin-top: 6px; padding: 5px 12px; }
+  /* «В седло!» и «С другом по сети» — в ряд, с промежутком, одной высоты */
+  .h-actions { display: flex; gap: 14px; justify-content: center; align-items: stretch; flex-wrap: wrap; margin-top: 8px; }
+  .h-actions .big-btn { margin: 0 !important; }
+  .h-actions .h-friend { margin: 0; display: inline-flex; padding: 0 20px; border-radius: 14px; font-size: 15px; }
+  html.short .h-actions { gap: 10px; margin-top: 4px; }
+  html.short .h-actions .h-friend { padding: 0 14px; font-size: 13px; }
+  /* телефон лёжа в Safari (высота 320–400 px): хаб целиком без прокрутки */
+  html.tiny .hub { padding: 6px 12px 8px; max-height: calc(var(--vh, 100vh) - 8px); }
+  html.tiny .h-top { margin-bottom: 0; }
+  html.tiny .h-club { padding: 3px 10px 3px 3px; font-size: 13px; }
+  html.tiny .h-club img { width: 34px; height: 21px; }
+  html.tiny .h-money { font-size: 15px; padding: 3px 10px; }
+  html.tiny .h-money small { font-size: 8px; }
+  html.tiny .h-icon { width: 34px; height: 34px; }
+  html.tiny .hub > .h-cup { display: inline-block; font-size: 17px; margin: 0 8px 0 0; vertical-align: middle; }
+  html.tiny .hub > .h-stage { vertical-align: middle; }
+  html.tiny .h-match { margin: 2px 0 0; gap: 6px; }
+  html.tiny .h-side { gap: 2px; }
+  html.tiny .h-side img { width: 62px; }
+  html.tiny .h-side b { font-size: 12px; }
+  html.tiny .h-stars { font-size: 11px; }
+  html.tiny .h-vs { font-size: 20px; }
+  html.tiny .h-arena { display: none; }
+  html.tiny .h-stake { margin: 3px 0 4px; }
+  html.tiny .h-actions .big-btn { padding: 7px 26px; font-size: 16px; }
+  html.tiny nav.h-tabs { margin-top: 6px; padding: 3px; gap: 4px; }
+  html.tiny nav.h-tabs .h-tab { flex-direction: row; justify-content: center; padding: 6px 4px; gap: 6px; font-size: 11px; }
+  html.tiny nav.h-tabs .h-tab .ic { width: 16px; height: 16px; }
+  html.tiny .h-badge { top: -5px; right: 4px; }
+  html.tiny .h-trophy { font-size: 40px; margin-top: 0; }
+  html.tiny .h-cup { font-size: 17px; }
+  html.tiny .h-stat { grid-template-columns: auto 1fr auto; padding: 4px 8px; gap: 6px; }
+  html.tiny .h-stat b { font-size: 13px; }
+  html.tiny .h-stat button { grid-column: auto; padding: 5px 8px; font-size: 11px; white-space: nowrap; }
+  html.tiny .h-pips i { width: 9px; height: 9px; }
+  html.tiny .h-stats { gap: 4px; margin-top: 2px; }
+  html.tiny .h-gt { margin: 4px 0 3px; font-size: 12px; }
+  html.tiny .h-coat { padding: 3px 2px; gap: 1px; }
+  html.tiny .h-coat i { width: 16px; height: 16px; }
+  html.tiny .h-coat b { font-size: 11px; }
+  html.tiny .h-coat small { font-size: 9px; }
+  html.tiny .q-row { padding: 5px 10px; }
+  /* настройки: окно не выше экрана, «Готово» всегда видно */
+  html.tiny .pausebox { max-height: calc(var(--vh, 100vh) - 8px); overflow: auto; padding-top: 6px; padding-bottom: 6px; }
+  html.tiny .s-row { padding: 2px 0; }
+  html.tiny .pausebox > .big-btn { margin: 4px 0 0; padding: 6px 20px; font-size: 15px; }
+  html.tiny .pausebox .s-head .h-cup { font-size: 16px; }
+  html.tiny .s-x { width: 30px; height: 30px; }
+  html.tiny .s-sec { margin-top: 4px; padding: 3px 10px; }
+  html.tiny .s-t { margin: 1px 0 1px; font-size: 11px; }
+  html.tiny .p-tog, html.tiny .p-seg button { padding: 4px 10px; font-size: 13px; }
   html, body { position: fixed; inset: 0; overscroll-behavior: none; } /* iPhone: страницу нельзя утащить пальцем */
   #stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
   html.rot #stage { transform-origin: 0 0; }
@@ -402,7 +453,7 @@
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvfpgubb","./js/boot.js":"./js/boot.js?v=mvfpgubb","./js/career.js":"./js/career.js?v=mvfpgubb","./js/crowd.js":"./js/crowd.js?v=mvfpgubb","./js/flags.js":"./js/flags.js?v=mvfpgubb","./js/game.js":"./js/game.js?v=mvfpgubb","./js/icons.js":"./js/icons.js?v=mvfpgubb","./js/kazan.js":"./js/kazan.js?v=mvfpgubb","./js/net.js":"./js/net.js?v=mvfpgubb","./js/portal.js":"./js/portal.js?v=mvfpgubb","./js/rider.js":"./js/rider.js?v=mvfpgubb","./js/serke.js":"./js/serke.js?v=mvfpgubb","./js/trees.js":"./js/trees.js?v=mvfpgubb","./js/world.js":"./js/world.js?v=mvfpgubb"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvfrbyf6","./js/boot.js":"./js/boot.js?v=mvfrbyf6","./js/career.js":"./js/career.js?v=mvfrbyf6","./js/crowd.js":"./js/crowd.js?v=mvfrbyf6","./js/flags.js":"./js/flags.js?v=mvfrbyf6","./js/game.js":"./js/game.js?v=mvfrbyf6","./js/icons.js":"./js/icons.js?v=mvfrbyf6","./js/kazan.js":"./js/kazan.js?v=mvfrbyf6","./js/net.js":"./js/net.js?v=mvfrbyf6","./js/portal.js":"./js/portal.js?v=mvfrbyf6","./js/rider.js":"./js/rider.js?v=mvfrbyf6","./js/serke.js":"./js/serke.js?v=mvfrbyf6","./js/trees.js":"./js/trees.js?v=mvfrbyf6","./js/world.js":"./js/world.js?v=mvfrbyf6"}}</script>
 </head>
 <body>
 <div id="stage">
@@ -456,6 +507,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvfpgubb"></script>
+<script type="module" src="./js/game.js?v=mvfrbyf6"></script>
 </body>
 </html>

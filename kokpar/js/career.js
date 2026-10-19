@@ -373,8 +373,8 @@ export function showHub(skipDaily) {
       </div>
       <div class="h-arena">${arenaName(f.arena)}</div>
       <div class="h-stake">${tr('stake')(money(PRIZE.win), money(PRIZE.goal))}${f.final ? ' · ' + tr('forTitle') + ' +' + money(PRIZE.title) : c.phase === 'semi' ? ' · ' + tr('forSemi') + ' +' + money(PRIZE.semi) : ''}</div>
-      <button class="big-btn" data-act="play">${tr('play')}</button>
-      ${window.KOKPAR_SDK || window.top !== window.self ? '' : `<button class="h-friend" data-act="online">${IC.crowd}<span>${L() === 'ru' ? 'С другом по сети' : 'Play a friend online'}</span></button>`}`; // на портале игру по сети не показываем
+      <div class="h-actions"><button class="big-btn" data-act="play">${tr('play')}</button>
+      ${window.KOKPAR_SDK || window.top !== window.self ? '' : `<button class="h-friend" data-act="online">${IC.crowd}<span>${L() === 'ru' ? 'С другом по сети' : 'Play a friend online'}</span></button>`}</div>`; // на портале игру по сети не показываем; кнопки в ряд с промежутком
   } else {
     const r = c.result;
     const msg = r === 'champion' ? tr('champion') : r === 'final' ? tr('runnerUp') : r === 'semi' ? tr('outSemi') : tr('outGroup');
