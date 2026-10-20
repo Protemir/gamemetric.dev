@@ -84,6 +84,7 @@ renderer.setSize(view.w, view.h);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
+renderer.debug.checkShaderErrors = P.has('debug'); // проверка каждого шейдера ждёт видеокарту — на старте это ~0,6 с; ошибки ловим в отладке
 renderer.shadowMap.enabled = Q !== 'low';
 renderer.shadowMap.type = Q === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; // мягкие тени дороги — только на высокой
 (document.getElementById('stage') || document.body).appendChild(renderer.domElement);

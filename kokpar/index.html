@@ -21,6 +21,12 @@
 <meta name="twitter:image" content="https://gamemetric.dev/kokpar/og.jpg">
 <link rel="preload" href="fonts/russo-one-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/rubik-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<!-- три.js и модели начинают качаться сразу, а не после всех скриптов (было лесенкой: +2–3 с к загрузке) -->
+<link rel="modulepreload" href="./vendor/three.module.js" fetchpriority="high">
+<link rel="modulepreload" href="./vendor/three.core.js" fetchpriority="high">
+<link rel="modulepreload" href="./vendor/loaders/GLTFLoader.js">
+<link rel="preload" href="models/warhorse-kz.glb" as="fetch" crossorigin fetchpriority="low">
+<link rel="preload" href="models/rider.glb" as="fetch" crossorigin fetchpriority="low">
 <style>/* шрифты внутри игры: Russo One и Rubik (OFL), без запросов к Google */
 @font-face { font-family: 'Rubik'; font-style: normal; font-weight: 500 900; font-display: swap; src: url(fonts/rubik-cyrillic-ext.woff2) format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
 @font-face { font-family: 'Rubik'; font-style: normal; font-weight: 500 900; font-display: swap; src: url(fonts/rubik-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -456,7 +462,7 @@
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvfuizu2","./js/boot.js":"./js/boot.js?v=mvfuizu2","./js/career.js":"./js/career.js?v=mvfuizu2","./js/crowd.js":"./js/crowd.js?v=mvfuizu2","./js/flags.js":"./js/flags.js?v=mvfuizu2","./js/game.js":"./js/game.js?v=mvfuizu2","./js/icons.js":"./js/icons.js?v=mvfuizu2","./js/kazan.js":"./js/kazan.js?v=mvfuizu2","./js/net.js":"./js/net.js?v=mvfuizu2","./js/portal.js":"./js/portal.js?v=mvfuizu2","./js/rider.js":"./js/rider.js?v=mvfuizu2","./js/serke.js":"./js/serke.js?v=mvfuizu2","./js/trees.js":"./js/trees.js?v=mvfuizu2","./js/world.js":"./js/world.js?v=mvfuizu2"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvgmcius","./js/boot.js":"./js/boot.js?v=mvgmcius","./js/career.js":"./js/career.js?v=mvgmcius","./js/crowd.js":"./js/crowd.js?v=mvgmcius","./js/flags.js":"./js/flags.js?v=mvgmcius","./js/game.js":"./js/game.js?v=mvgmcius","./js/icons.js":"./js/icons.js?v=mvgmcius","./js/kazan.js":"./js/kazan.js?v=mvgmcius","./js/net.js":"./js/net.js?v=mvgmcius","./js/portal.js":"./js/portal.js?v=mvgmcius","./js/rider.js":"./js/rider.js?v=mvgmcius","./js/serke.js":"./js/serke.js?v=mvgmcius","./js/trees.js":"./js/trees.js?v=mvgmcius","./js/world.js":"./js/world.js?v=mvgmcius"}}</script>
 </head>
 <body>
 <div id="stage">
@@ -510,6 +516,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvfuizu2"></script>
+<script type="module" src="./js/game.js?v=mvgmcius"></script>
 </body>
 </html>

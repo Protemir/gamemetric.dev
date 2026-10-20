@@ -17,6 +17,8 @@ const SIM = Number(P.get('sim') || 0);
 if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
 const OFF_RIDERS = (P.get('no') || '').includes('riders'), NO_SHADOW_RIDERS = (P.get('no') || '').includes('rshadow');
 const MATCH_LEN = Number(P.get('len') || 180); // с
+const ROOKIE_LEN = 120; // первый матч в жизни игрока
+let rookie = false;
 const KAZAN_TOP = 1.58; // верх насыпи казана — туда ложится туша
 const GOAL_X = 52, KAZAN_R = 3.0, SCORE_R = KAZAN_R + 1.5; // к казану надо подъехать вплотную
 const TUG_RANGE = 2.7, TUG_BREAK = 3.5, PICK_R = 1.8;
@@ -155,7 +157,8 @@ function kickoff(first) {
     e.stamina = 100; e.tugCD = 0; e.pickCD = 0; e.stun = 0;
     e.r.remount(); e.down = 0;
   });
-  dropSack(new THREE.Vector3(0, GROUND_Y, 0), new THREE.Vector3());
+  // в первом розыгрыше первого матча туша ближе к игроку: первый подбор — его
+  dropSack(new THREE.Vector3(first && rookie ? -9 * SWAP : 0, GROUND_Y, 0), new THREE.Vector3());
   state.tug = null;
   state.phase = 'countdown';
   state.intro = first && !SIM && !AI_PLAYER && !!fx && career.played() > 0;
@@ -401,6 +404,9 @@ function applyStage() {
   crowd?.paint(TEAMS[0].color, TEAMS[1].color);
   if (!SIM) { el.nmR.textContent = teamName(0); el.nmB.textContent = teamName(1); }
   if (!SIM && !P.has('pull')) Object.assign(DIFF, fx.diff);
+  // самый первый матч: соперники заметно слабее — первый гол реально забить за полминуты
+  rookie = !SIM && !online.role && career.played() === 0 && !P.has('len');
+  if (rookie) Object.assign(DIFF, { pull: -0.1, react: 1.1, speed: 0.9 });
   for (const e of ents) if (e.team === 0) e.h.turnMul = HB.turn;
   paintCoat();
 }
@@ -934,7 +940,7 @@ for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.btnWhip.addE
 function startMatch() {
   applyStage(); applyLang();
   el.menu.hidden = true;
-  state.score = [0, 0]; state.clock = MATCH_LEN; state.golden = false; state.events = []; kickoff(true);
+  state.score = [0, 0]; state.clock = rookie ? ROOKIE_LEN : MATCH_LEN; state.golden = false; state.events = []; kickoff(true); // первый матч короче — новичок точно доходит до итогов и призовых
 }
 el.pause.addEventListener('click', (e) => {
   const b = e.target.closest('[data-p]');
@@ -1241,7 +1247,9 @@ function frame(now) {
 }
 
 if (!SIM) applyLang();
+performance.mark('k:start');
 await Promise.all([loadModel(), loadRider()]);
+performance.mark('k:models');
 if (!SIM) loadTerrain().catch((err) => console.warn('рельеф не загрузился', err)); // горы появятся чуть позже
 for (const team of [0, 1]) for (let i = 0; i < 3; i++) ents.push(makeEnt(team, i, team === 0 && i === 1));
 me = ents.find((e) => e.me);
@@ -1252,6 +1260,7 @@ me = ents.find((e) => e.me);
   if (!SIM) globalThis.__kokparCoat();
 }
 kickoff(true);
+performance.mark('k:ents');
 
 if (SIM) {
   // матчи ботов без картинки: шаг 1/30 с, сводка в window.__sim
@@ -1269,7 +1278,7 @@ if (SIM) {
   window.__sim = res;
   document.title = 'SIM DONE';
 } else {
-  window.__loadDone?.(); setTimeout(() => el.load.remove(), 250);
+  window.__loadDone?.(); setTimeout(() => el.load.remove(), 150);
   portal.loadingDone();
   portal.onPortalMute(setPortalMute);
   if ((P.has('bots') || P.has('debug')) && !P.has('menu')) applyStage(); else showMenu();
@@ -1279,6 +1288,8 @@ if (SIM) {
   el.hint.dataset.keep = '1';
   el.hint.innerHTML = touch ? tr('helpTouch') : tr('help');
   setTimeout(() => { delete el.hint.dataset.keep; }, 9000);
-  requestAnimationFrame(frame);
+  // меню видно сразу, а шейдеры видеокарта собирает в фоне — раньше первая отрисовка держала экран загрузки 2–3 с
+  const go = () => { performance.mark('k:frame'); requestAnimationFrame(frame); };
+  if (renderer.compileAsync) renderer.compileAsync(scene, camera).then(go, go); else go();
 }
 if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };

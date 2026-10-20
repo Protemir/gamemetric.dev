@@ -4,8 +4,9 @@ const sdk = window.CrazyGames && window.CrazyGames.SDK;
 let ready = null;
 if (sdk) {
   try {
-    await sdk.init();
-    if (sdk.environment !== 'disabled') ready = sdk;
+    // SDK не ответил за 4 с — играем без него, а не висим на загрузке
+    const ok = await Promise.race([sdk.init().then(() => true), new Promise((r) => setTimeout(() => r(false), 4000))]);
+    if (ok && sdk.environment !== 'disabled') ready = sdk;
   } catch { ready = null; }
 }
 if (ready) {

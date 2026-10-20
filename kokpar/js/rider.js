@@ -22,8 +22,10 @@ export async function loadRider() {
 // ---------- перекраска одежды ----------
 const teamMats = new Map();
 function recolor(img, hue) { // коричневая ткань → цвет команды (яркость сохраняем), красная окантовка → золото
-  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
-  const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  // не больше 1024 px: всадник на экране мелкий, а попиксельная перекраска 2048² стоила полсекунды на старте
+  const k = Math.min(1, 1024 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, c.width, c.height);
   const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
   const [th, ts] = hue;
   for (let i = 0; i < p.length; i += 4) {
