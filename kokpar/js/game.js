@@ -1281,8 +1281,10 @@ if (SIM) {
   window.__loadDone?.(); setTimeout(() => el.load.remove(), 150);
   portal.loadingDone();
   portal.onPortalMute(setPortalMute);
-  if ((P.has('bots') || P.has('debug')) && !P.has('menu')) applyStage(); else showMenu();
   const roomCode = cleanCode((location.hash.match(/room=([A-Za-z0-9]{6})/) || [])[1]);
+  // самый первый запуск — сразу в первый матч, без меню: порталы считают «загрузку» до начала игры, а новичку меню ничего не говорит
+  const firstRun = career.played() === 0 && roomCode.length !== 6 && !P.has('menu') && !document.documentElement.classList.contains('portrait');
+  if ((P.has('bots') || P.has('debug')) && !P.has('menu')) applyStage(); else { showMenu(); if (firstRun) startMatch(); }
   if (roomCode.length === 6) onlineJoin(roomCode); // открыл ссылку друга
   updateCamera(0, true);
   el.hint.dataset.keep = '1';
