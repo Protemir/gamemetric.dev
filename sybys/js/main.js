@@ -1096,7 +1096,9 @@ function showToast(tt) {
   n.dataset.who = who;
   toastsEl.append(n);
   // never a wall of news: the oldest goes when there are too many
-  const max = window.innerWidth < 700 || window.innerHeight < 500 ? 2 : 3;
+  // on a phone the advisor and the news share the bottom of the map: while he speaks only the newest card stays
+  const small = window.innerWidth < 700 || window.innerHeight < 500;
+  const max = small ? (coachEl.classList.contains('on') ? 1 : 2) : 3;
   while (toastsEl.children.length > max) toastsEl.firstChild.remove();
   setTimeout(() => n.classList.add('out'), 4200);
   setTimeout(() => n.remove(), 4800);
