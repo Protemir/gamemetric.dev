@@ -96,7 +96,7 @@ const T = {
     bonus: (v) => 'сейчас +' + v + '%',
     quests: 'Задания', settings: 'Настройки', daily: 'Награда дня', dayN: (n) => 'День ' + n, claim: 'Забрать', streakNote: 'Заходи каждый день — награда растёт. Пропустишь день — начнёшь с первого.',
     questsTitle: 'Задания дня', questDone: 'Выполнено', questReward: 'Задание', newIn: (h) => 'Новые задания через ' + h, allDone: 'Все задания на сегодня выполнены!',
-    q: { win: 'Выиграй матч', goals: (n) => 'Забей командой ' + n + ' голов', my: (n) => 'Забей сам ' + n + ' гола', throw: 'Забей броском в казан', tugs: (n) => 'Выиграй ' + n + ' тартыса', falls: (n) => 'Сбей с коня ' + n + ' соперников', matches: (n) => 'Сыграй ' + n + ' матча', clean: 'Выиграй, пропустив не больше 1 гола' },
+    qGo: 'Играть', q: { duel: 'Выиграй бой в аударыспақ', duel2: (n) => 'Выиграй ' + n + ' боя в аударыспақ', jhits: (n) => 'Попади ' + n + ' раз в жамбы ату', jperf: (n) => 'Попади в яблочко ' + n + ' раза', win: 'Выиграй матч', goals: (n) => 'Забей командой ' + n + ' голов', my: (n) => 'Забей сам ' + n + ' гола', throw: 'Забей броском в казан', tugs: (n) => 'Выиграй ' + n + ' тартыса', falls: (n) => 'Сбей с коня ' + n + ' соперников', matches: (n) => 'Сыграй ' + n + ' матча', clean: 'Выиграй, пропустив не больше 1 гола' },
   },
   en: {
     cup: 'Zhetysu Cup', season: (n) => 'Season ' + n, group: (g, r) => 'Group ' + g + ' · round ' + r + ' of 3', semi: 'Semi-final', final: 'Final',
@@ -115,7 +115,7 @@ const T = {
     bonus: (v) => 'now +' + v + '%',
     quests: 'Quests', settings: 'Settings', daily: 'Daily reward', dayN: (n) => 'Day ' + n, claim: 'Claim', streakNote: 'Come back every day and the reward grows. Miss a day and you start over.',
     questsTitle: 'Daily quests', questDone: 'Done', questReward: 'Quest', newIn: (h) => 'New quests in ' + h, allDone: 'All quests done for today!',
-    q: { win: 'Win a match', goals: (n) => 'Score ' + n + ' team goals', my: (n) => 'Score ' + n + ' goals yourself', throw: 'Score with a throw into the kazan', tugs: (n) => 'Win ' + n + ' tugs of war', falls: (n) => 'Unhorse ' + n + ' rivals', matches: (n) => 'Play ' + n + ' matches', clean: 'Win conceding at most 1 goal' },
+    qGo: 'Play', q: { duel: 'Win an Audaryspak bout', duel2: (n) => 'Win ' + n + ' Audaryspak bouts', jhits: (n) => 'Hit ' + n + ' jamby targets', jperf: (n) => 'Hit ' + n + ' bullseyes', win: 'Win a match', goals: (n) => 'Score ' + n + ' team goals', my: (n) => 'Score ' + n + ' goals yourself', throw: 'Score with a throw into the kazan', tugs: (n) => 'Win ' + n + ' tugs of war', falls: (n) => 'Unhorse ' + n + ' rivals', matches: (n) => 'Play ' + n + ' matches', clean: 'Win conceding at most 1 goal' },
   },
 };
 
@@ -165,13 +165,20 @@ const QUESTS = [
   { id: 'win', n: 1, r: 1000 }, { id: 'goals', n: 5, r: 800 }, { id: 'my', n: 2, r: 900 }, { id: 'throw', n: 1, r: 700 },
   { id: 'tugs', n: 4, r: 800 }, { id: 'falls', n: 2, r: 900 }, { id: 'matches', n: 2, r: 600 }, { id: 'clean', n: 1, r: 1200 },
 ];
+// задания мини-режимов: каждый день одно из них — повод попробовать аударыспақ и жамбы ату
+const MODE_QUESTS = [
+  { id: 'duel', n: 1, r: 900, act: 'duel' }, { id: 'duel2', n: 2, r: 1300, act: 'duel' },
+  { id: 'jhits', n: 8, r: 800, act: 'jamby' }, { id: 'jperf', n: 3, r: 900, act: 'jamby' },
+];
+const questAct = (id) => MODE_QUESTS.find((q) => q.id === id)?.act;
 const dayKey = (d = new Date()) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 function questsToday() {
   const today = dayKey();
   if (S.quests?.date !== today) {
     let seed = [...today].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
     const pool = [...QUESTS], pick = [];
-    while (pick.length < 3) { seed = (seed * 1103515245 + 12345) >>> 0; pick.push(pool.splice(seed % pool.length, 1)[0]); }
+    while (pick.length < 2) { seed = (seed * 1103515245 + 12345) >>> 0; pick.push(pool.splice(seed % pool.length, 1)[0]); }
+    seed = (seed * 1103515245 + 12345) >>> 0; pick.push(MODE_QUESTS[seed % MODE_QUESTS.length]); // третье — из мини-режимов
     S.quests = { date: today, list: pick.map((q) => ({ id: q.id, n: q.n, r: q.r, p: 0, done: false })) };
     save(S);
   }
@@ -180,7 +187,8 @@ function questsToday() {
 const questText = (q) => { const f = tr('q')[q.id]; return typeof f === 'function' ? f(q.n) : f; };
 // после матча: продвинуть задания, выполненные — сразу в кассу
 function trackQuests(st) {
-  const add = { win: st.won ? 1 : 0, goals: st.goals, my: st.myGoals, throw: st.throwGoals, tugs: st.tugs, falls: st.falls, matches: 1, clean: st.won && st.against <= 1 ? 1 : 0 };
+  const add = { win: st.won ? 1 : 0, goals: st.goals, my: st.myGoals, throw: st.throwGoals, tugs: st.tugs, falls: st.falls, matches: st.matches || 0, clean: st.won && st.against <= 1 ? 1 : 0,
+    duel: st.duelWin || 0, duel2: st.duelWin || 0, jhits: st.jhits || 0, jperf: st.jperf || 0 };
   const done = [];
   for (const q of questsToday()) {
     if (q.done) continue;
@@ -276,7 +284,7 @@ export function report(my, their, st = {}) {
     if (my > their) { c.result = 'champion'; S.titles++; lines.push([tr('forTitle'), PRIZE.title]); note = tr('champion'); }
     else { c.result = 'final'; note = tr('runnerUp'); }
   }
-  const quests = trackQuests({ won: my > their, goals: my, against: their, ...st });
+  const quests = trackQuests({ won: my > their, goals: my, against: their, matches: 1, ...st });
   for (const q of quests) lines.push([tr('questReward') + ': ' + questText(q), q.r]);
   const total = lines.reduce((a, l) => a + l[1], 0);
   S.money += total;
@@ -356,7 +364,7 @@ function dailyModal() {
 }
 export function showQuests() {
   const list = questsToday();
-  const rows = list.map((q) => `<div class="q-row${q.done ? ' done' : ''}"><div class="q-t"><b>${questText(q)}</b><div class="q-bar"><i style="width:${(q.p / q.n) * 100}%"></i></div></div><div class="q-r">${q.done ? '✓ ' + tr('questDone') : '+' + money(q.r)}<small>${q.p}/${q.n}</small></div></div>`).join('');
+  const rows = list.map((q) => `<div class="q-row${q.done ? ' done' : ''}"><div class="q-t"><b>${questText(q)}</b><div class="q-bar"><i style="width:${(q.p / q.n) * 100}%"></i></div></div><div class="q-r">${q.done ? '✓ ' + tr('questDone') : '+' + money(q.r)}<small>${q.p}/${q.n}</small></div>${!q.done && questAct(q.id) ? `<button class="q-go" data-act="${questAct(q.id)}">${tr('qGo')}</button>` : ''}</div>`).join('');
   root.innerHTML = `<div class="hub">${head()}<div class="h-cup disp">${tr('questsTitle')}</div>
     <div class="h-season">${list.every((q) => q.done) ? tr('allDone') + ' · ' : ''}${tr('newIn')(untilMidnight())}</div>
     <div class="q-list">${rows}</div>${tabs('quests')}</div>`;
@@ -502,6 +510,7 @@ export function duelReport(win, my, their) {
   if (win) { d.w++; d.run++; d.best = Math.max(d.best, d.run); } else { d.l++; d.run = 0; }
   const lines = [[tr(win ? 'forDuelWin' : 'forDuelLoss'), win ? DUEL_PRIZE.win : DUEL_PRIZE.loss]];
   if (win && d.run > 1) lines.push([tr('duelRun')(d.run), Math.min(5, d.run - 1) * DUEL_PRIZE.run]);
+  for (const q of trackQuests({ duelWin: win ? 1 : 0, falls: my })) lines.push([tr('questReward') + ': ' + questText(q), q.r]);
   const total = lines.reduce((a, l) => a + l[1], 0);
   S.money += total;
   save(S);
@@ -519,6 +528,7 @@ export function jambyReport(hits, perfect, score, shots) {
   const lines = [[tr('jForHits')(hits), hits * 100]];
   if (perfect) lines.push([tr('jForPerfect')(perfect), perfect * 50]);
   if (record && j.runs > 1) lines.push([tr('jForRecord'), 500]);
+  for (const q of trackQuests({ jhits: hits, jperf: perfect })) lines.push([tr('questReward') + ': ' + questText(q), q.r]);
   const total = lines.reduce((a, l) => a + l[1], 0);
   S.money += total;
   save(S);

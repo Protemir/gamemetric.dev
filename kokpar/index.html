@@ -23,7 +23,7 @@
 <link rel="preload" href="fonts/rubik-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
 <!-- три.js и модели начинают качаться сразу, а не после всех скриптов (было лесенкой: +2–3 с к загрузке) -->
 <!-- карта импортов — раньше любых модулей и modulepreload: иначе браузер иногда разбирает GLTFLoader до неё и не находит "three" -->
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvikk5ln","./js/boot.js":"./js/boot.js?v=mvikk5ln","./js/career.js":"./js/career.js?v=mvikk5ln","./js/crowd.js":"./js/crowd.js?v=mvikk5ln","./js/flags.js":"./js/flags.js?v=mvikk5ln","./js/game.js":"./js/game.js?v=mvikk5ln","./js/icons.js":"./js/icons.js?v=mvikk5ln","./js/kazan.js":"./js/kazan.js?v=mvikk5ln","./js/net.js":"./js/net.js?v=mvikk5ln","./js/portal.js":"./js/portal.js?v=mvikk5ln","./js/rider.js":"./js/rider.js?v=mvikk5ln","./js/serke.js":"./js/serke.js?v=mvikk5ln","./js/trees.js":"./js/trees.js?v=mvikk5ln","./js/world.js":"./js/world.js?v=mvikk5ln"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvilil63","./js/boot.js":"./js/boot.js?v=mvilil63","./js/career.js":"./js/career.js?v=mvilil63","./js/crowd.js":"./js/crowd.js?v=mvilil63","./js/flags.js":"./js/flags.js?v=mvilil63","./js/game.js":"./js/game.js?v=mvilil63","./js/icons.js":"./js/icons.js?v=mvilil63","./js/kazan.js":"./js/kazan.js?v=mvilil63","./js/net.js":"./js/net.js?v=mvilil63","./js/portal.js":"./js/portal.js?v=mvilil63","./js/rider.js":"./js/rider.js?v=mvilil63","./js/serke.js":"./js/serke.js?v=mvilil63","./js/trees.js":"./js/trees.js?v=mvilil63","./js/world.js":"./js/world.js?v=mvilil63"}}</script>
 <link rel="modulepreload" href="./vendor/three.module.js" fetchpriority="high">
 <link rel="modulepreload" href="./vendor/three.core.js" fetchpriority="high">
 <link rel="modulepreload" href="./vendor/loaders/GLTFLoader.js">
@@ -353,6 +353,7 @@
   .q-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #ffe58a, #f0a01c); }
   .q-r { text-align: right; font: 16px 'Russo One', sans-serif; color: #ffe58a; white-space: nowrap; }
   .q-r small { display: block; font: 700 12px 'Rubik', sans-serif; opacity: .6; color: #fff; }
+  .q-go { border: 0; border-radius: 10px; padding: 7px 14px; background: linear-gradient(#ffd75a, #f0a01c); color: #3a2208; font: 700 13px 'Rubik', sans-serif; cursor: pointer; white-space: nowrap; }
   .q-row.done { box-shadow: inset 0 0 0 1px rgba(127,224,143,.5); background: rgba(70,170,90,.12); }
   .q-row.done .q-bar i { background: linear-gradient(90deg, #b8ffc4, #3fd264); }
   .q-row.done .q-r { color: #7fe08f; }
@@ -573,6 +574,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvikk5ln"></script>
+<script type="module" src="./js/game.js?v=mvilil63"></script>
 </body>
 </html>
