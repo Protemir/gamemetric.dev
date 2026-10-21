@@ -65,7 +65,8 @@ try {
   await wait(100);
   p = await pulses();
   const leaves = p.filter(([e]) => e === 'leave');
-  check('counter: going away says "leave play:y2:m<minute>" once', leaves.length === 1 && /^play:y2:m\d+$/.test(leaves[0][1]), JSON.stringify(leaves));
+  // ... with how far into the valley: canals, watered, thirsty, a dashed path, when the first water came
+  check('counter: going away says "leave play:y2:m<minute>:c..w..t.." once', leaves.length === 1 && /^play:y2:m\d+:c\dw\dt\dg?(:f\d)?$/.test(leaves[0][1]), JSON.stringify(leaves));
   check('counter: every event is one the server takes, every argument fits it', p.every(([e, a]) => EVENTS.includes(e) && /^[\w.:-]{0,24}$/.test(a)), JSON.stringify(p));
   // the real sender is off under ?debug and in automated browsers: nothing goes out from tests
   await B.init(`try { localStorage.clear(); } catch {} window.__beacons = 0; navigator.sendBeacon = () => (window.__beacons++, true);`);
@@ -75,10 +76,10 @@ try {
   // on the leave screen the place is named right: the menu, the gift panel, the loss
   for (const [name, setup, want] of [
     ['menu', '', /^menu:y0:m\d+$/],
-    ['gift', `[...document.querySelectorAll('button')].find((x) => x.innerText.includes('Играть')).click(); ${A}.g.day = 119.97;`, /^gift:y2:m\d+$/],
-    ['over', `[...document.querySelectorAll('button')].find((x) => x.innerText.includes('Играть')).click();`, /^over:y1:m\d+$/],
-    ['pause', `[...document.querySelectorAll('button')].find((x) => x.innerText.includes('Играть')).click(); setTimeout(() => document.getElementById('pauseBtn').click(), 300);`, /^pause:y1:m\d+$/],
-    ['play', `[...document.querySelectorAll('button')].find((x) => x.innerText.includes('Играть')).click();`, /^play:y1:m\d+$/],
+    ['gift', `[...document.querySelectorAll('button')].find((x) => x.innerText.includes('Играть')).click(); ${A}.g.day = 119.97;`, /^gift:y2:m\d+:c\dw\dt\dg?:f\d$/],
+    ['over', `[...document.querySelectorAll('button')].find((x) => x.innerText.includes('Играть')).click();`, /^over:y1:m\d+:c\dw\dt\dg?:f\d$/],
+    ['pause', `[...document.querySelectorAll('button')].find((x) => x.innerText.includes('Играть')).click(); setTimeout(() => document.getElementById('pauseBtn').click(), 300);`, /^pause:y1:m\d+:c\dw\dt\dg?:f\d$/],
+    ['play', `[...document.querySelectorAll('button')].find((x) => x.innerText.includes('Играть')).click();`, /^play:y1:m\d+:c\dw\dt\dg?:f\d$/],
   ]) {
     await B.init('try { localStorage.clear(); } catch {}');
     await B.open(page('&lang=ru&seed=2002'), 924, 520);
@@ -90,6 +91,21 @@ try {
     p = await pulses();
     const l = p.find(([e]) => e === 'leave');
     check(`counter: leaving on the ${name} screen is told as such`, l && want.test(l[1]), JSON.stringify(l));
+  }
+
+  // the first orchard watered soon after the start is told in the leave as f1/f2 (21.10)
+  await B.init('try { localStorage.clear(); } catch {}');
+  await B.open(page('&lang=ru&seed=2002'), 924, 520);
+  await wait(300);
+  await js(`[...document.querySelectorAll('button')].find((x) => x.innerText.includes('Играть')).click()`);
+  await wait(400);
+  await js(`(() => { const { g, S, state } = ${A}; const gh = state.ghost; S.startStroke(g, gh.from); for (const c of gh.cells) S.extend(g, c); S.endStroke(g); ${A}.step(0.3); })()`);
+  await wait(900);
+  await js(`Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange'))`);
+  p = await pulses();
+  {
+    const l = p.find(([e]) => e === 'leave');
+    check('counter: the leave tells the first water came within seconds (f1/f2)', l && /:c1w1t\dg?:f[12]$/.test(l[1]), JSON.stringify(l));
   }
 
   // ---------- one more year ----------

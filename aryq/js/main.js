@@ -61,6 +61,9 @@ function start(m = mode, restored = null) {
   paused = false;
   state.ghost = null;
   state.calmShown = false;
+  state.startedAt = performance.now();
+  state.firstWet = 0;
+  g.restored = !!restored;
   state.harvestAtYear = 0;
   told.clear();
   ui.replaceChildren();
@@ -978,6 +981,12 @@ function pickGhost(now, force) {
     if (!o.taught && o.s >= 0.6) {
       o.taught = true;
       store.set('aryq.taught', store.get('aryq.taught', 0) + 1);
+      // when the first orchard of this game got its water (told with "leave": f1 <10 s, f2 <20 s,
+      // f3 <40 s, f4 <90 s, f5 later; f0 = never)
+      if (!state.firstWet && !g.restored) {
+        const sec = (now - (state.startedAt || now)) / 1000;
+        state.firstWet = sec < 10 ? 1 : sec < 20 ? 2 : sec < 40 ? 3 : sec < 90 ? 4 : 5;
+      }
     }
   }
   const taught = store.get('aryq.taught', 0);
@@ -1183,7 +1192,11 @@ function left() {
   if (leftOnce) return;
   leftOnce = true;
   const panel = ui.querySelector('.rewards') ? 'gift' : ui.querySelector('.menu') ? 'menu' : g && g.over ? 'over' : ui.querySelector('.paused') ? 'pause' : ui.firstChild ? 'panel' : 'play';
-  pulse('leave', panel + ':y' + (g ? Math.min(g.year, 9) : 0) + ':' + minute());
+  // and how far into the valley: canals dug, orchards with water, thirsty ones, a dashed path shown
+  // (21.10: half the players left in the first two minutes while playing — bored or lost?)
+  const cap = (n) => Math.min(n, 9);
+  const how = g ? `:c${cap(g.strokes.length)}w${cap(g.objects.filter((o) => o.s >= 0.6).length)}t${cap(g.objects.filter((o) => o.s < 0.6).length)}${state.ghost ? 'g' : ''}${g.restored ? '' : ':f' + (state.firstWet || 0)}` : '';
+  pulse('leave', panel + ':y' + (g ? Math.min(g.year, 9) : 0) + ':' + minute() + how);
 }
 // caught on the way in, before the game's own handler pauses and puts up its panel
 window.addEventListener('visibilitychange', () => document.hidden && left(), true);
