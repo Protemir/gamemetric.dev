@@ -42,6 +42,8 @@ const SNOW = [236, 242, 247];
 
 export class View {
   constructor(canvas) {
+    this.happy = new WeakMap(); // object -> it had enough water on the last frame
+    this.happyAt = new WeakMap(); // object -> when it got water (for the jump)
     this.cv = canvas;
     this.cx = canvas.getContext('2d');
     this.terrain = null;
@@ -339,6 +341,7 @@ export class View {
     cx.shadowOffsetY = 6;
     cx.drawImage(this.terrain, this.ox, this.oy, this.bw, this.bh);
     cx.restore();
+    this.drawLife(g, now);
     cx.lineCap = 'round';
     cx.lineJoin = 'round';
 
@@ -371,28 +374,60 @@ export class View {
       this.segs(edges.filter(([a, b]) => isRiver(a, b) === river), cs * 0.06, cs * 0.06);
     }
 
-    // water: deep in the middle, lighter at the edges, wider when more flows
+    // water: deep in the middle, lighter at the edges, wider when more flows.
+    // A cell that has just got water fills a moment after the one above it, so water visibly runs
+    // down a newly dug canal (21.10); a valley seen for the first time is simply wet
+    const n = g.W * g.H;
+    if (this.wetG !== g || !this.wetSince || this.wetSince.length !== n) {
+      this.wetG = g;
+      this.wetSince = new Float64Array(n);
+      this.wasWet = new Uint8Array(n);
+      for (let i = 0; i < n; i++) this.wasWet[i] = g.flow[i] >= 0.01 && !g.gate[i] ? 1 : 0;
+    }
+    const order = g.order || [];
+    for (const i of order) {
+      const wet = g.flow[i] >= 0.01 && !g.gate[i];
+      if (wet && !this.wasWet[i]) {
+        const up = g.from[i] >= 0 ? g.from[i] : -1;
+        const fresh = up >= 0 && now - this.wetSince[up] < 4000;
+        this.wetSince[i] = fresh ? Math.max(now, this.wetSince[up] + 75) : now;
+      }
+      this.wasWet[i] = wet ? 1 : 0;
+    }
+    const RUN = 75; // ms for water to cross one cell
     const wetEdges = [];
+    const heads = [];
     for (const [a, b] of edges) {
       const q = g.flow[b] || 0;
       if (q < 0.01 || g.gate[b]) continue;
+      const f = clamp((now - this.wetSince[b]) / RUN, 0, 1);
+      if (f <= 0) continue;
+      if (f < 1) heads.push([a, b, f]);
       const river = g.kind[b] === S.RIVER;
       const k = river ? clamp(q / 8, 0, 1) : clamp(q / g.cap, 0, 1);
-      wetEdges.push([a, b, q, cs * (river ? 0.36 + 0.36 * k : 0.2 + 0.28 * k)]);
+      wetEdges.push([a, b, q, cs * (river ? 0.36 + 0.36 * k : 0.2 + 0.28 * k), f]);
     }
     // a canal full to the brim: white foam along its edges
     cx.strokeStyle = 'rgba(245,252,255,0.8)';
     cx.lineWidth = cs * 0.5;
     this.segs(wetEdges.filter(([a, b, q]) => g.kind[b] === S.CANAL && q >= g.cap * 0.97));
     cx.strokeStyle = C.water;
-    for (const [a, b, , w] of wetEdges) {
+    for (const [a, b, , w, f] of wetEdges) {
       cx.lineWidth = w;
-      this.seg(a, b);
+      this.part(a, b, f);
     }
     cx.strokeStyle = C.deep;
-    for (const [a, b, , w] of wetEdges) {
+    for (const [a, b, , w, f] of wetEdges) {
       cx.lineWidth = w * 0.5;
-      this.seg(a, b);
+      this.part(a, b, f);
+    }
+    // the head of running water: a little white foam
+    for (const [a, b, f] of heads) {
+      const [x1, y1] = this.center(a), [x2, y2] = this.center(b);
+      cx.fillStyle = 'rgba(240,250,255,0.9)';
+      cx.beginPath();
+      cx.arc(lerp(x1, x2, f), lerp(y1, y2, f), cs * 0.17, 0, Math.PI * 2);
+      cx.fill();
     }
     // moving glints: short light streaks that run downstream. Each edge keeps its own position and
     // moves it by speed × frame time, so a change in the flow changes the speed smoothly
@@ -541,6 +576,115 @@ export class View {
     this.cx.stroke();
   }
 
+  // Green comes where water runs (21.10, after the CrazyGames hits whose reward is the field changing
+  // under your hand): ground next to a canal with water and around a watered orchard turns from steppe
+  // to grass in a few seconds, then flowers; a dried place fades back slowly. Drawn to its own layer a
+  // few times a second, not every frame.
+  drawLife(g, now) {
+    const n = g.W * g.H;
+    if (this.lifeG !== g || !this.life || this.life.length !== n) {
+      this.lifeG = g;
+      this.life = new Float32Array(n);
+      this.lifeAt = now;
+      this.lifeKey = '';
+      this.lifeTarget(g, this.life); // a loaded valley is already green where it should be
+    }
+    const dt = clamp((now - this.lifeAt) / 1000, 0, 0.5);
+    this.lifeAt = now;
+    if (g.day < S.WINTER) {
+      const want = this.lifeWant || (this.lifeWant = new Float32Array(n));
+      want.fill(0);
+      this.lifeTarget(g, want);
+      for (let i = 0; i < n; i++) {
+        const d = want[i] - this.life[i];
+        this.life[i] += d > 0 ? Math.min(d, 0.45 * dt) : Math.max(d, -0.03 * dt);
+      }
+    }
+    const key = [Math.round(this.ox), Math.round(this.oy), this.cs.toFixed(2), this.cv.width, this.cv.height, Math.floor(now / 200)].join();
+    if (key !== this.lifeKey) {
+      this.lifeKey = key;
+      this.paintLife(g);
+    }
+    if (this.lifeLayer) this.cx.drawImage(this.lifeLayer, 0, 0, this.cv.width / this.dpr, this.cv.height / this.dpr);
+  }
+
+  // how green each cell wants to be: beside running water 0.7, around a watered orchard 1
+  lifeTarget(g, out) {
+    const { W, H } = g;
+    for (let i = 0; i < W * H; i++) {
+      if (g.kind[i] !== S.CANAL || g.flow[i] < 0.02 || g.gate[i]) continue;
+      const x = i % W, y = (i / W) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx >= 0 && yy >= 0 && xx < W && yy < H) out[yy * W + xx] = Math.max(out[yy * W + xx], 0.7);
+      }
+    }
+    for (const o of g.objects) {
+      if (o.s < 0.6 || o.type !== 'garden') continue;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const xx = o.x + dx, yy = o.y + dy;
+        if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const k = Math.max(Math.abs(dx), Math.abs(dy)) <= 1 ? 1 : 0.8;
+        out[yy * W + xx] = Math.max(out[yy * W + xx], k);
+      }
+    }
+  }
+
+  paintLife(g) {
+    const w = this.cv.width, h = this.cv.height;
+    if (!this.lifeLayer) this.lifeLayer = document.createElement('canvas');
+    const L = this.lifeLayer;
+    if (L.width !== w || L.height !== h) { L.width = w; L.height = h; }
+    const lx = L.getContext('2d');
+    lx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    lx.clearRect(0, 0, w, h);
+    const cs = this.cs;
+    const hash = (i, k) => {
+      let v = (i * 374761393 + k * 668265263) | 0;
+      v = Math.imul(v ^ (v >>> 13), 1274126177);
+      return ((v ^ (v >>> 16)) >>> 0) / 4294967296;
+    };
+    // soft meadow under everything
+    for (let i = 0; i < g.W * g.H; i++) {
+      const v = this.life[i];
+      if (v < 0.04) continue;
+      const [px, py] = this.center(i);
+      const gr = lx.createRadialGradient(px, py, 0, px, py, cs * 0.85);
+      gr.addColorStop(0, 'rgba(112,182,62,' + (0.52 * v).toFixed(3) + ')');
+      gr.addColorStop(1, 'rgba(112,182,62,0)');
+      lx.fillStyle = gr;
+      lx.fillRect(px - cs * 0.85, py - cs * 0.85, cs * 1.7, cs * 1.7);
+    }
+    // tufts of grass, then flowers where it has been green for a while
+    lx.lineCap = 'round';
+    lx.lineWidth = Math.max(1, cs * 0.045);
+    for (let i = 0; i < g.W * g.H; i++) {
+      const v = this.life[i];
+      if (v < 0.25 || g.kind[i] !== S.LAND) continue;
+      const [px, py] = this.center(i);
+      lx.strokeStyle = 'rgba(46,110,36,' + (0.75 * v).toFixed(3) + ')';
+      lx.beginPath();
+      for (let k = 0; k < 3; k++) {
+        const x = px + (hash(i, k) - 0.5) * cs * 0.8, y = py + (hash(i, k + 7) - 0.5) * cs * 0.8, hh = cs * (0.12 + 0.1 * v);
+        lx.moveTo(x - hh * 0.35, y); lx.lineTo(x - hh * 0.5, y - hh);
+        lx.moveTo(x, y); lx.lineTo(x, y - hh * 1.15);
+        lx.moveTo(x + hh * 0.35, y); lx.lineTo(x + hh * 0.5, y - hh);
+      }
+      lx.stroke();
+      if (v > 0.6 && hash(i, 3) < 0.55) {
+        const c = ['#fff6d8', '#ffd34d', '#ff9ec2', '#c9a8ff'][Math.floor(hash(i, 4) * 4)];
+        lx.fillStyle = c;
+        lx.globalAlpha = Math.min(1, (v - 0.6) * 3);
+        for (let k = 0; k < 2; k++) {
+          lx.beginPath();
+          lx.arc(px + (hash(i, k + 11) - 0.5) * cs * 0.75, py + (hash(i, k + 17) - 0.5) * cs * 0.75, Math.max(1, cs * 0.055), 0, Math.PI * 2);
+          lx.fill();
+        }
+        lx.globalAlpha = 1;
+      }
+    }
+  }
+
   // a magnifier above the finger while digging on a phone: the finger hides what it digs
   drawLoupe({ x, y }) {
     const { cx, dpr } = this;
@@ -568,6 +712,17 @@ export class View {
     cx.lineWidth = 3;
     cx.beginPath();
     cx.arc(lx, ly, r, 0, Math.PI * 2);
+    cx.stroke();
+  }
+
+  // the first part f of the segment a→b (water that is still running into b)
+  part(a, b, f) {
+    if (f >= 1) return this.seg(a, b);
+    const [x1, y1] = this.center(a), [x2, y2] = this.center(b);
+    const cx = this.cx;
+    cx.beginPath();
+    cx.moveTo(x1, y1);
+    cx.lineTo(lerp(x1, x2, f), lerp(y1, y2, f));
     cx.stroke();
   }
 
@@ -661,7 +816,17 @@ export class View {
       const [px, py] = this.center(o.y * g.W + o.x);
       const age = (g.day + (g.year - 1) * S.YEAR_DAYS - o.born) * S.DAY_SEC;
       const pop = age < 0.45 ? 0.3 + 1.6 * age : 1;
-      const r = cs * 0.5 * pop * (1 + 0.07 * (o.grown || 0)); // a grown orchard is a little bigger
+      let r = cs * 0.5 * pop * (1 + 0.07 * (o.grown || 0)); // a grown orchard is a little bigger
+      // the moment water reaches it: a little jump and a few leaves
+      const was = this.happy.get(o);
+      const happy = o.s >= 0.6 && g.day < S.WINTER;
+      if (happy && was === false) {
+        this.happyAt.set(o, now);
+        if (o.type === 'garden') this.burst(o.y * g.W + o.x, 'leaf');
+      }
+      this.happy.set(o, happy);
+      const at = this.happyAt.get(o);
+      if (at != null && now - at < 380) r *= 1 + 0.2 * Math.sin((Math.PI * (now - at)) / 380);
       if (o.thirst > 0.7 && g.day < S.WINTER) {
         cx.fillStyle = `rgba(226,73,59,${0.2 + 0.16 * Math.sin(now / 120)})`;
         cx.beginPath();
@@ -669,7 +834,10 @@ export class View {
         cx.fill();
       }
       if (o.type === 'garden') this.orchard(px, py, r, o, g, now);
-      else this.yurt(px, py, r * 0.95);
+      else {
+        this.yurt(px, py, r * 0.95);
+        if (o.s >= 0.6 || g.day >= S.WINTER) this.smoke(px, py, r, now, o.x * 7 + o.y);
+      }
       // not enough water: a drop bobs above it
       if (o.s < 0.6 && g.day < S.WINTER) this.drop(px, py - r * 2 + Math.sin(now / 220) * cs * 0.08, cs * 0.28);
       this.ring(px, py, r + 5, o.thirst, C.thirst);
@@ -702,6 +870,18 @@ export class View {
       for (const [dx, dy] of [[-0.55, -0.2], [0.3, -0.45], [-0.2, 0.55], [0.55, 0.3], [0.12, 0.05]]) {
         this.ball(px + dx * r, py + dy * r, Math.max(1.3, r * 0.09), '#ff8a6a', '#b8281e', 0.2);
       }
+    }
+  }
+
+  // smoke from the shanyrak: a few puffs that rise, grow and fade, drifting with the wind
+  smoke(px, py, r, now, seed) {
+    const cx = this.cx;
+    for (let k = 0; k < 3; k++) {
+      const f = ((now / 2200 + k / 3 + seed * 0.137) % 1 + 1) % 1;
+      cx.fillStyle = `rgba(238,236,228,${0.42 * (1 - f)})`;
+      cx.beginPath();
+      cx.arc(px + r * (0.15 + 0.9 * f), py - r * (0.15 + 1.6 * f), r * (0.16 + 0.32 * f), 0, Math.PI * 2);
+      cx.fill();
     }
   }
 
