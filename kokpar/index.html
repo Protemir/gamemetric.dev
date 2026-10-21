@@ -22,6 +22,8 @@
 <link rel="preload" href="fonts/russo-one-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/rubik-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
 <!-- три.js и модели начинают качаться сразу, а не после всех скриптов (было лесенкой: +2–3 с к загрузке) -->
+<!-- карта импортов — раньше любых модулей и modulepreload: иначе браузер иногда разбирает GLTFLoader до неё и не находит "three" -->
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvikk5ln","./js/boot.js":"./js/boot.js?v=mvikk5ln","./js/career.js":"./js/career.js?v=mvikk5ln","./js/crowd.js":"./js/crowd.js?v=mvikk5ln","./js/flags.js":"./js/flags.js?v=mvikk5ln","./js/game.js":"./js/game.js?v=mvikk5ln","./js/icons.js":"./js/icons.js?v=mvikk5ln","./js/kazan.js":"./js/kazan.js?v=mvikk5ln","./js/net.js":"./js/net.js?v=mvikk5ln","./js/portal.js":"./js/portal.js?v=mvikk5ln","./js/rider.js":"./js/rider.js?v=mvikk5ln","./js/serke.js":"./js/serke.js?v=mvikk5ln","./js/trees.js":"./js/trees.js?v=mvikk5ln","./js/world.js":"./js/world.js?v=mvikk5ln"}}</script>
 <link rel="modulepreload" href="./vendor/three.module.js" fetchpriority="high">
 <link rel="modulepreload" href="./vendor/three.core.js" fetchpriority="high">
 <link rel="modulepreload" href="./vendor/loaders/GLTFLoader.js">
@@ -505,7 +507,6 @@
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvikbqtt","./js/boot.js":"./js/boot.js?v=mvikbqtt","./js/career.js":"./js/career.js?v=mvikbqtt","./js/crowd.js":"./js/crowd.js?v=mvikbqtt","./js/flags.js":"./js/flags.js?v=mvikbqtt","./js/game.js":"./js/game.js?v=mvikbqtt","./js/icons.js":"./js/icons.js?v=mvikbqtt","./js/kazan.js":"./js/kazan.js?v=mvikbqtt","./js/net.js":"./js/net.js?v=mvikbqtt","./js/portal.js":"./js/portal.js?v=mvikbqtt","./js/rider.js":"./js/rider.js?v=mvikbqtt","./js/serke.js":"./js/serke.js?v=mvikbqtt","./js/trees.js":"./js/trees.js?v=mvikbqtt","./js/world.js":"./js/world.js?v=mvikbqtt"}}</script>
 </head>
 <body>
 <div id="stage">
@@ -572,6 +573,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvikbqtt"></script>
+<script type="module" src="./js/game.js?v=mvikk5ln"></script>
 </body>
 </html>
