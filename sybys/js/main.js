@@ -91,20 +91,33 @@ function hush() {
   coachEl.classList.remove('on');
   coach.until = 0;
 }
-// the advisor never hides what he is talking about: over the arrow, the ringed rider or the cursor the bubble thins out
+// the advisor never hides what he is talking about: if the pasture or rider he points at is under the bubble,
+// the bubble moves to the other side of the screen; only when there is no room (or under the cursor) it thins out
 function coachSeeThrough() {
-  let thin = false;
+  let thin = false, flip = coachEl.classList.contains('flip');
   if (coachEl.classList.contains('on') && g && g.phase === 'map') {
-    const b = coachEl.getBoundingClientRect(), pad = 36;
-    const pts = [];
+    const r0 = coachEl.getBoundingClientRect(), W = innerWidth;
+    const mirror = (b) => ({ left: W - b.right, right: W - b.left, top: b.top, bottom: b.bottom });
+    const home = flip ? mirror(r0) : r0, away = mirror(home);
+    const hits = (b, pts, pad) => pts.some(([x, y]) => x > b.left - pad && x < b.right + pad && y > b.top - pad && y < b.bottom + pad);
+    const lessonPts = [];
     const hand = look.hand >= 0 && g.map.regions[look.hand];
-    if (hand) pts.push(view.toScreen(hand.x, hand.y));
+    if (hand) lessonPts.push(view.toScreen(hand.x, hand.y));
     const r = look.pulse != null && g.riders.find((x) => x.id === look.pulse);
-    if (r) { const p = S.riderPos(g, r); pts.push(view.toScreen(p.x, p.y)); }
-    if (look.mouse) pts.push(look.mouse);
-    thin = pts.some(([x, y]) => x > b.left - pad && x < b.right + pad && y > b.top - pad * 1.5 && y < b.bottom + pad);
-  }
-  coachEl.classList.toggle('thin', thin);
+    if (r) { const p = S.riderPos(g, r); lessonPts.push(view.toScreen(p.x, p.y)); }
+    flip = hits(home, lessonPts, 26) && !hits(away, lessonPts, 26);
+    const now = flip ? away : home;
+    thin = hits(now, lessonPts, 26) || (look.mouse && hits(now, [look.mouse], 36));
+  } else flip = false;
+  coachEl.classList.toggle('flip', flip);
+  coachEl.classList.toggle('thin', !!thin);
+}
+// what is missing shivers red for a moment: the horses chip when there are no horses, the button while it waits
+function shake(node) {
+  if (!node) return;
+  node.classList.remove('short');
+  void node.offsetWidth;
+  node.classList.add('short');
 }
 function glowButton(key) {
   coach.glow = key;
@@ -510,7 +523,7 @@ function buildHud() {
     const cost = el('span', 'ac');
     cost.innerHTML = ICONS.horse.repeat(S.COST[key]);
     b.append(ava, el('span', 'an', T()[key]), el('span', 'as', T()[key + 'Sub']), cost);
-    b.onclick = () => { action = key; sfx.send(); updateHud(); };
+    b.onclick = () => { action = key; sfx.send(); updateHud(); if (b.classList.contains('off')) shake(g && g.horses < S.COST[key] ? $('horsesChip') : b); };
     // what the action does: on hover, or for a moment after a tap on a phone
     b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showTip(b, key, who); });
     b.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hideTip(); });
@@ -727,6 +740,8 @@ function doAction(kind, id) {
   if (!S.canAct(g, kind)) {
     sfx.no();
     say(g.horses < S.COST[kind] ? T().hintNoHorse : kind === 'aria' ? T().hintAriaBusy : T().hintKarasaiCD, 1500);
+    if (g.horses < S.COST[kind]) shake($('horsesChip'));
+    else shake([...actionsEl.children].find((b) => b.dataset.key === kind));
     return false;
   }
   const r = S.act(g, kind, id);
@@ -749,7 +764,7 @@ function tapRider(id) {
   if (res === 'caught') { sfx.caught(); if (!coach.step) say(T().caught, 1800); if (look.pulse === id) look.pulse = null; }
   if (res === 'insult') { sfx.bad(); say(T().insulted, 2200); }
   if (res === 'repelled') sfx.clash();
-  if (res === 'nohorse') { sfx.no(); say(T().hintNoHorse, 1500); }
+  if (res === 'nohorse') { sfx.no(); say(T().hintNoHorse, 1500); shake($('horsesChip')); }
   if (res === 'killer') { sfx.caught(); sfx.clue(); }
   return res;
 }

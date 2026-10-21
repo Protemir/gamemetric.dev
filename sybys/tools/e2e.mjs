@@ -70,11 +70,12 @@ try {
   const thin = await B.js(`(async () => { const s = ${A}; const b = document.getElementById('coach').getBoundingClientRect(); const was = s.look.hand;
     const id = s.g.map.regions.findIndex((r) => { const [x, y] = s.view.toScreen(r.x, r.y); return x > b.left && x < b.right && y > b.top && y < b.bottom; });
     if (id < 0) return 'none';
-    const c = document.getElementById('coach'), until = async (want) => { for (let k = 0; k < 30 && c.classList.contains('thin') !== want; k++) await new Promise((f) => setTimeout(f, 100)); return c.classList.contains('thin') === want; };
-    s.look.hand = id; const on = await until(true);
+    const c = document.getElementById('coach'), moved = () => c.classList.contains('thin') || c.classList.contains('flip'), until = async (want) => { for (let k = 0; k < 30 && moved() !== want; k++) await new Promise((f) => setTimeout(f, 100)); return moved() === want; };
+    s.look.hand = id; let on = await until(true);
+    if (on && !c.classList.contains('thin')) { await new Promise((f) => setTimeout(f, 300)); const n = c.getBoundingClientRect(), [px, py] = s.view.toScreen(s.g.map.regions[id].x, s.g.map.regions[id].y); on = !(px > n.left && px < n.right && py > n.top && py < n.bottom); }
     s.look.hand = was; const off = await until(false);
     return on && off ? 'ok' : JSON.stringify({ on, off, id, hand: s.look.hand, cls: document.getElementById('coach').className, phase: s.g.phase, b: [b.left, b.top, b.right, b.bottom].map(Math.round), p: s.view.toScreen(s.g.map.regions[id].x, s.g.map.regions[id].y).map(Math.round) }); })()`);
-  check('the advisor thins out over what he hides', thin === 'ok' || thin === 'none', thin);
+  check('the advisor moves aside or thins out over what he hides', thin === 'ok' || thin === 'none', thin);
   let xy = await handXY();
   await click(xy[0], xy[1]);
   await wait(100);
@@ -139,6 +140,9 @@ try {
   check('a tap on the killer at night', (await B.js(`${A}.g.night && ${A}.g.night.result`)) === 'caught');
   await B.js(`(() => { const s = ${A}; for (let k = 0; k < 40; k++) s.step(0.1); })()`);
 
+  // 5b'. no horses: the horses chip shivers red, nothing is sent
+  const short = await B.js(`(() => { const s = ${A}; const h = s.g.horses; s.g.horses = 0; const id = s.g.map.regions.findIndex((r, i) => i > 0 && r.tribe >= 0); const sent = s.act('word', id); const on = document.getElementById('horsesChip').classList.contains('short'); s.g.horses = h; return JSON.stringify({ sent, on }); })()`).then(JSON.parse);
+  check('no horses: the horses chip shivers', short.on && short.sent === false, JSON.stringify(short));
   // 5c. the camera: a drag moves the map and sends nobody, the wheel zooms, ⤢ shows the whole map again
   const before = await B.js(`JSON.stringify({ h: ${A}.g.horses, n: ${A}.g.riders.filter((r) => r.kind === 'word').length })`).then(JSON.parse);
   await B.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 360, deltaX: 0, deltaY: -600 });

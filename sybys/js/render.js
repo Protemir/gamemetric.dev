@@ -881,6 +881,8 @@ export class View {
     const w = ctx.measureText(text).width + 18;
     let x = look.mouse[0] + 16, y = look.mouse[1] + 18;
     if (x + w > this.w - 6) x = look.mouse[0] - w - 10;
+    x = Math.max(6, Math.min(x, this.w - w - 6));
+    if (y + 26 > this.h - 6) y = look.mouse[1] - 44;
     ctx.fillStyle = 'rgba(28,18,10,0.82)';
     ctx.beginPath();
     ctx.roundRect ? ctx.roundRect(x, y, w, 26, 8) : ctx.rect(x, y, w, 26);
