@@ -462,13 +462,16 @@ export function showCreate(keep) {
     <div class="h-lbl">${tr('sign')}</div><div class="h-sgs">${signs}</div></div></div>
     <button class="big-btn" data-act="save">${tr('done')}</button></div>`;
 }
+// строки призовых; выполненные задания — одной строкой, чтобы итоги влезали на телефон
+function prizeLines(all) {
+  const qp = tr('questReward') + ': ', qs = all.filter(([a]) => a.startsWith(qp)), rest = all.filter(([a]) => !a.startsWith(qp));
+  if (qs.length) rest.push([qs.length === 1 ? qs[0][0] : tr('quests') + ' (' + qs.length + ')', qs.reduce((s, l) => s + l[1], 0)]);
+  return rest.map(([a, b]) => `<div><span>${a}</span><b>+${money(b)}</b></div>`).join('');
+}
 export function showResult(sum) {
   const k = myKit(), f = kitOf(sum.opp);
   const title = sum.res === 'win' ? tr('win') : sum.res === 'loss' ? tr('loss') : tr('draw');
-  // выполненные задания — одной строкой, чтобы итоги влезали на телефон
-  const qp = tr('questReward') + ': ', qs = sum.lines.filter(([a]) => a.startsWith(qp)), rest = sum.lines.filter(([a]) => !a.startsWith(qp));
-  if (qs.length) rest.push([qs.length === 1 ? qs[0][0] : tr('quests') + ' (' + qs.length + ')', qs.reduce((s, l) => s + l[1], 0)]);
-  const lines = rest.map(([a, b]) => `<div><span>${a}</span><b>+${money(b)}</b></div>`).join('');
+  const lines = prizeLines(sum.lines);
   const c = S.cup;
   // после группы — итоговая таблица группы (видно, что вышел), после плей-офф — только сыгранная пара; вся сетка — во вкладке «Таблица»
   const mini = c.semiRes ? bracketHTML(true) : tableHTML(c.A, 'A');
@@ -535,7 +538,7 @@ export function jambyReport(hits, perfect, score, shots) {
   return { hits, perfect, score, shots, lines, total, record, best: j.best };
 }
 export function showJambyResult(sum) {
-  const lines = sum.lines.map(([a, b]) => `<div><span>${a}</span><b>+${money(b)}</b></div>`).join('');
+  const lines = prizeLines(sum.lines);
   root.innerHTML = `<div class="hub result ${sum.record ? 'win' : 'draw'}">
     <div class="h-cup disp r-title">${sum.record ? tr('jRecordT') : tr('jamby')}</div>
     <div class="r-score"><span class="disp">${sum.score}</span></div>
@@ -544,7 +547,7 @@ export function showJambyResult(sum) {
     <div class="r-acts"><button class="big-btn" data-act="jamby">${tr('jAgain')}</button><button class="r-menu" data-act="hub">${tr('toMenu')}</button>${upBtn()}</div></div>`;
 }
 export function showDuelResult(sum) {
-  const lines = sum.lines.map(([a, b]) => `<div><span>${a}</span><b>+${money(b)}</b></div>`).join('');
+  const lines = prizeLines(sum.lines);
   root.innerHTML = `<div class="hub result ${sum.win ? 'win' : 'loss'}">
     <div class="h-cup disp r-title">${sum.win ? tr('win') : tr('loss')}</div>
     <div class="h-season">${tr('duel')} · ${esc(sum.foe)}</div>
