@@ -26,7 +26,7 @@ const TEAMS = [
   { key: 'red', color: '#b8262c', css: '#ff6a6e', grad: ['#ffb1b3', '#e0393e'], blanket: 0, attack: 1 },
   { key: 'blue', color: '#2456a8', css: '#7fb0ff', grad: ['#b9d4ff', '#3a7be0'], blanket: 1, attack: -1 },
 ];
-const V = new THREE.Vector3(), V2 = new THREE.Vector3(), Qt = new THREE.Quaternion();
+const V = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(), Qt = new THREE.Quaternion();
 
 // ---------- тексты: русский и английский ----------
 const TEXT = {
@@ -285,7 +285,7 @@ function fallRider(e, nx, nz) {
   const side = Math.sign(fz * nx - fx * nz) || 1;
   e.r.fall(scene, fx * hv * 0.7 + nx * 2.5, 2.4, fz * hv * 0.7 + nz * 2.5, side);
   e.down = 3; e.wait = 0; e.stun = 3.3; e.pickCD = 3.5; e.tugCD = 3.5;
-  state.events.push({ t: 'fall', team: e.team, me: !!e.me });
+  state.events.push({ t: 'fall', team: e.team, me: !!e.me, x: e.h.obj.position.x, z: e.h.obj.position.z });
   if (!SIM) crowdShout('ooh');
   if (!SIM) neigh(e.h.obj.position.x, e.h.obj.position.z);
   if (!SIM && (e.me || e.team === me?.team)) banner(tr('unhorsed'), e.me ? null : TEAMS[e.team].grad, 1.1);
@@ -296,7 +296,7 @@ function stepFallen(e, dt) {
   const hp = e.h.obj.position, rp = e.r.root.position, d = Math.hypot(rp.x - hp.x, rp.z - hp.z);
   if (e.r.fallen.landed && d > 1.8 && e.down > 0) steerTo(e, rp.x, rp.z, d > 9 ? 3 : 1);
   else { e.h.gait = 0; e.h.steer = 0; }
-  if (e.r.stepFall(dt, e.down < 0.95) && !SIM) puff(rp, 6, 0, 0);
+  if (e.r.stepFall(dt, e.down < 0.95) && !SIM) dustBurst(rp.x, rp.z, 5, 8); // плюхнулся в пыль
   // встаёт, только когда конь рядом (или если ждать слишком долго)
   e.wait = (e.wait || 0) + dt;
   if (e.down > 0.95 || d < 2.6 || e.wait > 7) e.down -= dt;
@@ -325,6 +325,7 @@ function tugPress(e) { // игрок жмёт «тарт»: дёргает ме�
   const T = state.tug;
   if (!T) return;
   if (T.att === e) { T.bar += 0.13; T.presses = (T.presses || 0) + 1; }
+  if (!SIM) tugJolt(T, e === T.att ? 1 : -1, e.me);
   else if (T.car === e) T.bar -= 0.13;
 }
 function stepTug(dt) {
@@ -347,6 +348,7 @@ function stepTug(dt) {
     a.reach = 1;
     a.reachSide = Math.sign(Math.cos(a.h.yaw) * V.x - Math.sin(a.h.yaw) * V.z) || 1;
   }
+  if (!SIM && (T.jt = (T.jt || 0) - dt) < 0) { T.jt = 0.28 + rnd() * 0.25; tugJolt(T, rnd() < 0.5 ? 1 : -1, false); } // кони дёргают друг друга
   let winner = null;
   if (((T.att.me && !AI_PLAYER) || T.att.remote) && (T.presses || 0) < 3) T.bar = Math.min(T.bar, 0); // игрок-нападающий не жмёт — сама не вырвется
   if (T.bar >= 1) winner = 'att';
@@ -365,6 +367,7 @@ function stepTug(dt) {
     T.car.stats.tugsWon++;
     if (!SIM && (T.att.me || T.car.me)) banner(T.car.me ? tr('heldMe') : tr('heldThem'), TEAMS[T.car.team].grad, 1.1);
   }
+  if (!SIM) tugEndFx(T, winner);
   state.events.push({ t: 'tugEnd', winner, team: (winner === 'att' ? T.att : T.car).team, me: !!(T.att.me || T.car.me) });
 }
 
@@ -679,6 +682,7 @@ function stepSack(dt) {
   if (best) giveSack(best);
 }
 function onHit(a, b, imp, nx, nz) {
+  if (!SIM) impactFx(a, b, imp, nx, nz);
   {
     const ea = ents.find((x) => x.h === a), eb = ents.find((x) => x.h === b);
     if (ea && eb && ea.team !== eb.team && imp > 6.2) {
@@ -823,12 +827,24 @@ function updateCamera(dt, snap) {
   const fx = Math.sin(cam.yaw), fz = Math.cos(cam.yaw);
   const dist = 7.2 + h.v * 0.12, high = 3.3 + h.v * 0.04;
   V.set(p.x - fx * dist, high, p.z - fz * dist);
-  cam.pos.lerp(V, snap ? 1 : 1 - Math.exp(-dt * 10));
   V2.set(p.x + fx * 5, 1.2, p.z + fz * 5);
+  // «камера тартыса»: игрок тянет тушу — камера подходит ближе и сбоку, оба всадника и туша крупно (иначе тартыс мелкий и не читается)
+  const T = state.tug, myTug = T && (T.att === me || T.car === me);
+  cam.tugK = (cam.tugK || 0) + ((myTug ? 1 : 0) - (cam.tugK || 0)) * (1 - Math.exp(-dt * (myTug ? 5 : 2.5)));
+  if (cam.tugK > 0.01 && T) {
+    const o = T.att === me ? T.car : T.att, op = o.h.obj.position;
+    const mx = (p.x + op.x) / 2, mz = (p.z + op.z) / 2;
+    let sx = op.z - p.z, sz = -(op.x - p.x); const l = Math.hypot(sx, sz) || 1; sx /= l; sz /= l; // поперёк линии «я — соперник»
+    if (sx * fx + sz * fz > 0) { sx = -sx; sz = -sz; } // со стороны, откуда смотрели (сзади), чтобы не перескакивать
+    const k = cam.tugK;
+    V.lerp(V3.set(mx + sx * 4.6 - fx * 2.4, 2.1, mz + sz * 4.6 - fz * 2.4), k);
+    V2.lerp(V3.set(mx, 1.45, mz), k);
+  }
+  cam.pos.lerp(V, snap ? 1 : 1 - Math.exp(-dt * 10));
   cam.look.lerp(V2, snap ? 1 : 1 - Math.exp(-dt * 8));
   camera.position.copy(cam.pos);
   camera.lookAt(cam.look);
-  const fov = 58 + Math.min(h.v, 12) * 0.6 + (me.sprint > 0 ? 4 : 0);
+  const fov = 58 + Math.min(h.v, 12) * 0.6 + (me.sprint > 0 ? 4 : 0) - (cam.tugK || 0) * 8; // в тартысе — чуть «телевик», плотнее
   if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * (1 - Math.exp(-dt * 3)); camera.updateProjectionMatrix(); }
   followSun(cam.look.x, cam.look.z);
   setListener(camera.position.x, camera.position.z, cam.yaw);
@@ -837,7 +853,7 @@ function updateCamera(dt, snap) {
 
 // ---------- «сочность»: тряска камеры, замирание кадра на ударе, салют на гол, +₸ ----------
 // по событиям матча: всё, что касается игрока, ощущается сильнее
-const juice = { trauma: 0, stop: 0, seen: 0, t: 0 };
+const juice = { trauma: 0, stop: 0, slow: 0, seen: 0, t: 0 };
 const CONF = 180;
 const confetti = (() => {
   const g = new THREE.PlaneGeometry(0.24, 0.13);
@@ -900,7 +916,44 @@ function juiceEvents() {
     } else if (e.me && (e.t === 'fall' || e.t === 'fumble')) { juice.trauma = Math.max(juice.trauma, 0.7); juice.stop = 0.09; }
     else if (e.me && e.t === 'tugEnd') { juice.trauma = Math.max(juice.trauma, 0.4); juice.stop = 0.06; }
     else if (e.t === 'fall') juice.trauma = Math.max(juice.trauma, 0.15);
+    if (e.t === 'fall' && (e.me || Math.hypot(camera.position.x - e.x, camera.position.z - e.z) < 22)) juice.slow = Math.max(juice.slow, 0.35); // падение рядом — зрелище: на миг замедленно
   }
+}
+// облако пыли и комья в точке (удар, рывок, падение)
+function dustBurst(x, z, n, power) {
+  const p = new THREE.Vector3(x, 0, z);
+  for (let i = 0; i < n; i++) { const a = rnd() * 6.283; puff(p, power, Math.cos(a), Math.sin(a)); }
+}
+// столкновение коней: пыль и комья в точке контакта, всадников качает от толчка, игроку — тряска и миг замирания
+function impactFx(a, b, imp, nx, nz) {
+  if (imp < 4) return;
+  const ea = ents.find((x) => x.h === a), eb = ents.find((x) => x.h === b);
+  if (!ea || !eb) return;
+  const pa = a.obj.position, pb = b.obj.position, k = Math.min(1, (imp - 4) / 6);
+  dustBurst((pa.x + pb.x) / 2, (pa.z + pb.z) / 2, 2 + Math.round(k * 4), 6 + k * 6);
+  for (const [e, s] of [[ea, -1], [eb, 1]]) { // качнуло вбок от удара: по оси «бок коня» (нормаль удара в осях коня)
+    const side = Math.sign(Math.cos(e.h.yaw) * nx * s - Math.sin(e.h.yaw) * nz * s) || 1;
+    e.r.kick(side * (1.2 + k * 2.6), -k * 1.2);
+  }
+  if (ea.me || eb.me) { juice.trauma = Math.max(juice.trauma, 0.25 + k * 0.35); if (k > 0.5) juice.stop = Math.max(juice.stop, 0.05); }
+}
+// рывок в тартысе: оба всадника дёргаются в сторону тянущего, между конями пыль
+function tugJolt(T, dir, mine) {
+  const s = dir > 0 ? 1 : -1;
+  T.att.r.kick(0.9 * s * (T.att.reachSide || 1), -0.5);
+  T.car.r.kick(-0.9 * s * (T.car.reachSide || 1), -0.5);
+  const pa = T.att.h.obj.position, pc = T.car.h.obj.position;
+  if (rnd() < 0.7) dustBurst((pa.x + pc.x) / 2, (pa.z + pc.z) / 2, 1, 7);
+  if (mine) juice.trauma = Math.min(0.35, juice.trauma + 0.1);
+}
+// конец тартыса: проигравшего сильно качает назад, облако пыли, на миг замедление (если рядом с игроком)
+function tugEndFx(T, winner) {
+  const lose = winner === 'att' ? T.car : T.att, win = winner === 'att' ? T.att : T.car;
+  lose.r.kick((lose.reachSide || 1) * 3.2, 2.2);
+  win.r.kick(-(win.reachSide || 1) * 1.2, -1.4);
+  const p = lose.h.obj.position;
+  dustBurst(p.x, p.z, 4, 9);
+  if (camera.position.distanceTo(p) < 22) juice.slow = Math.max(juice.slow, 0.28);
 }
 function shakeCamera(dt) {
   juice.t += dt;
@@ -1323,6 +1376,7 @@ function frame(now) {
   const realDt = dt;
   if (state.phase === 'goal' && state.t > 2.1) dt *= 0.4; // гол — на мгновение замедленно
   if (juice.stop > 0) { juice.stop -= realDt; dt *= 0.12; } // удар — кадр на миг замирает
+  else if (juice.slow > 0) { juice.slow -= realDt; dt *= 0.4; } // падение, вырванная туша — на миг замедленно
   if (online.role === 'guest') guestStep(dt);
   else { step(dt); if (online.role === 'host') hostSend(dt); }
   updateCamera(dt);
@@ -1380,4 +1434,4 @@ if (SIM) {
   const go = () => { performance.mark('k:frame'); requestAnimationFrame(frame); };
   if (renderer.compileAsync) renderer.compileAsync(scene, camera).then(go, go); else go();
 }
-if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, getProto };
+if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, play(n, dt = 1 / 60) { for (let i = 0; i < n; i++) { let d = dt; if (juice.stop > 0) { juice.stop -= dt; d *= 0.12; } else if (juice.slow > 0) { juice.slow -= dt; d *= 0.4; } step(d); updateCamera(d); juiceEvents(); stepConfetti(dt); shakeCamera(dt); } hud(dt); renderAll(); }, getProto };

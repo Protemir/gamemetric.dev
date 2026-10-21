@@ -314,6 +314,8 @@ export class Rider {
     this.turn('Spine1', AZ, w.r * 0.6 + into); this.turn('Neck', AZ, -w.r * 0.4 - into * 0.5);
     this.turn('LeftForeArm', AY, w.p * 0.25); this.turn('RightForeArm', AY, -w.p * 0.25); // руки с поводом пружинят
   }
+  // толчок в седле: удар соседа, рывок в тартысе — корпус качает вбок (roll) и назад/вперёд (pitch), пружина сама вернёт
+  kick(roll, pitch = 0) { if (this.fallen) return; this.sw.rv += roll; this.sw.pv += pitch; }
   // перекрасить под команду (смена соперника в лиге)
   setColor(color) {
     const mats = materialsFor(color);
