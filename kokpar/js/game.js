@@ -32,25 +32,25 @@ const V = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(
 const TEXT = {
   ru: {
     red: 'Красные', blue: 'Синие', loading: 'Загрузка степи…', ready: 'Готовьтесь!', go: 'Вперёд!', goal: 'ГОЛ!', goalBy: (t) => t,
-    tug: 'Тартыс!', tugSub: 'Схватка за серке', jHit: 'Попал!', jPerfect: 'В яблочко!', jMiss: 'Мимо', jGallop: 'на скаку', jAim: 'Жми <kbd>E</kbd>, когда круги совпадут', jAimT: 'Жми ВЫРВАТЬ, когда круги совпадут', jRide: 'Скачи к шесту с жамбы — стреляй на ходу', jBest: 'Рекорд', jRecord: 'Новый рекорд!', wrestle: 'Аудар!', wrestleSub: 'Стащи его с коня', canWrestle: '<kbd>E</kbd> — схватиться', canWrestleT: 'ВЫРВАТЬ — схватиться', to3: 'до 3', downed: 'Сбросил!', downedMe: 'Тебя сбросили!', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
+    tug: 'Тартыс!', tugSub: 'Схватка за серке', jHit: 'Попал!', jPerfect: 'В яблочко!', jMiss: 'Мимо', jGallop: 'на скаку', jAim: 'Жми <kbd>E</kbd>, когда круги совпадут', jAimT: 'Жми ВЫСТРЕЛ, когда круги совпадут', jRide: 'Скачи к шесту с жамбы — стреляй на ходу', jBest: 'Рекорд', jRecord: 'Новый рекорд!', wrestle: 'Аудар!', wrestleSub: 'Стащи его с коня', canWrestle: '<kbd>E</kbd> — схватиться', canWrestleT: 'СХВАТКА — схватиться', btnGrip: 'СХВАТКА', mashGrip: 'Жми СХВАТКА быстрее!', btnShoot: 'ВЫСТРЕЛ', to3: 'до 3', downed: 'Сбросил!', downedMe: 'Тебя сбросили!', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
     fumble: 'Выронил серке!', win: 'Победа', lose: 'Поражение', draw: 'Ничья', again: 'Ещё раз', stamina: 'Сила коня',
     btnTug: 'ВЫРВАТЬ', btnWhip: 'КАМЧА', btnRear: 'СВЕЧКА', mashKey: 'Жми E быстрее!', mashTap: 'Жми ВЫРВАТЬ быстрее!', canTug: '<kbd>E</kbd> — вырвать серке',
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
     canPass: '<kbd>E</kbd> — взять серке у своего', passMe: 'Пас!', ram: 'Таран!',
     helpTouch: 'Палец слева — куда скакать · ВЫРВАТЬ — отнять серке · КАМЧА — рывок',
-    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!', getUpKey: 'Жми <kbd>E</kbd> — встанешь быстрее', getUpTap: 'Жми ВЫРВАТЬ — встанешь быстрее',
+    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!', getUpKey: 'Жми <kbd>E</kbd> — встанешь быстрее', getUpTap: 'Жми ВСТАТЬ — поднимешься быстрее', btnUp: 'ВСТАТЬ',
     league: 'Лига аулов Жетысу', vs: 'Соперник', play: 'В седло!', next: 'Дальше', retry: 'Ещё раз', champion: 'Чемпион Жетысу!',
     stageOf: (a, b) => 'Аул ' + a + ' из ' + b, unlocked: 'Следующий соперник', menuSub: 'Командная скачка за тушу в предгорьях Алатау · 3 на 3',
   },
   en: {
     red: 'Red', blue: 'Blue', loading: 'Loading the steppe…', ready: 'Get ready!', go: 'Go!', goal: 'GOAL!', goalBy: (t) => t,
-    tug: 'Tug of war!', jHit: 'Hit!', jPerfect: 'Bullseye!', jMiss: 'Miss', jGallop: 'at a gallop', jAim: 'Press <kbd>E</kbd> when the rings meet', jAimT: 'Tap GRAB when the rings meet', jRide: 'Ride past the pole — shoot on the move', jBest: 'Best', jRecord: 'New record!', wrestle: 'Wrestle!', wrestleSub: 'Pull him off the horse', canWrestle: '<kbd>E</kbd> — grapple', canWrestleT: 'GRAB — grapple', to3: 'first to 3', downed: 'Knocked him off!', downedMe: 'You got pulled off!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
+    tug: 'Tug of war!', jHit: 'Hit!', jPerfect: 'Bullseye!', jMiss: 'Miss', jGallop: 'at a gallop', jAim: 'Press <kbd>E</kbd> when the rings meet', jAimT: 'Tap SHOOT when the rings meet', jRide: 'Ride past the pole — shoot on the move', jBest: 'Best', jRecord: 'New record!', wrestle: 'Wrestle!', wrestleSub: 'Pull him off the horse', canWrestle: '<kbd>E</kbd> — grapple', canWrestleT: 'GRAPPLE — grab him', btnGrip: 'GRAPPLE', mashGrip: 'Tap GRAPPLE fast!', btnShoot: 'SHOOT', to3: 'first to 3', downed: 'Knocked him off!', downedMe: 'You got pulled off!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
     fumble: 'Fumble!', win: 'Victory', lose: 'Defeat', draw: 'Draw', again: 'Play again', stamina: 'Horse stamina',
     btnTug: 'GRAB', btnWhip: 'WHIP', btnRear: 'REAR UP', mashKey: 'Mash E!', mashTap: 'Tap GRAB fast!', canTug: '<kbd>E</kbd> — grab the serke',
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
     canPass: '<kbd>E</kbd> — take the serke from a teammate', passMe: 'Pass!', ram: 'Ram!',
     helpTouch: 'Left thumb — where to ride · GRAB — take the serke · WHIP — burst',
-    home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!', getUpKey: 'Mash <kbd>E</kbd> to get up faster', getUpTap: 'Tap GRAB to get up faster',
+    home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!', getUpKey: 'Mash <kbd>E</kbd> to get up faster', getUpTap: 'Tap GET UP to get up faster', btnUp: 'GET UP',
     league: 'Zhetysu village league', vs: 'Opponent', play: 'Ride!', next: 'Next', retry: 'Try again', champion: 'Zhetysu champion!',
     stageOf: (a, b) => 'Village ' + a + ' of ' + b, unlocked: 'Next opponent', menuSub: 'Team horseback fight for the carcass in the Alatau foothills · 3 vs 3',
   },
@@ -1261,7 +1261,7 @@ for (const c of document.querySelectorAll('[data-credits]')) c.textContent = CRE
 function applyLang() {
   document.documentElement.lang = lang; globalThis.__kokparLang = lang;
   document.querySelector('[data-turn]').textContent = lang === 'ru' ? 'Поверни телефон горизонтально' : 'Turn your phone sideways';
-  el.nmR.textContent = teamName(0); el.nmB.textContent = teamName(1);
+  el.nmR.textContent = teamName(0); el.nmB.textContent = jamby ? tr('jBest') : teamName(1); // в жамбы ату справа — рекорд
   el.stamlbl.textContent = tr('stamina'); el.btnTug.textContent = tr('btnTug'); el.btnWhip.textContent = tr('btnWhip');
   if (state.phase === 'menu') career.showHub();
   el.lang.textContent = lang === 'ru' ? 'EN' : 'RU';
@@ -1298,14 +1298,14 @@ function hud(dt) {
   if (mine) {
     const v = clamp(T.att === me ? T.bar : -T.bar, -1, 1); // + — в мою пользу
     sty(el.tugbar, 'left', `${50 + v * 50}%`);
-    txt(el.tugtip, touch ? tr('mashTap') : tr('mashKey'));
+    txt(el.tugtip, touch ? (audar ? tr('mashGrip') : tr('mashTap')) : tr('mashKey'));
   }
   // подсказка «можно тянуть»
   const nearKazan = sack.carrier === me && throwInfo(me).d < AIM_MAX;
   const aiming = !!me.throw?.aiming;
   hid(el.pow, !aiming);
   if (aiming) { sty(el.powbar, 'height', (aim.p * 100).toFixed(1) + '%'); el.pow.classList.toggle('hit', aim.hit); }
-  txt(el.btnTug, nearKazan ? tr('btnThrow') : tr('btnTug'));
+  txt(el.btnTug, me.r.fallen?.landed && me.r.fallen.mount == null ? tr('btnUp') : jamby ? tr('btnShoot') : audar ? tr('btnGrip') : nearKazan ? tr('btnThrow') : tr('btnTug'));
   const pass = !T && canPass(me);
   if (touch) { const lbl = canRear() ? tr('btnRear') : tr('btnWhip'); txt(el.btnWhip, lbl); }
   const can = audar ? !T && state.phase === 'play' && !audar.foe.r.fallen && !me.r.fallen && canTug(me, audar.foe) : !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan || pass);
