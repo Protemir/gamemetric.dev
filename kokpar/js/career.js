@@ -398,7 +398,7 @@ function tableHTML(ids, g) {
   }).join('');
   return `<div class="h-group"><div class="h-gt">${L() === 'ru' ? 'Группа' : 'Group'} ${g}</div><table><tr><th></th><th></th><th>${tr('gp')}</th><th>${tr('gd')}</th><th>${tr('pts')}</th></tr>${rows}</table></div>`;
 }
-function bracketHTML() {
+function bracketHTML(onlyMine) { // onlyMine — в итогах только сыгранный матч (вся сетка не влезала на телефон)
   const c = S.cup;
   if (!c.semis) return '';
   const nm = (id) => (id ? `<img src="${flag(kitOf(id), 48, 30)}" alt="">${esc(clubName(id, true))}` : tr('tbd'));
@@ -410,6 +410,7 @@ function bracketHTML() {
     if (i === mine) return p[0] === 'me' ? c.semiRes.me : [c.semiRes.me[1], c.semiRes.me[0]];
     return c.semiRes.other;
   };
+  if (onlyMine) return c.finalRes ? `<div class="h-gt">${tr('final')}</div><div class="h-bracket">${semi(c.final, c.finalRes)}</div>` : `<div class="h-gt">${tr('semi')}</div><div class="h-bracket">${semi(c.semis[mine], sc(mine))}</div>`;
   return `<div class="h-gt">${tr('bracket')}</div><div class="h-bracket">${semi(c.semis[0], sc(0))}${semi(c.semis[1], sc(1))}
     <div class="h-final"><span>${tr('final')}</span>${c.final ? semi(c.final, c.finalRes) : `<div class="h-tie"><div>${tr('tbd')}</div><div>${tr('tbd')}</div></div>`}</div></div>`;
 }
@@ -457,7 +458,8 @@ export function showResult(sum) {
   if (qs.length) rest.push([qs.length === 1 ? qs[0][0] : tr('quests') + ' (' + qs.length + ')', qs.reduce((s, l) => s + l[1], 0)]);
   const lines = rest.map(([a, b]) => `<div><span>${a}</span><b>+${money(b)}</b></div>`).join('');
   const c = S.cup;
-  const mini = c.phase === 'group' || (c.phase !== 'group' && !c.semis) ? tableHTML(c.A, 'A') : bracketHTML();
+  // после группы — итоговая таблица группы (видно, что вышел), после плей-офф — только сыгранная пара; вся сетка — во вкладке «Таблица»
+  const mini = c.semiRes ? bracketHTML(true) : tableHTML(c.A, 'A');
   root.innerHTML = `<div class="hub result ${sum.res}">
     <div class="h-cup disp r-title">${sum.champion ? '🏆 ' : ''}${title}</div>
     <div class="r-score"><img src="${flag(k, 144, 90)}" alt=""><span class="disp">${sum.my} : ${sum.their}</span><img src="${flag(f, 144, 90)}" alt=""></div>

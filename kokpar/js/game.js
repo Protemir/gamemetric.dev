@@ -373,6 +373,13 @@ const GRIP = Number(P.get('grip') || 0.07); // ~45% тартысов выигр�
 const DIFF = { pull: Number(P.get('pull') || 0.06), react: 0.45, speed: 1 }; // сила соперника — из лиги (applyStage)
 // перекрасить команду: всадники, тоқымы, кольца, казан, флаг, табло
 const painted = ['', ''];
+// геометрия, материалы и текстуры объекта — в видеопамяти, сами не уходят
+function disposeTree(o) {
+  o.traverse((x) => {
+    x.geometry?.dispose();
+    for (const m of [x.material].flat()) { if (!m) continue; for (const v of Object.values(m)) if (v?.isTexture) v.dispose(); m.dispose(); }
+  });
+}
 function paintTeam(t, def) {
   Object.assign(TEAMS[t], { color: def.color, css: def.css, grad: def.grad, sign: def.sign });
   if (painted[t] === def.color + def.sign) return;
@@ -384,7 +391,7 @@ function paintTeam(t, def) {
   }
   const k = kazans.find((q) => q.team === t);
   if (k) {
-    k.g.remove(k.body); k.body = makeKazan(def.color, KAZAN_R); k.g.add(k.body);
+    k.g.remove(k.body); disposeTree(k.body); k.body = makeKazan(def.color, KAZAN_R); k.g.add(k.body); // старый казан освобождаем — иначе видеопамять росла с каждым соперником
     const tex = new THREE.CanvasTexture(flagCanvas(def)); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     k.flag.material.map?.dispose(); k.flag.material.map = tex; k.flag.material.needsUpdate = true;
   }
