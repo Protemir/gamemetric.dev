@@ -7,6 +7,8 @@ import * as SkeletonUtils from '../vendor/utils/SkeletonUtils.js';
 import { hoof, snort, bump, neigh } from './audio.js';
 import { makeTrees, makeBirds } from './trees.js';
 
+// нет WebGL2 — экран загрузки уже объяснил, что делать; дальше не идём (без ошибок в консоли)
+if (window.__noGL) await new Promise(() => {});
 const P = new URLSearchParams(location.search);
 const Q = P.get('q') || (() => { try { return localStorage.getItem('kokpar.q'); } catch { return null; } })() || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
 const PR_MAX = Math.min(devicePixelRatio, Q === 'high' ? 2 : Q === 'medium' ? 1.5 : 1);
@@ -522,6 +524,7 @@ const clods = makeParticles(400, `varying float vL;
     #include <colorspace_fragment>
   }`);
 const particleSets = [dust, clods]; // масштаб точек обновляется при resize
+if (OFF.has('dust')) for (const P of particleSets) P.pts.visible = false; // ?no=dust — для обложек
 function emit(P, x, y, z, vx, vy, vz, size, decay) {
   const i = P.next; P.next = (P.next + 1) % P.N;
   P.pos[i * 3] = x; P.pos[i * 3 + 1] = y; P.pos[i * 3 + 2] = z;

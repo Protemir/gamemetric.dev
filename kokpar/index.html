@@ -102,6 +102,9 @@
   #load .lbar { width: min(320px, 70vw); height: 8px; margin: 16px auto 0; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
   #load #loadbar { display: block; height: 100%; width: 3%; border-radius: 4px; background: linear-gradient(90deg, #ffe58a, #f0a01c); box-shadow: 0 0 12px rgba(255,190,60,.7); }
   #load .s2 { text-align: center; letter-spacing: .32em; font-size: 14px; color: #ffe58a; margin-top: 2px; }
+  #load > div { text-align: center; }
+  #load .nogl { max-width: min(560px, 86vw); margin: 18px auto 0; text-align: center; font: 500 15px/1.45 'Rubik', system-ui, sans-serif; color: #f3e6c8; }
+  #load .nogl b { display: block; margin-bottom: 6px; font-size: 18px; color: #ffe58a; }
   #load .s { margin-top: 8px; text-align: center; letter-spacing: .2em; text-transform: uppercase; opacity: .8; }
 
   /* ---------- хаб: клуб, Лига чемпионов, конюшня ---------- */
@@ -462,7 +465,7 @@
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvgmu9n8","./js/boot.js":"./js/boot.js?v=mvgmu9n8","./js/career.js":"./js/career.js?v=mvgmu9n8","./js/crowd.js":"./js/crowd.js?v=mvgmu9n8","./js/flags.js":"./js/flags.js?v=mvgmu9n8","./js/game.js":"./js/game.js?v=mvgmu9n8","./js/icons.js":"./js/icons.js?v=mvgmu9n8","./js/kazan.js":"./js/kazan.js?v=mvgmu9n8","./js/net.js":"./js/net.js?v=mvgmu9n8","./js/portal.js":"./js/portal.js?v=mvgmu9n8","./js/rider.js":"./js/rider.js?v=mvgmu9n8","./js/serke.js":"./js/serke.js?v=mvgmu9n8","./js/trees.js":"./js/trees.js?v=mvgmu9n8","./js/world.js":"./js/world.js?v=mvgmu9n8"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvi4he0r","./js/boot.js":"./js/boot.js?v=mvi4he0r","./js/career.js":"./js/career.js?v=mvi4he0r","./js/crowd.js":"./js/crowd.js?v=mvi4he0r","./js/flags.js":"./js/flags.js?v=mvi4he0r","./js/game.js":"./js/game.js?v=mvi4he0r","./js/icons.js":"./js/icons.js?v=mvi4he0r","./js/kazan.js":"./js/kazan.js?v=mvi4he0r","./js/net.js":"./js/net.js?v=mvi4he0r","./js/portal.js":"./js/portal.js?v=mvi4he0r","./js/rider.js":"./js/rider.js?v=mvi4he0r","./js/serke.js":"./js/serke.js?v=mvi4he0r","./js/trees.js":"./js/trees.js?v=mvi4he0r","./js/world.js":"./js/world.js?v=mvi4he0r"}}</script>
 </head>
 <body>
 <div id="stage">
@@ -493,6 +496,19 @@
     requestAnimationFrame(tick);
   };
   tick();
+  // без WebGL2 игра не запустится (three.js r186 рисует только им) — вместо вечной загрузки говорим, что делать.
+  // Чаще всего в Chrome выключено аппаратное ускорение или видеокарта в «чёрном списке».
+  let gl2 = false;
+  try { const g = document.createElement('canvas').getContext('webgl2'); gl2 = !!g; g?.getExtension('WEBGL_lose_context')?.loseContext(); } catch { gl2 = false; }
+  if (!gl2) {
+    window.__noGL = true;
+    const box = document.querySelector('#load > div');
+    const msg = ru
+      ? '<b>Браузер не может показать 3D</b>Включите аппаратное ускорение: Chrome → Настройки → Система → «Использовать графическое ускорение», затем перезапустите браузер. Или обновите браузер / откройте игру в другом.'
+      : '<b>Your browser can’t show 3D (WebGL 2 is off)</b>Turn on hardware acceleration: Chrome → Settings → System → “Use graphics acceleration when available”, then restart the browser. Or update your browser / try another one.';
+    box.querySelector('.lbar').remove(); txt.remove();
+    const p = document.createElement('div'); p.className = 'nogl'; p.innerHTML = msg; box.appendChild(p);
+  }
 })();
 </script>
 <div id="top" class="ui">
@@ -516,6 +532,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvgmu9n8"></script>
+<script type="module" src="./js/game.js?v=mvi4he0r"></script>
 </body>
 </html>
