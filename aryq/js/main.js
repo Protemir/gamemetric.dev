@@ -916,8 +916,12 @@ function villageBox(v) {
 function showOver() {
   hud.hidden = true;
   sfx.lost();
-  const box = el('div', 'panel');
-  box.append(
+  // two halves: what happened, and what next; a phone on its side puts them side by side (21.10)
+  const box = el('div', 'panel over');
+  const info = el('div', 'over-info');
+  const acts = el('div', 'over-acts');
+  box.append(info, acts);
+  info.append(
     el('h2', null, t('over')),
     el('p', null, t('when', { y: g.year, s: t(S.seasonOf(g.day).key) })),
     el('p', 'big', t('result', { h: Math.floor(g.harvest), n: S.gardens(g) })),
@@ -925,10 +929,10 @@ function showOver() {
   const best = Math.max(store.get(bestKey(g.mode), 0), Math.floor(g.harvest));
   store.set(bestKey(g.mode), best);
   store.set('aryq.save', null);
-  box.append(el('p', 'muted', t('best', { b: best })));
+  info.append(el('p', 'muted', t('best', { b: best })));
   if (g.mode !== 'daily') {
     const v = bankHarvest();
-    box.append(villageBox(v));
+    info.append(villageBox(v));
     if (v.up) setTimeout(() => sfx.yearDone(), 350);
   }
   pulse('over', g.mode + ':y' + Math.min(g.year, 9) + ':' + minute());
@@ -948,14 +952,14 @@ function showOver() {
       pickGhost(performance.now(), true);
       say(t('revived', { d: S.REVIVE_DIG }), 4500);
     });
-    box.append(more);
+    acts.append(more);
   }
   const again = el('button', S.canRevive(g) ? 'btn ghost' : 'btn', t('again'));
   again.addEventListener('click', () => {
     sfx.audioInit();
     start(g.mode);
   });
-  box.append(again);
+  acts.append(again);
   // the valley of the day and its streak: a reason to come back tomorrow
   const st = streakNow();
   if (g.mode !== 'daily') {
@@ -965,12 +969,12 @@ function showOver() {
       store.set('aryq.save', null);
       start('daily');
     });
-    box.append(daily);
+    acts.append(daily);
   }
-  box.append(el('p', 'muted streak', st.d === today ? t('tomorrow', { n: st.n + 1, b: streakBonus(st.n + 1) }) : t('playDaily')));
+  acts.append(el('p', 'muted streak', st.d === today ? t('tomorrow', { n: st.n + 1, b: streakBonus(st.n + 1) }) : t('playDaily')));
   const menu = el('button', 'btn ghost', t('menu'));
   menu.addEventListener('click', showStart);
-  box.append(menu);
+  acts.append(menu);
   ui.replaceChildren(box);
 }
 

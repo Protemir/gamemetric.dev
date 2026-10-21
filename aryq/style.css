@@ -209,9 +209,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .langs { margin-top: 8px; }
 }
 /* wide and short: the valleys side by side */
-@media (max-height: 700px) and (min-width: 620px) {
+@media (max-height: 700px) and (min-width: 540px) {
   .panel.menu { width: min(580px, calc(100vw - 32px)); }
   .panel.menu .choices { grid-template-columns: 1fr 1fr; }
+}
+/* a phone on its side and the CrazyGames frame (844×390, 924×520): the game-over panel in two columns, so its buttons stay on screen */
+@media (max-height: 600px) and (min-width: 540px) {
+  .panel.over { width: min(660px, calc(100vw - 32px)); display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; align-items: center; }
+  .panel.over .over-acts > .btn:first-child { margin-top: 0; }
 }
 /* the help is long on a short screen: its button stays in sight at the bottom while the list scrolls */
 .panel.help > .btn { position: sticky; bottom: -12px; box-shadow: 0 4px 0 #9c4325, 0 -16px 14px var(--paper); }

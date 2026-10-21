@@ -638,6 +638,19 @@ try {
   await clickText('Как играть');
   r = await B.js(`(() => { const b = [...document.querySelectorAll('#ui .panel.help button')].pop().getBoundingClientRect(); return JSON.stringify({ top: Math.round(b.top), bottom: Math.round(b.bottom), vh: innerHeight }); })()`).then(JSON.parse);
   check('the help button is in sight on a phone on its side', r.top >= 0 && r.bottom <= r.vh, JSON.stringify(r));
+  // the tallest game-over panel (a village level up, one more year) fits the CrazyGames frame and a
+  // phone on its side with every button in sight (21.10: the last two were below the screen)
+  for (const [w, h] of [[924, 520], [844, 390], [640, 360]]) {
+    await B.init(`try { localStorage.clear(); localStorage.setItem('aryq.village', '900'); } catch {}`);
+    await B.open(page('&lang=ru&seed=1004'), w, h);
+    await clickText('Играть');
+    await wait(300);
+    await B.js(`${A}.g.harvest = 300; ${A}.g.objects.forEach((o) => (o.thirst = 1.5)); ${A}.step(0.2)`);
+    await wait(500);
+    r = await B.js(`(() => { const p = document.querySelector('#ui .panel.over').getBoundingClientRect(); const out = [...document.querySelectorAll('#ui .panel.over button')].filter((b) => { const q = b.getBoundingClientRect(); return q.top < 0 || q.bottom > innerHeight; }).length; return JSON.stringify({ top: Math.round(p.top), bottom: Math.round(p.bottom), vh: innerHeight, out, up: !!document.querySelector('#ui .village-up') }); })()`).then(JSON.parse);
+    check(`the game-over panel fits a ${w}x${h} screen`, r.up && r.top >= 0 && r.bottom <= r.vh && r.out === 0, JSON.stringify(r));
+  }
+  await B.init('');
   // a careless player for five years against the rules: water downhill and adding up, saves that
   // load back the same, and taps that stay put in winter (the water blinked, 18.10)
   {
