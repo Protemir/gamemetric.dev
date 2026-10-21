@@ -691,7 +691,7 @@ export function save(g) {
     objects: g.objects.map(({ type, x, y, need, thirst, flood, born, tap, got, grown }) => ({ type, x, y, need, thirst, flood, born, tap, got, grown })),
     flow: Array.from(g.flow, (v) => Math.round(v * 1000) / 1000),
     day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
-    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0,
+    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0, banked: g.banked || 0,
   };
 }
 
@@ -721,6 +721,7 @@ export function load(d) {
   rebuildNear(g);
   for (const k of ['day', 'year', 'dig', 'harvest', 'lost', 'gardensEver', 'nextGarden', 'nextHouse', 'cap', 'melt']) g[k] = d[k];
   g.giftDue = d.giftDue === g.year ? g.year : 0;
+  g.banked = Number.isFinite(d.banked) ? d.banked : 0;
   g.revived = d.revived || 0;
   g.rand = rng((d.seed ^ (d.year * 7919) ^ (d.gardensEver * 104729)) >>> 0);
   g.order = null;
@@ -752,6 +753,38 @@ export function revive(g) {
 
 // the reward picked at the end of a year
 export const REWARDS = ['dig', 'cap', 'melt'];
+
+// The village grows with every harvest, from game to game (21.10: nothing carried over, so there was
+// little reason to come back tomorrow). Each level makes every new game start a little better.
+export const VILLAGE = [
+  { at: 1000, perk: 'dig5' }, { at: 2500, perk: 'cap' }, { at: 5000, perk: 'melt' }, { at: 8000, perk: 'dig5' },
+  { at: 12000, perk: 'cap' }, { at: 17000, perk: 'melt' }, { at: 23000, perk: 'dig10' }, { at: 30000, perk: 'cap' },
+  { at: 40000, perk: 'melt' }, { at: 52000, perk: 'dig10' },
+];
+export const villageLevel = (apples) => VILLAGE.filter((v) => apples >= v.at).length;
+// what the first n levels give together
+export function villagePerks(n) {
+  const p = { dig: 0, cap: 0, melt: 1 };
+  for (const v of VILLAGE.slice(0, n)) {
+    if (v.perk === 'dig5') p.dig += 5;
+    if (v.perk === 'dig10') p.dig += 10;
+    if (v.perk === 'cap') p.cap += 0.2;
+    if (v.perk === 'melt') p.melt *= 1.04;
+  }
+  return p;
+}
+export function applyVillage(g, n) {
+  const p = villagePerks(n);
+  g.dig += p.dig;
+  g.cap += p.cap;
+  g.melt *= p.melt;
+}
+// harvest not yet put into the village (a game can end twice: once more year)
+export function unbanked(g) {
+  const h = Math.floor(g.harvest) - (g.banked || 0);
+  g.banked = Math.floor(g.harvest);
+  return Math.max(0, h);
+}
 export function reward(g, kind) {
   g.giftDue = 0;
   if (kind === 'dig') g.dig += 15;

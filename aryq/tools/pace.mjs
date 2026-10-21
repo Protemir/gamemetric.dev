@@ -65,7 +65,7 @@ for (let k = 0; k < games; k++) {
   }
   let why = 'alive';
   if (g.over) { const o = g.objects.find((x) => x.x === g.over.x && x.y === g.over.y) || g.objects.reduce((a, b) => (b.thirst > a.thirst ? b : a)); const p = S.planFor(g, o); const share = S.waterShare(g); why = o.got > 0.01 ? (share != null && share < 1 ? 'river short' : 'canal full / share') : !p ? 'no way' : p.cells.length > g.dig ? 'no digging left (' + p.cells.length + '>' + g.dig + ')' : g.kind[p.from] === S.CANAL && g.flow[p.from] < o.need ? (g.flow[p.from] < 0.02 ? 'way from a dry canal' : 'way from a thin canal') : 'missed / late'; }
-  rows.push({ why, min: real / 60, idle2, idleShare: idle / real, year: g.year, y1: year1End });
+  rows.push({ why, harvest: g.harvest, min: real / 60, idle2, idleShare: idle / real, year: g.year, y1: year1End });
 }
 const avg = (f) => rows.reduce((s, x) => s + f(x), 0) / rows.length;
 const med = (f) => { const a = rows.map(f).sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
@@ -74,3 +74,5 @@ console.log(`${variant.padEnd(16)} session min avg ${avg((x) => x.min).toFixed(1
 const whys = {};
 for (const x of rows) { const k = x.why.split(' (')[0]; whys[k] = (whys[k] || 0) + 1; }
 console.log('   why lost:', JSON.stringify(whys));
+const hv = rows.map((x) => x.harvest).sort((a, b) => a - b);
+console.log('   harvest per game: p25 ' + Math.round(hv[Math.floor(hv.length * 0.25)]) + ', median ' + Math.round(hv[Math.floor(hv.length / 2)]) + ', p75 ' + Math.round(hv[Math.floor(hv.length * 0.75)]));

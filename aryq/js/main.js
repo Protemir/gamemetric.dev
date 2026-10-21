@@ -70,6 +70,12 @@ function start(m = mode, restored = null) {
   hud.hidden = false;
   if (!restored) S.advance(g, 0.01); // the first garden appears
   pulse('start', restored ? m + ':resume' : m);
+  // the village's levels make every new game start better (not the valley of the day: it is the same for all)
+  const vl = S.villageLevel(store.get('aryq.village', 0));
+  if (!restored && m !== 'daily' && vl > 0) {
+    S.applyVillage(g, vl);
+    setTimeout(() => say(t('villageNow', { p: perksText(vl) }), 3500), 900);
+  }
   if (m === 'daily' && !restored) {
     const n = playDaily();
     const b = streakBonus(n);
@@ -220,6 +226,16 @@ const TEXT = {
     daily: 'Долина дня',
     dailySub: 'одна на всех сегодня, {d}',
     bestShort: 'рекорд {b}',
+    village: 'Аул · уровень {l}',
+    villageGain: '+{h} 🍏 в аул',
+    villageNext: 'Ещё {n} 🍏 — и каждая игра начнётся: {p}',
+    villageUp: 'Аул вырос! Теперь каждая игра: {p}',
+    villageTop: 'Аул на высшем уровне',
+    villageNow: 'Аул даёт: {p}',
+    perk_dig5: '+5 ⛏',
+    perk_dig10: '+10 ⛏',
+    perk_cap: 'арыки шире',
+    perk_melt: 'ледник щедрее',
   },
   en: {
     title: 'Aryk',
@@ -325,6 +341,16 @@ const TEXT = {
     daily: 'Valley of the day',
     dailySub: 'the same for everyone today, {d}',
     bestShort: 'best {b}',
+    village: 'Village · level {l}',
+    villageGain: '+{h} 🍏 to the village',
+    villageNext: '{n} 🍏 more and every game starts with: {p}',
+    villageUp: 'The village grew! Every game now: {p}',
+    villageTop: 'The village is at its top level',
+    villageNow: 'The village gives: {p}',
+    perk_dig5: '+5 ⛏',
+    perk_dig10: '+10 ⛏',
+    perk_cap: 'wider canals',
+    perk_melt: 'a more generous glacier',
   },
 };
 let lang = (() => {
@@ -845,6 +871,40 @@ function updateHud() {
   $('soundBtn').textContent = sfx.sound.on ? '🔊' : '🔇';
 }
 
+// "+10 ⛏, wider canals, a more generous glacier" for the first n levels
+function perksText(n) {
+  const p = S.villagePerks(n), out = [];
+  if (p.dig) out.push('+' + p.dig + ' ⛏');
+  if (p.cap) out.push(t('perk_cap'));
+  if (p.melt > 1) out.push(t('perk_melt'));
+  return out.join(', ');
+}
+// the harvest goes into the village; returns what it looks like now
+function bankHarvest() {
+  const before = store.get('aryq.village', 0);
+  const gain = S.unbanked(g);
+  const after = before + gain;
+  store.set('aryq.village', after);
+  return { gain, after, up: S.villageLevel(after) > S.villageLevel(before) };
+}
+function villageBox(v) {
+  const lvl = S.villageLevel(v.after);
+  const box = el('div', 'village');
+  const head = el('p', 'village-line');
+  head.append(el('span', null, t('village', { l: lvl })), el('b', null, t('villageGain', { h: v.gain })));
+  box.append(head);
+  const next = S.VILLAGE[lvl];
+  const from = lvl ? S.VILLAGE[lvl - 1].at : 0;
+  const bar = el('div', 'bar');
+  const fill = el('i');
+  fill.style.width = (next ? Math.min(100, ((v.after - from) / (next.at - from)) * 100) : 100) + '%';
+  bar.append(fill);
+  box.append(bar);
+  if (v.up) box.append(el('p', 'village-up', t('villageUp', { p: perksText(lvl) })));
+  else box.append(el('p', 'muted', next ? t('villageNext', { n: next.at - v.after, p: t('perk_' + next.perk) }) : t('villageTop')));
+  return box;
+}
+
 function showOver() {
   hud.hidden = true;
   sfx.lost();
@@ -858,6 +918,11 @@ function showOver() {
   store.set(bestKey(g.mode), best);
   store.set('aryq.save', null);
   box.append(el('p', 'muted', t('best', { b: best })));
+  if (g.mode !== 'daily') {
+    const v = bankHarvest();
+    box.append(villageBox(v));
+    if (v.up) setTimeout(() => sfx.yearDone(), 350);
+  }
   pulse('over', g.mode + ':y' + Math.min(g.year, 9) + ':' + minute());
   // once a game the valley can go on: players used to leave right here (21.10)
   if (S.canRevive(g)) {

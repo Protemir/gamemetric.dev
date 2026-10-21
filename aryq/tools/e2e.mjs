@@ -745,6 +745,41 @@ try {
   check('a day in a row adds to the streak and gives +10 ketmen', r.mode === 'daily' && r.streak.n === 3 && /Серия 3.*[+]10/.test(r.hint), JSON.stringify(r));
   await B.init('');
 
+  // 10f. the village (21.10): harvest carries over from game to game and its levels help new games
+  {
+    const Sim = await import('../js/sim.js');
+    check('village levels: none below 1000, one at 1000, all at the top', Sim.villageLevel(999) === 0 && Sim.villageLevel(1000) === 1 && Sim.villageLevel(1e9) === Sim.VILLAGE.length);
+    const g0 = Sim.newGame(16, 26, 5, 'wide'), g1 = Sim.newGame(16, 26, 5, 'wide');
+    Sim.applyVillage(g1, 3); // +5 ⛏, wider canals, more generous glacier
+    check('village perks change a new game', g1.dig === g0.dig + 5 && Math.abs(g1.cap - g0.cap - 0.2) < 1e-9 && g1.melt > g0.melt, `${g1.dig}/${g0.dig} ${g1.cap}/${g0.cap} ${g1.melt}`);
+    g0.harvest = 700;
+    const a = Sim.unbanked(g0);
+    g0.harvest = 900;
+    const b = Sim.unbanked(g0);
+    const d = Sim.load(JSON.parse(JSON.stringify(Sim.save(g0))));
+    d.harvest = 950;
+    check('a game banks its harvest only once (one more year, a saved game)', a === 700 && b === 200 && Sim.unbanked(d) === 50, `${a} ${b}`);
+  }
+  await B.init(`try { localStorage.clear(); localStorage.setItem('aryq.village', '2400'); } catch {}`);
+  await B.open(page('&lang=ru&seed=1004'), 924, 520);
+  await clickText('Играть');
+  await wait(300);
+  r = await B.js(`JSON.stringify({ dig: ${A}.g.dig })`).then(JSON.parse);
+  await wait(1200);
+  const villageHint = await B.js(`document.getElementById('hint').textContent`);
+  check('a new game starts with the village bonus and says so', r.dig === 35 && /Аул даёт/.test(villageHint), `${r.dig} ⛏, "${villageHint}"`);
+  await B.js(`${A}.g.harvest = 300; ${A}.g.objects.forEach((o) => (o.thirst = 1.5)); ${A}.step(0.2)`);
+  await wait(700);
+  r = await B.js(`JSON.stringify({ village: +localStorage.getItem('aryq.village'), text: (document.querySelector('#ui .village') || {}).innerText || '' })`).then(JSON.parse);
+  check('the loss puts the harvest into the village and shows the level up', r.village === 2700 && /уровень 2/.test(r.text) && /Аул вырос/.test(r.text), JSON.stringify(r));
+  await B.init(`try { localStorage.clear(); localStorage.setItem('aryq.village', '5000'); } catch {}`);
+  await B.open(page('&lang=ru'), 924, 520);
+  await clickText('Долина дня');
+  await wait(300);
+  r = await B.js(`JSON.stringify({ dig: ${A}.g.dig, cap: ${A}.g.cap })`).then(JSON.parse);
+  check('the valley of the day stays the same for all (no village bonus)', r.dig === 30 && r.cap === 2, JSON.stringify(r));
+  await B.init('');
+
   // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads
   //     even if the cache keeps giving the old code (the loop of 17.10)
   await B.init(`try { localStorage.clear(); sessionStorage.removeItem('x'); } catch {}
