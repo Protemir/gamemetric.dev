@@ -402,6 +402,9 @@
   .r-prize > div > b { white-space: nowrap; }
   .r-name2 { display: inline-flex; align-items: center; gap: 6px; color: #ffe58a; box-shadow: inset 0 0 0 1px rgba(255,207,58,.45); }
   .r-name2 .ic { width: 16px; height: 16px; }
+  .r-up { position: relative; animation: rup 1.6s ease-in-out infinite; }
+  .r-up .h-badge { position: absolute; top: -7px; right: -7px; }
+  @keyframes rup { 50% { box-shadow: inset 0 0 0 2px rgba(255,207,58,.85), 0 0 14px rgba(255,207,58,.35); } }
   html.tiny .result .r-stats { display: none; }
   html.tiny .result .h-stage.big { font-size: calc(14px * var(--u)); padding: 3px 14px; margin: 2px 0 4px; }
   html.tiny .result .r-score { margin: 0 0 2px; }
@@ -487,7 +490,7 @@
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvigm9wa","./js/boot.js":"./js/boot.js?v=mvigm9wa","./js/career.js":"./js/career.js?v=mvigm9wa","./js/crowd.js":"./js/crowd.js?v=mvigm9wa","./js/flags.js":"./js/flags.js?v=mvigm9wa","./js/game.js":"./js/game.js?v=mvigm9wa","./js/icons.js":"./js/icons.js?v=mvigm9wa","./js/kazan.js":"./js/kazan.js?v=mvigm9wa","./js/net.js":"./js/net.js?v=mvigm9wa","./js/portal.js":"./js/portal.js?v=mvigm9wa","./js/rider.js":"./js/rider.js?v=mvigm9wa","./js/serke.js":"./js/serke.js?v=mvigm9wa","./js/trees.js":"./js/trees.js?v=mvigm9wa","./js/world.js":"./js/world.js?v=mvigm9wa"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvihb48h","./js/boot.js":"./js/boot.js?v=mvihb48h","./js/career.js":"./js/career.js?v=mvihb48h","./js/crowd.js":"./js/crowd.js?v=mvihb48h","./js/flags.js":"./js/flags.js?v=mvihb48h","./js/game.js":"./js/game.js?v=mvihb48h","./js/icons.js":"./js/icons.js?v=mvihb48h","./js/kazan.js":"./js/kazan.js?v=mvihb48h","./js/net.js":"./js/net.js?v=mvihb48h","./js/portal.js":"./js/portal.js?v=mvihb48h","./js/rider.js":"./js/rider.js?v=mvihb48h","./js/serke.js":"./js/serke.js?v=mvihb48h","./js/trees.js":"./js/trees.js?v=mvihb48h","./js/world.js":"./js/world.js?v=mvihb48h"}}</script>
 </head>
 <body>
 <div id="stage">
@@ -554,6 +557,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvigm9wa"></script>
+<script type="module" src="./js/game.js?v=mvihb48h"></script>
 </body>
 </html>

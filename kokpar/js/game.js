@@ -11,7 +11,7 @@ import { IC } from './icons.js';
 import * as portal from './portal.js';
 import { Net, cleanCode, netSupported } from './net.js';
 import { flagCanvas } from './flags.js';
-import { setPortalMute, crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh } from './audio.js';
+import { setPortalMute, crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh, tumble, bump } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
 if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
@@ -38,7 +38,7 @@ const TEXT = {
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
     canPass: '<kbd>E</kbd> — взять серке у своего', passMe: 'Пас!', ram: 'Таран!',
     helpTouch: 'Палец слева — куда скакать · ВЫРВАТЬ — отнять серке · КАМЧА — рывок',
-    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!',
+    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!', getUpKey: 'Жми <kbd>E</kbd> — встанешь быстрее', getUpTap: 'Жми ВЫРВАТЬ — встанешь быстрее',
     league: 'Лига аулов Жетысу', vs: 'Соперник', play: 'В седло!', next: 'Дальше', retry: 'Ещё раз', champion: 'Чемпион Жетысу!',
     stageOf: (a, b) => 'Аул ' + a + ' из ' + b, unlocked: 'Следующий соперник', menuSub: 'Командная скачка за тушу в предгорьях Алатау · 3 на 3',
   },
@@ -50,7 +50,7 @@ const TEXT = {
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
     canPass: '<kbd>E</kbd> — take the serke from a teammate', passMe: 'Pass!', ram: 'Ram!',
     helpTouch: 'Left thumb — where to ride · GRAB — take the serke · WHIP — burst',
-    home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!',
+    home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!', getUpKey: 'Mash <kbd>E</kbd> to get up faster', getUpTap: 'Tap GRAB to get up faster',
     league: 'Zhetysu village league', vs: 'Opponent', play: 'Ride!', next: 'Next', retry: 'Try again', champion: 'Zhetysu champion!',
     stageOf: (a, b) => 'Village ' + a + ' of ' + b, unlocked: 'Next opponent', menuSub: 'Team horseback fight for the carcass in the Alatau foothills · 3 vs 3',
   },
@@ -155,7 +155,7 @@ function kickoff(first) {
     e.h.yaw = s > 0 ? Math.PI / 2 : -Math.PI / 2;
     e.h.v = 0; e.h.gait = 0; e.h.push.set(0, 0, 0);
     e.stamina = 100; e.tugCD = 0; e.pickCD = 0; e.stun = 0;
-    e.r.remount(); e.down = 0;
+    e.r.remount(); e.down = 0; if (e.stars) e.stars.visible = false;
   });
   // в первом розыгрыше первого матча туша ближе к игроку: первый подбор — его
   dropSack(new THREE.Vector3(first && rookie ? -9 * SWAP : 0, GROUND_Y, 0), new THREE.Vector3());
@@ -283,7 +283,10 @@ function fallRider(e, nx, nz) {
   if (state.tug && (state.tug.att === e || state.tug.car === e)) state.tug = null;
   const hv = e.h.v, fx = Math.sin(e.h.yaw), fz = Math.cos(e.h.yaw);
   const side = Math.sign(fz * nx - fx * nz) || 1;
-  e.r.fall(scene, fx * hv * 0.7 + nx * 2.5, 2.4, fz * hv * 0.7 + nz * 2.5, side);
+  const flips = hv > 7.5 || rnd() < 0.3 ? 1 : 0; // на скаку — летит колесом
+  e.r.fall(scene, fx * hv * 0.7 + nx * 2.5, 2.4 + flips * 1.4, fz * hv * 0.7 + nz * 2.5, side, flips);
+  e.mash = 0;
+  if (!SIM) tumble(e.h.obj.position.x, e.h.obj.position.z, flips ? 0.9 : 0.6);
   e.down = 3; e.wait = 0; e.stun = 3.3; e.pickCD = 3.5; e.tugCD = 3.5;
   state.events.push({ t: 'fall', team: e.team, me: !!e.me, x: e.h.obj.position.x, z: e.h.obj.position.z });
   if (!SIM) crowdShout('ooh');
@@ -296,11 +299,48 @@ function stepFallen(e, dt) {
   const hp = e.h.obj.position, rp = e.r.root.position, d = Math.hypot(rp.x - hp.x, rp.z - hp.z);
   if (e.r.fallen.landed && d > 1.8 && e.down > 0) steerTo(e, rp.x, rp.z, d > 9 ? 3 : 1);
   else { e.h.gait = 0; e.h.steer = 0; }
-  if (e.r.stepFall(dt, e.down < 0.95) && !SIM) dustBurst(rp.x, rp.z, 5, 8); // плюхнулся в пыль
+  if (e.r.stepFall(dt, e.down < 0.95) && !SIM) { dustBurst(rp.x, rp.z, 6, 9); bump(rp.x, rp.z, 5); } // плюхнулся в пыль
+  if (!SIM) dizzy(e, dt);
   // встаёт, только когда конь рядом (или если ждать слишком долго)
   e.wait = (e.wait || 0) + dt;
   if (e.down > 0.95 || d < 2.6 || e.wait > 7) e.down -= dt;
-  if (e.down <= 0) { e.r.startMount(); e.stun = Math.min(e.stun, 0.8); } // запрыгивает в седло
+  if (e.down <= 0) { e.r.startMount(); e.stun = Math.min(e.stun, 0.8); e.pickCD = Math.min(e.pickCD, 1); e.tugCD = Math.min(e.tugCD, 1); } // запрыгивает в седло
+}
+// быстрый подъём: лёжа жмёшь «вырвать» — каждое нажатие сокращает лежание (конь далеко — встанешь и ждёшь его)
+function mashUp(e) {
+  const f = e.r.fallen;
+  if (!f || !f.landed || f.mount != null || e.down <= 0) return;
+  const hp = e.h.obj.position, rp = e.r.root.position, near = Math.hypot(rp.x - hp.x, rp.z - hp.z) < 2.6;
+  e.down = Math.max(near ? 0.05 : 0.9, e.down - 0.28);
+  e.mash = (e.mash || 0) + 1;
+  e.r.jolt = Math.max(e.r.jolt, 0.5);
+  if (!SIM) dustBurst(rp.x, rp.z, 2, 3);
+}
+// звёздочки над головой, пока лежит: три кружатся вокруг макушки
+const STAR = (() => {
+  const sh = new THREE.Shape();
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + Math.PI / 2, r = i % 2 ? 0.06 : 0.15; sh[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
+  return { g: new THREE.ShapeGeometry(sh), m: new THREE.MeshBasicMaterial({ color: 0xffe066, side: THREE.DoubleSide, fog: false }) };
+})();
+function dizzy(e, dt) {
+  const f = e.r.fallen, on = f && f.landed && f.mount == null && e.r.stand < 0.6;
+  if (!e.stars) {
+    if (!on) return;
+    e.stars = new THREE.Group();
+    for (let i = 0; i < 3; i++) e.stars.add(new THREE.Mesh(STAR.g, STAR.m));
+    scene.add(e.stars); e.starT = 0;
+  }
+  e.stars.visible = on;
+  if (!on) return;
+  e.starT += dt;
+  const hb = e.r.bone('Head');
+  if (hb) hb.getWorldPosition(e.stars.position); else e.stars.position.copy(e.r.root.position);
+  e.stars.position.y += 0.32;
+  e.stars.children.forEach((s, i) => {
+    const a = e.starT * 4 + (i / 3) * Math.PI * 2;
+    s.position.set(Math.cos(a) * 0.36, Math.sin(e.starT * 6 + i) * 0.06, Math.sin(a) * 0.36);
+    s.quaternion.copy(camera.quaternion); s.rotateZ(e.starT * 3);
+  });
 }
 
 // пас: свой несущий рядом отдаёт серке из рук в руки
@@ -731,6 +771,7 @@ function step(dt) {
     if (roleT <= 0) { assignRoles(); roleT = 0.3; }
     for (const e of ents) if ((!e.me || AI_PLAYER) && !e.remote) think(e, dt);
     if (me && !AI_PLAYER && !me.r.fallen) playerInput(dt);
+    else if (me && !AI_PLAYER && tugTap) { tugTap = false; if (!online.role) mashUp(me); }
     if (online.remote) { const r = online.remote; applyInput(r, online.inp, online.taps > online.tapsDone); online.tapsDone = Math.min(online.taps, online.tapsDone + 1); if (online.rear > online.rearDone) { online.rearDone = online.rear; if (r.h.v < 1.5 && !r.r.fallen && sack.carrier !== r) r.h.rear(); } }
     if (state.clock <= 0) {
       state.clock = 0;
@@ -916,7 +957,7 @@ function juiceEvents() {
     } else if (e.me && (e.t === 'fall' || e.t === 'fumble')) { juice.trauma = Math.max(juice.trauma, 0.7); juice.stop = 0.09; }
     else if (e.me && e.t === 'tugEnd') { juice.trauma = Math.max(juice.trauma, 0.4); juice.stop = 0.06; }
     else if (e.t === 'fall') juice.trauma = Math.max(juice.trauma, 0.15);
-    if (e.t === 'fall' && (e.me || Math.hypot(camera.position.x - e.x, camera.position.z - e.z) < 22)) juice.slow = Math.max(juice.slow, 0.35); // падение рядом — зрелище: на миг замедленно
+    if (e.t === 'fall' && (e.me || Math.hypot(camera.position.x - e.x, camera.position.z - e.z) < 22)) juice.slow = Math.max(juice.slow, e.me ? 0.55 : 0.35); // падение рядом — зрелище: на миг замедленно
   }
 }
 // облако пыли и комья в точке (удар, рывок, падение)
@@ -1018,8 +1059,10 @@ function hud(dt) {
   const pass = !T && canPass(me);
   if (touch) { const lbl = canRear() ? tr('btnRear') : tr('btnWhip'); txt(el.btnWhip, lbl); }
   const can = !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan || pass);
-  el.btnTug.classList.toggle('ready', !!(can || mine));
-  if (tut.on && !el.tut.hidden) { if (!el.hint.dataset.keep) txt(el.hint, ''); }
+  el.btnTug.classList.toggle('ready', !!(can || mine || me.r.fallen?.landed));
+  // лежит на земле — главное сейчас: как встать быстрее (даже поверх обучения и стартовой справки)
+  if (me.r.fallen?.landed && me.r.fallen.mount == null && me.down > 0.95 && !online.role) { delete el.hint.dataset.keep; html(el.hint, touch ? tr('getUpTap') : tr('getUpKey')); }
+  else if (tut.on && !el.tut.hidden) { if (!el.hint.dataset.keep) txt(el.hint, ''); }
   else if (can && nearKazan) html(el.hint, touch ? tr('aimTouch') : tr('canThrow'));
   else if (can && !touch) html(el.hint, pass ? tr('canPass') : tr('canTug'));
   else if (!el.hint.dataset.keep) txt(el.hint, '');

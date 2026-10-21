@@ -129,15 +129,18 @@ export class Rider {
   }
   // падение с коня: слетает с той скоростью, что была, в полёте машет руками и поджимается,
   // бьётся плечом о землю, чуть подпрыгивает, перекатывается на спину, а потом встаёт
-  fall(scene, vx, vy, vz, sideSign) {
+  // flips — лишние полные кувырки в воздухе: от сильного удара всадник летит колесом
+  fall(scene, vx, vy, vz, sideSign, flips = 0) {
     if (this.fallen) return;
     this.root.updateMatrixWorld(true);
     scene.attach(this.root);
+    // крутится так, чтобы успеть докрутить до земли
+    const lim = 1.4 + flips * Math.PI * 2, h = Math.max(0.3, this.root.position.y - 0.24), T = (vy + Math.sqrt(vy * vy + 19.6 * h)) / 9.8;
     const up = new THREE.Euler().setFromQuaternion(this.root.quaternion, 'YXZ');
     this.fallen = {
       t: 0, vel: new THREE.Vector3(vx, vy, vz), side: sideSign,
       spin: new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion).normalize(),
-      w: 4.5 * sideSign, turned: 0, landed: false, bounced: false, rolled: 0, tLand: 0,
+      w: Math.max(4.5, lim / (T * 0.85)) * sideSign, lim, turned: 0, landed: false, bounced: 0, rolled: 0, tLand: 0,
       qUp: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, up.y, 0, 'YXZ')), qLie: null, yLie: 0, rise: 0,
     };
     this.limp = 0; this.fly = 0; this.jolt = 0; this.stand = 0;
@@ -193,19 +196,19 @@ export class Rider {
       f.vel.y -= 9.8 * dt;
       r.position.addScaledVector(f.vel, dt);
       const step = f.w * dt;
-      if (Math.abs(f.turned) < 1.4) { f.turned += step; r.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, step)); }
+      if (Math.abs(f.turned) < f.lim) { f.turned += step; r.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, step)); }
       this.fly = Math.min(1, this.fly + dt * 6);
       if (r.position.y < 0.24) {
         r.position.y = 0.24;
-        if (!f.bounced) { // удар: отскок, руки и голова дёргаются по инерции
-          f.bounced = true; landedNow = true; this.jolt = 1;
-          f.vel.set(f.vel.x * 0.45, Math.min(2.2, -f.vel.y * 0.3), f.vel.z * 0.45);
+        if (!f.bounced || (f.bounced < 2 && f.vel.y < -2.6)) { // удар: отскок (с высоты — дважды), руки и голова дёргаются по инерции
+          f.bounced++; landedNow = true; this.jolt = 1;
+          f.vel.set(f.vel.x * 0.5, Math.min(f.bounced > 1 ? 1.2 : 2.6, -f.vel.y * 0.35), f.vel.z * 0.5);
         } else { f.landed = true; f.tLand = f.t; f.vel.y = 0; }
       }
     } else if (!getUp) {
       r.position.addScaledVector(f.vel, dt);
       f.vel.multiplyScalar(Math.exp(-dt * 4)); // скользит по траве и останавливается
-      if (Math.abs(f.turned) < 1.55) { const s = Math.sign(f.w) * dt * 2; f.turned += s; r.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, s)); }
+      if (Math.abs(f.turned) < f.lim + 0.15) { const s = Math.sign(f.w) * dt * 2; f.turned += s; r.quaternion.premultiply(Qa.setFromAxisAngle(f.spin, s)); }
       // с бока перекатывается на спину — вокруг своего позвоночника, с затуханием
       if (f.rolled < 1.25) {
         const sp = Math.max(0.4, 3.2 * (1 - f.rolled / 1.25)) * dt;

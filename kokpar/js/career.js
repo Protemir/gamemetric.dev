@@ -90,7 +90,7 @@ const T = {
     stats: { speed: ['Скорость', 'Быстрее галоп'], stamina: ['Выносливость', 'Дольше скачет без усталости'], strength: ['Сила', 'Крепче держит и тянет в тартысе'], agility: ['Ловкость', 'Круче поворачивает'] },
     upgrade: 'Улучшить', max: 'Максимум', coat: 'Масть вашего коня', buy: 'Купить', chosen: 'Выбрана', choose: 'Выбрать',
     stableSub: 'Улучшения действуют на всех коней клуба', rating: 'Сила', bracket: 'Плей-офф', tbd: '—', you: 'вы',
-    nextMatch: 'Следующий матч', toMenu: 'В меню', dailyWaits: (m) => 'Награда дня ждёт в меню: +' + m, tomorrow: (m) => 'Завтра: +' + m + ' за вход и 3 новых задания',
+    nextMatch: 'Следующий матч', upHorse: 'Улучшить коня', toMenu: 'В меню', dailyWaits: (m) => 'Награда дня ждёт в меню: +' + m, tomorrow: (m) => 'Завтра: +' + m + ' за вход и 3 новых задания',
     sGoals: 'Твои голы', sTugs: 'Выиграно тартысов', sFalls: 'Сбито соперников',
     goldenGoal: 'Ничья в плей-офф — играем до золотого гола', stake: (w, g) => 'Победа +' + w + ' · гол +' + g,
     bonus: (v) => 'сейчас +' + v + '%',
@@ -109,7 +109,7 @@ const T = {
     stats: { speed: ['Speed', 'Faster gallop'], stamina: ['Stamina', 'Gallops longer before tiring'], strength: ['Strength', 'Holds and pulls harder in a tug'], agility: ['Agility', 'Turns tighter'] },
     upgrade: 'Upgrade', max: 'Max', coat: 'Your horse coat', buy: 'Buy', chosen: 'Selected', choose: 'Select',
     stableSub: 'Upgrades apply to every horse of the club', rating: 'Strength', bracket: 'Play-offs', tbd: '—', you: 'you',
-    nextMatch: 'Next match', toMenu: 'Menu', dailyWaits: (m) => 'Your daily reward is waiting in the menu: +' + m, tomorrow: (m) => 'Tomorrow: +' + m + ' for coming back and 3 new quests',
+    nextMatch: 'Next match', upHorse: 'Upgrade horse', toMenu: 'Menu', dailyWaits: (m) => 'Your daily reward is waiting in the menu: +' + m, tomorrow: (m) => 'Tomorrow: +' + m + ' for coming back and 3 new quests',
     sGoals: 'Your goals', sTugs: 'Tugs won', sFalls: 'Riders unhorsed',
     goldenGoal: 'Draw in a knockout — golden goal decides', stake: (w, g) => 'Win +' + w + ' · goal +' + g,
     bonus: (v) => 'now +' + v + '%',
@@ -344,7 +344,7 @@ function head() {
 function tabs(active) { // нижние вкладки с иконками; у заданий — счётчик невыполненных
   const left = questsToday().filter((q) => !q.done).length;
   const t = (act, icon, label, badge) => `<button class="h-tab${act === active ? ' on' : ''}" data-act="${act}">${icon}<span>${label}</span>${badge ? `<i class="h-badge">${badge}</i>` : ''}</button>`;
-  return `<nav class="h-tabs">${t('hub', IC.trophy, L() === 'ru' ? 'Кубок' : 'Cup')}${t('table', IC.list, tr('table'))}${t('stable', IC.horse, tr('stable'), STATS.filter((k) => S.upg[k] < 5 && S.money >= COSTS[S.upg[k]]).length)}${t('quests', IC.target, tr('quests'), left)}</nav>`;
+  return `<nav class="h-tabs">${t('hub', IC.trophy, L() === 'ru' ? 'Кубок' : 'Cup')}${t('table', IC.list, tr('table'))}${t('stable', IC.horse, tr('stable'), upCount())}${t('quests', IC.target, tr('quests'), left)}</nav>`;
 }
 function dailyModal() {
   const d = dailyState();
@@ -473,10 +473,14 @@ export function showResult(sum) {
 // сразу в следующий матч кубка — без захода в меню (второй матч — главное, что держит новичка); кубок кончился — в меню
 function nextActs() {
   const nf = fixture();
-  if (!nf) return `<div class="r-acts"><button class="big-btn" data-act="hub">${tr('next')}</button>${nameBtn()}</div>`;
+  const extra = upBtn() || nameBtn();
+  if (!nf) return `<div class="r-acts"><button class="big-btn" data-act="hub">${tr('next')}</button>${extra}</div>`;
   return `<div class="r-acts"><button class="big-btn" data-act="play">${tr('nextMatch')}<small>${esc(nf.full)} · ${tr('win').toLowerCase()} +${money(PRIZE.win)}</small></button>
-    <button class="r-menu" data-act="hub">${tr('toMenu')}</button>${nameBtn()}</div>`;
+    <button class="r-menu" data-act="hub">${tr('toMenu')}</button>${extra}</div>`;
 }
+// хватает денег на улучшение — сразу видно, на что потратить выигрыш
+const upCount = () => STATS.filter((k) => S.upg[k] < 5 && S.money >= COSTS[S.upg[k]]).length;
+const upBtn = () => (upCount() ? `<button class="r-menu r-name2 r-up" data-act="stable">${IC.horse}<span>${tr('upHorse')}</span><i class="h-badge">${upCount()}</i></button>` : '');
 // клуб ещё с именем по умолчанию — предложить назвать (в одном ряду с кнопками)
 const nameBtn = () => (S.club?.auto ? `<button class="r-menu r-name2" data-act="club">${IC.gear}<span>${L() === 'ru' ? 'Свой клуб и флаг' : 'Name your club'}</span></button>` : '');
 // зачем приходить завтра: награда за вход (или она уже ждёт сегодня) и новые задания

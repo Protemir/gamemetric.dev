@@ -122,6 +122,18 @@ export function bump(x, z, imp) {
   snort(x, z, 1.4);
 }
 
+// полёт с коня: свисток вниз «фью-у-у» с дрожью, как в мультике; потом шлепок о землю — bump
+export function tumble(x, z, long = 0.7) {
+  if (!ctx || muted) return;
+  const { vol, pan } = place(x, z, 6);
+  if (vol < 0.1) return;
+  const t = ctx.currentTime, o = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(), g = ctx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(1150, t); o.frequency.exponentialRampToValueAtTime(240, t + long);
+  lfo.frequency.value = 9; lg.gain.value = 28; lfo.connect(lg); lg.connect(o.frequency);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * 0.13, t + 0.05); g.gain.setValueAtTime(vol * 0.13, t + long * 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t + long);
+  o.connect(g); g.connect(out(1, pan)); o.start(t); lfo.start(t); o.stop(t + long + 0.02); lfo.stop(t + long + 0.02);
+}
+
 // каждый кадр: ветер от скорости, река от расстояния до воды
 export function ambience(speed, riverDistance) {
   if (!ctx) return;
