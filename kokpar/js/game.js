@@ -11,7 +11,7 @@ import { IC } from './icons.js';
 import * as portal from './portal.js';
 import { Net, cleanCode, netSupported } from './net.js';
 import { flagCanvas } from './flags.js';
-import { setPortalMute, crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh, tumble, bump } from './audio.js';
+import { setPortalMute, crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh, tumble, bump, twang, clink } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
 if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
@@ -32,7 +32,7 @@ const V = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(
 const TEXT = {
   ru: {
     red: 'Красные', blue: 'Синие', loading: 'Загрузка степи…', ready: 'Готовьтесь!', go: 'Вперёд!', goal: 'ГОЛ!', goalBy: (t) => t,
-    tug: 'Тартыс!', tugSub: 'Схватка за серке', wrestle: 'Аудар!', wrestleSub: 'Стащи его с коня', canWrestle: '<kbd>E</kbd> — схватиться', canWrestleT: 'ВЫРВАТЬ — схватиться', to3: 'до 3', downed: 'Сбросил!', downedMe: 'Тебя сбросили!', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
+    tug: 'Тартыс!', tugSub: 'Схватка за серке', jHit: 'Попал!', jPerfect: 'В яблочко!', jMiss: 'Мимо', jGallop: 'на скаку', jAim: 'Жми <kbd>E</kbd>, когда круги совпадут', jAimT: 'Жми ВЫРВАТЬ, когда круги совпадут', jRide: 'Скачи к шесту с жамбы — стреляй на ходу', jBest: 'Рекорд', jRecord: 'Новый рекорд!', wrestle: 'Аудар!', wrestleSub: 'Стащи его с коня', canWrestle: '<kbd>E</kbd> — схватиться', canWrestleT: 'ВЫРВАТЬ — схватиться', to3: 'до 3', downed: 'Сбросил!', downedMe: 'Тебя сбросили!', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
     fumble: 'Выронил серке!', win: 'Победа', lose: 'Поражение', draw: 'Ничья', again: 'Ещё раз', stamina: 'Сила коня',
     btnTug: 'ВЫРВАТЬ', btnWhip: 'КАМЧА', btnRear: 'СВЕЧКА', mashKey: 'Жми E быстрее!', mashTap: 'Жми ВЫРВАТЬ быстрее!', canTug: '<kbd>E</kbd> — вырвать серке',
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
@@ -44,7 +44,7 @@ const TEXT = {
   },
   en: {
     red: 'Red', blue: 'Blue', loading: 'Loading the steppe…', ready: 'Get ready!', go: 'Go!', goal: 'GOAL!', goalBy: (t) => t,
-    tug: 'Tug of war!', wrestle: 'Wrestle!', wrestleSub: 'Pull him off the horse', canWrestle: '<kbd>E</kbd> — grapple', canWrestleT: 'GRAB — grapple', to3: 'first to 3', downed: 'Knocked him off!', downedMe: 'You got pulled off!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
+    tug: 'Tug of war!', jHit: 'Hit!', jPerfect: 'Bullseye!', jMiss: 'Miss', jGallop: 'at a gallop', jAim: 'Press <kbd>E</kbd> when the rings meet', jAimT: 'Tap GRAB when the rings meet', jRide: 'Ride past the pole — shoot on the move', jBest: 'Best', jRecord: 'New record!', wrestle: 'Wrestle!', wrestleSub: 'Pull him off the horse', canWrestle: '<kbd>E</kbd> — grapple', canWrestleT: 'GRAB — grapple', to3: 'first to 3', downed: 'Knocked him off!', downedMe: 'You got pulled off!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
     fumble: 'Fumble!', win: 'Victory', lose: 'Defeat', draw: 'Draw', again: 'Play again', stamina: 'Horse stamina',
     btnTug: 'GRAB', btnWhip: 'WHIP', btnRear: 'REAR UP', mashKey: 'Mash E!', mashTap: 'Tap GRAB fast!', canTug: '<kbd>E</kbd> — grab the serke',
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
@@ -489,7 +489,7 @@ function assignRoles() {
 function think(e, dt) {
   const b = e.bot, p = e.h.obj.position;
   if (e.r.fallen) return; // всадник на земле
-  if (audar) { if (e.off) { e.h.gait = 0; e.h.steer = 0; } else audarThink(e, dt); return; }
+  if (audar || jamby) { if (e.off || !audar) { e.h.gait = 0; e.h.steer = 0; } else audarThink(e, dt); return; }
   const carrier = sack.carrier;
   // роль могла устареть: мешок сменил хозяина между пересчётами
   if (!carrier && b.role !== 'fetch' && b.role !== 'support') b.role = 'fetch';
@@ -639,6 +639,7 @@ function playerInput(dt) {
   if (tugTap) {
     tugTap = false;
     if (state.tug && (state.tug.att === me || state.tug.car === me)) tugPress(me);
+    else if (jamby) jambyShoot();
     else if (audar) { if (state.phase === 'play' && !audar.foe.r.fallen && canTug(me, audar.foe)) startTug(me, audar.foe); }
     else if (sack.carrier && canTug(me, sack.carrier)) startTug(me);
     else if (canPass(me)) { giveSack(me); banner(tr('passMe'), null, 0.8); }
@@ -660,7 +661,7 @@ function stepEnt(e, dt) {
   e.h.speedMul = (e.sprint > 0 ? 1.22 : 1) * (sack.carrier === e ? 0.9 : 1) * (e.stun > 0 ? 0.6 : 1) * (tugging ? 0.75 : 1) * (e.tired ? 0.82 : 1) * (e.team === 1 ? DIFF.speed : HB.speed) * (e.bot?.role === "chase" && !e.me ? e.boost || 1 : 1);
 }
 function stepSack(dt) {
-  if (audar) return; // в аударыспақ туши нет
+  if (audar || jamby) return; // в мини-режимах туши нет
   if (sack.flight) { // летит: после гола на казан или брошена
     const f = sack.flight; f.t = Math.min(1, f.t + dt / (f.T || 0.62));
     sack.pos.lerpVectors(f.from, f.to, f.t); sack.pos.y += Math.sin(f.t * Math.PI) * (f.arc || 3);
@@ -788,7 +789,8 @@ function step(dt) {
     if (online.remote) { const r = online.remote; applyInput(r, online.inp, online.taps > online.tapsDone); online.tapsDone = Math.min(online.taps, online.tapsDone + 1); if (online.rear > online.rearDone) { online.rearDone = online.rear; if (r.h.v < 1.5 && !r.r.fallen && sack.carrier !== r) r.h.rear(); } }
     if (state.clock <= 0) {
       state.clock = 0;
-      if (fx?.ko && !SIM && state.score[0] === state.score[1]) { if (!state.golden) { state.golden = true; banner(lang === 'ru' ? 'ЗОЛОТОЙ ГОЛ' : 'GOLDEN GOAL', ['#fff3c0', '#f0a01c'], 2.2, career.goldenText()); } }
+      if (jamby) jambyEnd();
+      else if (fx?.ko && !SIM && state.score[0] === state.score[1]) { if (!state.golden) { state.golden = true; banner(lang === 'ru' ? 'ЗОЛОТОЙ ГОЛ' : 'GOLDEN GOAL', ['#fff3c0', '#f0a01c'], 2.2, career.goldenText()); } }
       else endMatch();
     }
   } else if (state.phase === 'goal') {
@@ -807,7 +809,8 @@ function step(dt) {
   }
   stepTug(dt);
   for (const e of ents) if (!e.off) e.h.update(dt); // в аударыспақ остальные кони убраны — не считаем
-  collide(audar ? [me.h, audar.foe.h] : ents.map((e) => e.h), onHit);
+  collide(audar ? [me.h, audar.foe.h] : jamby ? [] : ents.map((e) => e.h), onHit);
+  if (jamby && !SIM) jambyStep(dt);
   for (const e of ents) for (const k of kazans) pushOut(e.h, k.x, 0, KAZAN_R);
   stepSack(dt);
   if (!SIM) { stepAim(dt); stepTut(dt); }
@@ -828,7 +831,7 @@ function step(dt) {
   }
   if (!SIM) {
     const bobM = Math.sin(performance.now() / 250) * 0.15, cr = sack.carrier;
-    sackMarker.visible = !sack.flight && state.phase !== 'goal' && !audar;
+    sackMarker.visible = !sack.flight && state.phase !== 'goal' && !audar && !jamby;
     if (cr) { const p = cr.h.obj.position; sackMarker.position.set(p.x, 3.35 + bobM, p.z); sackMarker.material.color.set(TEAMS[cr.team].css); sackMarker.scale.setScalar(1.25); }
     else { sackMarker.position.set(sack.pos.x, 2.4 + bobM, sack.pos.z); sackMarker.material.color.set('#ffd23a'); sackMarker.scale.setScalar(1); }
     for (const k of kazans) { // флаги колышутся
@@ -861,21 +864,178 @@ function startAudar() {
   applyStage(); applyLang();
   el.menu.hidden = true; el.tut.hidden = true; delete el.hint.dataset.keep;
   const foe = ents.find((e) => e.team === 1);
+  modeOff();
   audar = { foe, hard: Math.min(0.12, career.duels().w * 0.02) }; // каждая победа — соперник чуть крепче
-  for (const e of ents) {
-    const on = e === me || e === foe;
-    e.off = !on; e.h.obj.visible = on; e.ring.visible = on;
-    if (!on) { e.r.remount(); e.h.obj.position.set(e.team ? 80 : -80, 0, 40 + ents.indexOf(e) * 6); e.h.v = 0; e.h.gait = 0; e.h.steer = 0; }
-  }
-  sack.carrier = null; sack.flight = null; sack.mesh.visible = false;
+  onlyOnField([me, foe]);
   state.score = [0, 0]; state.clock = 999; state.golden = false; state.events = [];
   audarKick(true);
 }
-function audarOff() {
-  if (!audar) return;
+function modeOff() {
+  if (!audar && !jamby) return;
   audar = null;
+  if (jamby) { jambyGear.post.visible = false; jambyGear.arrow.visible = false; jambyGear.ret.style.display = 'none'; jamby = null; }
   for (const e of ents) { e.off = false; e.h.obj.visible = true; e.ring.visible = true; }
   sack.mesh.visible = true;
+}
+function onlyOnField(list) { // мини-режим: на поле только эти, остальных убрать
+  for (const e of ents) {
+    const on = list.includes(e);
+    e.off = !on; e.h.obj.visible = on; e.ring.visible = on;
+    if (!on) { e.r.remount(); e.h.obj.position.set(e.team ? 80 : -80, 0, 40 + ents.indexOf(e) * 6); e.h.v = 0; e.h.gait = 0; e.h.steer = 0; }
+  }
+  sack.carrier = null; sack.flight = null; sack.mesh.visible = false; state.tug = null;
+}
+
+// ---------- жамбы ату: стрельба из лука на скаку по серебряному слитку на шесте, 60 с ----------
+let jamby = null;
+const JAMBY_LEN = 60;
+const jambyGear = (() => {
+  const post = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: '#7a5532', roughness: 0.9 });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 4.6, 8), wood); pole.position.y = 2.3; pole.castShadow = true; post.add(pole);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.7, 6), wood); bar.rotation.z = Math.PI / 2; bar.position.set(0.8, 4.45, 0); post.add(bar);
+  const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.95, 4), new THREE.MeshBasicMaterial({ color: '#e6dcc0' })); rope.position.set(1.5, 3.95, 0); post.add(rope);
+  // жамбы — серебряный слиток-«лодочка» с красной кистью
+  const ing = new THREE.Group();
+  ing.add(new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 8).scale(1.45, 0.62, 0.85), new THREE.MeshStandardMaterial({ color: '#eef2f6', metalness: 0.85, roughness: 0.22, emissive: '#3a3f46' })));
+  const tas = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.32, 6), new THREE.MeshBasicMaterial({ color: '#d0242c' })); tas.position.y = -0.3; tas.rotation.x = Math.PI; ing.add(tas);
+  ing.scale.setScalar(1.6); ing.position.set(1.5, 3.35, 0); post.add(ing);
+  // флажок на макушке шеста и золотой маркер — шест видно издалека
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.42), new THREE.MeshBasicMaterial({ color: '#d0242c', side: THREE.DoubleSide })); flag.position.set(-0.36, 4.35, 0); post.add(flag);
+  const mark = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.55, 4), new THREE.MeshBasicMaterial({ color: '#ffd23a' })); mark.rotation.x = Math.PI; mark.position.set(1.5, 5.1, 0); post.add(mark);
+  post.visible = false; scene.add(post);
+  const arrow = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.0, 5).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#3b2a1a' }));
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.14, 6).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#c9ccd0' })); tip.position.z = 0.55;
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.2).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#f4efe2', side: THREE.DoubleSide })); fl.position.z = -0.42;
+  arrow.add(shaft, tip, fl); arrow.visible = false; scene.add(arrow);
+  const ret = document.createElement('div'); ret.id = 'jret'; ret.innerHTML = '<i></i><b></b>';
+  (document.getElementById('stage') || document.body).appendChild(ret);
+  return { post, ing, rope, arrow, ret, mark };
+})();
+function startJamby() {
+  modeOff();
+  applyStage(); applyLang();
+  el.menu.hidden = true; el.tut.hidden = true; delete el.hint.dataset.keep;
+  onlyOnField([me]);
+  jamby = { tgt: { live: false, wait: 0 }, score: 0, hits: 0, perfect: 0, shots: 0, streak: 0, best: career.jambyStats().best, arrow: null, drop: null };
+  el.nmB.textContent = tr('jBest');
+  const s = SWAP;
+  me.h.obj.position.set(-40 * s, 0, 0); me.h.yaw = s > 0 ? Math.PI / 2 : -Math.PI / 2;
+  me.h.v = 0; me.h.gait = 0; me.h.push.set(0, 0, 0); me.stamina = 100; me.stun = 0; me.r.remount(); me.down = 0;
+  state.score = [0, 0]; state.clock = JAMBY_LEN; state.golden = false; state.events = [];
+  state.phase = 'countdown'; state.t = 3.2;
+  banner('3', null, 1.2, lang === 'ru' ? 'Жамбы ату · 60 секунд' : 'Jamby shooting · 60 seconds');
+  jambyNext();
+}
+// новый шест — впереди по ходу, сбоку от линии скачки; у края поля — поворачиваем
+function jambyNext() {
+  const T = jamby.tgt, p = me.h.obj.position, yaw = me.h.yaw;
+  for (const turn of [0, 0.5, -0.5, 1.1, -1.1, 1.8, -1.8, Math.PI]) {
+    const a = yaw + turn + (rnd() - 0.5) * 0.3, dist = 30 + rnd() * 10;
+    const fx = Math.sin(a), fz = Math.cos(a), side = rnd() < 0.5 ? -1 : 1;
+    const cx = p.x + fx * dist, cz = p.z + fz * dist;
+    const px = cx + fz * side * 5.6, pz = cz - fx * side * 5.6; // шест в стороне от дорожки
+    if (Math.abs(px) > 46 || Math.abs(pz) > 30) continue;
+    const g = jambyGear.post;
+    g.position.set(px, 0, pz);
+    g.rotation.y = Math.atan2(cx - px, cz - pz) - Math.PI / 2; // перекладина смотрит на дорожку
+    g.visible = true;
+    jambyGear.ing.position.set(1.5, 3.35, 0); jambyGear.ing.rotation.set(0, 0, 0);
+    if (jambyGear.ing.parent !== g) g.add(jambyGear.ing);
+    jambyGear.rope.visible = true;
+    g.updateMatrixWorld(true);
+    T.ing = jambyGear.ing.getWorldPosition(new THREE.Vector3());
+    T.live = true; T.k = null; T.age = 0;
+    return;
+  }
+}
+const headPos = (e, out) => { const hb = e.r.bone('Head'); if (hb) hb.getWorldPosition(out); else out.copy(e.h.obj.position).setY(2.6); return out; };
+function jambyShoot() {
+  const J = jamby, T = J.tgt;
+  if (state.phase !== 'play' || !T.live || T.k == null || J.arrow) return;
+  const acc = Math.abs(T.k - 1), hit = acc < 0.24, perfect = acc < 0.08;
+  const from = headPos(me, new THREE.Vector3()); from.y += 0.1;
+  const to = T.ing.clone();
+  if (!hit) to.add(new THREE.Vector3((rnd() - 0.5) * 2, (T.k > 1 ? 1 : -1) * (0.6 + rnd() * 0.5), (rnd() - 0.5) * 2)); // рано — выше, поздно — ниже
+  J.arrow = { from, to, t: 0, T: 0.12 + from.distanceTo(to) * 0.012, hit, perfect, gallop: me.h.v > 9 };
+  J.shots++;
+  twang();
+  me.r.kick(0.25 * (rnd() < 0.5 ? 1 : -1), -0.4);
+}
+function jambyStep(dt) {
+  const J = jamby, T = J.tgt, G = jambyGear;
+  if (J.arrow) { // стрела в полёте
+    const A = J.arrow; A.t = Math.min(1, A.t + dt / A.T);
+    G.arrow.visible = true;
+    G.arrow.position.lerpVectors(A.from, A.to, A.t); G.arrow.position.y += Math.sin(A.t * Math.PI) * 0.25;
+    G.arrow.lookAt(A.to);
+    if (A.t >= 1) { J.arrow = null; G.arrow.visible = false; if (A.hit) jambyHit(A); else jambyMiss(true); }
+  }
+  if (J.drop) { // сбитый слиток падает
+    const D = J.drop; D.vel.y -= 9.8 * dt; G.ing.position.addScaledVector(D.vel, dt); G.ing.rotation.x += dt * 8; G.ing.rotation.z += dt * 5;
+    if (G.ing.position.y < 0.15) { G.ing.position.y = 0.15; dustBurst(G.ing.position.x, G.ing.position.z, 3, 4); J.drop = null; }
+  }
+  G.mark.visible = T.live; G.mark.position.y = 5.1 + Math.sin(performance.now() / 250) * 0.15; G.mark.rotation.y += dt * 2;
+  if (state.phase !== 'play') return;
+  if (!T.live) { T.wait -= dt; if (T.wait <= 0 && !J.drop) jambyNext(); return; }
+  const p = me.h.obj.position, dx = T.ing.x - p.x, dz = T.ing.z - p.z, d = Math.hypot(dx, dz);
+  const ang = Math.abs(wrap(Math.atan2(dx, dz) - me.h.yaw));
+  T.age += dt;
+  if (T.k == null) {
+    if (d < 19 && ang < 1.25 && !me.r.fallen) T.k = 2.6; // вошёл в зону выстрела — круг начинает сходиться
+    else if (T.age > 14 || d > 60) { T.live = false; T.wait = 0; G.post.visible = false; } // ускакал — новый шест
+  } else if (!J.arrow) {
+    T.k -= dt * 1.45;
+    if (T.k < 0.42 || ang > 2.1) jambyMiss(false); // не выстрелил вовремя
+  }
+}
+function jambyHit(A) {
+  const J = jamby, T = J.tgt, G = jambyGear;
+  const mult = (A.perfect ? 1.5 : 1) * (A.gallop ? 1.5 : 1) * (1 + Math.min(0.5, J.streak * 0.1));
+  const pts = Math.round(100 * mult / 10) * 10;
+  J.score += pts; J.hits++; if (A.perfect) J.perfect++; J.streak++;
+  state.score[0] = J.hits;
+  state.events.push({ t: 'jHit', perfect: A.perfect });
+  // верёвка лопнула — слиток падает
+  const w = G.ing.getWorldPosition(new THREE.Vector3());
+  scene.attach(G.ing); G.ing.position.copy(w); G.rope.visible = false;
+  V.subVectors(A.to, A.from).setY(0).normalize();
+  J.drop = { vel: new THREE.Vector3(V.x * 2.5, 2, V.z * 2.5) };
+  T.live = false; T.wait = 1.1;
+  burst(w.x, w.z, A.perfect ? '#ffcf3a' : '#ffffff');
+  clink(w.x, w.z); crowdShout('ah');
+  popMoney('+' + pts);
+  banner(A.perfect ? tr('jPerfect') : tr('jHit'), null, 0.8, [A.gallop ? tr('jGallop') + ' ×1.5' : '', J.streak > 1 ? '×' + J.streak : ''].filter(Boolean).join(' · '));
+  juice.trauma = Math.max(juice.trauma, 0.25);
+}
+function jambyMiss(shot) {
+  const J = jamby, T = J.tgt;
+  J.streak = 0;
+  T.live = false; T.k = null; T.wait = 0.7;
+  if (!shot) jambyGear.post.visible = false; // проскакал мимо — шест убираем, сразу новый
+  banner(tr('jMiss'), ['#cfd6dd', '#8a96a3'], 0.6);
+}
+function jambyHud() {
+  const J = jamby, T = J.tgt, R = jambyGear.ret;
+  txt(el.scB, Math.max(J.best?.hits || 0, J.hits));
+  const show = T.live && T.k != null && !J.arrow && state.phase === 'play';
+  if (!show) { if (R.style.display !== 'none') R.style.display = 'none'; return; }
+  V.copy(T.ing).project(camera);
+  R.style.display = 'block';
+  sty(R, 'left', (V.x * 0.5 + 0.5) * 100 + '%'); sty(R, 'top', (-V.y * 0.5 + 0.5) * 100 + '%');
+  R.style.setProperty('--k', T.k.toFixed(3));
+  R.classList.toggle('ok', Math.abs(T.k - 1) < 0.24);
+}
+function jambyEnd() {
+  state.phase = 'end';
+  const J = jamby;
+  jambyGear.ret.style.display = 'none';
+  const sum = career.jambyReport(J.hits, J.perfect, J.score, J.shots);
+  el.banner.classList.remove('on'); bannerT = 0; el.hint.textContent = ''; el.tug.hidden = true;
+  career.showJambyResult(sum);
+  el.menu.hidden = false;
+  if (sum.record) { cheer(true); portal.happytime(); }
 }
 function audarKick(first) {
   for (const e of [me, audar.foe]) {
@@ -1130,6 +1290,7 @@ function hud(dt) {
   txt(el.clock, `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`);
   if (state.golden) txt(el.clock, '⚡');
   if (audar) txt(el.clock, tr('to3'));
+  if (jamby) jambyHud();
   sty(el.stam, 'width', me.stamina + '%');
   sty(el.stam, 'background', me.stamina < 25 ? 'linear-gradient(90deg,#8f1418,#e0393e)' : '');
   const T = state.tug, mine = T && (T.att === me || T.car === me);
@@ -1153,12 +1314,13 @@ function hud(dt) {
   if (me.r.fallen?.landed && me.r.fallen.mount == null && me.down > 0.95 && !online.role) { delete el.hint.dataset.keep; html(el.hint, touch ? tr('getUpTap') : tr('getUpKey')); }
   else if (tut.on && !el.tut.hidden) { if (!el.hint.dataset.keep) txt(el.hint, ''); }
   else if (can && nearKazan) html(el.hint, touch ? tr('aimTouch') : tr('canThrow'));
+  else if (jamby) html(el.hint, jamby.tgt.k != null && !jamby.arrow ? (touch ? tr('jAimT') : tr('jAim')) : tr('jRide'));
   else if (can && audar) html(el.hint, touch ? tr('canWrestleT') : tr('canWrestle'));
   else if (can && !touch) html(el.hint, pass ? tr('canPass') : tr('canTug'));
   else if (!el.hint.dataset.keep) txt(el.hint, '');
   if (state.phase === 'menu') txt(el.hint, ''); // под меню подсказок нет
   // стрелка к цели по краю экрана: к мешку или к чужому казану
-  const target = audar ? V2.copy(audar.foe.h.obj.position).setY(1) : sack.carrier === me ? new THREE.Vector3(kazans[1 - me.team].x, 1, 0) : sack.carrier && sack.carrier.team === me.team ? null : sack.pos;
+  const target = jamby ? (jamby.tgt.live ? V2.copy(jamby.tgt.ing).setY(2) : null) : audar ? V2.copy(audar.foe.h.obj.position).setY(1) : sack.carrier === me ? new THREE.Vector3(kazans[1 - me.team].x, 1, 0) : sack.carrier && sack.carrier.team === me.team ? null : sack.pos;
   if (target) {
     V.copy(target).project(camera);
     const off = V.z > 1 || Math.abs(V.x) > 0.95 || Math.abs(V.y) > 0.95;
@@ -1207,7 +1369,7 @@ for (const ev of ['pointerup', 'pointercancel']) el.btnTug.addEventListener(ev, 
 el.btnWhip.addEventListener('pointerdown', (e) => { e.preventDefault(); if (canRear()) me.h.rear(); else whipHeld = true; });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.btnWhip.addEventListener(ev, () => { whipHeld = false; });
 function startMatch() {
-  audarOff();
+  modeOff();
   applyStage(); applyLang();
   el.menu.hidden = true;
   state.score = [0, 0]; state.clock = rookie ? ROOKIE_LEN : MATCH_LEN; state.golden = false; state.events = []; kickoff(true); // первый матч короче — новичок точно доходит до итогов и призовых
@@ -1238,9 +1400,9 @@ el.pause.addEventListener('input', (e) => { // ползунки громкост
 el.pauseBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePause(); });
 el.pauseBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
 addEventListener('blur', () => { if (!SIM && state.phase === 'play' && !P.has('debug') && !online.role) togglePause(true); }); // ушёл со вкладки — пауза
-career.initCareer(document.getElementById('hub'), () => { initAudio(); goLandscape(); startMatch(); }, openSettings, () => { initAudio(); onlineOpen(); }, () => { initAudio(); goLandscape(); startAudar(); });
+career.initCareer(document.getElementById('hub'), () => { initAudio(); goLandscape(); startMatch(); }, openSettings, () => { initAudio(); onlineOpen(); }, () => { initAudio(); goLandscape(); startAudar(); }, () => { initAudio(); goLandscape(); startJamby(); });
 function showMenu() {
-  audarOff();
+  modeOff();
   state.phase = 'menu';
   applyStage(); // соперник в своих цветах уже в меню
   el.banner.classList.remove('on'); bannerT = 0;
@@ -1304,7 +1466,7 @@ function tutPic(step) {
   return [k('W'), k('W') + k('A') + k('D'), k('E') + `<span class="hold">${lang === 'ru' ? 'держи' : 'hold'}</span>`, k('E')][step];
 }
 function stepTut(dt) {
-  if (!tut.on || SIM || AI_PLAYER || !me || audar) { if (audar) el.tut.hidden = true; return; }
+  if (!tut.on || SIM || AI_PLAYER || !me || audar || jamby) { if (audar || jamby) el.tut.hidden = true; return; }
   const playing = state.phase === 'play' || state.phase === 'countdown';
   el.tut.hidden = !playing || paused;
   if (!playing) return;
@@ -1385,7 +1547,7 @@ function onlineJoin(code) {
 }
 // хост: друг играет за 2-го всадника команды соперника, в своих цветах
 function onlineStartHost() {
-  audarOff();
+  modeOff();
   const f = online.friend;
   online.remote = ents.find((e) => e.team === 1 && ents.filter((o) => o.team === 1).indexOf(e) === 1);
   online.remote.remote = true;
@@ -1399,7 +1561,7 @@ function onlineStartHost() {
 }
 // друг: смотрит с хоста, управляет своим всадником
 function onlineStartGuest(m) {
-  audarOff();
+  modeOff();
   const mine = ents.find((e) => e.team === 1 && ents.filter((o) => o.team === 1).indexOf(e) === 1);
   for (const e of ents) e.me = false;
   mine.me = true; me = mine;
@@ -1571,4 +1733,4 @@ if (SIM) {
   const go = () => { performance.mark('k:frame'); requestAnimationFrame(frame); };
   if (renderer.compileAsync) renderer.compileAsync(scene, camera).then(go, go); else go();
 }
-if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, startAudar, get audar() { return audar; }, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, play(n, dt = 1 / 60) { for (let i = 0; i < n; i++) { let d = dt; if (juice.stop > 0) { juice.stop -= dt; d *= 0.12; } else if (juice.slow > 0) { juice.slow -= dt; d *= 0.4; } step(d); updateCamera(d); juiceEvents(); stepConfetti(dt); shakeCamera(dt); } hud(dt); renderAll(); }, getProto };
+if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, startAudar, startJamby, get audar() { return audar; }, get jamby() { return jamby; }, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, play(n, dt = 1 / 60) { for (let i = 0; i < n; i++) { let d = dt; if (juice.stop > 0) { juice.stop -= dt; d *= 0.12; } else if (juice.slow > 0) { juice.slow -= dt; d *= 0.4; } step(d); updateCamera(d); juiceEvents(); stepConfetti(dt); shakeCamera(dt); } hud(dt); renderAll(); }, getProto };

@@ -134,6 +134,30 @@ export function tumble(x, z, long = 0.7) {
   o.connect(g); g.connect(out(1, pan)); o.start(t); lfo.start(t); o.stop(t + long + 0.02); lfo.stop(t + long + 0.02);
 }
 
+// лук: щелчок тетивы и свист стрелы
+export function twang() {
+  if (!ctx || muted) return;
+  const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(260, t); o.frequency.exponentialRampToValueAtTime(120, t + 0.18);
+  g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  o.connect(g); g.connect(out(1, 0)); o.start(t); o.stop(t + 0.22);
+  const s = ctx.createBufferSource(); s.buffer = noise;
+  const f = filter('bandpass', 2600, 1.5), sg = ctx.createGain();
+  sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime(0.12, t + 0.05); sg.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  s.connect(f); f.connect(sg); sg.connect(out(1, 0)); s.start(t, Math.random()); s.stop(t + 0.32);
+}
+// стрела попала в серебро: звон
+export function clink(x, z) {
+  if (!ctx || muted) return;
+  const { vol, pan } = place(x, z, 10);
+  const t = ctx.currentTime;
+  for (const [f, k] of [[1870, 1], [2810, 0.6], [4100, 0.35]]) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.value = f; g.gain.setValueAtTime(Math.max(0.05, vol) * 0.16 * k, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    o.connect(g); g.connect(out(1, pan)); o.start(t); o.stop(t + 0.72);
+  }
+}
+
 // каждый кадр: ветер от скорости, река от расстояния до воды
 export function ambience(speed, riverDistance) {
   if (!ctx) return;

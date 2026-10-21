@@ -433,7 +433,18 @@
   .h-actions { display: flex; gap: 14px; justify-content: center; align-items: stretch; flex-wrap: wrap; margin-top: 8px; }
   .h-actions .big-btn { margin: 0 !important; }
   .h-actions .h-friend { margin: 0; display: inline-flex; padding: 0 20px; border-radius: 14px; font-size: 15px; }
+  .h-modes { display: flex; flex-direction: column; gap: 6px; }
+  .h-actions .h-modes .h-friend { padding: 4px 14px; font-size: 13px; border-radius: 11px; flex: 1; }
+  .h-modes .ic { width: 18px; height: 18px; }
+  html.tiny .h-actions .h-modes .h-friend { padding: 2px 12px; font-size: calc(12px * var(--u)); }
+  html.tiny .h-modes { gap: 4px; }
   .h-duel span { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+  #jret { position: absolute; width: 0; height: 0; pointer-events: none; display: none; z-index: 3; }
+  #jret i, #jret b { position: absolute; left: -20px; top: -20px; width: 40px; height: 40px; border-radius: 50%; box-sizing: border-box; }
+  #jret i { border: 3px solid #ffd23a; box-shadow: 0 0 0 2px rgba(0,0,0,.35), inset 0 0 0 2px rgba(0,0,0,.25); }
+  #jret b { border: 3px solid #fff; transform: scale(var(--k, 2)); box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
+  #jret.ok b { border-color: #5be27a; }
+  #jret.ok i { box-shadow: 0 0 14px #5be27a, 0 0 0 2px rgba(0,0,0,.35); }
   .h-duel small { font-size: 11px; font-weight: 600; opacity: .7; }
   .h-duel { color: #ffe58a; box-shadow: inset 0 0 0 1px rgba(255,207,58,.45) !important; }
   html .result .r-solo { max-width: 420px; margin: 4px auto 0; width: 100%; }
@@ -494,7 +505,7 @@
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvii8nga","./js/boot.js":"./js/boot.js?v=mvii8nga","./js/career.js":"./js/career.js?v=mvii8nga","./js/crowd.js":"./js/crowd.js?v=mvii8nga","./js/flags.js":"./js/flags.js?v=mvii8nga","./js/game.js":"./js/game.js?v=mvii8nga","./js/icons.js":"./js/icons.js?v=mvii8nga","./js/kazan.js":"./js/kazan.js?v=mvii8nga","./js/net.js":"./js/net.js?v=mvii8nga","./js/portal.js":"./js/portal.js?v=mvii8nga","./js/rider.js":"./js/rider.js?v=mvii8nga","./js/serke.js":"./js/serke.js?v=mvii8nga","./js/trees.js":"./js/trees.js?v=mvii8nga","./js/world.js":"./js/world.js?v=mvii8nga"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mviix3ph","./js/boot.js":"./js/boot.js?v=mviix3ph","./js/career.js":"./js/career.js?v=mviix3ph","./js/crowd.js":"./js/crowd.js?v=mviix3ph","./js/flags.js":"./js/flags.js?v=mviix3ph","./js/game.js":"./js/game.js?v=mviix3ph","./js/icons.js":"./js/icons.js?v=mviix3ph","./js/kazan.js":"./js/kazan.js?v=mviix3ph","./js/net.js":"./js/net.js?v=mviix3ph","./js/portal.js":"./js/portal.js?v=mviix3ph","./js/rider.js":"./js/rider.js?v=mviix3ph","./js/serke.js":"./js/serke.js?v=mviix3ph","./js/trees.js":"./js/trees.js?v=mviix3ph","./js/world.js":"./js/world.js?v=mviix3ph"}}</script>
 </head>
 <body>
 <div id="stage">
@@ -561,6 +572,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvii8nga"></script>
+<script type="module" src="./js/game.js?v=mviix3ph"></script>
 </body>
 </html>
