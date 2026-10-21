@@ -304,6 +304,15 @@ export function flowStep(g) {
     o.tap = best >= 0 ? best : null;
     if (best >= 0) tap.set(o, best);
   }
+  // when the river cannot give everyone a full share, everyone asks for the same part of it. The water
+  // used to go to the upper orchards first, and a lower one right next to a canal got nothing and dried
+  // (21.10: most losses in year 2 had water for all at 70–80% each, enough for every orchard to live)
+  let asked = 0, canals = 0;
+  for (const o of g.objects) if (tap.has(o)) asked += o.need;
+  for (const i of g.order) if (g.kind[i] === CANAL) canals++;
+  const supply = sourceFlow(g.day, g.year, g.melt) - canals * SOAK;
+  const ration = sleeping || asked <= 0 ? 1 : clamp((supply * 0.97) / asked, 0.15, 1);
+  g.ration = ration;
   // a cell that water reaches from two canals splits its order between them; ordered in full from
   // both, the water came twice and the second share spilled where the canals meet
   // ... by how much water each of them brought last tick: in a loop of canals one side can be nearly
@@ -318,14 +327,14 @@ export function flowStep(g) {
     // before a canal that leaves it and comes back lower down takes any
     if (g.kind[i] === RIVER) {
       let w = 0;
-      if (!sleeping) for (const o of g.near[i]) if (tap.get(o) === i) w += o.need;
+      if (!sleeping) for (const o of g.near[i]) if (tap.get(o) === i) w += o.need * ration;
       for (const t of g.out[i]) if (!g.gate[t]) w += (g.kind[t] === RIVER ? need[t] : Math.min(g.cap, need[t])) * part(i, t);
       need[i] = w;
       carry[i] = Infinity;
       continue;
     }
     let w = 0, c = 0;
-    if (!sleeping) for (const o of g.near[i]) if (tap.get(o) === i) w += o.need;
+    if (!sleeping) for (const o of g.near[i]) if (tap.get(o) === i) w += o.need * ration;
     if (!sleeping) w += SOAK; // the canal itself drinks a little: a valley dug all over dries the river
     c = w;
     let open = 0;
@@ -378,7 +387,7 @@ export function flowStep(g) {
     if (!sleeping) {
       for (const o of g.near[i]) {
         if (tap.get(o) !== i) continue; // each drinks from its own cell only
-        const take = Math.min(q, o.need - o.got);
+        const take = Math.min(q, o.need * ration - o.got);
         if (take > 0) {
           o.got += take;
           q -= take;

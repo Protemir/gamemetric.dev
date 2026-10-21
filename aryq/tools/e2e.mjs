@@ -79,6 +79,35 @@ const clickText = (text) => B.js(`(() => { const b = [...document.querySelectorA
   check('the wide valley has more water than the gorge', w.melt > m.melt && m.melt > gz.melt, `${w.melt} / ${m.melt} / ${gz.melt}`);
 }
 
+// 0d. short water is shared: at 70% of what all ask for, no watered orchard is left with nothing
+// (until 21.10 the upper ones drank first and a lower one beside a canal dried: most year-2 losses)
+{
+  const Sim = await import('../js/sim.js');
+  let worst = 0, cases = 0;
+  for (let seed = 500; seed < 520; seed++) {
+    const g = Sim.newGame(16, 26, seed, 'wide');
+    g.dig = 1e9;
+    for (let t = 0; t < 70; t += 0.5) {
+      for (const o of g.objects) {
+        if (o.s >= 0.99) continue;
+        const p = Sim.planFor(g, o);
+        if (p && p.cells.length) { Sim.startStroke(g, p.from); for (const c of p.cells) if (!Sim.extend(g, c).ok) break; Sim.endStroke(g); }
+        o.thirst = 0;
+      }
+      Sim.advance(g, 0.5);
+    }
+    const share = Sim.waterShare(g);
+    if (share == null) continue;
+    g.melt *= 0.7 / share;
+    for (let k = 0; k < 8; k++) Sim.flowStep(g);
+    const fed = g.objects.filter((o) => o.tap != null);
+    if (fed.length < 4) continue;
+    cases++;
+    worst = Math.max(worst, fed.filter((o) => o.got / o.need < 0.2).length / fed.length);
+  }
+  check('short water is shared, nobody watered gets nothing', cases >= 10 && worst === 0, `${cases} valleys, worst ${Math.round(worst * 100)}% starved`);
+}
+
 try {
   // 1. start screens in both languages
   await B.init('try { localStorage.clear(); } catch {}');
