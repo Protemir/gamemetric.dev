@@ -279,13 +279,13 @@ function releaseSack(e) { // руки выпрямились — туша лет
 // ---------- падение всадника ----------
 function fallRider(e, nx, nz) {
   if (e.r.fallen || state.phase !== 'play') return;
-  if (sack.carrier === e) { dropSack(sack.pos.clone(), new THREE.Vector3(nx * 2.5, 2, nz * 2.5)); state.events.push({ t: 'fumble' }); }
+  if (sack.carrier === e) { dropSack(sack.pos.clone(), new THREE.Vector3(nx * 2.5, 2, nz * 2.5)); state.events.push({ t: 'fumble', me: !!e.me }); }
   if (state.tug && (state.tug.att === e || state.tug.car === e)) state.tug = null;
   const hv = e.h.v, fx = Math.sin(e.h.yaw), fz = Math.cos(e.h.yaw);
   const side = Math.sign(fz * nx - fx * nz) || 1;
   e.r.fall(scene, fx * hv * 0.7 + nx * 2.5, 2.4, fz * hv * 0.7 + nz * 2.5, side);
   e.down = 3; e.wait = 0; e.stun = 3.3; e.pickCD = 3.5; e.tugCD = 3.5;
-  state.events.push({ t: 'fall', team: e.team });
+  state.events.push({ t: 'fall', team: e.team, me: !!e.me });
   if (!SIM) crowdShout('ooh');
   if (!SIM) neigh(e.h.obj.position.x, e.h.obj.position.z);
   if (!SIM && (e.me || e.team === me?.team)) banner(tr('unhorsed'), e.me ? null : TEAMS[e.team].grad, 1.1);
@@ -365,7 +365,7 @@ function stepTug(dt) {
     T.car.stats.tugsWon++;
     if (!SIM && (T.att.me || T.car.me)) banner(T.car.me ? tr('heldMe') : tr('heldThem'), TEAMS[T.car.team].grad, 1.1);
   }
-  state.events.push({ t: 'tugEnd', winner, team: (winner === 'att' ? T.att : T.car).team });
+  state.events.push({ t: 'tugEnd', winner, team: (winner === 'att' ? T.att : T.car).team, me: !!(T.att.me || T.car.me) });
 }
 
 // ---------- боты ----------
@@ -699,7 +699,7 @@ function onHit(a, b, imp, nx, nz) {
       dropSack(sack.pos.clone(), new THREE.Vector3(nx * s * 3 + Math.sin(e.h.yaw) * e.h.v * 0.4, 2.5, nz * s * 3 + Math.cos(e.h.yaw) * e.h.v * 0.4));
       e.pickCD = 1.2;
       state.tug = null;
-      state.events.push({ t: 'fumble' });
+      state.events.push({ t: 'fumble', me: !!(e.me || o.me) });
       if (!SIM && (e.me || o.me)) banner(tr('fumble'), null, 1);
     }
   }
@@ -833,6 +833,82 @@ function updateCamera(dt, snap) {
   followSun(cam.look.x, cam.look.z);
   setListener(camera.position.x, camera.position.z, cam.yaw);
   ambience(h.v, riverDist(camera.position.x, camera.position.z));
+}
+
+// ---------- «сочность»: тряска камеры, замирание кадра на ударе, салют на гол, +₸ ----------
+// по событиям матча: всё, что касается игрока, ощущается сильнее
+const juice = { trauma: 0, stop: 0, seen: 0, t: 0 };
+const CONF = 180;
+const confetti = (() => {
+  const g = new THREE.PlaneGeometry(0.24, 0.13);
+  const m = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, toneMapped: false });
+  const im = new THREE.InstancedMesh(g, m, CONF);
+  im.count = 0; im.frustumCulled = false;
+  const p = [], c = new THREE.Color();
+  for (let i = 0; i < CONF; i++) { p.push({ pos: new THREE.Vector3(), vel: new THREE.Vector3(), rot: new THREE.Euler(), spin: new THREE.Vector3(), life: 0 }); im.setColorAt(i, c.set('#fff')); }
+  scene.add(im);
+  return { im, p };
+})();
+function burst(x, z, color) { // салют над казаном: цвет команды, золото, белый
+  const c = new THREE.Color(), cols = [color, color, '#ffcf3a', '#ffffff'];
+  confetti.p.forEach((q, i) => {
+    const a = rnd() * 6.283, s = 3 + rnd() * 5;
+    q.pos.set(x + (rnd() - 0.5), 2.2, z + (rnd() - 0.5));
+    q.vel.set(Math.cos(a) * s * 0.5, 6 + rnd() * 6, Math.sin(a) * s * 0.5);
+    q.rot.set(rnd() * 6, rnd() * 6, rnd() * 6); q.spin.set(rnd() * 12 - 6, rnd() * 12 - 6, rnd() * 12 - 6);
+    q.life = 2.2 + rnd() * 1.4;
+    confetti.im.setColorAt(i, c.set(cols[i % cols.length]));
+  });
+  confetti.im.instanceColor.needsUpdate = true;
+  confetti.im.count = CONF;
+}
+const Mc = new THREE.Matrix4(), Qc2 = new THREE.Quaternion(), Sc = new THREE.Vector3(1, 1, 1);
+function stepConfetti(dt) {
+  if (!confetti.im.count) return;
+  let alive = 0;
+  confetti.p.forEach((q, i) => {
+    if (q.life > 0) {
+      q.life -= dt; alive++;
+      q.vel.y -= 9.8 * dt * 0.55; q.vel.multiplyScalar(Math.exp(-dt * 1.4)); // бумажки тормозят воздухом
+      q.pos.addScaledVector(q.vel, dt);
+      if (q.pos.y < 0.05) { q.pos.y = 0.05; q.vel.set(0, 0, 0); q.spin.multiplyScalar(0.9); }
+      q.rot.x += q.spin.x * dt; q.rot.y += q.spin.y * dt; q.rot.z += q.spin.z * dt;
+    }
+    const s = q.life > 0 ? Math.min(1, q.life * 2) : 0;
+    Sc.setScalar(s);
+    confetti.im.setMatrixAt(i, Mc.compose(q.pos, Qc2.setFromEuler(q.rot), Sc));
+  });
+  confetti.im.instanceMatrix.needsUpdate = true;
+  if (!alive) confetti.im.count = 0;
+}
+function popMoney(text) { // «+150 ₸» всплывает над полем
+  const d = document.createElement('div');
+  d.className = 'pop-money disp'; d.textContent = text;
+  (document.getElementById('stage') || document.body).appendChild(d);
+  setTimeout(() => d.remove(), 1500);
+}
+function juiceEvents() {
+  const ev = state.events;
+  if (juice.seen > ev.length) juice.seen = 0; // новый матч
+  for (; juice.seen < ev.length; juice.seen++) {
+    const e = ev[juice.seen];
+    if (e.t === 'goal') {
+      const k = kazans[e.team === 0 ? 1 : 0];
+      burst(k.x, 0, TEAMS[e.team].color);
+      juice.trauma = Math.max(juice.trauma, e.team === me.team ? 0.55 : 0.3);
+      if (e.team === me.team && !online.role) popMoney('+' + (150).toLocaleString('ru-RU') + ' ₸');
+    } else if (e.me && (e.t === 'fall' || e.t === 'fumble')) { juice.trauma = Math.max(juice.trauma, 0.7); juice.stop = 0.09; }
+    else if (e.me && e.t === 'tugEnd') { juice.trauma = Math.max(juice.trauma, 0.4); juice.stop = 0.06; }
+    else if (e.t === 'fall') juice.trauma = Math.max(juice.trauma, 0.15);
+  }
+}
+function shakeCamera(dt) {
+  juice.t += dt;
+  if (juice.trauma <= 0.001) return;
+  const s = juice.trauma * juice.trauma, t = juice.t * 32;
+  camera.position.x += Math.sin(t * 1.1) * s * 0.28; camera.position.y += Math.sin(t * 1.7 + 1) * s * 0.18; camera.position.z += Math.sin(t * 1.3 + 2) * s * 0.28;
+  camera.rotateZ(Math.sin(t * 0.9 + 3) * s * 0.035);
+  juice.trauma = Math.max(0, juice.trauma - dt * 1.6);
 }
 
 // ---------- интерфейс ----------
@@ -1244,10 +1320,13 @@ function frame(now) {
   if (!paused) tuneRes(dt);
   portal.gameplay(!paused && el.menu.hidden && el.pause.hidden && ['countdown', 'play', 'goal'].includes(state.phase)); // для портала: идёт ли сам матч
   if (paused) { renderAll(); requestAnimationFrame(frame); return; }
+  const realDt = dt;
   if (state.phase === 'goal' && state.t > 2.1) dt *= 0.4; // гол — на мгновение замедленно
+  if (juice.stop > 0) { juice.stop -= realDt; dt *= 0.12; } // удар — кадр на миг замирает
   if (online.role === 'guest') guestStep(dt);
   else { step(dt); if (online.role === 'host') hostSend(dt); }
   updateCamera(dt);
+  juiceEvents(); stepConfetti(realDt); shakeCamera(realDt);
   hud(dt);
   renderAll();
   requestAnimationFrame(frame);

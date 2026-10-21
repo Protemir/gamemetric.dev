@@ -78,6 +78,9 @@
   #tugtip { margin-top: 10px; font-size: 22px; color: var(--gold); text-shadow: 0 2px 0 rgba(0,0,0,.4), 0 0 14px rgba(0,0,0,.35); animation: pulse .5s ease-in-out infinite alternate; }
   @keyframes pulse { to { transform: scale(1.08); } }
   #hint { left: 50%; bottom: 16px; transform: translateX(-50%); background: rgba(14,10,6,.62); padding: 8px 16px; border-radius: 999px; white-space: nowrap; font-size: 14px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+  /* «+150 ₸» при своём голе — всплывает и тает */
+  .pop-money { position: fixed; left: 50%; top: 46%; z-index: 4; pointer-events: none; font-size: clamp(30px, 5vw, 54px); color: #ffe58a; text-shadow: 0 3px 0 rgba(0,0,0,.45), 0 0 18px rgba(255,190,40,.7); transform: translate(-50%, 0); animation: popm 1.4s ease-out forwards; }
+  @keyframes popm { 0% { opacity: 0; transform: translate(-50%, 20px) scale(.6); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); } 30% { transform: translate(-50%, -6px) scale(1); } 100% { opacity: 0; transform: translate(-50%, -70px) scale(1); } }
   #hint:empty { display: none; }
   #hint kbd { font: 700 12px 'Rubik', sans-serif; background: #fff; color: var(--ink); border-radius: 4px; padding: 1px 5px; margin: 0 2px; box-shadow: 0 2px 0 #9a8f7a; }
   #arrow { font-size: 34px; font-weight: 900; text-shadow: 0 2px 4px rgba(0,0,0,.6); }
@@ -484,7 +487,7 @@
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvi7a0o5","./js/boot.js":"./js/boot.js?v=mvi7a0o5","./js/career.js":"./js/career.js?v=mvi7a0o5","./js/crowd.js":"./js/crowd.js?v=mvi7a0o5","./js/flags.js":"./js/flags.js?v=mvi7a0o5","./js/game.js":"./js/game.js?v=mvi7a0o5","./js/icons.js":"./js/icons.js?v=mvi7a0o5","./js/kazan.js":"./js/kazan.js?v=mvi7a0o5","./js/net.js":"./js/net.js?v=mvi7a0o5","./js/portal.js":"./js/portal.js?v=mvi7a0o5","./js/rider.js":"./js/rider.js?v=mvi7a0o5","./js/serke.js":"./js/serke.js?v=mvi7a0o5","./js/trees.js":"./js/trees.js?v=mvi7a0o5","./js/world.js":"./js/world.js?v=mvi7a0o5"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvig9f5o","./js/boot.js":"./js/boot.js?v=mvig9f5o","./js/career.js":"./js/career.js?v=mvig9f5o","./js/crowd.js":"./js/crowd.js?v=mvig9f5o","./js/flags.js":"./js/flags.js?v=mvig9f5o","./js/game.js":"./js/game.js?v=mvig9f5o","./js/icons.js":"./js/icons.js?v=mvig9f5o","./js/kazan.js":"./js/kazan.js?v=mvig9f5o","./js/net.js":"./js/net.js?v=mvig9f5o","./js/portal.js":"./js/portal.js?v=mvig9f5o","./js/rider.js":"./js/rider.js?v=mvig9f5o","./js/serke.js":"./js/serke.js?v=mvig9f5o","./js/trees.js":"./js/trees.js?v=mvig9f5o","./js/world.js":"./js/world.js?v=mvig9f5o"}}</script>
 </head>
 <body>
 <div id="stage">
@@ -551,6 +554,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvi7a0o5"></script>
+<script type="module" src="./js/game.js?v=mvig9f5o"></script>
 </body>
 </html>
