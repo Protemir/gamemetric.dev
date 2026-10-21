@@ -83,6 +83,9 @@ export function newGame(W, H, seed = 1, valley = 'mountain', gen = GEN) {
     harvest: 0,
     lost: 0,
     gardensEver: 0,
+    dugEver: new Uint8Array(W * H), // cells dug at least once in this game (finds come only from new ground)
+    dugCount: 0,
+    nextFind: 5, // the first find comes early, on the fifth new cell
     over: null,
     nextGarden: 0,
     nextHouse: 3,
@@ -156,9 +159,36 @@ export function extend(g, b) {
     g.out[a].push(b);
     g.dig -= 1;
     s.cells.push(b);
+    if (!g.loading && !g.dugEver[b]) {
+      g.dugEver[b] = 1;
+      g.dugCount += 1;
+      if (g.dugCount >= g.nextFind) find(g, b);
+    }
   }
   g.order = null;
   return r;
+}
+
+// Now and then the ketmen turns something up (21.10, after the digging hits on CrazyGames: little
+// surprises keep you digging): coins for the harvest, an old jug with a few more cells of digging, or
+// a spring that gives the river a little more water for the rest of the game. Which one, and when the
+// next comes, follows from the valley and the count, so a saved game finds the same things.
+export const FINDS = { coins: 25, jug: 3, spring: 1.03 };
+function find(g, cell) {
+  const h = (k) => {
+    let v = (g.seed * 2654435761 + g.dugCount * 40503 + k * 97) | 0;
+    v = Math.imul(v ^ (v >>> 15), 2246822519);
+    v = Math.imul(v ^ (v >>> 13), 3266489917);
+    return ((v ^ (v >>> 16)) >>> 0) / 4294967296;
+  };
+  const r = h(1);
+  const kind = r < 0.5 ? 'coins' : r < 0.82 ? 'jug' : 'spring';
+  if (kind === 'coins') g.harvest += FINDS.coins;
+  if (kind === 'jug') g.dig += FINDS.jug;
+  if (kind === 'spring') g.melt *= FINDS.spring;
+  g.finds = (g.finds || 0) + 1;
+  g.nextFind = g.dugCount + 14 + Math.floor(h(2) * 15);
+  g.events.push({ type: 'find', kind, cell });
 }
 
 function removeCell(g, c) {
@@ -691,7 +721,7 @@ export function save(g) {
     objects: g.objects.map(({ type, x, y, need, thirst, flood, born, tap, got, grown }) => ({ type, x, y, need, thirst, flood, born, tap, got, grown })),
     flow: Array.from(g.flow, (v) => Math.round(v * 1000) / 1000),
     day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
-    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0, banked: g.banked || 0,
+    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0, banked: g.banked || 0, dugCount: g.dugCount || 0, nextFind: g.nextFind || 5, finds: g.finds || 0,
   };
 }
 
@@ -704,12 +734,18 @@ export function usable(d, W, H) {
 export function load(d) {
   const g = newGame(d.W, d.H, d.seed, VALLEYS[d.valley] ? d.valley : 'mountain', d.gen || 1);
   g.dig = 1e9;
+  g.loading = true; // digging the saved canals again finds nothing
   for (const s of d.strokes) {
     startStroke(g, s.from);
     for (const c of s.cells) extend(g, c);
     if (s.join) extend(g, s.join[1]);
     endStroke(g);
   }
+  g.loading = false;
+  for (let i = 0; i < g.W * g.H; i++) if (g.kind[i] === CANAL) g.dugEver[i] = 1;
+  if (Number.isFinite(d.dugCount)) g.dugCount = d.dugCount;
+  if (Number.isFinite(d.nextFind)) g.nextFind = d.nextFind;
+  if (Number.isFinite(d.finds)) g.finds = d.finds;
   for (const i of d.gates) if (g.kind[i] === CANAL) g.gate[i] = 1;
   for (const o of d.objects) {
     // only what stands on dry land inside the valley, on a cell of its own

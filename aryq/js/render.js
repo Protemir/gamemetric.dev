@@ -42,6 +42,7 @@ const SNOW = [236, 242, 247];
 
 export class View {
   constructor(canvas) {
+    this.floats = []; // words that rise from a cell and fade: what a find gave
     this.happy = new WeakMap(); // object -> it had enough water on the last frame
     this.happyAt = new WeakMap(); // object -> when it got water (for the jump)
     this.cv = canvas;
@@ -64,6 +65,32 @@ export class View {
     }
   }
 
+  float(cell, text) {
+    this.floats.push({ cell, text, at: performance.now() });
+  }
+
+  drawFloats(now) {
+    if (!this.floats.length) return;
+    const cx = this.cx;
+    this.floats = this.floats.filter((f) => now - f.at < 1700);
+    cx.save();
+    cx.font = `800 ${Math.max(13, Math.min(17, this.cs * 0.42))}px system-ui, sans-serif`;
+    cx.textAlign = 'center';
+    cx.textBaseline = 'middle';
+    for (const f of this.floats) {
+      const k = (now - f.at) / 1700;
+      const [px, py] = this.center(f.cell);
+      const y = py - this.cs * 0.6 - k * this.cs * 1.4;
+      cx.globalAlpha = k < 0.75 ? 1 : 1 - (k - 0.75) / 0.25;
+      cx.lineWidth = 4;
+      cx.strokeStyle = 'rgba(42,26,12,0.85)';
+      cx.strokeText(f.text, px, y);
+      cx.fillStyle = '#ffe66b';
+      cx.fillText(f.text, px, y);
+    }
+    cx.restore();
+  }
+
   drawBits(now) {
     const cx = this.cx;
     this.bits = this.bits.filter((b) => now - b.at < b.life);
@@ -78,7 +105,7 @@ export class View {
         cx.stroke();
       } else {
         const e = 1 - (1 - f) * (1 - f);
-        cx.fillStyle = b.kind === 'leaf' ? `rgba(96,170,70,${1 - f})` : `rgba(92,62,36,${1 - f})`;
+        cx.fillStyle = b.kind === 'leaf' ? `rgba(96,170,70,${1 - f})` : b.kind === 'coin' ? `rgba(255,206,64,${1 - f})` : `rgba(92,62,36,${1 - f})`;
         cx.beginPath();
         cx.arc(b.x + b.vx * e * 0.3, b.y + b.vy * e * 0.3 - Math.sin(f * Math.PI) * this.cs * 0.3, b.r, 0, Math.PI * 2);
         cx.fill();
@@ -554,6 +581,7 @@ export class View {
       }
     }
     if (g.day >= S.WINTER) this.drawSnow();
+    this.drawFloats(now);
     if (ui.loupe && this.cs < LOUPE_UNTIL) this.drawLoupe(ui.loupe);
     if (g.over) {
       const [px, py] = this.center(g.over.y * g.W + g.over.x);

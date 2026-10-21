@@ -226,6 +226,10 @@ const TEXT = {
     daily: 'Долина дня',
     dailySub: 'одна на всех сегодня, {d}',
     bestShort: 'рекорд {b}',
+    find_coins: '+{n} 🍏 монеты!',
+    find_jug: '+{n} ⛏ старый кувшин',
+    find_spring: 'родник! воды больше',
+    findTip: 'Кетмень иногда что-то находит в новой земле: монеты, кувшин, родник.',
     village: 'Аул · уровень {l}',
     villageGain: '+{h} 🍏 в аул',
     villageNext: 'Ещё {n} 🍏 — и каждая игра начнётся: {p}',
@@ -341,6 +345,10 @@ const TEXT = {
     daily: 'Valley of the day',
     dailySub: 'the same for everyone today, {d}',
     bestShort: 'best {b}',
+    find_coins: '+{n} 🍏 coins!',
+    find_jug: '+{n} ⛏ an old jug',
+    find_spring: 'a spring! more water',
+    findTip: 'The ketmen sometimes turns something up in new ground: coins, a jug, a spring.',
     village: 'Village · level {l}',
     villageGain: '+{h} 🍏 to the village',
     villageNext: '{n} 🍏 more and every game starts with: {p}',
@@ -1154,6 +1162,14 @@ function frame(now) {
       if (ev.type === 'grow') {
         view.burst(ev.obj.y * W + ev.obj.x, 'leaf');
         tip('grew', 4500, 2);
+      }
+      if (ev.type === 'find') {
+        view.float(ev.cell, t('find_' + ev.kind, { n: ev.kind === 'coins' ? S.FINDS.coins : S.FINDS.jug }));
+        view.burst(ev.cell, ev.kind === 'spring' ? 'splash' : 'coin');
+        if (ev.kind === 'spring') sfx.splash();
+        else sfx.watered();
+        tip('findTip', 4500, 1);
+        updateHud();
       }
       if (ev.type === 'year') {
         pulse('year', g.mode + ':y' + (ev.year - 1));

@@ -108,6 +108,48 @@ const clickText = (text) => B.js(`(() => { const b = [...document.querySelectorA
   check('short water is shared, nobody watered gets nothing', cases >= 10 && worst === 0, `${cases} valleys, worst ${Math.round(worst * 100)}% starved`);
 }
 
+// 0e. finds while digging (21.10): the first comes on the fifth new cell, none from digging the same
+// ground again, none when a saved game is loaded, and a loaded game finds the same as it would have
+{
+  const Sim = await import('../js/sim.js');
+  const g = Sim.newGame(16, 26, 3, 'wide');
+  g.dig = 1e9;
+  Sim.advance(g, 0.01);
+  g.events.length = 0;
+  const w = g.river.find((c) => { const x = c % g.W; return x > 4 && x < g.W - 5; });
+  const dir = (w % g.W) < g.W / 2 ? 1 : -1;
+  // a straight run of new ground away from the river (sideways keeps the bed falling slowly)
+  Sim.startStroke(g, w);
+  let c = w, dug = 0;
+  for (let k = 0; k < 4; k++) { const r = Sim.extend(g, c + dir); if (!r.ok) break; c += dir; dug++; }
+  Sim.endStroke(g);
+  const at4 = g.events.filter((e) => e.type === 'find').length;
+  Sim.undo(g);
+  for (let k = 0; k < 20; k++) { Sim.startStroke(g, w); Sim.extend(g, w + dir); Sim.endStroke(g); Sim.undo(g); }
+  const again = g.events.filter((e) => e.type === 'find').length;
+  check('finds: none in the first four cells, none from digging the same ground again', dug >= 3 && dug <= 4 && at4 === 0 && again === 0, `dug ${dug}, finds ${at4}/${again}`);
+  const h = Sim.newGame(16, 26, 3, 'wide');
+  h.dig = 1e9;
+  Sim.advance(h, 0.01);
+  h.events.length = 0;
+  let found = null, n = 0;
+  for (const r of h.river) {
+    for (const d of [1, -1]) {
+      if (found) break;
+      if (!Sim.startStroke(h, r)) continue;
+      let x = r;
+      for (let k = 0; k < 6; k++) { if (!Sim.extend(h, x + d).ok) break; x += d; }
+      Sim.endStroke(h);
+      n = h.dugCount;
+      found = h.events.find((e) => e.type === 'find');
+    }
+    if (found) break;
+  }
+  const saved = JSON.parse(JSON.stringify(Sim.save(h)));
+  const back = Sim.load(saved);
+  check('finds: the first one comes on the fifth new cell, loading finds nothing new', found && back.finds === h.finds && back.events.every((e) => e.type !== 'find') && back.dugCount === h.dugCount, `${found && found.kind} after ${n} cells, finds ${h.finds}/${back.finds}`);
+}
+
 try {
   // 1. start screens in both languages
   await B.init('try { localStorage.clear(); } catch {}');
