@@ -1410,6 +1410,8 @@ function showMenu() {
   el.menu.hidden = false;
 }
 addEventListener('resize', onResize);
+// портал: телефон повернули вертикально посреди матча — экран закрыт просьбой повернуть, матч ставим на паузу
+addEventListener('resize', () => { if (document.documentElement.classList.contains('portrait') && !paused && !online.role && ['play', 'countdown', 'goal'].includes(state.phase)) togglePause(true); });
 
 // ---------- запуск ----------
 let last = performance.now(), frozen = false;

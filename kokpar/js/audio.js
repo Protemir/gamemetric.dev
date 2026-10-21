@@ -51,7 +51,7 @@ export const getVolume = (k) => vol[k];
 export function setVolume(k, v) {
   vol[k] = Math.max(0, Math.min(1, v));
   try { localStorage.setItem('kokpar.vol', JSON.stringify(vol)); } catch { /* приватный режим */ }
-  if (ctx) { master.gain.setTargetAtTime(muted ? 0 : vol.master, ctx.currentTime, 0.05); crowdBus.gain.setTargetAtTime(vol.crowd, ctx.currentTime, 0.05); }
+  if (ctx) { master.gain.setTargetAtTime(muted || portalMuted ? 0 : vol.master, ctx.currentTime, 0.05); crowdBus.gain.setTargetAtTime(vol.crowd, ctx.currentTime, 0.05); }
 }
 try { muted = localStorage.getItem('kokpar.mute') === '1'; } catch { /* приватный режим */ }
 let portalMuted = false;
