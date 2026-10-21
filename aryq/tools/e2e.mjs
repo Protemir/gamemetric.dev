@@ -665,9 +665,31 @@ try {
     Object.defineProperty(window, 'CrazyGames', { configurable: false, writable: false, value: { SDK: { environment: 'crazygames', init: () => new Promise(() => {}), game: {}, data: null } } });`);
   await B.open(`${S.url}/dist/aryq-crazygames/index.html`, 924, 520);
   await wait(6500);
-  r = await B.js(`document.getElementById('ui').innerText.slice(0, 4)`);
+  // it opens straight in a valley (21.10), so the header shows instead of a menu
+  r = await B.js(`document.getElementById('ui').innerText.slice(0, 4) || (document.getElementById('hud').hidden ? '' : 'hud')`);
   B.errors.splice(0); // the real SDK script cannot replace the pinned stand-in
   check('the portal build starts even if its SDK hangs', r.length > 0, JSON.stringify(r));
+  await B.init('');
+
+  // 10f. on a portal the first screen is the valley (21.10: CG counts a visit only once play starts)
+  await B.init(`try { localStorage.clear(); } catch {} window.ARYQ_PORTAL = 'crazygames';`);
+  await B.open(page('&lang=ru&seed=1005'), 924, 520);
+  await wait(700);
+  r = await B.js(`JSON.stringify({ hud: !document.getElementById('hud').hidden, ui: document.getElementById('ui').innerText.slice(0, 20), mode: ${A}.g.mode })`).then(JSON.parse);
+  check('a new portal player lands straight in the wide valley', r.hud && r.ui === '' && r.mode === 'wide', JSON.stringify(r));
+  await B.js(`${A}.g.day = 30; document.dispatchEvent(new Event('visibilitychange'))`);
+  await B.init(`window.ARYQ_PORTAL = 'crazygames';`);
+  await B.js('location.reload()').catch(() => {});
+  await wait(900);
+  r = await B.js(`JSON.stringify({ hud: !document.getElementById('hud').hidden, day: ${A}.g.day, mode: ${A}.g.mode })`).then(JSON.parse);
+  check('a returning portal player goes on with the saved valley', r.hud && r.day >= 30 && r.mode === 'wide', JSON.stringify(r));
+  await B.js(`document.getElementById('pauseBtn').click()`);
+  await clickText('Меню');
+  await wait(300);
+  const day0 = await B.js(`${A}.g.day`);
+  await wait(600);
+  r = await B.js(`JSON.stringify({ menu: document.getElementById('ui').innerText.includes('Продолжить'), hud: !document.getElementById('hud').hidden, still: ${A}.g.day === ${day0} })`).then(JSON.parse);
+  check('pause has a way to the menu, the valley waits behind it', r.menu && !r.hud && r.still, JSON.stringify(r));
   await B.init('');
 
   // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads

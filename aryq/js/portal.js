@@ -24,6 +24,8 @@ export function portalLang() {
 export function gameplay(on) {
   const s = sdk();
   if (!s || on === playing) return;
+  // the game now opens straight in a valley: loading has to be over before play starts
+  if (on) loadingDone();
   playing = on;
   try {
     if (on) s.game.gameplayStart();

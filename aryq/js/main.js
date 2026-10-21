@@ -694,7 +694,7 @@ function doUndo() {
   if (g && !g.over && S.undo(g)) updateHud();
 }
 function togglePause() {
-  if (!g || g.over || ui.querySelector('.rewards')) return;
+  if (!g || g.over || hud.hidden || ui.querySelector('.rewards')) return;
   paused = !paused;
   if (paused) showPause();
   else ui.replaceChildren();
@@ -708,7 +708,13 @@ function showPause() {
   go.addEventListener('click', togglePause);
   const how = el('button', 'btn ghost', t('help'));
   how.addEventListener('click', () => showHelp(showPause));
-  box.append(go, how);
+  // the game is saved, so the menu offers "continue" for it
+  const menu = el('button', 'btn ghost', t('menu'));
+  menu.addEventListener('click', () => {
+    saveNow(); // the valley stays paused behind the menu
+    showStart();
+  });
+  box.append(go, how, menu);
   ui.replaceChildren(box);
 }
 
@@ -1075,7 +1081,23 @@ async function checkUpdate() {
 setInterval(checkUpdate, 60000);
 document.addEventListener('visibilitychange', () => setTimeout(checkUpdate, 500));
 
-showStart();
+// On a portal the first screen is the valley itself. CrazyGames counts a visit only once the game
+// starts, and the menu in front lost a third of them (21.10: 62% on computers, 33% on phones):
+// a saved game goes on, a new player gets the easy wide valley.
+function firstScreen() {
+  if (!PORTAL || q.has('menu')) return showStart();
+  const raw = store.get('aryq.save', null);
+  if (S.usable(raw, W, H) && raw.v === 1) {
+    try {
+      return start(['wide', 'mountain', 'gorge', 'daily'].includes(raw.mode) ? raw.mode : 'mountain', S.load(raw));
+    } catch {
+      store.set('aryq.save', null);
+    }
+  }
+  start(store.get('aryq.mode', null) ? mode : 'wide');
+}
+
+firstScreen();
 requestAnimationFrame(frame);
 requestAnimationFrame(() => loadingDone());
 onPortalMute((muted) => {
