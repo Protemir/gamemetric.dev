@@ -433,6 +433,10 @@
   .h-actions { display: flex; gap: 14px; justify-content: center; align-items: stretch; flex-wrap: wrap; margin-top: 8px; }
   .h-actions .big-btn { margin: 0 !important; }
   .h-actions .h-friend { margin: 0; display: inline-flex; padding: 0 20px; border-radius: 14px; font-size: 15px; }
+  .h-duel span { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+  .h-duel small { font-size: 11px; font-weight: 600; opacity: .7; }
+  .h-duel { color: #ffe58a; box-shadow: inset 0 0 0 1px rgba(255,207,58,.45) !important; }
+  html .result .r-solo { max-width: 420px; margin: 4px auto 0; width: 100%; }
   html.short .h-actions { gap: 10px; margin-top: 4px; }
   html.short .h-actions .h-friend { padding: 0 14px; font-size: 13px; }
   /* телефон лёжа в Safari (высота 320–380 px): меню целиком без прокрутки, размеры растут вместе с высотой экрана (u = 1 при 360 px) */
@@ -490,7 +494,7 @@
   html.short .big-btn { font-size: 19px; padding: 10px 34px; }
   html.short .credits { font-size: 8px; bottom: 2px; opacity: .5; }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvihb48h","./js/boot.js":"./js/boot.js?v=mvihb48h","./js/career.js":"./js/career.js?v=mvihb48h","./js/crowd.js":"./js/crowd.js?v=mvihb48h","./js/flags.js":"./js/flags.js?v=mvihb48h","./js/game.js":"./js/game.js?v=mvihb48h","./js/icons.js":"./js/icons.js?v=mvihb48h","./js/kazan.js":"./js/kazan.js?v=mvihb48h","./js/net.js":"./js/net.js?v=mvihb48h","./js/portal.js":"./js/portal.js?v=mvihb48h","./js/rider.js":"./js/rider.js?v=mvihb48h","./js/serke.js":"./js/serke.js?v=mvihb48h","./js/trees.js":"./js/trees.js?v=mvihb48h","./js/world.js":"./js/world.js?v=mvihb48h"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audio.js":"./js/audio.js?v=mvii8nga","./js/boot.js":"./js/boot.js?v=mvii8nga","./js/career.js":"./js/career.js?v=mvii8nga","./js/crowd.js":"./js/crowd.js?v=mvii8nga","./js/flags.js":"./js/flags.js?v=mvii8nga","./js/game.js":"./js/game.js?v=mvii8nga","./js/icons.js":"./js/icons.js?v=mvii8nga","./js/kazan.js":"./js/kazan.js?v=mvii8nga","./js/net.js":"./js/net.js?v=mvii8nga","./js/portal.js":"./js/portal.js?v=mvii8nga","./js/rider.js":"./js/rider.js?v=mvii8nga","./js/serke.js":"./js/serke.js?v=mvii8nga","./js/trees.js":"./js/trees.js?v=mvii8nga","./js/world.js":"./js/world.js?v=mvii8nga"}}</script>
 </head>
 <body>
 <div id="stage">
@@ -557,6 +561,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvihb48h"></script>
+<script type="module" src="./js/game.js?v=mvii8nga"></script>
 </body>
 </html>

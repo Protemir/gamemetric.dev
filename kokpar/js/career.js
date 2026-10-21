@@ -90,7 +90,7 @@ const T = {
     stats: { speed: ['Скорость', 'Быстрее галоп'], stamina: ['Выносливость', 'Дольше скачет без усталости'], strength: ['Сила', 'Крепче держит и тянет в тартысе'], agility: ['Ловкость', 'Круче поворачивает'] },
     upgrade: 'Улучшить', max: 'Максимум', coat: 'Масть вашего коня', buy: 'Купить', chosen: 'Выбрана', choose: 'Выбрать',
     stableSub: 'Улучшения действуют на всех коней клуба', rating: 'Сила', bracket: 'Плей-офф', tbd: '—', you: 'вы',
-    nextMatch: 'Следующий матч', upHorse: 'Улучшить коня', toMenu: 'В меню', dailyWaits: (m) => 'Награда дня ждёт в меню: +' + m, tomorrow: (m) => 'Завтра: +' + m + ' за вход и 3 новых задания',
+    nextMatch: 'Следующий матч', upHorse: 'Улучшить коня', duel: 'Аударыспақ', duelSub: '1 на 1 · до 3', duelAgain: 'Ещё бой', forDuelWin: 'за победу', forDuelLoss: 'за бой', duelRun: (n) => 'серия побед ×' + n, duelWins: 'Побед в аударыспақ', duelBest: 'Лучшая серия', toMenu: 'В меню', dailyWaits: (m) => 'Награда дня ждёт в меню: +' + m, tomorrow: (m) => 'Завтра: +' + m + ' за вход и 3 новых задания',
     sGoals: 'Твои голы', sTugs: 'Выиграно тартысов', sFalls: 'Сбито соперников',
     goldenGoal: 'Ничья в плей-офф — играем до золотого гола', stake: (w, g) => 'Победа +' + w + ' · гол +' + g,
     bonus: (v) => 'сейчас +' + v + '%',
@@ -109,7 +109,7 @@ const T = {
     stats: { speed: ['Speed', 'Faster gallop'], stamina: ['Stamina', 'Gallops longer before tiring'], strength: ['Strength', 'Holds and pulls harder in a tug'], agility: ['Agility', 'Turns tighter'] },
     upgrade: 'Upgrade', max: 'Max', coat: 'Your horse coat', buy: 'Buy', chosen: 'Selected', choose: 'Select',
     stableSub: 'Upgrades apply to every horse of the club', rating: 'Strength', bracket: 'Play-offs', tbd: '—', you: 'you',
-    nextMatch: 'Next match', upHorse: 'Upgrade horse', toMenu: 'Menu', dailyWaits: (m) => 'Your daily reward is waiting in the menu: +' + m, tomorrow: (m) => 'Tomorrow: +' + m + ' for coming back and 3 new quests',
+    nextMatch: 'Next match', upHorse: 'Upgrade horse', duel: 'Audaryspak', duelSub: '1 on 1 · first to 3', duelAgain: 'Fight again', forDuelWin: 'for the win', forDuelLoss: 'for the fight', duelRun: (n) => 'win streak ×' + n, duelWins: 'Duels won', duelBest: 'Best streak', toMenu: 'Menu', dailyWaits: (m) => 'Your daily reward is waiting in the menu: +' + m, tomorrow: (m) => 'Tomorrow: +' + m + ' for coming back and 3 new quests',
     sGoals: 'Your goals', sTugs: 'Tugs won', sFalls: 'Riders unhorsed',
     goldenGoal: 'Draw in a knockout — golden goal decides', stake: (w, g) => 'Win +' + w + ' · goal +' + g,
     bonus: (v) => 'now +' + v + '%',
@@ -292,9 +292,9 @@ const kitOf = (id) => (id === 'me' ? myKit() : makeKit(byId(id).c, byId(id).sign
 const money = (n) => n.toLocaleString('ru-RU').replace(/,/g, ' ') + ' ₸';
 const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
-let onSettings = null, onOnline = null;
-export function initCareer(el, play, settings, online) {
-  root = el; onPlay = play; onSettings = settings; onOnline = online;
+let onSettings = null, onOnline = null, onDuel = null;
+export function initCareer(el, play, settings, online, duel) {
+  root = el; onPlay = play; onSettings = settings; onOnline = online; onDuel = duel;
   root.addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]');
     if (!b || b.disabled) return;
@@ -326,6 +326,7 @@ const ACTS = {
   quests: () => showQuests(),
   settings: () => onSettings?.(),
   online: () => onOnline?.(),
+  duel: () => onDuel?.(),
   claim: () => {
     const d = dailyState();
     if (!d.ready) return;
@@ -376,6 +377,7 @@ export function showHub(skipDaily) {
       <div class="h-arena">${arenaName(f.arena)}</div>
       <div class="h-stake">${tr('stake')(money(PRIZE.win), money(PRIZE.goal))}${f.final ? ' · ' + tr('forTitle') + ' +' + money(PRIZE.title) : c.phase === 'semi' ? ' · ' + tr('forSemi') + ' +' + money(PRIZE.semi) : ''}</div>
       <div class="h-actions"><button class="big-btn" data-act="play">${tr('play')}</button>
+      <button class="h-friend h-duel" data-act="duel">${IC.horse}<span>${tr('duel')}<small>${tr('duelSub')}</small></span></button>
       ${window.KOKPAR_SDK || window.top !== window.self ? '' : `<button class="h-friend" data-act="online">${IC.crowd}<span>${L() === 'ru' ? 'С другом по сети' : 'Play a friend online'}</span></button>`}</div>`; // на портале игру по сети не показываем; кнопки в ряд с промежутком
   } else {
     const r = c.result;
@@ -490,3 +492,27 @@ function tomorrowText() {
   return tr('tomorrow')(money(DAILY[d.day % 7]));
 }
 export const goldenText = () => tr('goldenGoal');
+
+// ---------- аударыспақ: короткий бой 1 на 1 ----------
+export const duels = () => S.duels || { w: 0, l: 0, run: 0, best: 0 };
+export function duelReport(win, my, their) {
+  const d = (S.duels = duels());
+  if (win) { d.w++; d.run++; d.best = Math.max(d.best, d.run); } else { d.l++; d.run = 0; }
+  const lines = [[tr(win ? 'forDuelWin' : 'forDuelLoss'), win ? DUEL_PRIZE.win : DUEL_PRIZE.loss]];
+  if (win && d.run > 1) lines.push([tr('duelRun')(d.run), Math.min(5, d.run - 1) * DUEL_PRIZE.run]);
+  const total = lines.reduce((a, l) => a + l[1], 0);
+  S.money += total;
+  save(S);
+  return { win, my, their, lines, total, d: { ...d } };
+}
+const DUEL_PRIZE = { win: 1000, loss: 250, run: 200 };
+export function showDuelResult(sum) {
+  const lines = sum.lines.map(([a, b]) => `<div><span>${a}</span><b>+${money(b)}</b></div>`).join('');
+  root.innerHTML = `<div class="hub result ${sum.win ? 'win' : 'loss'}">
+    <div class="h-cup disp r-title">${sum.win ? tr('win') : tr('loss')}</div>
+    <div class="h-season">${tr('duel')} · ${esc(sum.foe)}</div>
+    <div class="r-score"><img src="${flag(myKit(), 144, 90)}" alt=""><span class="disp">${sum.my} : ${sum.their}</span><img src="${flag(sum.kit, 144, 90)}" alt=""></div>
+    <div class="r-stats"><span>${tr('duelWins')} <b>${sum.d.w}</b></span><span>${tr('duelBest')} <b>${sum.d.best}</b></span></div>
+    <div class="r-prize r-solo">${lines}<div class="tot"><span>${tr('total')}</span><b>+${money(sum.total)}</b></div></div>
+    <div class="r-acts"><button class="big-btn" data-act="duel">${tr('duelAgain')}</button><button class="r-menu" data-act="hub">${tr('toMenu')}</button>${upBtn()}</div></div>`;
+}
