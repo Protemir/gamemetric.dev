@@ -424,6 +424,19 @@ try {
   check('an orchard dries up: the game is over', r && overPanel.includes('Сад засох'), overPanel.split('\n')[0]);
   const saveGone = await B.js(`localStorage.getItem('aryq.save')`);
   check('the finished game is not offered to continue', saveGone === null || saveGone === 'null', String(saveGone).slice(0, 20));
+  // 8a. "one more year" (21.10): once a game the dry orchard goes and the valley carries on
+  r = await B.js(`JSON.stringify({ dead: ${A}.g.over, objects: ${A}.g.objects.length, dig: ${A}.g.dig, more: [...document.querySelectorAll('#ui button')].some((b) => b.innerText.includes('Ещё год')), tomorrow: document.getElementById('ui').innerText.includes('долин') })`).then(JSON.parse);
+  check('the loss offers one more year and the valley of the day', r.more && r.tomorrow, JSON.stringify(r));
+  const atLoss = r;
+  await clickText('Ещё год');
+  await wait(300);
+  r = await B.js(`JSON.stringify({ over: !!${A}.g.over, deadHere: ${A}.g.objects.some((o) => o.x === ${atLoss.dead.x} && o.y === ${atLoss.dead.y} && o.thirst > 0.5), objects: ${A}.g.objects.length, dig: ${A}.g.dig, hud: !document.getElementById('hud').hidden, panel: document.getElementById('ui').innerText.length, thirst: Math.max(...${A}.g.objects.map((o) => o.thirst)), revived: ${A}.g.revived })`).then(JSON.parse);
+  // (a new orchard may come up at once: its turn was due while the loss stopped time)
+  check('one more year: the dry orchard is gone, the rest get a breather and ketmen', !r.over && r.hud && r.panel === 0 && !r.deadHere && r.objects <= atLoss.objects && r.dig >= atLoss.dig + 15 && r.thirst < 0.9 && r.revived === 1, JSON.stringify(r));
+  r = await B.js(`(() => { const { g } = ${A}; for (let k = 0; k < 40 && !g.over; k++) { for (let i = 0; i < g.W * g.H; i++) g.gate[i] = g.kind[i] === 2 ? 1 : 0; ${A}.step(5); } return !!g.over; })()`);
+  await wait(200);
+  r = await B.js(`[...document.querySelectorAll('#ui button')].map((b) => b.innerText.split(String.fromCharCode(10))[0]).join('|')`);
+  check('one more year is given only once a game', !r.includes('Ещё год') && r.includes('Ещё раз'), r);
   await clickText('Ещё раз');
   await wait(200);
   r = await B.js(`JSON.stringify({ over: !!${A}.g.over, day: ${A}.g.day, objects: ${A}.g.objects.length })`).then(JSON.parse);
@@ -690,6 +703,17 @@ try {
   await wait(600);
   r = await B.js(`JSON.stringify({ menu: document.getElementById('ui').innerText.includes('Продолжить'), hud: !document.getElementById('hud').hidden, still: ${A}.g.day === ${day0} })`).then(JSON.parse);
   check('pause has a way to the menu, the valley waits behind it', r.menu && !r.hud && r.still, JSON.stringify(r));
+  await B.init('');
+
+  // 10g. the valley of the day keeps a streak of days in a row, each day gives ketmen at the start
+  await B.init(`try { localStorage.clear(); localStorage.setItem('aryq.streak', JSON.stringify({ d: new Date(Date.now() - 864e5).toISOString().slice(0, 10), n: 2 })); } catch {}`);
+  await B.open(page('&lang=ru'), 924, 520);
+  r = await B.js(`document.getElementById('ui').innerText.includes('Серия: 2 дн.')`);
+  check('the menu shows the streak of the valley of the day', r, String(r));
+  await B.js(`[...document.querySelectorAll('#ui .choice')].find((b) => b.innerText.includes('Долина дня')).click()`);
+  await wait(1000);
+  r = await B.js(`JSON.stringify({ streak: JSON.parse(localStorage.getItem('aryq.streak')), hint: document.querySelector('.hint-line').textContent, mode: ${A}.g.mode })`).then(JSON.parse);
+  check('a day in a row adds to the streak and gives +10 ketmen', r.mode === 'daily' && r.streak.n === 3 && /Серия 3.*[+]10/.test(r.hint), JSON.stringify(r));
   await B.init('');
 
   // 11. a new version while the menu is open: one jump to a fresh address, then no more reloads

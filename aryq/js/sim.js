@@ -682,7 +682,7 @@ export function save(g) {
     objects: g.objects.map(({ type, x, y, need, thirst, flood, born, tap, got, grown }) => ({ type, x, y, need, thirst, flood, born, tap, got, grown })),
     flow: Array.from(g.flow, (v) => Math.round(v * 1000) / 1000),
     day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
-    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0,
+    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0,
   };
 }
 
@@ -712,6 +712,7 @@ export function load(d) {
   rebuildNear(g);
   for (const k of ['day', 'year', 'dig', 'harvest', 'lost', 'gardensEver', 'nextGarden', 'nextHouse', 'cap', 'melt']) g[k] = d[k];
   g.giftDue = d.giftDue === g.year ? g.year : 0;
+  g.revived = d.revived || 0;
   g.rand = rng((d.seed ^ (d.year * 7919) ^ (d.gardensEver * 104729)) >>> 0);
   g.order = null;
   g.events = [];
@@ -719,6 +720,25 @@ export function load(d) {
   flowStep(g);
   for (const o of g.objects) o.s = o.need > 0 ? clamp(o.got / o.need, 0, 1) : 1;
   return g;
+}
+
+// "One more year" after a loss, once a game: the orchard that dried up is gone, the others get a
+// breather and the village gives ketmen, and the valley goes on (21.10: players left on the loss)
+export const REVIVES = 1;
+export const REVIVE_DIG = 15;
+export function canRevive(g) {
+  return !!g.over && (g.revived || 0) < REVIVES;
+}
+export function revive(g) {
+  if (!canRevive(g)) return false;
+  const dead = g.objAt[g.over.y * g.W + g.over.x];
+  if (dead) removeObject(g, dead);
+  for (const o of g.objects) o.thirst = Math.min(o.thirst, 0.35);
+  g.dig += REVIVE_DIG;
+  g.revived = (g.revived || 0) + 1;
+  g.over = null;
+  g.order = null;
+  return true;
 }
 
 // the reward picked at the end of a year

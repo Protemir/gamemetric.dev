@@ -3,6 +3,7 @@ import { View } from './render.js';
 import { el, store, clamp } from './util.js';
 import * as sfx from './audio.js';
 import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute } from './portal.js';
+import { pulse, minute } from './pulse.js';
 
 const q = new URLSearchParams(location.search);
 const DEBUG = q.has('debug');
@@ -32,6 +33,24 @@ const dailySeed = [...today].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt
 const bestKey = (mode) => (mode === 'daily' ? 'aryq.best.daily.' + today : 'aryq.best.' + mode);
 let mode = store.get('aryq.mode', 'mountain');
 
+// days in a row the valley of the day was played; each one gives more ketmen at its start
+const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+const STREAK_DIG = 5, STREAK_MAX = 20;
+const streakBonus = (n) => Math.min(STREAK_MAX, STREAK_DIG * Math.max(0, n - 1));
+function streakNow() {
+  const s = store.get('aryq.streak', null);
+  if (!s || typeof s !== 'object' || !(s.n >= 1)) return { d: '', n: 0 };
+  return s.d === today || s.d === yesterday ? s : { d: s.d, n: 0 };
+}
+// a new daily game: the streak goes on (or starts again) and gives its bonus
+function playDaily() {
+  const s = streakNow();
+  const n = s.d === today ? s.n : s.n + 1;
+  store.set('aryq.streak', { d: today, n });
+  pulse('daily', 'n' + Math.min(n, 30));
+  return n;
+}
+
 function start(m = mode, restored = null) {
   mode = m;
   if (m !== 'daily') store.set('aryq.mode', m);
@@ -47,6 +66,15 @@ function start(m = mode, restored = null) {
   ui.replaceChildren();
   hud.hidden = false;
   if (!restored) S.advance(g, 0.01); // the first garden appears
+  pulse('start', restored ? m + ':resume' : m);
+  if (m === 'daily' && !restored) {
+    const n = playDaily();
+    const b = streakBonus(n);
+    if (b) {
+      g.dig += b;
+      setTimeout(() => say(t('streakBonus', { n, b }), 4500), 600);
+    }
+  }
   saveNow();
   pickGhost(performance.now(), true);
   if (!store.get('aryq.labelsSeen', false) && !restored) {
@@ -94,6 +122,13 @@ const TEXT = {
     when: 'Год {y}, {s}',
     result: 'Урожай {h} · садов {n}',
     best: 'Лучший урожай {b}',
+    oneMore: 'Ещё год',
+    oneMoreSub: 'засохший сад уйдёт, остальным передышка и +{d} ⛏ · раз за игру',
+    revived: 'Долина живёт дальше: +{d} ⛏. Напои тех, кому мало воды.',
+    streak: 'Серия: {n} дн. подряд',
+    streakBonus: 'Серия {n} дн. подряд: +{b} ⛏ на старте',
+    tomorrow: 'Завтра будет новая долина дня. Зайди — серия {n} дн., +{b} ⛏ на старте.',
+    playDaily: 'Сыграй долину дня: каждый день подряд даёт ещё кетменя на старте.',
     hud: 'год {y}',
     spring: 'весна',
     summer: 'лето',
@@ -192,6 +227,13 @@ const TEXT = {
     when: 'Year {y}, {s}',
     result: 'Harvest {h} · orchards {n}',
     best: 'Best harvest {b}',
+    oneMore: 'One more year',
+    oneMoreSub: 'the dry orchard goes, the rest get a breather and +{d} ⛏ · once a game',
+    revived: 'The valley goes on: +{d} ⛏. Water the ones that are short.',
+    streak: 'Streak: {n} days in a row',
+    streakBonus: '{n} days in a row: +{b} ⛏ to start with',
+    tomorrow: 'A new valley of the day comes tomorrow. Come back for a {n}-day streak and +{b} ⛏ to start.',
+    playDaily: 'Play the valley of the day: every day in a row gives more ketmen to start with.',
     hud: 'year {y}',
     spring: 'spring',
     summer: 'summer',
@@ -702,7 +744,7 @@ function togglePause() {
 }
 
 function showPause() {
-  const box = el('div', 'panel');
+  const box = el('div', 'panel paused');
   box.append(el('h2', null, t('paused')), el('p', 'muted', t('pauseTip')));
   const go = el('button', 'btn', t('resume'));
   go.addEventListener('click', togglePause);
@@ -813,14 +855,46 @@ function showOver() {
   store.set(bestKey(g.mode), best);
   store.set('aryq.save', null);
   box.append(el('p', 'muted', t('best', { b: best })));
-  const again = el('button', 'btn', t('again'));
+  pulse('over', g.mode + ':y' + Math.min(g.year, 9) + ':' + minute());
+  // once a game the valley can go on: players used to leave right here (21.10)
+  if (S.canRevive(g)) {
+    const more = el('button', 'btn');
+    more.append(el('span', null, t('oneMore')), el('small', null, t('oneMoreSub', { d: S.REVIVE_DIG })));
+    more.addEventListener('click', () => {
+      sfx.audioInit();
+      if (!S.revive(g)) return;
+      pulse('more', 'y' + Math.min(g.year, 9));
+      ui.replaceChildren();
+      hud.hidden = false;
+      paused = false;
+      saveNow();
+      updateHud();
+      pickGhost(performance.now(), true);
+      say(t('revived', { d: S.REVIVE_DIG }), 4500);
+    });
+    box.append(more);
+  }
+  const again = el('button', S.canRevive(g) ? 'btn ghost' : 'btn', t('again'));
   again.addEventListener('click', () => {
     sfx.audioInit();
     start(g.mode);
   });
+  box.append(again);
+  // the valley of the day and its streak: a reason to come back tomorrow
+  const st = streakNow();
+  if (g.mode !== 'daily') {
+    const daily = el('button', 'btn ghost', t('daily'));
+    daily.addEventListener('click', () => {
+      sfx.audioInit();
+      store.set('aryq.save', null);
+      start('daily');
+    });
+    box.append(daily);
+  }
+  box.append(el('p', 'muted streak', st.d === today ? t('tomorrow', { n: st.n + 1, b: streakBonus(st.n + 1) }) : t('playDaily')));
   const menu = el('button', 'btn ghost', t('menu'));
   menu.addEventListener('click', showStart);
-  box.append(again, menu);
+  box.append(menu);
   ui.replaceChildren(box);
 }
 
@@ -860,7 +934,8 @@ function showStart() {
   for (const m of ['wide', 'mountain', 'gorge', 'daily']) {
     const btn = el('button', 'choice' + (m === mode && !saved ? ' picked' : ''));
     const best = store.get(bestKey(m), 0);
-    const sub = m === 'daily' ? t('dailySub', { d: today.slice(8, 10) + '.' + today.slice(5, 7) }) : t(m + 'Sub');
+    const st = m === 'daily' ? streakNow() : null;
+    const sub = m === 'daily' ? (st.n ? t('streak', { n: st.n }) : t('dailySub', { d: today.slice(8, 10) + '.' + today.slice(5, 7) })) : t(m + 'Sub');
     btn.append(icon(m), el('b', null, t(m)), el('small', null, sub + (best ? ' · ' + t('bestShort', { b: best }) : '')));
     btn.addEventListener('click', () => {
       sfx.audioInit();
@@ -992,7 +1067,8 @@ function frame(now) {
       // winter has nothing to do in it: it goes by four times faster
       S.advance(g, (dt * speed * (g.day >= S.WINTER ? 4 : state.calm ? 2.5 : 1)) / S.DAY_SEC);
     }
-    if (g.over && !ui.firstChild) showOver();
+    // (a pause panel never hides a lost valley: its Continue button would do nothing)
+    if (g.over && (!ui.firstChild || ui.querySelector('.paused'))) showOver();
     gameplay(!g.over && !paused && !hud.hidden);
     for (const ev of g.events.splice(0)) {
       if (ev.type === 'winter') say(t('winterCame'), 5000);
@@ -1006,6 +1082,7 @@ function frame(now) {
         tip('grew', 4500, 2);
       }
       if (ev.type === 'year') {
+        pulse('year', g.mode + ':y' + (ev.year - 1));
         sfx.yearDone();
         happytime();
         showYear(ev);
@@ -1097,8 +1174,20 @@ function firstScreen() {
   start(store.get('aryq.mode', null) ? mode : 'wide');
 }
 
+pulse('open', S.usable(store.get('aryq.save', null), W, H) || store.get('aryq.taught', 0) ? 'back' : 'new');
 firstScreen();
 requestAnimationFrame(frame);
+// where a player was when the page went away (the first time only): the menu, playing, a panel
+let leftOnce = false;
+function left() {
+  if (leftOnce) return;
+  leftOnce = true;
+  const panel = ui.querySelector('.rewards') ? 'gift' : ui.querySelector('.menu') ? 'menu' : g && g.over ? 'over' : ui.querySelector('.paused') ? 'pause' : ui.firstChild ? 'panel' : 'play';
+  pulse('leave', panel + ':y' + (g ? Math.min(g.year, 9) : 0) + ':' + minute());
+}
+// caught on the way in, before the game's own handler pauses and puts up its panel
+window.addEventListener('visibilitychange', () => document.hidden && left(), true);
+window.addEventListener('pagehide', left);
 requestAnimationFrame(() => loadingDone());
 onPortalMute((muted) => {
   portalMuted = muted;

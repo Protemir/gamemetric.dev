@@ -11,8 +11,10 @@ const SITES = {
   asem: ['open', 'start', 'finish', 'timeout', 'fail'],
   jekpe: ['open', 'start', 'end', 'arcade'],
   oyu: ['open', 'start', 'win', 'fail'],
+  // aryq: "leave" says where and when a player went away, "more" is one more year after a loss
+  aryq: ['open', 'start', 'year', 'over', 'more', 'leave', 'daily'],
 };
-const HOME = { asem: ['asemface.com', 'gamemetric.dev'], jekpe: ['gamemetric.dev'], oyu: ['gamemetric.dev'] };
+const HOME = { asem: ['asemface.com', 'gamemetric.dev'], jekpe: ['gamemetric.dev'], oyu: ['gamemetric.dev'], aryq: ['gamemetric.dev'] };
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|embedly/i;
 
 // Almaty time, so a "day" matches the owner's day
