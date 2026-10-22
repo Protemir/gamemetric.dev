@@ -829,9 +829,18 @@ function journal() {
   box.append(el('h2', null, t.journalTitle), el('h3', null, t.clueHead));
   const ul = el('ul');
   if (!g.clues.length) ul.append(el('li', 'muted', t.noClues));
+  // the same clue found twice reads as one line with ×2, its hints under it
+  const rows = new Map();
   for (const c of g.clues) {
-    const li = el('li', null, '✦ ' + t.clue[c.kind]);
-    if (c.hint >= 0 && c.hint < 4) li.append(el('small', 'hint', t.hints[g.culprit][c.hint]));
+    let r = rows.get(c.kind);
+    if (!r) rows.set(c.kind, (r = { n: 0, hints: [] }));
+    r.n++;
+    if (c.hint >= 0 && c.hint < 4 && !r.hints.includes(c.hint)) r.hints.push(c.hint);
+  }
+  for (const [kind, r] of rows) {
+    const li = el('li', null, '✦ ' + t.clue[kind]);
+    if (r.n > 1) li.append(el('b', 'times', ' ×' + r.n));
+    for (const h of r.hints) li.append(el('small', 'hint', t.hints[g.culprit][h]));
     ul.append(li);
   }
   box.append(ul, el('h3', null, t.deedsHead));

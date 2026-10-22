@@ -186,6 +186,9 @@ try {
   check('Zaltyr marks a forged rider', zw === 'seen', zw);
   await wait(200);
   await B.shot(path.join(out, 'autumn.png'));
+  // the same clue twice is one line with ×2 in the journal
+  const jr = await B.js(`(() => { const g = ${A}.g; if (g.phase !== 'map') return 'phase ' + g.phase; const k = g.clues.length; g.clues.push({ kind: 'forged', hint: -1 }, { kind: 'forged', hint: -1 }); document.getElementById('journalBtn').click(); const rows = [...document.querySelectorAll('.journal li')].filter((li) => li.textContent.includes(${JSON.stringify('A forged order')})); const r = rows.length + ':' + (rows[0] ? rows[0].textContent.includes('×') : false); g.clues.splice(k); [...document.querySelectorAll('.journal button')].pop().click(); return r; })()`);
+  check('the journal folds a repeated clue into one line with ×N', jr === '1:true', jr);
   await playTo('kurultai');
   await wait(1500);
   t = await uiText();

@@ -552,6 +552,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .deeds li.got { color: var(--ink); }
 .deeds li.got b { color: var(--gold-hi); }
 .journal .hint, .hintlist li { color: #d9b77a; }
+.journal .times { color: var(--gold-hi); font-weight: 800; font-size: 0.9em; }
 .end .culprit .ok { color: #9ad46e; }
 .end .glory { color: var(--gold-hi); font-family: var(--serif); letter-spacing: 0.04em; }
 .end .deed { color: #b9e08e; }
@@ -663,8 +664,6 @@ button.busy { transform: translateY(2px) scale(0.98); filter: brightness(1.15); 
 /* the show's Play button calls when the map is tapped during the show */
 .tour .big.call { animation: call 0.5s ease-in-out 3; }
 @keyframes call { 50% { transform: scale(1.12); box-shadow: 0 0 22px rgba(255, 210, 120, 0.8); } }
-/* on a narrow chip the +N% sat on the clan's name: it drops just under the chip instead */
-@media (max-width: 760px), (max-height: 520px) {
-  .delta { top: auto; bottom: -17px; right: 4px; padding: 0 5px; border-radius: 4px; background: rgba(16, 10, 6, 0.85); line-height: 16px; font-size: 12px; animation-name: dropIn; }
-}
+/* the +N% sat on the clan's name or trait: it drops just under the chip instead, on every screen */
+.delta { top: auto; bottom: -17px; right: 4px; padding: 0 5px; border-radius: 4px; background: rgba(16, 10, 6, 0.85); line-height: 16px; font-size: 12px; animation-name: dropIn; z-index: 3; }
 @keyframes dropIn { from { transform: translateY(-6px); opacity: 0; } 20% { opacity: 1; } 75% { opacity: 1; } to { transform: translateY(3px); opacity: 0; } }
