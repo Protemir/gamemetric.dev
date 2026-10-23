@@ -1285,7 +1285,15 @@ function frame(now) {
     state.hand = store.get('aryq.taught', 0) < 3;
     const wait = Math.max(1, Math.ceil(((S.DIG_REGEN - (g.digTimer || 0)) * S.DAY_SEC) / speed));
     state.tags = { high: t('tagHigh'), up: t('tagHigh'), tired: g.dig < 1 && g.cur ? t('tagTiredIn', { s: wait }) : t('tagTired'), object: t('tagObject'), ice: t('tagIce') };
-    view.draw(g, now, state);
+    // one bad frame must not stop the game: the loop goes on and the next frame tries again
+    try {
+      view.draw(g, now, state);
+    } catch (err) {
+      if (!state.drawFailed) {
+        state.drawFailed = true;
+        console.error(err);
+      }
+    }
   }
   if (now > hintUntil && hintEl.textContent) hintEl.textContent = '';
   requestAnimationFrame(frame);

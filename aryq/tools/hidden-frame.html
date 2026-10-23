@@ -1,0 +1,6 @@
+<!doctype html><meta charset="utf-8"><title>aryq in a hidden frame</title>
+<!-- for tools/e2e.mjs: the game loads in a frame that stays hidden for a while, as CrazyGames does on a
+     relaunch or behind an ad (23.10: the valley then never showed), then the frame is shown -->
+<body style="margin:0;background:#222">
+<iframe id="f" src="../?debug&lang=en&seed=1004" style="display:none;width:924px;height:520px;border:0"></iframe>
+<script>setTimeout(() => { document.getElementById('f').style.display = 'block'; }, 1500);</script>

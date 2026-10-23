@@ -682,7 +682,9 @@ export class View {
       this.lifeKey = key;
       this.paintLife(g);
     }
-    if (this.lifeLayer) this.cx.drawImage(this.lifeLayer, 0, 0, this.cv.width / this.dpr, this.cv.height / this.dpr);
+    // (23.10: a game loaded in a hidden frame, as CrazyGames does on a relaunch or behind an ad, made
+    // this layer 0×0; drawing it threw every frame and the valley never showed)
+    if (this.lifeLayer && this.lifeLayer.width && this.lifeLayer.height) this.cx.drawImage(this.lifeLayer, 0, 0, this.cv.width / this.dpr, this.cv.height / this.dpr);
   }
 
   // how green each cell wants to be: beside running water 0.7, around a watered orchard 1

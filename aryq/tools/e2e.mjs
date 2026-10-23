@@ -738,6 +738,20 @@ try {
     check('a player who knows the game: no hand, no head start, taps dig nothing', !r.hand && r.mercy === 0 && r.shield === 0 && later === 0, JSON.stringify({ ...r, strokes: later }));
   }
   await B.init('');
+  // a game started in a hidden frame (a CrazyGames relaunch, a game behind an ad) shows its valley
+  // once the frame is shown (23.10: the grass layer was 0×0, drawing it threw and the loop stopped)
+  await B.init('try { localStorage.clear(); } catch {}');
+  await B.open(`${S.url}/aryq/tools/hidden-frame.html`, 960, 560);
+  await wait(700);
+  await B.js(`document.getElementById('f').contentWindow.document.querySelector('#ui .btn').click()`);
+  await wait(2200);
+  r = await B.js(`(() => { const w = document.getElementById('f').contentWindow, c = w.document.getElementById('game'), v = w.__aryq.view;
+    const [x, y] = v.center(w.__aryq.g.river[Math.floor(w.__aryq.g.river.length / 2)]);
+    const p = c.getContext('2d').getImageData(Math.round(x * v.dpr), Math.round(y * v.dpr), 1, 1).data;
+    return JSON.stringify({ canvas: [c.width, c.height], river: [p[0], p[1], p[2]] }); })()`).then(JSON.parse);
+  const blue = r.river[2] > r.river[0] + 40;
+  check('a game started in a hidden frame shows its valley when the frame is shown', r.canvas[0] > 900 && blue && !B.errors.some((e) => /drawImage/.test(e)), JSON.stringify(r));
+  await B.init('');
   // a careless player for five years against the rules: water downhill and adding up, saves that
   // load back the same, and taps that stay put in winter (the water blinked, 18.10)
   {
