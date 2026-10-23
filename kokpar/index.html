@@ -23,7 +23,7 @@
 <link rel="preload" href="fonts/rubik-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
 <!-- три.js и модели начинают качаться сразу, а не после всех скриптов (было лесенкой: +2–3 с к загрузке) -->
 <!-- карта импортов — раньше любых модулей и modulepreload: иначе браузер иногда разбирает GLTFLoader до неё и не находит "three" -->
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audar.js":"./js/audar.js?v=mvkx2k2u","./js/audio.js":"./js/audio.js?v=mvkx2k2u","./js/boot-pg.js":"./js/boot-pg.js?v=mvkx2k2u","./js/boot-ya.js":"./js/boot-ya.js?v=mvkx2k2u","./js/boot.js":"./js/boot.js?v=mvkx2k2u","./js/career.js":"./js/career.js?v=mvkx2k2u","./js/crowd.js":"./js/crowd.js?v=mvkx2k2u","./js/flags.js":"./js/flags.js?v=mvkx2k2u","./js/game.js":"./js/game.js?v=mvkx2k2u","./js/icons.js":"./js/icons.js?v=mvkx2k2u","./js/kazan.js":"./js/kazan.js?v=mvkx2k2u","./js/net.js":"./js/net.js?v=mvkx2k2u","./js/portal.js":"./js/portal.js?v=mvkx2k2u","./js/pulse.js":"./js/pulse.js?v=mvkx2k2u","./js/rider.js":"./js/rider.js?v=mvkx2k2u","./js/serke.js":"./js/serke.js?v=mvkx2k2u","./js/trees.js":"./js/trees.js?v=mvkx2k2u","./js/world.js":"./js/world.js?v=mvkx2k2u"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audar.js":"./js/audar.js?v=mvkxof3m","./js/audio.js":"./js/audio.js?v=mvkxof3m","./js/boot-pg.js":"./js/boot-pg.js?v=mvkxof3m","./js/boot-ya.js":"./js/boot-ya.js?v=mvkxof3m","./js/boot.js":"./js/boot.js?v=mvkxof3m","./js/career.js":"./js/career.js?v=mvkxof3m","./js/crowd.js":"./js/crowd.js?v=mvkxof3m","./js/flags.js":"./js/flags.js?v=mvkxof3m","./js/game.js":"./js/game.js?v=mvkxof3m","./js/icons.js":"./js/icons.js?v=mvkxof3m","./js/kazan.js":"./js/kazan.js?v=mvkxof3m","./js/net.js":"./js/net.js?v=mvkxof3m","./js/portal.js":"./js/portal.js?v=mvkxof3m","./js/pulse.js":"./js/pulse.js?v=mvkxof3m","./js/rider.js":"./js/rider.js?v=mvkxof3m","./js/serke.js":"./js/serke.js?v=mvkxof3m","./js/trees.js":"./js/trees.js?v=mvkxof3m","./js/world.js":"./js/world.js?v=mvkxof3m"}}</script>
 <link rel="modulepreload" href="./vendor/three.module.js" fetchpriority="high">
 <link rel="modulepreload" href="./vendor/three.core.js" fetchpriority="high">
 <link rel="modulepreload" href="./vendor/loaders/GLTFLoader.js">
@@ -87,6 +87,10 @@
   .pop-money.long { animation-duration: 2.6s; }
   @keyframes popm { 0% { opacity: 0; transform: translate(-50%, 20px) scale(.6); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); } 30% { transform: translate(-50%, -6px) scale(1); } 100% { opacity: 0; transform: translate(-50%, -70px) scale(1); } }
   #hint:empty { display: none; }
+  #nudge { left: 50%; top: 73%; transform: translateX(-50%); padding: 10px 22px; border-radius: 14px; background: rgba(14,10,6,.7); box-shadow: inset 0 0 0 2px rgba(255,207,58,.7), 0 6px 18px rgba(0,0,0,.35); font: 22px 'Russo One', sans-serif; color: #ffd23a; white-space: nowrap; pointer-events: none; animation: nudge 1s ease-in-out infinite alternate; }
+  #nudge kbd { font: 20px 'Russo One', sans-serif; background: #fff; color: var(--ink); border-radius: 6px; padding: 1px 9px; margin: 0 4px; box-shadow: 0 3px 0 #9a8f7a; }
+  body.touch #nudge { left: 24%; top: 58%; font-size: 18px; }
+  @keyframes nudge { to { transform: translateX(-50%) scale(1.07); } }
   #hint kbd { font: 700 12px 'Rubik', sans-serif; background: #fff; color: var(--ink); border-radius: 4px; padding: 1px 5px; margin: 0 2px; box-shadow: 0 2px 0 #9a8f7a; }
   #arrow { font-size: 34px; font-weight: 900; text-shadow: 0 2px 4px rgba(0,0,0,.6); }
   /* язык */
@@ -577,6 +581,7 @@
 <div id="pow" class="ui" hidden><div id="powtrack"><div id="powbar"></div></div><b>⚡</b></div>
 <div id="tug" class="ui" hidden><div id="tugtrack"><div id="tugbar"></div></div><div id="tugtip" class="disp"></div></div>
 <div id="hint" class="ui"></div>
+<div id="nudge" class="ui" hidden></div>
 <div id="arrow" class="ui" hidden>➤</div>
 <button id="lang">EN</button>
 <button id="pauseBtn" class="ui" aria-label="Pause">II</button>
@@ -588,6 +593,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvkx2k2u"></script>
+<script type="module" src="./js/game.js?v=mvkxof3m"></script>
 </body>
 </html>

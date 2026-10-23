@@ -22,6 +22,7 @@ const OFF_RIDERS = (P.get('no') || '').includes('riders'), NO_SHADOW_RIDERS = (P
 const MATCH_LEN = Number(P.get('len') || 180); // с
 const ROOKIE_LEN = 120; // первый матч в жизни игрока
 let rookie = false;
+let rodeOnce = false, idleT = 0, autoRide = false; // первый матч: пока новичок ничего не нажал, конь сам идёт к серке
 const rookieHero = () => rookie && !state.events.some((x) => x.t === 'goal' && x.me); // первый матч, игрок ещё не забил
 const KAZAN_TOP = 1.58; // верх насыпи казана — туда ложится туша
 const GOAL_X = 52, KAZAN_R = 3.0, SCORE_R = KAZAN_R + 1.5; // к казану надо подъехать вплотную
@@ -42,7 +43,7 @@ const TEXT = {
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
     canPass: '<kbd>E</kbd> — взять серке у своего', passMe: 'Пас!', ram: 'Таран!',
     helpTouch: 'Палец слева — куда скакать · ВЫРВАТЬ — отнять серке · КАМЧА — рывок',
-    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!', getUpKey: 'Жми <kbd>E</kbd> — встанешь быстрее', getUpTap: 'Жми ВСТАТЬ — поднимешься быстрее', btnUp: 'ВСТАТЬ',
+    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!', getUpKey: 'Жми <kbd>E</kbd> — встанешь быстрее', nudgeK: 'Держи <kbd>W</kbd> — в галоп!', nudgeT: '👆 Веди пальцем здесь', getUpTap: 'Жми ВСТАТЬ — поднимешься быстрее', btnUp: 'ВСТАТЬ',
     league: 'Лига аулов Жетысу', vs: 'Соперник', play: 'В седло!', next: 'Дальше', retry: 'Ещё раз', champion: 'Чемпион Жетысу!',
     stageOf: (a, b) => 'Аул ' + a + ' из ' + b, unlocked: 'Следующий соперник', menuSub: 'Командная скачка за тушу в предгорьях Алатау · 3 на 3',
   },
@@ -54,7 +55,7 @@ const TEXT = {
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
     canPass: '<kbd>E</kbd> — take the serke from a teammate', passMe: 'Pass!', ram: 'Ram!',
     helpTouch: 'Left thumb — where to ride · GRAB — take the serke · WHIP — burst',
-    home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!', getUpKey: 'Mash <kbd>E</kbd> to get up faster', getUpTap: 'Tap GET UP to get up faster', btnUp: 'GET UP',
+    home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!', getUpKey: 'Mash <kbd>E</kbd> to get up faster', nudgeK: 'Hold <kbd>W</kbd> to gallop!', nudgeT: '👆 Drag here to ride', getUpTap: 'Tap GET UP to get up faster', btnUp: 'GET UP',
     league: 'Zhetysu village league', vs: 'Opponent', play: 'Ride!', next: 'Next', retry: 'Try again', champion: 'Zhetysu champion!',
     stageOf: (a, b) => 'Village ' + a + ' of ' + b, unlocked: 'Next opponent', menuSub: 'Team horseback fight for the carcass in the Alatau foothills · 3 vs 3',
   },
@@ -588,6 +589,7 @@ const keys = {};
 let stick = null, tugTap = false;
 const touch = matchMedia('(pointer: coarse)').matches;
 addEventListener('keydown', (e) => {
+  if (/^(Key[WASDZQ]|Arrow)/.test(e.code)) rodeOnce = true;
   if (e.repeat) return;
   keys[e.code] = true;
   initAudio();
@@ -624,13 +626,15 @@ function playerInput(dt) {
     const camYaw = cam.yaw;
     const want = camYaw + Math.atan2(-stick.dx, -stick.dy);
     const mag = Math.min(1, Math.hypot(stick.dx, stick.dy));
-    if (mag > 0.2) { h.steer = clamp(wrap(want - h.yaw) * 2.2, -1, 1); h.gait = mag > 0.75 ? 4 : mag > 0.45 ? 3 : 2; } else { h.steer = 0; h.gait = 0; }
+    if (mag > 0.2) { rodeOnce = true; h.steer = clamp(wrap(want - h.yaw) * 2.2, -1, 1); h.gait = mag > 0.75 ? 4 : mag > 0.45 ? 3 : 2; } else { h.steer = 0; h.gait = 0; }
   } else {
     h.steer = (keys.KeyA || keys.ArrowLeft || keys.KeyQ ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
     // без клавиш конь останавливается; только поворот — идёт шагом
     h.gait = keys.KeyW || keys.ArrowUp || keys.KeyZ ? 4 : keys.KeyS || keys.ArrowDown ? 0 : h.steer ? 1 : 0;
     if (h.rearClock != null) h.gait = 0; // во время свечки стоит
   }
+  autoRide = rookie && !rodeOnce && !audar && !jamby && !online.role && state.phase === 'play' && (idleT += dt) > 2.5;
+  if (autoRide && h.rearClock == null) h.gait = 3; // стоит без дела — конь сам трогается кентером, рулит помощь ниже
   if (jamby && h.gait > 3) h.gait = 3; // жамбы ату — на ровном кентере: шаг ~0,5 с, ритм ловится
   if (rookie && !audar && !jamby && h.gait >= 2 && !state.tug) {
     const steering = stick ? Math.abs(stick.dx) > 0.35 * Math.hypot(stick.dx, stick.dy) : h.steer !== 0;
@@ -1363,7 +1367,7 @@ function shakeCamera(dt) {
 }
 
 // ---------- интерфейс ----------
-const el = Object.fromEntries(['menu', 'tut', 'pause', 'pauseBtn', 'pow', 'powbar', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
+const el = Object.fromEntries(['nudge', 'menu', 'tut', 'pause', 'pauseBtn', 'pow', 'powbar', 'scR', 'scB', 'nmR', 'nmB', 'clock', 'banner', 'stam', 'stamlbl', 'tug', 'tugbar', 'tugtip', 'hint', 'load', 'loadtxt', 'stick', 'btnTug', 'btnWhip', 'arrow', 'lang'].map((id) => [id, document.getElementById(id)]));
 el.bigText = el.banner.querySelector('.big'); el.subText = el.banner.querySelector('.small');
 const CREDITS = 'Рельеф / Terrain: SRTM (USGS), AWS Terrain Tiles · Снимок / Imagery: EOxCloudless 2016 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016), CC BY 4.0 · Конь / Horse: Warhorse Lite by Literock Studios · Всадник / Rider: Heraklios by A. Dizon (Mixamo)';
 for (const c of document.querySelectorAll('[data-credits]')) c.textContent = CREDITS;
@@ -1437,6 +1441,7 @@ function hud(dt) {
   else if (can && !touch) html(el.hint, pass ? tr('canPass') : tr('canTug'));
   else if (!el.hint.dataset.keep) txt(el.hint, '');
   if (state.phase === 'menu') txt(el.hint, ''); // под меню подсказок нет
+  hid(el.nudge, !autoRide || paused); if (autoRide) html(el.nudge, touch ? tr('nudgeT') : tr('nudgeK'));
   // стрелка к цели по краю экрана: к мешку или к чужому казану
   const target = jamby ? (jamby.tgt.live ? V2.copy(jamby.tgt.ing).setY(2) : null) : audar ? V2.copy(audar.foe.h.obj.position).setY(1) : sack.carrier === me ? new THREE.Vector3(kazans[1 - me.team].x, 1, 0) : sack.carrier && sack.carrier.team === me.team ? null : sack.pos;
   if (target) {
