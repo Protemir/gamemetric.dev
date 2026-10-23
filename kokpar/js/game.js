@@ -22,6 +22,7 @@ const OFF_RIDERS = (P.get('no') || '').includes('riders'), NO_SHADOW_RIDERS = (P
 const MATCH_LEN = Number(P.get('len') || 180); // с
 const ROOKIE_LEN = 120; // первый матч в жизни игрока
 let rookie = false;
+const rookieHero = () => rookie && !state.events.some((x) => x.t === 'goal' && x.me); // первый матч, игрок ещё не забил
 const KAZAN_TOP = 1.58; // верх насыпи казана — туда ложится туша
 const GOAL_X = 52, KAZAN_R = 3.0, SCORE_R = KAZAN_R + 1.5; // к казану надо подъехать вплотную
 const TUG_RANGE = 2.7, TUG_BREAK = 3.5, PICK_R = 1.8;
@@ -483,7 +484,8 @@ function assignRoles() {
 function think(e, dt) {
   const b = e.bot, p = e.h.obj.position;
   if (e.r.fallen) return; // всадник на земле
-  if (audar || jamby) { e.h.gait = 0; e.h.steer = 0; return; } // аударыспақ: кони идут сами (audarRide), жамбы ату: на поле только игрок
+  if (audar || jamby) { e.h.gait = 0; e.h.steer = 0; return; }
+  if (!e.me && e.team === me?.team && rookieHero() && (b.role === 'fetch' || b.role === 'carry')) b.role = 'support'; // не отбирать у новичка его первый гол // аударыспақ: кони идут сами (audarRide), жамбы ату: на поле только игрок
   const carrier = sack.carrier;
   // роль могла устареть: мешок сменил хозяина между пересчётами
   if (!carrier && b.role !== 'fetch' && b.role !== 'support') b.role = 'fetch';
@@ -630,6 +632,14 @@ function playerInput(dt) {
     if (h.rearClock != null) h.gait = 0; // во время свечки стоит
   }
   if (jamby && h.gait > 3) h.gait = 3; // жамбы ату — на ровном кентере: шаг ~0,5 с, ритм ловится
+  if (rookie && !audar && !jamby && h.gait >= 2 && !state.tug) {
+    const steering = stick ? Math.abs(stick.dx) > 0.35 * Math.hypot(stick.dx, stick.dy) : h.steer !== 0;
+    const tx = sack.carrier === me ? kazans[1 - me.team].x : !sack.carrier && !sack.flight ? sack.pos.x : null;
+    if (!steering && tx != null) {
+      const tz = sack.carrier === me ? 0 : sack.pos.z, p = h.obj.position;
+      h.steer = clamp(wrap(Math.atan2(tx - p.x, tz - p.z) - h.yaw) * 1.6, -0.85, 0.85);
+    }
+  }
   me.wantSprint = keys.ShiftLeft || keys.ShiftRight || whipHeld;
   if (tugTap) {
     tugTap = false;
@@ -720,6 +730,7 @@ function stepSack(dt) {
   let best = null, bd = PICK_R;
   for (const e of ents) {
     if (e.pickCD > 0 || e.stun > 0) continue;
+    if (!e.me && e.team === me?.team && rookieHero()) continue; // первый матч: серке берёт сам игрок, напарники прикрывают
     const d = Math.hypot(e.h.obj.position.x - sack.pos.x, e.h.obj.position.z - sack.pos.z);
     if (d < 5 && sack.pos.y < 1 && !e.r.fallen) {
       e.dip = Math.max(e.dip || 0, Math.min(1, 1.25 - d / 4));
@@ -851,7 +862,7 @@ function endMatch() {
   career.showResult(sum);
   el.menu.hidden = false;
   portal.interstitial(); // итоги — естественная пауза; сам портал держит не чаще раза в 2 минуты
-  pulse('end', 'cup:' + sum.res + ':' + state.score[0] + '-' + state.score[1] + ':' + minute());
+  pulse('end', 'cup:' + sum.res + ':' + state.score[0] + '-' + state.score[1] + ':' + minute() + fpsTag());
   if (sum.res === 'win') { cheer(true); portal.happytime(); }
 }
 
@@ -1544,7 +1555,7 @@ function left() {
   leftOnce = true;
   const scr = document.getElementById('load') ? 'load' : !el.pause.hidden ? 'pause' : !el.menu.hidden ? (document.querySelector('#hub .result') ? 'res' : 'menu') : state.phase === 'menu' ? 'menu' : 'play';
   const mode = audar ? 'duel' : jamby ? 'jamby' : online.role ? 'net' : 'cup';
-  pulse('leave', scr + ':' + (scr === 'play' || scr === 'pause' ? mode + ':' : '') + minute() + ':n' + starts + (scr === 'play' && !jamby ? ':' + state.score[0] + '-' + state.score[1] : ''));
+  pulse('leave', scr + ':' + (scr === 'play' || scr === 'pause' ? mode + ':' : '') + minute() + ':n' + starts + (scr === 'play' && !jamby ? ':' + state.score[0] + '-' + state.score[1] : '') + (scr === 'load' ? '' : fpsTag()));
 }
 addEventListener('visibilitychange', () => document.hidden && left(), true);
 addEventListener('pagehide', left);
@@ -1804,9 +1815,12 @@ el.pause.addEventListener('click', (e) => {
   else if (b.dataset.o2 === 'menu') { const was = online.role; onlineReset(); el.pause.hidden = true; if (was === 'guest') { location.hash = ''; location.reload(); } else showMenu(); }
 });
 function openSettings() { setMode = 'menu'; el.pause.hidden = false; renderPause(); }
+let fpsAvg = 60;
+const fpsTag = () => ':f' + Math.min(60, Math.round(fpsAvg / 5) * 5);
 function frame(now) {
   if (frozen) return;
   let dt = Math.min(0.05, (now - last) / 1000);
+  const raw = (now - last) / 1000; if (raw > 0.002 && raw < 1) fpsAvg += (1 / raw - fpsAvg) * 0.02; // FPS без обрезки — для счётчика
   last = now;
   if (!paused) tuneRes(dt);
   portal.gameplay(!paused && el.menu.hidden && el.pause.hidden && ['countdown', 'play', 'goal'].includes(state.phase)); // для портала: идёт ли сам матч
