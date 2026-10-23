@@ -110,7 +110,9 @@ export class Renderer {
       tokenR = clamp(cell * 0.95, 12, 21);
       mv = Math.max(1.25, (tokenR * 1.3) / cell);
     }
-    cell = Math.floor(cell * 4) / 4;
+    // a page that has no size yet (a hidden tab, a portal's frame before it is laid out) still gets
+    // a board; the next resize lays it out for real
+    cell = Math.max(1, Math.floor(cell * 4) / 4);
     this.cell = cell;
     this.tokenR = tokenR;
     this.mv = mv;
