@@ -96,7 +96,7 @@ function makeBag() {
   return g;
 }
 export function makeSerke() {
-  if (window.KOKPAR_BUILD === 'playgama' || new URLSearchParams(location.search).has('bag')) return makeBag(); // ?bag — для съёмки обложек и роликов
+  if (window.KOKPAR_BUILD === 'playgama' || window.KOKPAR_BUILD === 'yandex' || new URLSearchParams(location.search).has('bag')) return makeBag(); // ?bag — для съёмки обложек и роликов
   const g = new THREE.Group();
   const hide = new THREE.MeshStandardMaterial({ map: furTexture(512, 256, '#d6cbb8', '#efe8da'), normalMap: bumpTexture(256, 128), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95 });
   hide.map.repeat.set(2, 1); hide.normalMap.repeat.set(3, 2);
