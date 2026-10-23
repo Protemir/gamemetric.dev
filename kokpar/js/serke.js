@@ -80,23 +80,23 @@ function makeBag() {
   const skin = new THREE.MeshStandardMaterial({ map: leatherTexture(512, 256), roughness: 0.8 });
   const rope = new THREE.MeshStandardMaterial({ color: '#7a6040', roughness: 0.9 });
   const prof = [];
-  for (let i = 0; i <= 18; i++) { const t = i / 18; prof.push(new THREE.Vector2(Math.max(0.035, 0.19 * Math.pow(Math.sin(Math.PI * t), 0.6) + 0.01), t * L - L / 2)); }
+  for (let i = 0; i <= 18; i++) { const t = i / 18; prof.push(new THREE.Vector2(Math.max(0.05, 0.2 * Math.pow(Math.sin(Math.PI * t), 0.3) + 0.01), t * L * 0.86 - L * 0.43)); } // пухлый мешок, концы округлые
   const geo = new THREE.LatheGeometry(prof, 24); geo.rotateZ(-Math.PI / 2);
   const p = geo.attributes.position;
   for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i), p.getY(i) * 0.9, p.getZ(i) * 0.85);
   geo.computeVertexNormals();
   g.add(new THREE.Mesh(geo, skin));
   for (const s of [-1, 1]) { // концы стянуты верёвкой, кожа торчит хвостиком
-    const tie = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.014, 6, 14), rope);
-    tie.rotation.y = Math.PI / 2; tie.position.x = s * (L / 2 - 0.07); g.add(tie);
-    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 10), skin);
-    tuft.rotation.z = s > 0 ? -Math.PI / 2 : Math.PI / 2; tuft.position.x = s * (L / 2 + 0.01); g.add(tuft);
+    const tie = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.016, 6, 14), rope);
+    tie.rotation.y = Math.PI / 2; tie.position.x = s * (L * 0.43 - 0.06); g.add(tie);
+    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.07, 10), skin);
+    tuft.rotation.z = s > 0 ? -Math.PI / 2 : Math.PI / 2; tuft.position.x = s * (L * 0.43 + 0.0); g.add(tuft);
   }
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
 export function makeSerke() {
-  if (window.KOKPAR_BUILD === 'playgama') return makeBag();
+  if (window.KOKPAR_BUILD === 'playgama' || new URLSearchParams(location.search).has('bag')) return makeBag(); // ?bag — для съёмки обложек и роликов
   const g = new THREE.Group();
   const hide = new THREE.MeshStandardMaterial({ map: furTexture(512, 256, '#d6cbb8', '#efe8da'), normalMap: bumpTexture(256, 128), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95 });
   hide.map.repeat.set(2, 1); hide.normalMap.repeat.set(3, 2);
