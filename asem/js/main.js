@@ -8,7 +8,7 @@ import { sound, media, audioInit, setSound, holdAudio, engine, crashSound, beep,
 import { music, playMusic, setMusic, pauseMusic } from './music.js';
 import { online, getBoard, submit, flushPending, newGroupCode, boardId } from './scores.js';
 import { pulse } from './pulse.js';
-import { PORTAL, portalInit, portalLang, portalLoaded, gameplay, happytime, onPortalMute } from './portal.js';
+import { PORTAL, portalInit, portalLang, portalLoaded, gameplay, happytime, onPortalMute, onPortalPause, adBreak } from './portal.js';
 
 const STEP = 1 / 60;
 const $ = (id) => document.getElementById(id);
@@ -1168,6 +1168,8 @@ function startRace(opts) {
   g.chapter = opts.chapter ?? 0;
   const mapId = g.kind === 'story' ? CHAPTERS[g.chapter].map : opts.mapId;
   g.pulseArg = (g.kind === 'story' ? 'ch' + (g.chapter + 1) + ':' : '') + mapId;
+  // every race is a new level for a portal, a pause in it is not
+  g.raceNo = (g.raceNo || 0) + 1;
   pulse('start', g.pulseArg);
   progress.map = mapId;
   saveProgress();
@@ -1874,6 +1876,8 @@ const screenSettings = screen((back = screenMain) => {
 });
 
 function showFinish() {
+  // the results screen is a natural break: on a portal a full-screen ad may come up over it
+  adBreak('race_end');
   showHud(false);
   playMusic(g.map.id, 0);
   const i = g.chapter;
@@ -1907,6 +1911,7 @@ function styleResult(board) {
 }
 
 function showFail() {
+  adBreak('race_end');
   g.mode = 'fail';
   saveProgress();
   showHud(false);
@@ -1918,6 +1923,7 @@ function showFail() {
 }
 
 function showOver() {
+  adBreak('race_end');
   g.mode = 'over';
   saveProgress();
   showHud(false);
@@ -2217,7 +2223,7 @@ function frame(now) {
   renderer.render(view);
   updateHud();
   engine(g.speed / BASE_MAX, ['play', 'countdown', 'ending', 'finish'].includes(g.mode), g.boosting, currentCar().electric);
-  gameplay(racingNow());
+  gameplay(racingNow(), g.raceNo);
   requestAnimationFrame(frame);
 }
 
@@ -2229,6 +2235,8 @@ if (PORTAL) {
   const lang = portalLang();
   if (lang && !store.get('asem.lang', null) && !new URLSearchParams(location.search).get('lang')) setLang(lang);
   onPortalMute((muted) => holdAudio(muted));
+  // the platform's menu pauses the race like another tab does
+  onPortalPause(() => pause());
 }
 applyLang();
 // a new player on a portal goes straight to the first chapter: one tap and the race starts

@@ -7,6 +7,8 @@
 //   video-landscape.mp4 1920x1080, video-portrait.mp4 1080x1620 (18 s, 30 fps, no sound,
 //   the first half second is the cover, as CrazyGames asks)
 // --try renders only landscape covers of every map, to pick the best one.
+// --playgama: dist/playgama-art/ with the covers Playgama takes (800x800, 1080x1920, 1920x1080)
+// and four screenshots of real races 1920x1080, no videos.
 //
 // The game's own loop is stopped (requestAnimationFrame does nothing) and the script steps it
 // through window.__asem (?debug), so every frame is exact. The race is driven by g.autoDrive.
@@ -27,7 +29,8 @@ const TITLE = arg('title', 'Asem Road');
 const FFMPEG = arg('ffmpeg', 'ffmpeg');
 const TRY = process.argv.includes('--try');
 const ONLY = arg('only', null);
-const out = path.join(root, 'dist', 'covers');
+const PG = process.argv.includes('--playgama');
+const out = path.join(root, 'dist', PG ? 'playgama-art' : 'covers');
 fs.mkdirSync(out, { recursive: true });
 
 const CHROME = [
@@ -124,6 +127,7 @@ const COVER_CSS = {
   landscape: '.og-title { left: auto; right: 96px; top: 84px; } .og-title b { font-size: 176px; }',
   portrait: '.og-title { left: 0; right: 0; top: 270px; justify-items: center; } .og-title b { font-size: 112px; text-align: center; }',
   square: '.og-title { left: 0; right: 0; top: 270px; justify-items: center; } .og-title b { font-size: 104px; }',
+  tall: '.og-title { left: 0; right: 0; top: 420px; justify-items: center; } .og-title b { font-size: 150px; text-align: center; }',
 };
 async function cover(map, kind, width, height, file) {
   await open(`/?debug&og&lang=en&map=${map}`, width, height);
@@ -143,7 +147,31 @@ async function cover(map, kind, width, height, file) {
 const SIZES = { landscape: [1920, 1080], portrait: [800, 1200], square: [800, 800] };
 
 try {
-  if (TRY) {
+  if (PG) {
+    for (const [kind, w, h] of [['square', 800, 800], ['tall', 1080, 1920], ['landscape', 1920, 1080]]) await cover(MAP, kind, w, h, path.join(out, `cover-${kind === 'tall' ? 'portrait' : kind}-${w}x${h}.png`));
+    // real races with the HUD in the Playgama build itself (node tools/build-portal.mjs --target playgama
+    // first; Bridge from its CDN runs a mock platform here), the autopilot at the wheel
+    const pgPage = async () => {
+      await open('/dist/playgama/index.html?debug&lang=en', 1920, 1080);
+      for (let k = 0; k < 100 && !(await js('!!window.__asem')); k++) await new Promise((r) => setTimeout(r, 100));
+    };
+    const raceShot = async (opts, secs, file) => {
+      await pgPage();
+      await js(`(() => { const A = window.__asem; A.g.autoDrive = true; A.start(${JSON.stringify(opts)}); for (let k = 0; k < ${secs}; k++) { A.press('nitro', k % 4 === 1); A.step(60); } })()`);
+      await new Promise((r) => setTimeout(r, 2500)); // the start banner goes in real time
+      await shot(path.join(out, file));
+      console.log(file);
+    };
+    await raceShot({ kind: 'story', chapter: 0 }, 16, 'shot-1-almaty-night.png');
+    await raceShot({ kind: 'free', mapId: 'kapchagay' }, 14, 'shot-2-kapchagay.png');
+    await raceShot({ kind: 'free', mapId: 'kolsai' }, 12, 'shot-3-kolsai-rain.png');
+    // chapter 1 to its results
+    await pgPage();
+    await js(`(() => { const A = window.__asem; A.g.autoDrive = true; A.start({ kind: 'story', chapter: 0 }); for (let k = 0; k < 400 && A.g.mode !== 'done'; k++) A.step(30); A.step(60); })()`);
+    await new Promise((r) => setTimeout(r, 2500)); // the stars land in real time
+    await shot(path.join(out, 'shot-4-finish.png'));
+    console.log('shot-4-finish.png');
+  } else if (TRY) {
     for (const map of ['city', 'medeu', 'shymbulak', 'kapchagay', 'charyn', 'kolsai', 'astana']) await cover(map, 'landscape', 1920, 1080, path.join(out, `try-${map}.png`));
   } else if (ONLY) {
     // --only square: redraw one cover, no videos
