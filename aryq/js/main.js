@@ -2,7 +2,7 @@ import * as S from './sim.js';
 import { View } from './render.js';
 import { el, store, clamp } from './util.js';
 import * as sfx from './audio.js';
-import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute } from './portal.js';
+import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute, onPortalPause, adBreak } from './portal.js';
 import { pulse, minute } from './pulse.js';
 
 const q = new URLSearchParams(location.search);
@@ -885,6 +885,7 @@ function showHelp(back) {
 
 // the end of a year: the game stops and the player picks one gift
 function showYear(ev) {
+  adBreak('year_end'); // Playgama only, at most once in two minutes
   paused = true;
   const box = el('div', 'panel rewards');
   const yurts = g.objects.filter((o) => o.type === 'house').length;
@@ -976,6 +977,7 @@ function villageBox(v) {
 
 function showOver() {
   hud.hidden = true;
+  adBreak('game_over'); // Playgama only, at most once in two minutes
   sfx.lost();
   // two halves: what happened, and what next; a phone on its side puts them side by side (21.10)
   const box = el('div', 'panel over');
@@ -1416,5 +1418,14 @@ requestAnimationFrame(() => loadingDone());
 onPortalMute((muted) => {
   portalMuted = muted;
   sfx.holdAudio(muted || document.hidden);
+});
+// the platform asks for a pause (Playgama: its menu, an ad): the game stops behind the pause panel
+onPortalPause(() => {
+  if (g) saveNow();
+  if (g && !g.over && !paused && !hud.hidden) {
+    paused = true;
+    showPause();
+    updateHud();
+  }
 });
 if (q.has('autostart')) start();

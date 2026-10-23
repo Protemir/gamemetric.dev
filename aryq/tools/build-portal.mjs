@@ -2,10 +2,14 @@
 // page and window.ARYQ_PORTAL set (js/portal.js reads it), started through js/boot.js.
 //
 //   node aryq/tools/build-portal.mjs [crazygames]
+//   node aryq/tools/build-portal.mjs --target playgama
 //
-// Output: dist/aryq-<portal>/ and dist/aryq-<portal>.zip in the repo root (dist/ is not in git).
-// On a portal saves go to the portal's Data module, there is no update check and the page title is
-// the full English name. Run node aryq/tools/stamp.mjs first so the versions in index.html are fresh.
+// Output: dist/aryq-<portal>/ and dist/aryq-<portal>.zip in the repo root (dist/ is not in git),
+// index.html at the root of the zip.
+// On a portal saves go to the portal's storage (CrazyGames Data module, Playgama Bridge storage),
+// there is no update check and the page title is the full English name. Playgama allows no requests
+// besides Bridge itself: there js/pulse.js counts nothing, and playgama-bridge-config.json sets the
+// full-screen ads apart. Run node aryq/tools/stamp.mjs first so the versions in index.html are fresh.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -13,8 +17,13 @@ import { fileURLToPath } from 'node:url';
 
 const game = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repo = path.resolve(game, '..');
-const portal = process.argv[2] || 'crazygames';
-const SDK = { crazygames: 'https://sdk.crazygames.com/crazygames-sdk-v3.js' };
+const args = process.argv.slice(2);
+const t = args.indexOf('--target');
+const portal = t >= 0 ? args[t + 1] : args.find((a) => !a.startsWith('--')) || 'crazygames';
+const SDK = {
+  crazygames: 'https://sdk.crazygames.com/crazygames-sdk-v3.js',
+  playgama: 'https://bridge.playgama.com/v2/stable/playgama-bridge.js',
+};
 if (!SDK[portal]) throw new Error('unknown portal ' + portal);
 
 const out = path.join(repo, 'dist', 'aryq-' + portal);
@@ -22,6 +31,27 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, 'js'), { recursive: true });
 fs.copyFileSync(path.join(game, 'style.css'), path.join(out, 'style.css'));
 for (const f of fs.readdirSync(path.join(game, 'js'))) if (f.endsWith('.js')) fs.copyFileSync(path.join(game, 'js', f), path.join(out, 'js', f));
+
+if (portal === 'playgama') {
+  fs.writeFileSync(
+    path.join(out, 'js', 'pulse.js'),
+    `// The Playgama build counts nothing of its own: the platform allows no requests besides Bridge
+// (tools/build-portal.mjs puts this file in place of js/pulse.js).
+export function minute() {
+  return 'm0';
+}
+export function pulse() {}
+`,
+  );
+  const config = {
+    advertisement: {
+      minimumDelayBetweenInterstitial: 120,
+      initialInterstitialDelay: 120,
+      interstitial: { placementFallback: 'year_end', placements: [{ id: 'year_end' }, { id: 'game_over' }] },
+    },
+  };
+  fs.writeFileSync(path.join(out, 'playgama-bridge-config.json'), JSON.stringify(config, null, 4) + '\n');
+}
 
 let html = fs.readFileSync(path.join(game, 'index.html'), 'utf8');
 const main = html.match(/<script type="module" src="\.\/js\/main\.js\?v=[0-9a-f]+"><\/script>/);
@@ -33,11 +63,17 @@ html = html
   .join('\n')
   .replace(/<title>[^<]*<\/title>/, '<title>Aryk: Water the Valley</title>')
   .replace(main[0], `<script src="${SDK[portal]}"></script>\n<script>window.ARYQ_PORTAL = '${portal}';</script>\n<script type="module" src="${boot[1]}"></script>`);
+// the stub above is not the file the stamp hashed: drop its version so no cache keeps the real one
+if (portal === 'playgama') html = html.replace(/(\.\/js\/pulse\.js)\?v=[0-9a-f]+/g, '$1?v=playgama');
 fs.writeFileSync(path.join(out, 'index.html'), html);
 
 const zip = path.join(repo, 'dist', `aryq-${portal}.zip`);
 fs.rmSync(zip, { force: true });
-execFileSync('powershell', ['-NoProfile', '-Command', `Compress-Archive -Path '${out}\\*' -DestinationPath '${zip}'`], { stdio: 'inherit' });
+// tar writes the paths with forward slashes (24.10: PowerShell 5 Compress-Archive wrote "js\main.js",
+// which a Linux server unpacks as a file of that name, and the game would not load there)
+// (Windows' own bsdtar: the GNU tar of Git Bash takes "E:" for a host name)
+const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+execFileSync(tar, ['-a', '-c', '-f', zip, ...fs.readdirSync(out)], { cwd: out, stdio: 'inherit' });
 const files = fs.readdirSync(out, { recursive: true }).filter((f) => fs.statSync(path.join(out, f)).isFile());
 const size = files.reduce((s, f) => s + fs.statSync(path.join(out, f)).size, 0);
 console.log(`${out}: ${files.length} files, ${(size / 1024).toFixed(0)} KB`);
