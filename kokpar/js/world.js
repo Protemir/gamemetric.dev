@@ -66,17 +66,21 @@ const REAR_LEN = 3.0, REAR_UP = 0.85, REAR_DOWN = 0.9; // длительност
 // телефон в портрете: страницу поворачиваем на 90°, игра всегда горизонтальная
 export const view = { w: innerWidth, h: innerHeight, rot: false };
 const touchDev = matchMedia('(pointer: coarse)').matches;
-export const PORTAL = P.has('cg') || window.top !== window.self;
+export const PORTAL = P.has('cg') || window.top !== window.self || !!window.KOKPAR_BUILD; // сборка для портала — всегда «на портале»
 // iPhone: палец не должен прокручивать и тянуть страницу (только списки в меню)
 addEventListener('touchmove', (e) => { if (!e.target.closest?.('.hub, .pausebox')) e.preventDefault(); }, { passive: false });
 function measure() {
   view.rot = touchDev && innerHeight > innerWidth && !PORTAL; // на портале не крутим — просим повернуть телефон
   document.documentElement.classList.toggle('portrait', PORTAL && touchDev && innerHeight > innerWidth);
   view.w = view.rot ? innerHeight : innerWidth; view.h = view.rot ? innerWidth : innerHeight;
+  // портал просит на ПК не растягивать поле шире заданного (Playgama: 2:1) — по бокам поля
+  const maxA = window.KOKPAR_MAXASPECT, wide = !view.rot && maxA && view.w / view.h > maxA;
+  if (wide) view.w = Math.round(view.h * maxA);
+  if (maxA) document.body.style.background = wide ? '#15100a' : ''; // поля по бокам — тёмные
   document.documentElement.classList.toggle('rot', view.rot);
   document.documentElement.classList.toggle('short', view.h < 600); document.documentElement.classList.toggle('tiny', view.h < 380); document.documentElement.style.setProperty('--u', (Math.min(380, view.h) / 360).toFixed(3)); // телефон лёжа в Safari с панелями: ~320–350 px по высоте // окна порталов ~500–560 px — компактный режим
   document.documentElement.style.setProperty('--vh', view.h + 'px'); document.documentElement.style.setProperty('--vw', view.w + 'px'); // высота экрана игры (в повёрнутом виде — ширина телефона)
-  Object.assign((document.getElementById('stage') || document.body).style, view.rot ? { width: view.w + 'px', height: view.h + 'px', transform: `translateX(${innerWidth}px) rotate(90deg)` } : { width: '', height: '', transform: '' });
+  Object.assign((document.getElementById('stage') || document.body).style, view.rot ? { width: view.w + 'px', height: view.h + 'px', transform: `translateX(${innerWidth}px) rotate(90deg)`, left: '' } : wide ? { width: view.w + 'px', height: '', transform: '', left: Math.round((innerWidth - view.w) / 2) + 'px' } : { width: '', height: '', transform: '', left: '' });
 }
 measure();
 // ---------- рендер ----------

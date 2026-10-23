@@ -91,7 +91,7 @@ const T = {
     stats: { speed: ['Скорость', 'Быстрее галоп'], stamina: ['Выносливость', 'Дольше скачет без усталости'], strength: ['Сила', 'Крепче держит и тянет в тартысе'], agility: ['Ловкость', 'Круче поворачивает'] },
     upgrade: 'Улучшить', max: 'Максимум', coat: 'Масть вашего коня', buy: 'Купить', chosen: 'Выбрана', choose: 'Выбрать',
     stableSub: 'Улучшения действуют на всех коней клуба', rating: 'Сила', bracket: 'Плей-офф', tbd: '—', you: 'вы',
-    nextMatch: 'Следующий матч', upHorse: 'Улучшить коня', duel: 'Аударыспақ', duelSub: '1 на 1 · до 2', jamby: 'Жамбы ату', jambySub: 'лук на скаку · 60 с', jAgain: 'Ещё заезд', jRecordT: 'Рекорд!', jHits: 'Попаданий', jPerf: 'В яблочко', jBestS: 'Рекорд', jForHits: (n) => 'попадания (' + n + ')', jForPerfect: (n) => 'в яблочко (' + n + ')', jForRecord: 'за новый рекорд', duelAgain: 'Ещё бой', forDuelWin: 'за победу', forDuelLoss: 'за бой', duelRun: (n) => 'серия побед ×' + n, duelWins: 'Побед в аударыспақ', duelBest: 'Лучшая серия', toMenu: 'В меню', dailyWaits: (m) => 'Награда дня ждёт в меню: +' + m, tomorrow: (m) => 'Завтра: +' + m + ' за вход и 3 новых задания',
+    x2: '×2 призовые за рекламу', close: 'Закрыть', nextMatch: 'Следующий матч', upHorse: 'Улучшить коня', duel: 'Аударыспақ', duelSub: '1 на 1 · до 2', jamby: 'Жамбы ату', jambySub: 'лук на скаку · 60 с', jAgain: 'Ещё заезд', jRecordT: 'Рекорд!', jHits: 'Попаданий', jPerf: 'В яблочко', jBestS: 'Рекорд', jForHits: (n) => 'попадания (' + n + ')', jForPerfect: (n) => 'в яблочко (' + n + ')', jForRecord: 'за новый рекорд', duelAgain: 'Ещё бой', forDuelWin: 'за победу', forDuelLoss: 'за бой', duelRun: (n) => 'серия побед ×' + n, duelWins: 'Побед в аударыспақ', duelBest: 'Лучшая серия', toMenu: 'В меню', dailyWaits: (m) => 'Награда дня ждёт в меню: +' + m, tomorrow: (m) => 'Завтра: +' + m + ' за вход и 3 новых задания',
     sGoals: 'Твои голы', sTugs: 'Выиграно тартысов', sFalls: 'Сбито соперников',
     goldenGoal: 'Ничья в плей-офф — играем до золотого гола', stake: (w, g) => 'Победа +' + w + ' · гол +' + g,
     bonus: (v) => 'сейчас +' + v + '%',
@@ -110,7 +110,7 @@ const T = {
     stats: { speed: ['Speed', 'Faster gallop'], stamina: ['Stamina', 'Gallops longer before tiring'], strength: ['Strength', 'Holds and pulls harder in a tug'], agility: ['Agility', 'Turns tighter'] },
     upgrade: 'Upgrade', max: 'Max', coat: 'Your horse coat', buy: 'Buy', chosen: 'Selected', choose: 'Select',
     stableSub: 'Upgrades apply to every horse of the club', rating: 'Strength', bracket: 'Play-offs', tbd: '—', you: 'you',
-    nextMatch: 'Next match', upHorse: 'Upgrade horse', duel: 'Audaryspak', duelSub: '1 on 1 · first to 2', jamby: 'Jamby shooting', jambySub: 'bow at a gallop · 60 s', jAgain: 'Ride again', jRecordT: 'New record!', jHits: 'Hits', jPerf: 'Bullseyes', jBestS: 'Best', jForHits: (n) => 'hits (' + n + ')', jForPerfect: (n) => 'bullseyes (' + n + ')', jForRecord: 'for a new record', duelAgain: 'Fight again', forDuelWin: 'for the win', forDuelLoss: 'for the fight', duelRun: (n) => 'win streak ×' + n, duelWins: 'Duels won', duelBest: 'Best streak', toMenu: 'Menu', dailyWaits: (m) => 'Your daily reward is waiting in the menu: +' + m, tomorrow: (m) => 'Tomorrow: +' + m + ' for coming back and 3 new quests',
+    x2: '×2 prize for watching an ad', close: 'Close', nextMatch: 'Next match', upHorse: 'Upgrade horse', duel: 'Audaryspak', duelSub: '1 on 1 · first to 2', jamby: 'Jamby shooting', jambySub: 'bow at a gallop · 60 s', jAgain: 'Ride again', jRecordT: 'New record!', jHits: 'Hits', jPerf: 'Bullseyes', jBestS: 'Best', jForHits: (n) => 'hits (' + n + ')', jForPerfect: (n) => 'bullseyes (' + n + ')', jForRecord: 'for a new record', duelAgain: 'Fight again', forDuelWin: 'for the win', forDuelLoss: 'for the fight', duelRun: (n) => 'win streak ×' + n, duelWins: 'Duels won', duelBest: 'Best streak', toMenu: 'Menu', dailyWaits: (m) => 'Your daily reward is waiting in the menu: +' + m, tomorrow: (m) => 'Tomorrow: +' + m + ' for coming back and 3 new quests',
     sGoals: 'Your goals', sTugs: 'Tugs won', sFalls: 'Riders unhorsed',
     goldenGoal: 'Draw in a knockout — golden goal decides', stake: (w, g) => 'Win +' + w + ' · goal +' + g,
     bonus: (v) => 'now +' + v + '%',
@@ -337,6 +337,18 @@ const ACTS = {
   online: () => onOnline?.(),
   duel: () => onDuel?.(),
   jamby: () => onJamby?.(),
+  dclose: () => showHub(true), // закрыть окно награды, не забирая (заберёт в следующий раз)
+  x2: (a, btn) => { // двойные призовые за рекламу (если портал умеет)
+    const sum = lastSum;
+    if (!sum || sum.doubled || !window.KOKPAR_ADS?.canReward()) return;
+    btn.disabled = true;
+    window.KOKPAR_ADS.rewarded().then((ok) => {
+      if (!ok) { btn.disabled = false; return; }
+      sum.doubled = true; S.money += sum.total; save(S);
+      btn.textContent = '✓ +' + money(sum.total);
+      const tot = root.querySelector('.r-prize .tot b'); if (tot) tot.textContent = '+' + money(sum.total * 2);
+    });
+  },
   claim: () => {
     const d = dailyState();
     if (!d.ready) return;
@@ -368,7 +380,7 @@ export function claimDaily() {
 function dailyModal() {
   const d = dailyState();
   const tiles = DAILY.map((r, i) => `<div class="d-tile${i + 1 < d.day ? ' got' : i + 1 === d.day ? ' now' : ''}${i === 6 ? ' big' : ''}"><small>${tr('dayN')(i + 1)}</small>${i === 6 ? IC.gift : IC.coin}<b>${money(r)}</b></div>`).join('');
-  return `<div class="d-modal"><div class="d-box"><div class="h-cup disp">${tr('daily')}</div><div class="d-tiles">${tiles}</div>
+  return `<div class="d-modal"><div class="d-box"><button class="d-x" data-act="dclose" aria-label="${tr('close')}">${IC.close}</button><div class="h-cup disp">${tr('daily')}</div><div class="d-tiles">${tiles}</div>
     <div class="h-season">${tr('streakNote')}</div><button class="big-btn" data-act="claim">${tr('claim')} +${money(DAILY[d.day - 1])}</button></div></div>`;
 }
 export function showQuests() {
@@ -397,7 +409,7 @@ export function showHub(skipDaily) {
       <div class="h-actions"><button class="big-btn" data-act="play">${tr('play')}</button>
       <div class="h-modes"><button class="h-friend h-duel" data-act="duel">${IC.horse}<span>${tr('duel')}<small>${tr('duelSub')}</small></span></button>
       <button class="h-friend h-duel" data-act="jamby">${IC.target}<span>${tr('jamby')}<small>${tr('jambySub')}</small></span></button></div>
-      ${window.KOKPAR_SDK || window.top !== window.self ? '' : `<button class="h-friend" data-act="online">${IC.crowd}<span>${L() === 'ru' ? 'С другом по сети' : 'Play a friend online'}</span></button>`}</div>`; // на портале игру по сети не показываем; кнопки в ряд с промежутком
+      ${window.KOKPAR_SDK || window.KOKPAR_BUILD || window.top !== window.self ? '' : `<button class="h-friend" data-act="online">${IC.crowd}<span>${L() === 'ru' ? 'С другом по сети' : 'Play a friend online'}</span></button>`}</div>`; // на портале игру по сети не показываем; кнопки в ряд с промежутком
   } else {
     const r = c.result;
     const msg = r === 'champion' ? tr('champion') : r === 'final' ? tr('runnerUp') : r === 'semi' ? tr('outSemi') : tr('outGroup');
@@ -487,14 +499,16 @@ function autoNext(sec = 10) {
   if (!show()) return;
   autoT = setInterval(() => {
     if (!show()) { clearInterval(autoT); return; }
-    if (document.hidden) return;
+    if (document.hidden || window.__adOpen) return; // вкладка скрыта или идёт реклама — отсчёт стоит
     n--; show();
     if (n <= 0) { clearInterval(autoT); onPlay?.(); }
   }, 1000);
   root.addEventListener('pointerdown', stopAuto, { once: true, capture: true });
 }
 function stopAuto() { clearInterval(autoT); root.querySelector('.r-next .r-auto')?.remove(); }
+let lastSum = null;
 export function showResult(sum) {
+  lastSum = sum;
   const k = myKit(), f = kitOf(sum.opp);
   const title = sum.res === 'win' ? tr('win') : sum.res === 'loss' ? tr('loss') : tr('draw');
   const lines = prizeLines(sum.lines);
@@ -506,7 +520,7 @@ export function showResult(sum) {
     <div class="r-score"><img src="${flag(k, 144, 90)}" alt=""><span class="disp">${sum.my} : ${sum.their}</span><img src="${flag(f, 144, 90)}" alt=""></div>
     <div class="r-stats"><span>${tr('sGoals')} <b>${sum.st?.myGoals || 0}</b></span><span>${tr('sTugs')} <b>${sum.st?.tugs || 0}</b></span><span>${tr('sFalls')} <b>${sum.st?.falls || 0}</b></span></div>
     ${sum.note ? `<div class="h-stage big">${sum.note}</div>` : ''}
-    <div class="r-cols"><div class="r-prize"><div class="h-gt">${tr('prize')}</div>${lines}<div class="tot"><span>${tr('total')}</span><b>+${money(sum.total)}</b></div></div>
+    <div class="r-cols"><div class="r-prize"><div class="h-gt">${tr('prize')}</div>${lines}<div class="tot"><span>${tr('total')}</span><b>+${money(sum.total)}</b></div>${sum.total > 0 && window.KOKPAR_ADS?.canReward() ? `<button class="r-x2" data-act="x2">${IC.play}<span>${tr('x2')}</span></button>` : ''}</div>
     <div class="r-mini">${mini}</div></div>
     ${nextActs()}
     <div class="r-tomorrow">${IC.gift}<span>${tomorrowText()}</span></div></div>`;

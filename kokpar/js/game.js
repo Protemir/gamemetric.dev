@@ -850,6 +850,7 @@ function endMatch() {
   el.banner.classList.remove('on'); bannerT = 0; delete el.hint.dataset.keep; el.hint.textContent = ''; el.tug.hidden = true;
   career.showResult(sum);
   el.menu.hidden = false;
+  portal.interstitial(); // итоги — естественная пауза; сам портал держит не чаще раза в 2 минуты
   pulse('end', 'cup:' + sum.res + ':' + state.score[0] + '-' + state.score[1] + ':' + minute());
   if (sum.res === 'win') { cheer(true); portal.happytime(); }
 }
@@ -1053,6 +1054,7 @@ function jambyEnd() {
   el.banner.classList.remove('on'); bannerT = 0; el.hint.textContent = ''; el.tug.hidden = true;
   career.showJambyResult(sum);
   el.menu.hidden = false;
+  portal.interstitial();
   pulse('end', 'jamby:h' + J.hits + ':' + minute());
   if (sum.record) { cheer(true); portal.happytime(); }
 }
@@ -1091,6 +1093,7 @@ function audarEnd() {
   el.banner.classList.remove('on'); bannerT = 0; el.hint.textContent = ''; el.tug.hidden = true;
   career.showDuelResult({ ...sum, kit: fx.kit, foe: teamName(1) });
   el.menu.hidden = false;
+  portal.interstitial();
   pulse('end', 'duel:' + (win ? 'win' : 'loss') + ':' + state.score[0] + '-' + state.score[1] + ':' + minute());
   if (win) portal.happytime();
 }
@@ -1511,6 +1514,7 @@ function showMenu() {
   el.menu.hidden = false;
 }
 addEventListener('resize', onResize);
+addEventListener('contextmenu', (e) => e.preventDefault()); // долгое нажатие и правая кнопка — без меню браузера
 // портал: телефон повернули вертикально посреди матча — экран закрыт просьбой повернуть, матч ставим на паузу
 let pendingStart = false;
 // телефон повернули горизонтально, а игрок ещё ничего не нажимал — сразу в матч
@@ -1848,9 +1852,10 @@ if (SIM) {
   window.__sim = res;
   document.title = 'SIM DONE';
 } else {
-  window.__loadDone?.(); setTimeout(() => el.load.remove(), 150);
+  window.__loadDone?.(); setTimeout(() => { el.load.remove(); requestAnimationFrame(() => portal.gameReady()); }, 150); // Playgama: «готово» — когда экран загрузки снят и кадр нарисован
   portal.loadingDone();
   portal.onPortalMute(setPortalMute);
+  portal.onPortalPause((on) => { if (on) togglePause(true); }); // портал попросил паузу (реклама, свернули)
   const roomCode = cleanCode((location.hash.match(/room=([A-Za-z0-9]{6})/) || [])[1]);
   // самый первый запуск — сразу в первый матч, без меню: порталы считают «загрузку» до начала игры, а новичку меню ничего не говорит
   const portrait = document.documentElement.classList.contains('portrait');

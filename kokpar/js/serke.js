@@ -54,7 +54,49 @@ function bumpTexture(w, h) {
   return t;
 }
 
+// кожаный мешок с войлочной полосой и узором, концы стянуты верёвкой — серке без туши (для порталов со строгими правилами)
+function leatherTexture(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.fillStyle = '#8a5530'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '40,22,10' : '190,130,80'},${Math.random() * 0.12})`; g.fillRect(Math.random() * w, Math.random() * h, 3, 2); }
+  // войлочная полоса посередине: красная с золотым орнаментом «қошқар мүйіз»
+  const y0 = h * 0.38, y1 = h * 0.62;
+  g.fillStyle = '#a32a24'; g.fillRect(0, y0, w, y1 - y0);
+  g.strokeStyle = '#e2b04a'; g.lineWidth = 3;
+  for (let x = 0; x < w; x += 32) {
+    g.beginPath(); g.moveTo(x, (y0 + y1) / 2); g.bezierCurveTo(x + 6, y0 + 4, x + 16, y0 + 4, x + 16, (y0 + y1) / 2); g.bezierCurveTo(x + 16, y1 - 4, x + 26, y1 - 4, x + 32, (y0 + y1) / 2); g.stroke();
+  }
+  g.fillStyle = '#e2b04a'; g.fillRect(0, y0 - 3, w, 3); g.fillRect(0, y1, w, 3);
+  // шов
+  g.strokeStyle = 'rgba(30,16,8,.6)'; g.lineWidth = 2; g.setLineDash([6, 6]);
+  g.beginPath(); g.moveTo(0, h * 0.12); g.lineTo(w, h * 0.12); g.stroke();
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+function makeBag() {
+  const g = new THREE.Group(), L = 0.9;
+  const skin = new THREE.MeshStandardMaterial({ map: leatherTexture(512, 256), roughness: 0.8 });
+  const rope = new THREE.MeshStandardMaterial({ color: '#7a6040', roughness: 0.9 });
+  const prof = [];
+  for (let i = 0; i <= 18; i++) { const t = i / 18; prof.push(new THREE.Vector2(Math.max(0.035, 0.19 * Math.pow(Math.sin(Math.PI * t), 0.6) + 0.01), t * L - L / 2)); }
+  const geo = new THREE.LatheGeometry(prof, 24); geo.rotateZ(-Math.PI / 2);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i), p.getY(i) * 0.9, p.getZ(i) * 0.85);
+  geo.computeVertexNormals();
+  g.add(new THREE.Mesh(geo, skin));
+  for (const s of [-1, 1]) { // концы стянуты верёвкой, кожа торчит хвостиком
+    const tie = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.014, 6, 14), rope);
+    tie.rotation.y = Math.PI / 2; tie.position.x = s * (L / 2 - 0.07); g.add(tie);
+    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 10), skin);
+    tuft.rotation.z = s > 0 ? -Math.PI / 2 : Math.PI / 2; tuft.position.x = s * (L / 2 + 0.01); g.add(tuft);
+  }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
 export function makeSerke() {
+  if (window.KOKPAR_BUILD === 'playgama') return makeBag();
   const g = new THREE.Group();
   const hide = new THREE.MeshStandardMaterial({ map: furTexture(512, 256, '#d6cbb8', '#efe8da'), normalMap: bumpTexture(256, 128), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95 });
   hide.map.repeat.set(2, 1); hide.normalMap.repeat.set(3, 2);
