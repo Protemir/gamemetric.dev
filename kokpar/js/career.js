@@ -2,6 +2,7 @@
 // Всё хранится в localStorage; экраны рисуются в #menu вместо старой лестницы аулов.
 import { flagCanvas, SIGN_LIST } from './flags.js';
 import { IC } from './icons.js';
+import { pulse } from './pulse.js';
 
 const KEY = 'kokpar.career';
 const box = () => window.KOKPAR_DATA || localStorage; // на портале прогресс хранится в аккаунте игрока
@@ -340,6 +341,7 @@ const ACTS = {
     const d = dailyState();
     if (!d.ready) return;
     S.money += DAILY[d.day - 1]; S.daily = { last: dayKey(), streak: d.day }; save(S);
+    pulse('daily', 'd' + d.day);
     showHub(true);
   },
 };
@@ -355,6 +357,13 @@ function tabs(active) { // нижние вкладки с иконками; у �
   const left = questsToday().filter((q) => !q.done).length;
   const t = (act, icon, label, badge) => `<button class="h-tab${act === active ? ' on' : ''}" data-act="${act}">${icon}<span>${label}</span>${badge ? `<i class="h-badge">${badge}</i>` : ''}</button>`;
   return `<nav class="h-tabs">${t('hub', IC.trophy, L() === 'ru' ? 'Кубок' : 'Cup')}${t('table', IC.list, tr('table'))}${t('stable', IC.horse, tr('stable'), upCount())}${t('quests', IC.target, tr('quests'), left)}</nav>`;
+}
+// награда дня без окна — для прямого старта на портале: зачислить и вернуть, что показать
+export function claimDaily() {
+  const d = dailyState();
+  if (!d.ready || !S.played) return null;
+  S.money += DAILY[d.day - 1]; S.daily = { last: dayKey(), streak: d.day }; save(S);
+  return { day: d.day, sum: '+' + money(DAILY[d.day - 1]), dayText: tr('dayN')(d.day).toLowerCase() };
 }
 function dailyModal() {
   const d = dailyState();
@@ -468,6 +477,23 @@ function prizeLines(all) {
   if (qs.length) rest.push([qs.length === 1 ? qs[0][0] : tr('quests') + ' (' + qs.length + ')', qs.reduce((s, l) => s + l[1], 0)]);
   return rest.map(([a, b]) => `<div><span>${a}</span><b>+${money(b)}</b></div>`).join('');
 }
+// итоги кубкового матча: через 10 с сам начинается следующий матч (кнопка показывает отсчёт);
+// любое нажатие в итогах отсчёт останавливает, на скрытой вкладке он стоит
+let autoT = null;
+function autoNext(sec = 10) {
+  clearInterval(autoT);
+  let n = sec;
+  const show = () => { const i = root.querySelector('.r-next .r-auto'); if (i) i.textContent = n; return !!i; };
+  if (!show()) return;
+  autoT = setInterval(() => {
+    if (!show()) { clearInterval(autoT); return; }
+    if (document.hidden) return;
+    n--; show();
+    if (n <= 0) { clearInterval(autoT); onPlay?.(); }
+  }, 1000);
+  root.addEventListener('pointerdown', stopAuto, { once: true, capture: true });
+}
+function stopAuto() { clearInterval(autoT); root.querySelector('.r-next .r-auto')?.remove(); }
 export function showResult(sum) {
   const k = myKit(), f = kitOf(sum.opp);
   const title = sum.res === 'win' ? tr('win') : sum.res === 'loss' ? tr('loss') : tr('draw');
@@ -484,13 +510,14 @@ export function showResult(sum) {
     <div class="r-mini">${mini}</div></div>
     ${nextActs()}
     <div class="r-tomorrow">${IC.gift}<span>${tomorrowText()}</span></div></div>`;
+  autoNext();
 }
 // сразу в следующий матч кубка — без захода в меню (второй матч — главное, что держит новичка); кубок кончился — в меню
 function nextActs() {
   const nf = fixture();
   const extra = upBtn() || nameBtn();
   if (!nf) return `<div class="r-acts"><button class="big-btn" data-act="hub">${tr('next')}</button>${extra}</div>`;
-  return `<div class="r-acts"><button class="big-btn" data-act="play">${tr('nextMatch')}<small>${esc(nf.full)} · ${tr('win').toLowerCase()} +${money(PRIZE.win)}</small></button>
+  return `<div class="r-acts"><button class="big-btn r-next" data-act="play"><i class="r-auto"></i>${tr('nextMatch')}<small>${esc(nf.full)} · ${tr('win').toLowerCase()} +${money(PRIZE.win)}</small></button>
     <button class="r-menu" data-act="hub">${tr('toMenu')}</button>${extra}</div>`;
 }
 // хватает денег на улучшение — сразу видно, на что потратить выигрыш

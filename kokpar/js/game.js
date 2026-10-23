@@ -11,9 +11,11 @@ import { IC } from './icons.js';
 import * as portal from './portal.js';
 import { Net, cleanCode, netSupported } from './net.js';
 import { flagCanvas } from './flags.js';
+import { pulse, minute } from './pulse.js';
 import { setPortalMute, crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh, tumble, bump, twang, clink } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
+let starts = 0; // сколько матчей и режимов начато за этот заход — для счётчика
 if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
 const OFF_RIDERS = (P.get('no') || '').includes('riders'), NO_SHADOW_RIDERS = (P.get('no') || '').includes('rshadow');
 const MATCH_LEN = Number(P.get('len') || 180); // с
@@ -854,6 +856,7 @@ function endMatch() {
   el.banner.classList.remove('on'); bannerT = 0; delete el.hint.dataset.keep; el.hint.textContent = ''; el.tug.hidden = true;
   career.showResult(sum);
   el.menu.hidden = false;
+  pulse('end', 'cup:' + sum.res + ':' + state.score[0] + '-' + state.score[1] + ':' + minute());
   if (sum.res === 'win') { cheer(true); portal.happytime(); }
 }
 
@@ -861,6 +864,7 @@ function endMatch() {
 let audar = null; // { foe, hard }
 const AUDAR_WIN = 3;
 function startAudar() {
+  pulse('start', 'duel:n' + Math.min(++starts, 9));
   applyStage(); applyLang();
   el.menu.hidden = true; el.tut.hidden = true; delete el.hint.dataset.keep;
   const foe = ents.find((e) => e.team === 1);
@@ -914,6 +918,7 @@ const jambyGear = (() => {
   return { post, ing, rope, arrow, ret, mark };
 })();
 function startJamby() {
+  pulse('start', 'jamby:n' + Math.min(++starts, 9));
   modeOff();
   applyStage(); applyLang();
   el.menu.hidden = true; el.tut.hidden = true; delete el.hint.dataset.keep;
@@ -1035,6 +1040,7 @@ function jambyEnd() {
   el.banner.classList.remove('on'); bannerT = 0; el.hint.textContent = ''; el.tug.hidden = true;
   career.showJambyResult(sum);
   el.menu.hidden = false;
+  pulse('end', 'jamby:h' + J.hits + ':' + minute());
   if (sum.record) { cheer(true); portal.happytime(); }
 }
 function audarKick(first) {
@@ -1072,6 +1078,7 @@ function audarEnd() {
   el.banner.classList.remove('on'); bannerT = 0; el.hint.textContent = ''; el.tug.hidden = true;
   career.showDuelResult({ ...sum, kit: fx.kit, foe: teamName(1) });
   el.menu.hidden = false;
+  pulse('end', 'duel:' + (win ? 'win' : 'loss') + ':' + state.score[0] + '-' + state.score[1] + ':' + minute());
   if (win) portal.happytime();
 }
 // бот: скачет наперерез, вблизи хватает; пока игрок лежит — ждёт рядом
@@ -1186,11 +1193,12 @@ function stepConfetti(dt) {
   confetti.im.instanceMatrix.needsUpdate = true;
   if (!alive) confetti.im.count = 0;
 }
-function popMoney(text) { // «+150 ₸» всплывает над полем
+function popMoney(text, sub = '') { // «+150 ₸» всплывает над полем; sub — мелкая строка под суммой (держится дольше)
   const d = document.createElement('div');
-  d.className = 'pop-money disp'; d.textContent = text;
+  d.className = 'pop-money disp' + (sub ? ' long' : ''); d.textContent = text;
+  if (sub) { const sm = document.createElement('small'); sm.textContent = sub; d.appendChild(sm); }
   (document.getElementById('stage') || document.body).appendChild(d);
-  setTimeout(() => d.remove(), 1500);
+  setTimeout(() => d.remove(), sub ? 2700 : 1500);
 }
 function juiceEvents() {
   const ev = state.events;
@@ -1368,10 +1376,11 @@ el.btnTug.addEventListener('pointerdown', (e) => { e.preventDefault(); initAudio
 for (const ev of ['pointerup', 'pointercancel']) el.btnTug.addEventListener(ev, () => { if (me) releaseAim(me); });
 el.btnWhip.addEventListener('pointerdown', (e) => { e.preventDefault(); if (canRear()) me.h.rear(); else whipHeld = true; });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.btnWhip.addEventListener(ev, () => { whipHeld = false; });
-function startMatch() {
+function startMatch(how = '') {
   modeOff();
   applyStage(); applyLang();
   el.menu.hidden = true;
+  if (!SIM) pulse('start', 'cup:' + (rookie ? 'new' : 'p' + Math.min(career.played(), 20)) + ':n' + Math.min(++starts, 9) + how);
   state.score = [0, 0]; state.clock = rookie ? ROOKIE_LEN : MATCH_LEN; state.golden = false; state.events = []; kickoff(true); // первый матч короче — новичок точно доходит до итогов и призовых
 }
 el.pause.addEventListener('click', (e) => {
@@ -1411,7 +1420,34 @@ function showMenu() {
 }
 addEventListener('resize', onResize);
 // портал: телефон повернули вертикально посреди матча — экран закрыт просьбой повернуть, матч ставим на паузу
+let pendingStart = false;
+// телефон повернули горизонтально, а игрок ещё ничего не нажимал — сразу в матч
+addEventListener('resize', () => {
+  if (!pendingStart || document.documentElement.classList.contains('portrait') || state.phase !== 'menu' || el.menu.hidden || document.getElementById('load')) return;
+  pendingStart = false;
+  if (career.played() > 0) dailyOnEntry();
+  if (career.played() === 0 || career.fixture()) startMatch(':turn');
+});
+el.menu.addEventListener('pointerdown', () => { pendingStart = false; }, true);
+function dailyOnEntry() {
+  const got = career.claimDaily();
+  if (!got) return;
+  pulse('daily', 'd' + got.day);
+  setTimeout(() => popMoney(got.sum, (lang === 'ru' ? 'Награда дня · ' : 'Daily reward · ') + got.dayText), 900);
+}
 addEventListener('resize', () => { if (document.documentElement.classList.contains('portrait') && !paused && !online.role && ['play', 'countdown', 'goal'].includes(state.phase)) togglePause(true); });
+
+// ---------- счётчик: уход игрока ----------
+let leftOnce = false;
+function left() {
+  if (leftOnce || SIM) return;
+  leftOnce = true;
+  const scr = document.getElementById('load') ? 'load' : !el.pause.hidden ? 'pause' : !el.menu.hidden ? (document.querySelector('#hub .result') ? 'res' : 'menu') : state.phase === 'menu' ? 'menu' : 'play';
+  const mode = audar ? 'duel' : jamby ? 'jamby' : online.role ? 'net' : 'cup';
+  pulse('leave', scr + ':' + (scr === 'play' || scr === 'pause' ? mode + ':' : '') + minute() + ':n' + starts + (scr === 'play' && !jamby ? ':' + state.score[0] + '-' + state.score[1] : ''));
+}
+addEventListener('visibilitychange', () => document.hidden && left(), true);
+addEventListener('pagehide', left);
 
 // ---------- запуск ----------
 let last = performance.now(), frozen = false;
@@ -1458,7 +1494,7 @@ const TUT = {
   en: [['Ride to the carcass', 'gold arrow above it'], ['Carry it to the enemy kazan', 'arrow at the screen edge'], ['Hold and release to throw', 'green ring — it will land in'], ['Steal it from a rival', 'catch up and press — tug of war']],
 };
 const tut = { on: false, step: 0, shown: -1, doneT: 0 };
-try { tut.on = !P.has('bots') && localStorage.getItem('kokpar.tut') !== '1'; } catch { tut.on = false; }
+try { tut.on = !P.has('bots') && localStorage.getItem('kokpar.tut') !== '1' && career.played() === 0; } catch { tut.on = false; } // обучение — только в самом первом матче
 function tutEnd() { tut.on = false; el.tut.hidden = true; try { localStorage.setItem('kokpar.tut', '1'); } catch { /* приватный режим */ } }
 el.tut.addEventListener('click', (e) => { if (e.target.closest('.t-skip')) tutEnd(); });
 el.tut.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -1549,6 +1585,7 @@ function onlineJoin(code) {
 }
 // хост: друг играет за 2-го всадника команды соперника, в своих цветах
 function onlineStartHost() {
+  pulse('start', 'net:host');
   modeOff();
   const f = online.friend;
   online.remote = ents.find((e) => e.team === 1 && ents.filter((o) => o.team === 1).indexOf(e) === 1);
@@ -1724,8 +1761,19 @@ if (SIM) {
   portal.onPortalMute(setPortalMute);
   const roomCode = cleanCode((location.hash.match(/room=([A-Za-z0-9]{6})/) || [])[1]);
   // самый первый запуск — сразу в первый матч, без меню: порталы считают «загрузку» до начала игры, а новичку меню ничего не говорит
-  const firstRun = career.played() === 0 && roomCode.length !== 6 && !P.has('menu') && !document.documentElement.classList.contains('portrait');
-  if ((P.has('bots') || P.has('debug')) && !P.has('menu')) applyStage(); else { showMenu(); if (firstRun) startMatch(); }
+  const portrait = document.documentElement.classList.contains('portrait');
+  const firstRun = career.played() === 0 && roomCode.length !== 6 && !P.has('menu') && !portrait;
+  // портал: вернувшийся игрок — сразу в следующий матч кубка (меню перед игрой порталы считают «не начал играть»),
+  // награда дня зачисляется сама и всплывает над полем; кубок доигран — меню с «Новым сезоном»
+  const direct = (PORTAL || !!window.KOKPAR_SDK) && career.played() > 0 && roomCode.length !== 6 && !P.has('menu') && !!career.fixture();
+  pulse('open', (career.played() ? 'back' : 'new') + (portrait ? ':portrait' : ''));
+  if ((P.has('bots') || P.has('debug')) && !P.has('menu')) applyStage();
+  else {
+    showMenu();
+    if (portrait && (firstRun || direct || career.played() === 0)) pendingStart = true; // повернёт телефон — начнём
+    else if (firstRun) startMatch();
+    else if (direct) { dailyOnEntry(); startMatch(':auto'); }
+  }
   if (roomCode.length === 6) onlineJoin(roomCode); // открыл ссылку друга
   updateCamera(0, true);
   el.hint.dataset.keep = '1';
