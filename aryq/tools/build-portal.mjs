@@ -3,13 +3,16 @@
 //
 //   node aryq/tools/build-portal.mjs [crazygames]
 //   node aryq/tools/build-portal.mjs --target playgama
+//   node aryq/tools/build-portal.mjs --target yandex
 //
 // Output: dist/aryq-<portal>/ and dist/aryq-<portal>.zip in the repo root (dist/ is not in git),
 // index.html at the root of the zip.
 // On a portal saves go to the portal's storage (CrazyGames Data module, Playgama Bridge storage),
 // there is no update check and the page title is the full English name. Playgama allows no requests
 // besides Bridge itself: there js/pulse.js counts nothing, and playgama-bridge-config.json sets the
-// full-screen ads apart. Run node aryq/tools/stamp.mjs first so the versions in index.html are fresh.
+// full-screen ads apart. Yandex Games hosts the SDK itself at /sdk.js; there too js/pulse.js counts
+// nothing, the page blocks the browser's long-press menu and pull-to-refresh, and the scripts lose
+// their comment lines. Run node aryq/tools/stamp.mjs first so the versions in index.html are fresh.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -23,7 +26,9 @@ const portal = t >= 0 ? args[t + 1] : args.find((a) => !a.startsWith('--')) || '
 const SDK = {
   crazygames: 'https://sdk.crazygames.com/crazygames-sdk-v3.js',
   playgama: 'https://bridge.playgama.com/v2/stable/playgama-bridge.js',
+  yandex: '/sdk.js',
 };
+const own = portal === 'playgama' || portal === 'yandex'; // no requests of the game's own there
 if (!SDK[portal]) throw new Error('unknown portal ' + portal);
 
 const out = path.join(repo, 'dist', 'aryq-' + portal);
@@ -32,10 +37,10 @@ fs.mkdirSync(path.join(out, 'js'), { recursive: true });
 fs.copyFileSync(path.join(game, 'style.css'), path.join(out, 'style.css'));
 for (const f of fs.readdirSync(path.join(game, 'js'))) if (f.endsWith('.js')) fs.copyFileSync(path.join(game, 'js', f), path.join(out, 'js', f));
 
-if (portal === 'playgama') {
+if (own) {
   fs.writeFileSync(
     path.join(out, 'js', 'pulse.js'),
-    `// The Playgama build counts nothing of its own: the platform allows no requests besides Bridge
+    `// This build counts nothing of its own: the platform allows no requests besides its SDK
 // (tools/build-portal.mjs puts this file in place of js/pulse.js).
 export function minute() {
   return 'm0';
@@ -43,6 +48,15 @@ export function minute() {
 export function pulse() {}
 `,
   );
+}
+if (portal === 'yandex') {
+  // whole comment lines only: the code itself is left exactly as tested
+  for (const file of fs.readdirSync(path.join(out, 'js'))) {
+    const p = path.join(out, 'js', file);
+    fs.writeFileSync(p, fs.readFileSync(p, 'utf8').split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n'));
+  }
+}
+if (portal === 'playgama') {
   const config = {
     advertisement: {
       minimumDelayBetweenInterstitial: 120,
@@ -64,7 +78,16 @@ html = html
   .replace(/<title>[^<]*<\/title>/, '<title>Aryk: Water the Valley</title>')
   .replace(main[0], `<script src="${SDK[portal]}"></script>\n<script>window.ARYQ_PORTAL = '${portal}';</script>\n<script type="module" src="${boot[1]}"></script>`);
 // the stub above is not the file the stamp hashed: drop its version so no cache keeps the real one
-if (portal === 'playgama') html = html.replace(/(\.\/js\/pulse\.js)\?v=[0-9a-f]+/g, '$1?v=playgama');
+if (own) html = html.replace(/(\.\/js\/pulse\.js)\?v=[0-9a-f]+/g, '$1?v=' + portal);
+// Yandex: a long press opens no browser menu or picture callout, the page does not pull to refresh
+// (style.css says most of it too; written here as well, where checkers of the page look first)
+if (portal === 'yandex')
+  html = html.replace(
+    '<script src="/sdk.js"></script>',
+    `<style>html, body { overflow: hidden; overscroll-behavior: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; } #game { touch-action: none; }</style>
+<script>document.addEventListener('contextmenu', (e) => e.preventDefault());</script>
+<script src="/sdk.js"></script>`,
+  );
 fs.writeFileSync(path.join(out, 'index.html'), html);
 
 const zip = path.join(repo, 'dist', `aryq-${portal}.zip`);

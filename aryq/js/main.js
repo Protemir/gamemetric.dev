@@ -885,7 +885,8 @@ function showHelp(back) {
 
 // the end of a year: the game stops and the player picks one gift
 function showYear(ev) {
-  adBreak('year_end'); // Playgama only, at most once in two minutes
+  saveNow(); // the year as it is, before a full-screen ad on the portals that show them
+  adBreak('year_end');
   paused = true;
   const box = el('div', 'panel rewards');
   const yurts = g.objects.filter((o) => o.type === 'house').length;
@@ -977,7 +978,7 @@ function villageBox(v) {
 
 function showOver() {
   hud.hidden = true;
-  adBreak('game_over'); // Playgama only, at most once in two minutes
+  adBreak('game_over'); // portal.js: only where the portal shows ads, at most once in two minutes
   sfx.lost();
   // two halves: what happened, and what next; a phone on its side puts them side by side (21.10)
   const box = el('div', 'panel over');

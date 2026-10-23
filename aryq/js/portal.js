@@ -5,9 +5,20 @@
 // the portal's mute.
 // Playgama: js/boot.js starts Bridge; here the game says it is ready, takes the language, obeys the
 // platform's sound and pause, and shows a full-screen ad at a natural break now and then.
+// Yandex Games: js/boot.js starts their SDK (YaGames.init); the same as Playgama through LoadingAPI,
+// GameplayAPI, environment.i18n.lang, game_api_pause/resume and showFullscreenAdv.
 export const PORTAL = window.ARYQ_PORTAL || null;
 const sdk = () => window.ARYQ_SDK_READY || null;
 const pg = () => (PORTAL === 'playgama' && window.ARYQ_BRIDGE) || null;
+const ya = () => (PORTAL === 'yandex' && window.ARYQ_YSDK) || null;
+const yaCall = (f) => {
+  try {
+    const r = f(ya());
+    if (r && r.catch) r.catch(() => {});
+  } catch {
+    /* an SDK without that part: the game goes on */
+  }
+};
 
 let playing = false;
 
@@ -18,6 +29,8 @@ export function portalLang() {
   try {
     const b = pg();
     if (b) return b.platform.language ? regional(String(b.platform.language)) : null;
+    const y = ya();
+    if (y) return window.ARYQ_YLANG ? regional(String(window.ARYQ_YLANG)) : null;
     const s = sdk();
     const loc = s && s.user && s.user.systemInfo && s.user.systemInfo.locale;
     if (!loc) return null;
@@ -39,6 +52,13 @@ const say = (msg) => {
 // called every frame with "is the player in a running game right now"; the portal hears only changes
 let started = false;
 export function gameplay(on) {
+  if (ya()) {
+    if (on === playing) return;
+    if (on) loadingDone();
+    playing = on;
+    yaCall((y) => (on ? y.features.GameplayAPI.start() : y.features.GameplayAPI.stop()));
+    return;
+  }
   if (pg()) {
     if (on === playing) return;
     if (on) loadingDone();
@@ -65,6 +85,11 @@ export function gameplay(on) {
 let loaded = false;
 export function loadingDone() {
   if (loaded) return;
+  if (ya()) {
+    loaded = true;
+    yaCall(() => window.ARYQ_YREADY());
+    return;
+  }
   if (pg()) {
     loaded = true;
     say('game_ready');
@@ -91,7 +116,16 @@ export function happytime() {
 }
 
 // fn(muted) now and whenever the portal's mute changes (on Playgama also while an ad is open)
+let yaTell = null; // Yandex: the sound holds while an ad is open (set by onPortalMute, used by adBreak)
+const yaState = { ad: false, paused: false };
 export function onPortalMute(fn) {
+  if (ya()) {
+    yaTell = () => fn(yaState.ad || yaState.paused);
+    yaCall((y) => y.on('game_api_pause', () => ((yaState.paused = true), yaTell())));
+    yaCall((y) => y.on('game_api_resume', () => ((yaState.paused = false), yaTell())));
+    yaTell();
+    return;
+  }
   const b = pg();
   if (b) {
     const st = { audio: true, ad: false, paused: false };
@@ -128,6 +162,7 @@ export function onPortalMute(fn) {
 
 // fn() when the portal asks the game to pause (Playgama: another tab, an ad, the platform's menu)
 export function onPortalPause(fn) {
+  if (ya()) return yaCall((y) => y.on('game_api_pause', () => fn()));
   const b = pg();
   if (!b) return;
   try {
@@ -137,11 +172,22 @@ export function onPortalPause(fn) {
   }
 }
 
-// A full-screen ad at a natural break (the end of a year, a dried orchard), on Playgama only and at
-// most once in two minutes, never in the first two minutes of a visit. The config file says the same.
+// A full-screen ad at a natural break (the end of a year, a dried orchard), on Playgama and Yandex only,
+// at most once in two minutes and never in the first two minutes of a visit (Playgama's config file
+// says the same; Yandex allows one a minute).
 export const AD_GAP = 120000;
 let lastAd = performance.now();
 export function adBreak(placement) {
+  if (ya()) {
+    if (performance.now() - lastAd < AD_GAP) return false;
+    lastAd = performance.now();
+    const quiet = (on) => {
+      yaState.ad = on;
+      if (yaTell) yaTell();
+    };
+    yaCall((y) => y.adv.showFullscreenAdv({ callbacks: { onOpen: () => quiet(true), onClose: () => quiet(false), onError: () => quiet(false), onOffline: () => quiet(false) } }));
+    return true;
+  }
   const b = pg();
   if (!b || performance.now() - lastAd < AD_GAP) return false;
   try {
