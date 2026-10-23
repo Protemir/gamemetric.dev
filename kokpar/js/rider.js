@@ -245,6 +245,11 @@ export class Rider {
     if (!this.fallen) { // крен всего всадника в седле (вокруг продольной оси)
       this.root.quaternion.copy(this.home.quat).multiply(Qr.setFromAxisAngle(AZ, dip * 0.3 * (this.dipSide || -1))); // таз почти на месте — наклоняется корпус
     }
+    if (!this.fallen && this.pull) { // аударыспақ: тянет к сопернику (+) или откинулся назад (−) — клонится весь, от таза
+      const pl = this.pull, sd = this.pullSide || 1;
+      this.root.quaternion.multiply(Qr.setFromAxisAngle(AZ, pl * 0.95 * sd));
+      this.turn('Spine', AZ, pl * 0.3 * -sd); this.turn('Spine1', AZ, pl * 0.35 * -sd); this.turn('Spine2', AZ, pl * 0.25 * -sd);
+    }
     if (dip > 0.01) {
       const sd = this.dipSide || -1, arm = sd < 0 ? 'Right' : 'Left', sa = sd < 0 ? -1 : 1;
       this.turn('Spine1', AZ, dip * 1.0 * sd); this.turn('Spine2', AZ, dip * 0.65 * sd);

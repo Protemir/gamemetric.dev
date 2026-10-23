@@ -12,6 +12,7 @@ import * as portal from './portal.js';
 import { Net, cleanCode, netSupported } from './net.js';
 import { flagCanvas } from './flags.js';
 import { pulse, minute } from './pulse.js';
+import * as AUD from './audar.js';
 import { setPortalMute, crowdTension, crowdShout, getVolume, setVolume, isMuted, initAudio, toggleMute, setListener, ambience, cheer, whip, grabSound, neigh, tumble, bump, twang, clink } from './audio.js';
 
 const SIM = Number(P.get('sim') || 0);
@@ -34,7 +35,7 @@ const V = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(
 const TEXT = {
   ru: {
     red: 'Красные', blue: 'Синие', loading: 'Загрузка степи…', ready: 'Готовьтесь!', go: 'Вперёд!', goal: 'ГОЛ!', goalBy: (t) => t,
-    tug: 'Тартыс!', tugSub: 'Схватка за серке', jHit: 'Попал!', jPerfect: 'В яблочко!', jMiss: 'Мимо', jGallop: 'на скаку', jAim: 'Жми <kbd>E</kbd>, когда круги совпадут', jAimT: 'Жми ВЫСТРЕЛ, когда круги совпадут', jRide: 'Скачи к шесту с жамбы — стреляй на ходу', jBest: 'Рекорд', jRecord: 'Новый рекорд!', wrestle: 'Аудар!', wrestleSub: 'Стащи его с коня', canWrestle: '<kbd>E</kbd> — схватиться', canWrestleT: 'СХВАТКА — схватиться', btnGrip: 'СХВАТКА', mashGrip: 'Жми СХВАТКА быстрее!', btnShoot: 'ВЫСТРЕЛ', to3: 'до 3', downed: 'Сбросил!', downedMe: 'Тебя сбросили!', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
+    tug: 'Тартыс!', tugSub: 'Схватка за серке', jHit: 'Попал!', jPerfect: 'В яблочко!', jMiss: 'Мимо', jGallop: 'на скаку', jAim: 'Жми <kbd>E</kbd>, когда прицел подлетит к слитку', jAimT: 'Жми ВЫСТРЕЛ, когда прицел подлетит к слитку', jRide: 'Скачи к шесту с жамбы — стреляй на ходу', jBest: 'Рекорд', jRecord: 'Новый рекорд!', auTip: 'Жми E, когда он откидывается назад', auTipT: 'Жми СХВАТКА, когда он откидывается назад', auSlip: 'Руки сорвались — хватаемся снова…', auPulled: 'Стащил!', auBack: 'Улетел назад!', auFoeBack: 'Сам улетел назад!', to2: 'до 2', wrestle: 'Аудар!', wrestleSub: 'Стащи его с коня', canWrestle: '<kbd>E</kbd> — схватиться', canWrestleT: 'СХВАТКА — схватиться', btnGrip: 'СХВАТКА', mashGrip: 'Жми СХВАТКА быстрее!', btnShoot: 'ВЫСТРЕЛ', to3: 'до 3', downed: 'Сбросил!', downedMe: 'Тебя сбросили!', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
     fumble: 'Выронил серке!', win: 'Победа', lose: 'Поражение', draw: 'Ничья', again: 'Ещё раз', stamina: 'Сила коня',
     btnTug: 'ВЫРВАТЬ', btnWhip: 'КАМЧА', btnRear: 'СВЕЧКА', mashKey: 'Жми E быстрее!', mashTap: 'Жми ВЫРВАТЬ быстрее!', canTug: '<kbd>E</kbd> — вырвать серке',
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
@@ -46,7 +47,7 @@ const TEXT = {
   },
   en: {
     red: 'Red', blue: 'Blue', loading: 'Loading the steppe…', ready: 'Get ready!', go: 'Go!', goal: 'GOAL!', goalBy: (t) => t,
-    tug: 'Tug of war!', jHit: 'Hit!', jPerfect: 'Bullseye!', jMiss: 'Miss', jGallop: 'at a gallop', jAim: 'Press <kbd>E</kbd> when the rings meet', jAimT: 'Tap SHOOT when the rings meet', jRide: 'Ride past the pole — shoot on the move', jBest: 'Best', jRecord: 'New record!', wrestle: 'Wrestle!', wrestleSub: 'Pull him off the horse', canWrestle: '<kbd>E</kbd> — grapple', canWrestleT: 'GRAPPLE — grab him', btnGrip: 'GRAPPLE', mashGrip: 'Tap GRAPPLE fast!', btnShoot: 'SHOOT', to3: 'first to 3', downed: 'Knocked him off!', downedMe: 'You got pulled off!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
+    tug: 'Tug of war!', jHit: 'Hit!', jPerfect: 'Bullseye!', jMiss: 'Miss', jGallop: 'at a gallop', jAim: 'Press <kbd>E</kbd> when the sight bounces up to the ingot', jAimT: 'Tap SHOOT when the sight bounces up to the ingot', jRide: 'Ride past the pole — shoot on the move', jBest: 'Best', jRecord: 'New record!', auTip: 'Press E when he leans back', auTipT: 'Tap GRAPPLE when he leans back', auSlip: 'Grip lost — grabbing again…', auPulled: 'Pulled him off!', auBack: 'Flew off backwards!', auFoeBack: 'He flew off backwards!', to2: 'first to 2', wrestle: 'Wrestle!', wrestleSub: 'Pull him off the horse', canWrestle: '<kbd>E</kbd> — grapple', canWrestleT: 'GRAPPLE — grab him', btnGrip: 'GRAPPLE', mashGrip: 'Tap GRAPPLE fast!', btnShoot: 'SHOOT', to3: 'first to 3', downed: 'Knocked him off!', downedMe: 'You got pulled off!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
     fumble: 'Fumble!', win: 'Victory', lose: 'Defeat', draw: 'Draw', again: 'Play again', stamina: 'Horse stamina',
     btnTug: 'GRAB', btnWhip: 'WHIP', btnRear: 'REAR UP', mashKey: 'Mash E!', mashTap: 'Tap GRAB fast!', canTug: '<kbd>E</kbd> — grab the serke',
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
@@ -362,29 +363,29 @@ function startTug(att, car = sack.carrier) {
   const luck = (e, o) => (human(e) ? 0 : human(o) ? Math.abs(rnd() - 0.5) * 0.4 : (rnd() - 0.5) * 0.5);
   state.tug = { att, car, bar: 0, t: 0, ra: luck(att, car), rc: luck(car, att) }; // удача на весь тартыс (раньше бралась каждый кадр и усреднялась в ноль — нападающий-бот не вырывал никогда)
   state.events.push({ t: 'tug' });
-  if (!SIM && (att.me || car.me)) banner(audar ? tr('wrestle') : tr('tug'), null, 1.1, audar ? tr('wrestleSub') : tr('tugSub'));
+  if (!SIM && (att.me || car.me)) banner(tr('tug'), null, 1.1, tr('tugSub'));
 }
 function tugPress(e) { // игрок жмёт «тарт»: дёргает мешок на себя
   const T = state.tug;
   if (!T) return;
   if (T.att === e) { T.bar += 0.13; T.presses = (T.presses || 0) + 1; }
-  else if (T.car === e && (SIM || audar)) { T.bar -= 0.13; T.cpresses = (T.cpresses || 0) + 1; } // в аударыспақ тянут оба
+  else if (T.car === e && SIM) T.bar -= 0.13;
   if (!SIM) tugJolt(T, e === T.att ? 1 : -1, e.me);
 }
 function stepTug(dt) {
   const T = state.tug;
   if (!T) return;
-  if (!audar && sack.carrier !== T.car) { state.tug = null; return; } // туша ушла из рук (бросок, удар) — тартыс окончен
+  if (sack.carrier !== T.car) { state.tug = null; return; } // туша ушла из рук (бросок, удар) — тартыс окончен
   T.t += dt;
   const d = T.att.h.obj.position.distanceTo(T.car.h.obj.position);
-  const pull = (e) => audar ? (e.me && !AI_PLAYER ? 0.3 : 0.6 + DIFF.pull + audar.hard + (e === T.att ? T.ra : T.rc)) * (0.65 + 0.35 * e.stamina / 100) : ((e.me && !AI_PLAYER ? 0.42 : 0.42 + (e.team === 1 && !SIM ? DIFF.pull : 0) + (e === T.att ? T.ra : T.rc)) + (e.team === 0 ? HB.pull : 0)) * (0.65 + 0.35 * e.stamina / 100);
+  const pull = (e) => ((e.me && !AI_PLAYER ? 0.42 : 0.42 + (e.team === 1 && !SIM ? DIFF.pull : 0) + (e === T.att ? T.ra : T.rc)) + (e.team === 0 ? HB.pull : 0)) * (0.65 + 0.35 * e.stamina / 100);
   // всадники держат один мешок — кони сцеплены: не разбегаются, несущий притормаживает
   if (d > 2.3) {
     V.subVectors(T.car.h.obj.position, T.att.h.obj.position).setY(0).multiplyScalar((d - 2.3) / d * 0.5);
     T.att.h.obj.position.add(V); T.car.h.obj.position.sub(V);
   }
   T.att.h.v = Math.min(T.att.h.v, T.car.h.v + 0.5);
-  T.bar += (pull(T.att) - pull(T.car) - (audar ? 0 : GRIP)) * dt; // несущий держит мешок под ногой — ему легче
+  T.bar += (pull(T.att) - pull(T.car) - GRIP) * dt; // несущий держит мешок под ногой — ему легче
   // обе лошади тянутся друг к другу — всадники наклоняются
   for (const [a, b] of [[T.att, T.car], [T.car, T.att]]) {
     V.subVectors(b.h.obj.position, a.h.obj.position);
@@ -396,18 +397,9 @@ function stepTug(dt) {
   if (((T.att.me && !AI_PLAYER) || T.att.remote) && (T.presses || 0) < 3) T.bar = Math.min(T.bar, 0); // игрок-нападающий не жмёт — сама не вырвется
   if (T.bar >= 1) winner = 'att';
   else if (T.bar <= -1) winner = 'car';
-  else if (T.t > (audar ? 5 : 3.6)) winner = T.bar > (audar ? 0 : 0.05) ? 'att' : 'car';
+  else if (T.t > 3.6) winner = T.bar > 0.05 ? 'att' : 'car';
   if (!winner) return;
   state.tug = null;
-  if (audar) { // кто перетянул — тот стащил соперника с коня
-    const w = winner === 'att' ? T.att : T.car, l = w === T.att ? T.car : T.att;
-    w.stats.tugsWon++;
-    if (!SIM) tugEndFx(T, winner);
-    state.events.push({ t: 'tugEnd', winner, team: w.team, me: true });
-    V.subVectors(l.h.obj.position, w.h.obj.position).setY(0).normalize();
-    fallRider(l, V.x, V.z);
-    return;
-  }
   if (winner === 'att') {
     T.car.tugCD = T.att.me ? 1.0 : 1.6; T.car.pickCD = 1.0; T.car.stun = 0.3; // у игрока вырвали — бот сразу снова лезет
     T.att.stats.tugsWon++;
@@ -491,7 +483,7 @@ function assignRoles() {
 function think(e, dt) {
   const b = e.bot, p = e.h.obj.position;
   if (e.r.fallen) return; // всадник на земле
-  if (audar || jamby) { if (e.off || !audar) { e.h.gait = 0; e.h.steer = 0; } else audarThink(e, dt); return; }
+  if (audar || jamby) { e.h.gait = 0; e.h.steer = 0; return; } // аударыспақ: кони идут сами (audarRide), жамбы ату: на поле только игрок
   const carrier = sack.carrier;
   // роль могла устареть: мешок сменил хозяина между пересчётами
   if (!carrier && b.role !== 'fetch' && b.role !== 'support') b.role = 'fetch';
@@ -637,12 +629,13 @@ function playerInput(dt) {
     h.gait = keys.KeyW || keys.ArrowUp || keys.KeyZ ? 4 : keys.KeyS || keys.ArrowDown ? 0 : h.steer ? 1 : 0;
     if (h.rearClock != null) h.gait = 0; // во время свечки стоит
   }
+  if (jamby && h.gait > 3) h.gait = 3; // жамбы ату — на ровном кентере: шаг ~0,5 с, ритм ловится
   me.wantSprint = keys.ShiftLeft || keys.ShiftRight || whipHeld;
   if (tugTap) {
     tugTap = false;
     if (state.tug && (state.tug.att === me || state.tug.car === me)) tugPress(me);
     else if (jamby) jambyShoot();
-    else if (audar) { if (state.phase === 'play' && !audar.foe.r.fallen && canTug(me, audar.foe)) startTug(me, audar.foe); }
+    else if (audar) audarTap();
     else if (sack.carrier && canTug(me, sack.carrier)) startTug(me);
     else if (canPass(me)) { giveSack(me); banner(tr('passMe'), null, 0.8); }
   }
@@ -745,7 +738,7 @@ function onHit(a, b, imp, nx, nz) {
       const va = a.v * (Math.sin(a.yaw) * nx + Math.cos(a.yaw) * nz), vb = b.v * (Math.sin(b.yaw) * nx + Math.cos(b.yaw) * nz);
       const victim = va > -vb ? eb : ea, s = victim === eb ? 1 : -1;
       const ram = (victim === eb ? ea : eb).sprint > 0; // таран на камче
-      if (!(audar && state.tug) && rnd() < (audar ? 0.03 : sack.carrier === victim ? 0.35 : 0.14) * (ram ? 1.6 : 1)) fallRider(victim, nx * s, nz * s); // в аударыспақ сбивают в схватке, не тараном
+      if (rnd() < (sack.carrier === victim ? 0.35 : 0.14) * (ram ? 1.6 : 1)) fallRider(victim, nx * s, nz * s);
     }
   }
   // сильный толчок в несущего — может выронить мешок
@@ -811,7 +804,8 @@ function step(dt) {
   }
   stepTug(dt);
   for (const e of ents) if (!e.off) e.h.update(dt); // в аударыспақ остальные кони убраны — не считаем
-  collide(audar ? [me.h, audar.foe.h] : jamby ? [] : ents.map((e) => e.h), onHit);
+  collide(audar || jamby ? [] : ents.map((e) => e.h), onHit);
+  if (audar && !SIM) audarStep(dt);
   if (jamby && !SIM) jambyStep(dt);
   for (const e of ents) for (const k of kazans) pushOut(e.h, k.x, 0, KAZAN_R);
   stepSack(dt);
@@ -860,22 +854,23 @@ function endMatch() {
   if (sum.res === 'win') { cheer(true); portal.happytime(); }
 }
 
-// ---------- аударыспақ: 1 на 1 без туши — стащи соперника с коня, до трёх ----------
-let audar = null; // { foe, hard }
-const AUDAR_WIN = 3;
+// ---------- аударыспақ: бок о бок, одна кнопка — стащи соперника с коня, до двух побед ----------
+let audar = null; // { foe, skill, S — схватка (audar.js), ang/speed — где на круге и как быстро }
+const AUDAR_WIN = 2, AU_R = 22, AU_V = 6.2; // до двух побед; круг скачки (радиус, м), скорость кентера
 function startAudar() {
   pulse('start', 'duel:n' + Math.min(++starts, 9));
   applyStage(); applyLang();
   el.menu.hidden = true; el.tut.hidden = true; delete el.hint.dataset.keep;
   const foe = ents.find((e) => e.team === 1);
   modeOff();
-  audar = { foe, hard: Math.min(0.12, career.duels().w * 0.02) }; // каждая победа — соперник чуть крепче
+  audar = { foe, skill: Math.min(0.85, 0.55 + career.duels().w * 0.04), ang: 0, speed: 0, acc: 0 }; // каждая победа — соперник чуть смекалистей
   onlyOnField([me, foe]);
   state.score = [0, 0]; state.clock = 999; state.golden = false; state.events = [];
   audarKick(true);
 }
 function modeOff() {
   if (!audar && !jamby) return;
+  if (audar) auArmsShow(false);
   audar = null;
   if (jamby) { jambyGear.post.visible = false; jambyGear.arrow.visible = false; jambyGear.ret.style.display = 'none'; jamby = null; }
   for (const e of ents) { e.off = false; e.h.obj.visible = true; e.ring.visible = true; }
@@ -959,14 +954,31 @@ const headPos = (e, out) => { const hb = e.r.bone('Head'); if (hb) hb.getWorldPo
 function jambyShoot() {
   const J = jamby, T = J.tgt;
   if (state.phase !== 'play' || !T.live || T.k == null || J.arrow) return;
-  const acc = Math.abs(T.k - 1), hit = acc < 0.24, perfect = acc < 0.08;
+  const hit = jHit(T), perfect = T.k < JPERF; // T.k — насколько прицел ниже слитка: 0 — верх шага
   const from = headPos(me, new THREE.Vector3()); from.y += 0.1;
   const to = T.ing.clone();
-  if (!hit) to.add(new THREE.Vector3((rnd() - 0.5) * 2, (T.k > 1 ? 1 : -1) * (0.6 + rnd() * 0.5), (rnd() - 0.5) * 2)); // рано — выше, поздно — ниже
-  J.arrow = { from, to, t: 0, T: 0.12 + from.distanceTo(to) * 0.012, hit, perfect, gallop: me.h.v > 9 };
+  if (!hit) to.add(new THREE.Vector3((rnd() - 0.5) * 1.6, -(0.5 + T.k * 1.2), (rnd() - 0.5) * 1.6)); // не в такт — стрела уходит ниже слитка
+  J.arrow = { from, to, t: 0, T: 0.12 + from.distanceTo(to) * 0.012, hit, perfect, gallop: me.h.v > 5.5 };
   J.shots++;
   twang();
   me.r.kick(0.25 * (rnd() < 0.5 ? 1 : -1), -0.4);
+}
+// ритм: прицел качается вместе с седлом — внизу шага он под слитком, в верхней точке («подвисание») касается его.
+// Седло за последние полсекунды: где низ и верх шага; T.k = 1 − (высота седла в этом размахе).
+// окно попадания несимметричное: чуть до верхней точки и дольше после — там конь «подвисает», и опоздание с тач-экрана прощается
+const JUP = 0.07, JDOWN = 0.42, JPERF = 0.04, JAMP = 64; // k до верха / после верха / в яблочко, размах прицела, px
+const jHit = (T) => T.k < (T.fall ? JDOWN : JUP);
+function jambyBob(dt) {
+  const J = jamby, sock = (J.sock ||= me.h.obj.getObjectByName('saddle_socket'));
+  if (!sock) return 1;
+  sock.getWorldPosition(V3);
+  const B = (J.bob ||= { t: 0, s: [] });
+  B.t += dt; B.s.push([B.t, V3.y]);
+  while (B.s.length && B.s[0][0] < B.t - 0.5) B.s.shift();
+  let lo = Infinity, hi = -Infinity;
+  for (const [, y] of B.s) { lo = Math.min(lo, y); hi = Math.max(hi, y); }
+  if (hi - lo < 0.03 || me.h.v < 4) return 1; // стоит или идёт шагом — подвисания нет
+  return 1 - (V3.y - lo) / (hi - lo);
 }
 function jambyStep(dt) {
   const J = jamby, T = J.tgt, G = jambyGear;
@@ -987,12 +999,13 @@ function jambyStep(dt) {
   const p = me.h.obj.position, dx = T.ing.x - p.x, dz = T.ing.z - p.z, d = Math.hypot(dx, dz);
   const ang = Math.abs(wrap(Math.atan2(dx, dz) - me.h.yaw));
   T.age += dt;
+  const bob = jambyBob(dt);
   if (T.k == null) {
-    if (d < 19 && ang < 1.25 && !me.r.fallen) T.k = 2.6; // вошёл в зону выстрела — круг начинает сходиться
+    if (d < 19 && ang < 1.25 && !me.r.fallen) T.k = bob; // вошёл в зону выстрела — прицел над слитком
     else if (T.age > 14 || d > 60) { T.live = false; T.wait = 0; G.post.visible = false; } // ускакал — новый шест
   } else if (!J.arrow) {
-    T.k -= dt * 1.45;
-    if (T.k < 0.42 || ang > 2.1) jambyMiss(false); // не выстрелил вовремя
+    T.fall = bob >= T.k; T.k = bob; // fall — прицел уже пошёл вниз от верхней точки
+    if (ang > 2.1 || d > 24) jambyMiss(false); // проскакал мимо, не выстрелив
   }
 }
 function jambyHit(A) {
@@ -1029,8 +1042,8 @@ function jambyHud() {
   V.copy(T.ing).project(camera);
   R.style.display = 'block';
   sty(R, 'left', (V.x * 0.5 + 0.5) * 100 + '%'); sty(R, 'top', (-V.y * 0.5 + 0.5) * 100 + '%');
-  R.style.setProperty('--k', T.k.toFixed(3));
-  R.classList.toggle('ok', Math.abs(T.k - 1) < 0.24);
+  R.style.setProperty('--dy', (T.k * JAMP * (view.h < 420 ? 0.7 : 1)).toFixed(1) + 'px');
+  R.classList.toggle('ok', jHit(T));
 }
 function jambyEnd() {
   state.phase = 'end';
@@ -1044,18 +1057,17 @@ function jambyEnd() {
   if (sum.record) { cheer(true); portal.happytime(); }
 }
 function audarKick(first) {
+  audar.S = AUD.newBout(rnd); audar.acc = 0; audar.speed = 0; audar.shown = false;
   for (const e of [me, audar.foe]) {
-    const s = (e === me ? 1 : -1) * SWAP;
-    e.h.obj.position.set(-12 * s, 0, 0);
-    e.h.yaw = s > 0 ? Math.PI / 2 : -Math.PI / 2;
     e.h.v = 0; e.h.gait = 0; e.h.push.set(0, 0, 0);
     e.stamina = 100; e.tugCD = 0; e.pickCD = 0; e.stun = 0; e.bot.react = 0;
-    e.r.remount(); e.down = 0; if (e.stars) e.stars.visible = false;
+    e.r.remount(); e.down = 0; e.r.pull = 0; if (e.stars) e.stars.visible = false;
   }
+  audarRide(0);
   state.tug = null;
   state.phase = 'countdown';
   state.t = first ? 3.2 : 2.2;
-  banner(first ? '3' : tr('ready'), null, 1.2, first ? (lang === 'ru' ? 'Аударыспақ · до 3 побед' : 'Audaryspak · first to 3') : '');
+  banner(first ? '3' : tr('ready'), null, 1.2, first ? (lang === 'ru' ? 'Аударыспақ · до 2 побед' : 'Audaryspak · first to 2') : '');
 }
 function audarPoint(loser) {
   if (state.phase !== 'play') return;
@@ -1064,8 +1076,9 @@ function audarPoint(loser) {
   state.phase = 'goal'; state.t = 3.4;
   if (SIM) return;
   const p = loser.r.root.position;
-  if (w === me.team) { banner(tr('downed'), TEAMS[w].grad, 1.6); burst(p.x, p.z, TEAMS[w].color); cheer(true); }
-  else banner(tr('downedMe'), TEAMS[w].grad, 1.6);
+  const back = audar.S?.why === 'back';
+  if (w === me.team) { banner(back ? tr('auFoeBack') : tr('downed'), TEAMS[w].grad, 1.6); burst(p.x, p.z, TEAMS[w].color); cheer(true); }
+  else banner(back ? tr('auBack') : tr('downedMe'), TEAMS[w].grad, 1.6);
 }
 function audarNext() {
   if (Math.max(...state.score) >= AUDAR_WIN) { audarEnd(); return; }
@@ -1081,18 +1094,86 @@ function audarEnd() {
   pulse('end', 'duel:' + (win ? 'win' : 'loss') + ':' + state.score[0] + '-' + state.score[1] + ':' + minute());
   if (win) portal.happytime();
 }
-// бот: скачет наперерез, вблизи хватает; пока игрок лежит — ждёт рядом
-function audarThink(e, dt) {
-  const o = e === me ? audar.foe : me, p = e.h.obj.position, q = o.h.obj.position, d = Math.hypot(q.x - p.x, q.z - p.z);
-  e.wantSprint = false;
-  if (o.r.fallen || state.phase !== 'play') { e.h.gait = 0; e.h.steer = 0; return; }
-  const lead = Math.min(0.7, d * 0.06);
-  steerTo(e, q.x + Math.sin(o.h.yaw) * o.h.v * lead, q.z + Math.cos(o.h.yaw) * o.h.v * lead, 4);
-  e.wantSprint = d > 4 && d < 14 && e.stamina > 40;
-  if (!state.tug && canTug(e, o)) {
-    e.bot.react = (e.bot.react || 0) + dt;
-    if (e.bot.react > DIFF.react + 0.35) { e.bot.react = 0; startTug(e, o); }
-  } else e.bot.react = 0;
+// кони сами идут кентером по кругу бок о бок (игрок только тянет): я — по внутренней дорожке, соперник — на 1,35 м снаружи (руки достают)
+function audarRide(dt) {
+  const A = audar, ride = ['play', 'countdown'].includes(state.phase);
+  if (!ride) return;
+  A.speed = state.phase === 'play' ? Math.min(AU_V, A.speed + dt * 3) : 0;
+  A.ang += (A.speed / AU_R) * dt;
+  const c = Math.cos(A.ang), sn = Math.sin(A.ang), yaw = Math.atan2(-sn, c); // касательная против часовой
+  [[me, AU_R], [A.foe, AU_R + 1.35]].forEach(([e, r]) => {
+    if (e.r.fallen) return;
+    e.h.obj.position.set(r * c, 0, r * sn); e.h.yaw = yaw; e.h.obj.rotation.y = yaw; e.h.v = A.speed;
+  });
+}
+const auArms = [0, 1].map(() => {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 1, 8), new THREE.MeshStandardMaterial({ color: '#7a1f22', roughness: 0.85 }));
+  m.visible = false; m.castShadow = true; scene.add(m); return m;
+});
+const Va = new THREE.Vector3(), Vb = new THREE.Vector3(), Vc = new THREE.Vector3(), UPV = new THREE.Vector3(0, 1, 0);
+function innerShoulder(e, o, out) { // плечо, что ближе к сопернику
+  const L = e.r.bone('LeftArm'), R = e.r.bone('RightArm');
+  if (!L || !R) return out.copy(e.h.obj.position).setY(2);
+  L.getWorldPosition(Va); R.getWorldPosition(Vb);
+  const op = o.h.obj.position;
+  return out.copy(Va.distanceToSquared(op) < Vb.distanceToSquared(op) ? Va : Vb);
+}
+function auArmsShow(on) {
+  const foe = audar?.foe;
+  auArms.forEach((m) => { m.visible = !!on; });
+  if (!on) return;
+  innerShoulder(me, foe, Vc); const a = Vc.clone(); innerShoulder(foe, me, Vc); const b = Vc.clone();
+  const mid = a.clone().add(b).multiplyScalar(0.5); mid.y -= 0.08; // руки чуть провисают
+  [[a, me], [b, foe]].forEach(([from, e], i) => {
+    const m = auArms[i], d = mid.clone().sub(from), len = d.length();
+    m.position.copy(from).addScaledVector(d, 0.5);
+    m.scale.set(1, Math.max(0.05, len), 1);
+    m.quaternion.setFromUnitVectors(UPV, d.normalize());
+    m.material.color.set(TEAMS[e.team].color);
+  });
+}
+function audarStep(dt) {
+  const A = audar, S = A.S;
+  audarRide(dt);
+  const foe = A.foe;
+  for (const [e, o] of [[me, foe], [foe, me]]) { // руки — к сопернику, корпус — по модели
+    V.subVectors(o.h.obj.position, e.h.obj.position);
+    e.reachSide = Math.sign(Math.cos(e.h.yaw) * V.x - Math.sin(e.h.yaw) * V.z) || 1;
+    e.r.pullSide = e.reachSide;
+  }
+  if (!S || S.over || !['play', 'countdown'].includes(state.phase)) { me.r.pull *= 0.9; foe.r.pull *= 0.9; auArmsShow(false); return; }
+  if (state.phase === 'countdown') { auArmsShow(true); return; } // уже держат друг друга, ждут «Вперёд!»
+  A.acc = Math.min(0.1, A.acc + dt);
+  const wasGrip = S.grip;
+  while (A.acc >= 1 / 60) { // своя физика — ровным шагом 1/60, как в тестах
+    A.acc -= 1 / 60;
+    if (AUD.botWants(S, 'b', A.skill, rnd) && AUD.tap(S, 'b')) audarYankFx(foe);
+    AUD.step(S, 1 / 60);
+    if (S.over) break;
+  }
+  me.r.pull = S.a.th; foe.r.pull = S.b.th;
+  me.reach = foe.reach = S.grip ? 0.6 : 0.25;
+  auArmsShow(S.grip && !S.over);
+  if (wasGrip && !S.grip && !S.over) { crowdShout('ooh'); me.r.kick(0.8 * -me.reachSide, -0.3); foe.r.kick(0.8 * -foe.reachSide, -0.3); juice.trauma = Math.max(juice.trauma, 0.25); }
+  if (S.over) {
+    const loser = S.over.loser === 'a' ? me : foe, winner = loser === me ? foe : me;
+    V.subVectors(winner.h.obj.position, loser.h.obj.position).setY(0).normalize();
+    if (S.why === 'back') V.negate();
+    me.r.pull = foe.r.pull = 0;
+    fallRider(loser, V.x, V.z);
+  }
+}
+function audarTap() {
+  const S = audar?.S;
+  if (!S || state.phase !== 'play' || S.over) return;
+  if (AUD.tap(S, 'a')) audarYankFx(me);
+}
+function audarYankFx(e) { // рывок: всадника дёргает назад, пыль между конями, щелчок
+  const o = e === me ? audar.foe : me;
+  e.r.kick(0.6 * -e.reachSide, -0.5); o.r.kick(0.7 * o.reachSide, 0.3);
+  const a = e.h.obj.position, b = o.h.obj.position;
+  if (rnd() < 0.7) dustBurst((a.x + b.x) / 2, (a.z + b.z) / 2, 1, 6);
+  if (e === me) { whip(); juice.trauma = Math.min(0.3, juice.trauma + 0.08); }
 }
 
 // ---------- камера ----------
@@ -1125,7 +1206,7 @@ function updateCamera(dt, snap) {
   V.set(p.x - fx * dist, high, p.z - fz * dist);
   V2.set(p.x + fx * 5, 1.2, p.z + fz * 5);
   // «камера тартыса»: игрок тянет тушу — камера подходит ближе и сбоку, оба всадника и туша крупно (иначе тартыс мелкий и не читается)
-  const T = state.tug, myTug = T && (T.att === me || T.car === me);
+  const T = state.tug || (audar && audar.S && ['play', 'countdown', 'goal'].includes(state.phase) ? { att: me, car: audar.foe } : null), myTug = T && (T.att === me || T.car === me);
   cam.tugK = (cam.tugK || 0) + ((myTug ? 1 : 0) - (cam.tugK || 0)) * (1 - Math.exp(-dt * (myTug ? 5 : 2.5)));
   if (cam.tugK > 0.01 && T) {
     const o = T.att === me ? T.car : T.att, op = o.h.obj.position;
@@ -1133,8 +1214,14 @@ function updateCamera(dt, snap) {
     let sx = op.z - p.z, sz = -(op.x - p.x); const l = Math.hypot(sx, sz) || 1; sx /= l; sz /= l; // поперёк линии «я — соперник»
     if (sx * fx + sz * fz > 0) { sx = -sx; sz = -sz; } // со стороны, откуда смотрели (сзади), чтобы не перескакивать
     const k = cam.tugK;
-    V.lerp(V3.set(mx + sx * 4.6 - fx * 2.4, 2.1, mz + sz * 4.6 - fz * 2.4), k);
-    V2.lerp(V3.set(mx, 1.45, mz), k);
+    if (audar) { // аударыспақ: всадники бок о бок — камера впереди, оба в лицо, наклоны видно
+      const hf = Math.sin(h.yaw), hz = Math.cos(h.yaw);
+      V.lerp(V3.set(mx + hf * 3.7 - sx * 0.5, 1.85, mz + hz * 3.7 - sz * 0.5), k);
+      V2.lerp(V3.set(mx, 1.5, mz), k);
+    } else {
+      V.lerp(V3.set(mx + sx * 4.6 - fx * 2.4, 2.1, mz + sz * 4.6 - fz * 2.4), k);
+      V2.lerp(V3.set(mx, 1.45, mz), k);
+    }
   }
   cam.pos.lerp(V, snap ? 1 : 1 - Math.exp(-dt * 10));
   cam.look.lerp(V2, snap ? 1 : 1 - Math.exp(-dt * 8));
@@ -1297,13 +1384,18 @@ function hud(dt) {
   const c = Math.ceil(state.clock);
   txt(el.clock, `${Math.floor(c / 60)}:${String(c % 60).padStart(2, '0')}`);
   if (state.golden) txt(el.clock, '⚡');
-  if (audar) txt(el.clock, tr('to3'));
+  if (audar) txt(el.clock, tr('to2'));
   if (jamby) jambyHud();
   sty(el.stam, 'width', me.stamina + '%');
   sty(el.stam, 'background', me.stamina < 25 ? 'linear-gradient(90deg,#8f1418,#e0393e)' : '');
   const T = state.tug, mine = T && (T.att === me || T.car === me);
-  hid(el.tug, !mine);
-  if (mine) {
+  const grapple = audar && audar.S && state.phase === 'play' && !me.r.fallen && !audar.foe.r.fallen;
+  hid(el.tug, !mine && !grapple);
+  if (grapple) { // + — соперника тянет ко мне
+    const v = clamp((audar.S.b.th - audar.S.a.th) / 1.4, -1, 1);
+    sty(el.tugbar, 'left', `${50 + v * 50}%`);
+    txt(el.tugtip, audar.S.grip ? (touch ? tr('auTipT') : tr('auTip')) : tr('auSlip'));
+  } else if (mine) {
     const v = clamp(T.att === me ? T.bar : -T.bar, -1, 1); // + — в мою пользу
     sty(el.tugbar, 'left', `${50 + v * 50}%`);
     txt(el.tugtip, touch ? (audar ? tr('mashGrip') : tr('mashTap')) : tr('mashKey'));
@@ -1316,7 +1408,7 @@ function hud(dt) {
   txt(el.btnTug, me.r.fallen?.landed && me.r.fallen.mount == null ? tr('btnUp') : jamby ? tr('btnShoot') : audar ? tr('btnGrip') : nearKazan ? tr('btnThrow') : tr('btnTug'));
   const pass = !T && canPass(me);
   if (touch) { const lbl = canRear() ? tr('btnRear') : tr('btnWhip'); txt(el.btnWhip, lbl); }
-  const can = audar ? !T && state.phase === 'play' && !audar.foe.r.fallen && !me.r.fallen && canTug(me, audar.foe) : !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan || pass);
+  const can = audar ? false : !T && sack.carrier && (canTug(me, sack.carrier) || nearKazan || pass);
   el.btnTug.classList.toggle('ready', !!(can || mine || me.r.fallen?.landed));
   // лежит на земле — главное сейчас: как встать быстрее (даже поверх обучения и стартовой справки)
   if (me.r.fallen?.landed && me.r.fallen.mount == null && me.down > 0.95 && !online.role) { delete el.hint.dataset.keep; html(el.hint, touch ? tr('getUpTap') : tr('getUpKey')); }
@@ -1783,4 +1875,4 @@ if (SIM) {
   const go = () => { performance.mark('k:frame'); requestAnimationFrame(frame); };
   if (renderer.compileAsync) renderer.compileAsync(scene, camera).then(go, go); else go();
 }
-if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, startAudar, startJamby, get audar() { return audar; }, get jamby() { return jamby; }, endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, play(n, dt = 1 / 60) { for (let i = 0; i < n; i++) { let d = dt; if (juice.stop > 0) { juice.stop -= dt; d *= 0.12; } else if (juice.slow > 0) { juice.slow -= dt; d *= 0.4; } step(d); updateCamera(d); juiceEvents(); stepConfetti(dt); shakeCamera(dt); } hud(dt); renderAll(); }, getProto };
+if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, startAudar, startJamby, get audar() { return audar; }, get jamby() { return jamby; }, keys, jshoot: () => jambyShoot(), autap: () => audarTap(), jhit: () => !!(jamby && jamby.tgt.k != null && jHit(jamby.tgt)), endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, play(n, dt = 1 / 60) { for (let i = 0; i < n; i++) { let d = dt; if (juice.stop > 0) { juice.stop -= dt; d *= 0.12; } else if (juice.slow > 0) { juice.slow -= dt; d *= 0.4; } step(d); updateCamera(d); juiceEvents(); stepConfetti(dt); shakeCamera(dt); } hud(dt); renderAll(); }, getProto };
