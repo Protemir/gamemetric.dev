@@ -5,6 +5,8 @@
 // Output in dist/sybys-covers/: cover-landscape.png 1920x1080, cover-portrait.png 800x1200,
 // cover-square.png 800x800, video-landscape.mp4 1920x1080 (about 15 s, 30 fps, no sound;
 // the first half second is the cover, as CrazyGames asks).
+// --playgama: dist/sybys-playgama-art/ with the covers Playgama takes (800x800, 1080x1920,
+// 1920x1080) and four screenshots of real play 1920x1080, no video.
 // Time is driven by hand: the page's animation frames are called with a made-up clock, one per video frame.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,8 +21,9 @@ const arg = (name, def) => {
 };
 const SEED = +arg('seed', 5);
 const FFMPEG = arg('ffmpeg', 'C:/Users/prote/Downloads/TEMIRLAB-посты/сборка/ffmpeg.exe');
-const VIDEO = !process.argv.includes('--no-video');
-const out = path.join(repo, 'dist', 'sybys-covers');
+const PG = process.argv.includes('--playgama');
+const VIDEO = !PG && !process.argv.includes('--no-video');
+const out = path.join(repo, 'dist', PG ? 'sybys-playgama-art' : 'sybys-covers');
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
@@ -59,14 +62,47 @@ async function cover(name, w, h, frames) {
   await tick(frames);
   await B.js(TITLE);
   await tick(1);
-  await B.shot(path.join(out, `cover-${name}.png`));
+  await B.shot(path.join(out, PG ? `cover-${name}-${w}x${h}.png` : `cover-${name}.png`));
   console.log('cover', name);
 }
 
 try {
-  await cover('landscape', 1920, 1080, 240);
-  await cover('portrait', 800, 1200, 240);
-  await cover('square', 800, 800, 240);
+  if (PG) {
+    await cover('square', 800, 800, 240);
+    await cover('portrait', 1080, 1920, 240);
+    await cover('landscape', 1920, 1080, 240);
+    // real play in real time (the page's own frames): the khan's word goes out, Karasai rides,
+    // a forged order, a scene card, the small council
+    await B.init("try { localStorage.clear(); localStorage.setItem('sybys.tutDone', 'true'); } catch {}");
+    const shot = async (file) => {
+      await wait(900);
+      await B.shot(path.join(out, file));
+      console.log(file);
+    };
+    const A = 'window.__sybys';
+    await B.open(`${S.url}/sybys/?lang=en&covers&play&seed=${SEED}`, 1920, 1080);
+    await wait(2500);
+    await B.js(`(() => { const s = ${A}; s.coach.step = null; s.g.hold = false; })()`);
+    for (let k = 0; k < 6; k++) {
+      await B.js(`(() => { const s = ${A}; s.g.horses = Math.max(s.g.horses, 2); s.act('word', s.S.suggest(s.g)); })()`);
+      if (k === 3) await B.js(`(() => { const s = ${A}; s.g.horses = 5; const r = s.g.map.regions.filter((r) => r.tribe === 2).sort((a, b) => s.g.t[a.id] - s.g.t[b.id])[0]; s.act('karasai', r.id); s.S.spawnPlot(s.g); })()`);
+      await wait(700);
+    }
+    await shot('shot-1-steppe.png');
+    await B.js(`(() => { const s = ${A}; s.view.zoomAt(innerWidth * 0.5, innerHeight * 0.55, 1.5); })()`);
+    await wait(1500);
+    await shot('shot-2-riders.png');
+    await B.js(`(() => { const s = ${A}; let n = 0; while (s.g.phase === 'map' && n++ < 20000) s.step(0.1); })()`);
+    await shot('shot-3-scene.png');
+    await B.js(`(() => { const s = ${A}; let n = 0; while (!['council', 'kurultai'].includes(s.g.phase) && n++ < 40000) { if (s.g.phase === 'event') { const c = s.S.eventChoices(s.g).find((c) => c.ok); s.choose(c.key); } else s.step(0.1); } })()`);
+    await wait(1500);
+    await shot('shot-4-council.png');
+    if (B.errors.length) console.log('errors', B.errors);
+  } else {
+    await cover('landscape', 1920, 1080, 240);
+    await cover('portrait', 800, 1200, 240);
+    await cover('square', 800, 800, 240);
+  }
 
   if (VIDEO) {
     const frames = path.join(out, 'frames');

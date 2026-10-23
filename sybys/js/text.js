@@ -1,12 +1,14 @@
 // Every word the player sees, in Russian and English. English is the portal's language; Russian is ours.
 const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+// on a portal the saves live with the portal (js/boot.js sets window.SYBYS_DATA)
+const box = () => (typeof window !== 'undefined' && window.SYBYS_DATA) || localStorage;
 let saved = null;
-try { saved = localStorage.getItem('sybys.lang'); } catch { /* private mode */ }
+try { saved = box().getItem('sybys.lang'); } catch { /* private mode */ }
 export let lang = q.get('lang') || saved || (typeof navigator !== 'undefined' && /^(ru|kk|be|uk)/i.test(navigator.language) ? 'ru' : 'en');
 if (lang !== 'ru') lang = 'en';
 export function setLang(l) {
   lang = l === 'ru' ? 'ru' : 'en';
-  try { localStorage.setItem('sybys.lang', lang); } catch { /* private mode */ }
+  try { box().setItem('sybys.lang', lang); } catch { /* private mode */ }
 }
 
 const RU = {

@@ -6,7 +6,7 @@ import { T, lang, setLang } from './text.js';
 import { sfx, audioInit, sound, setSound, holdAudio, musicLevel, musicMood } from './sfx.js';
 import { avatar, elder, LONE_HORSE, ICONS } from './avatars.js';
 import * as M from './meta.js';
-import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute } from './portal.js';
+import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute, onPortalPause, adBreak, adShowing } from './portal.js';
 
 const q = new URLSearchParams(location.search);
 // on a portal its language wins unless the URL says otherwise
@@ -1004,13 +1004,13 @@ function showEnd(rec) {
     for (const s of rec.opened) box.append(el('p', 'deed', t.opened(t.styles[s])));
   }
   const b = el('button', 'big', t.playAgain);
-  b.onclick = () => { mode = 'free'; busyThen(b, start); };
+  b.onclick = () => { mode = 'free'; adBreak('new_game'); busyThen(b, start); };
   box.append(b);
   const meta = M.load();
   const row = el('div', 'titlerow');
   if (!M.dailyDone(meta)) {
     const dly = el('button', 'link', t.dailyBtn);
-    dly.onclick = () => { mode = 'daily'; busyThen(dly, start); };
+    dly.onclick = () => { mode = 'daily'; adBreak('new_game'); busyThen(dly, start); };
     row.append(dly);
   }
   const chr = el('button', 'link', t.chronicleBtn);
@@ -1040,7 +1040,7 @@ function frame(now) {
   watchSpeed(Math.min(0.5, raw));
   last = now;
   if (g && g.demo) S.step(g, dt * 0.6);
-  else if (g && !paused && g.phase === 'map') {
+  else if (g && !paused && !adShowing() && g.phase === 'map') {
     // the false rider of the lesson comes slowly, so there is time to see him; the first seconds of a raid
     // and the whole night run slower too, so a person can react
     const slow = coach.step === 'false' ? 0.4 : g.night && !g.night.until ? 0.55 : g.raid && g.time - g.raid.at < 2.5 ? 0.5 : 1;
@@ -1076,7 +1076,11 @@ function frame(now) {
     if (g.phase === 'event' && shownPhase === 'event' && !ui.children.length) showEvent(); // never a scene without its screen
     if (g.phase !== shownPhase) {
       shownPhase = g.phase;
-      if (g.phase === 'event') showEvent();
+      if (g.phase === 'event') {
+        // a scene card is a natural break: on a portal a full-screen ad may come first
+        if (!g.demo && !tourState) adBreak('scene');
+        showEvent();
+      }
       if (g.phase === 'kurultai' || g.phase === 'council') {
         hud.hidden = true;
         actionsEl.hidden = true;
@@ -1098,7 +1102,7 @@ function frame(now) {
   const mood = tourState ? 'kerbez' : !g || g.demo ? 'adai' : g.phase !== 'map' ? 'dala' : g.raid ? 'shabuyl' : g.night ? 'tun' : 'play';
   if (mood !== lastMood) { lastMood = mood; musicMood(mood); }
   // the portal counts only real play: not the title, the cards, the scenes or a pause
-  gameplay(!!g && !g.demo && g.phase === 'map' && !paused && !document.hidden);
+  gameplay(!!g && !g.demo && g.phase === 'map' && !paused && !adShowing() && !document.hidden, g);
   view.draw(g && (g.phase !== 'end' || view.setCinema) ? g : null, now, look);
   requestAnimationFrame(frame);
 }
@@ -1164,5 +1168,7 @@ modelsReady.then(() => {
   if (boot) { boot.classList.add('gone'); setTimeout(() => boot.remove(), 700); }
 });
 onPortalMute((muted) => holdAudio(muted));
+// the platform's menu pauses the game like another tab does
+onPortalPause(() => { if (g && !g.demo && g.phase === 'map' && !paused) togglePause(true); });
 if (q.has('play')) start();
 requestAnimationFrame(frame);

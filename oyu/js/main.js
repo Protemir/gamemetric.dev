@@ -5,7 +5,7 @@ import { Renderer } from './render.js';
 import * as sfx from './audio.js';
 import { store, el, clamp } from './util.js';
 import { pulse } from './pulse.js';
-import { PORTAL, portalInit, portalLang, gameplay, happytime, onPortalMute } from './portal.js';
+import { PORTAL, portalInit, portalLang, gameplay, happytime, onPortalMute, onPortalPause, loadingDone, adBreak } from './portal.js';
 
 // ---------- texts ----------
 
@@ -115,6 +115,10 @@ let mode = 'menu';
 let endTimer = 0;
 let hintStage = 0;
 let hintTimer = 0;
+// the platform paused the game (its menu, an ad): nothing moves until it lets go
+let held = false;
+// a level just began: the portal hears "started", not "resumed"
+let fresh = false;
 const params = new URLSearchParams(location.search);
 
 // a menu backdrop: an ornament level nobody plays
@@ -134,6 +138,7 @@ function startLevel(i) {
   save();
   pulse('start', i + 1);
   mode = 'play';
+  fresh = true;
   endTimer = 0;
   ui.replaceChildren();
   hud.hidden = false;
@@ -329,21 +334,27 @@ function screenWin() {
   save();
   for (let k = 0; k < got; k++) setTimeout(() => sfx.star(k), 250 + k * 280);
   const clean = el('p', 'clean', got === 3 ? t('clean') : t('starsTip1'));
-  panel('', el('h2', '', t('done')), starRow(got), el('p', 'sub', L(level.name)), prev, clean, bar, last ? null : button(t('next'), 'primary', () => startLevel(i + 1)), button(t('menu'), '', screenMenu));
+  panel('', el('h2', '', t('done')), starRow(got), el('p', 'sub', L(level.name)), prev, clean, bar, last ? null : button(t('next'), 'primary', () => next(i + 1)), button(t('menu'), '', screenMenu));
 }
 
 function screenLost() {
   mode = 'lost';
   pulse('fail', level.index + 1);
   const p = Math.floor(((game.total - game.left) / Math.max(1, game.total)) * 100);
-  panel('', el('h2', '', t('lost')), el('p', 'almost', t('almost', { p })), el('p', 'sub', t('lostTip')), button(t('retry'), 'primary', () => startLevel(level.index)), button(t('menu'), '', screenMenu));
+  panel('', el('h2', '', t('lost')), el('p', 'almost', t('almost', { p })), el('p', 'sub', t('lostTip')), button(t('retry'), 'primary', () => next(level.index)), button(t('menu'), '', screenMenu));
+}
+
+// on a portal the way to the next level (or another try) may show a full-screen ad first
+function next(i) {
+  adBreak(i === level.index ? 'retry' : 'next_level');
+  startLevel(i);
 }
 
 // ---------- input ----------
 
 canvas.addEventListener('pointerdown', (e) => {
   sfx.audioInit();
-  if (mode !== 'play' || !game || game.state !== 'play') return;
+  if (held || mode !== 'play' || !game || game.state !== 'play') return;
   const hit = R.hit(e.clientX, e.clientY);
   if (!hit) return;
   const ok = hit.type === 'queue' ? game.launchFromQueue(hit.q) : game.launchFromDock(hit.d);
@@ -396,7 +407,7 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  tick(dt);
+  tick(held ? 0 : dt);
   requestAnimationFrame(frame);
 }
 
@@ -442,7 +453,9 @@ function tick(dt, draw = true) {
   }
   R.update(dt);
   if (draw) R.draw();
-  gameplay(mode === 'play' && !!game && game.state === 'play');
+  const on = mode === 'play' && !!game && game.state === 'play' && !held;
+  gameplay(on, fresh);
+  if (on) fresh = false;
 }
 
 function resize() {
@@ -458,6 +471,7 @@ if (PORTAL) {
   const pl = portalLang();
   if (pl && !store.get('oyu.lang', null) && !params.get('lang')) lang = pl;
   onPortalMute((muted) => sfx.holdAudio(muted));
+  onPortalPause((on) => (held = on));
 }
 labelSound();
 applyLang();
@@ -467,6 +481,8 @@ pulse('open');
 if (params.has('level')) startLevel(parseInt(params.get('level'), 10) - 1);
 else if (!progress.done.length) startLevel(0);
 else screenMenu();
+// the first screen is up and can be played
+loadingDone();
 requestAnimationFrame(frame);
 
 if (params.has('debug')) {

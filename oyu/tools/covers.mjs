@@ -6,6 +6,8 @@
 // cover-square.png 800x800, video-landscape.mp4 1920x1080, video-portrait.mp4 1080x1620
 // (18 s, 30 fps, no sound; the first half second is the cover, as CrazyGames asks).
 // --try renders landscape covers of several levels to pick from.
+// --playgama: dist/oyu-playgama-art/ with the three covers Playgama takes (800x800, 1080x1920,
+// 1920x1080) and four screenshots of real play 1920x1080, no video.
 // The title stays out of the top-left corner: CrazyGames puts its labels there.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,6 +35,7 @@ const TITLE_CSS = {
   landscape: 'right: 7%; top: 40%; font-size: 230px;',
   portrait: 'left: 0; right: 0; text-align: center; bottom: 9%; font-size: 170px;',
   square: 'right: 3%; top: 43%; font-size: 112px;',
+  tall: 'left: 0; right: 0; text-align: center; bottom: 8%; font-size: 250px;',
 };
 
 // a level in the middle of play: shooters on the belt, blocks flying
@@ -55,7 +58,40 @@ async function scene(level, w, h, kind, title = true) {
 const SIZES = { landscape: [1920, 1080], portrait: [800, 1200], square: [800, 800] };
 
 try {
-  if (process.argv.includes('--try')) {
+  if (process.argv.includes('--playgama')) {
+    const art = path.join(repo, 'dist', 'oyu-playgama-art');
+    fs.rmSync(art, { recursive: true, force: true });
+    fs.mkdirSync(art, { recursive: true });
+    for (const [name, w, h, kind] of [['cover-square-800x800', 800, 800, 'square'], ['cover-portrait-1080x1920', 1080, 1920, 'tall'], ['cover-landscape-1920x1080', 1920, 1080, 'landscape']]) {
+      await scene(LEVEL, w, h, kind);
+      await B.shot(path.join(art, name + '.png'));
+      console.log(name);
+    }
+    // real play with the HUD: a bot taps for a while
+    const play = async (level, taps, file) => {
+      await B.open(`${S.url}/oyu/?debug&nopulse&lang=en&level=${level}`, 1920, 1080);
+      await B.js(`(async () => { window.__bot = await import('/oyu/tools/bot.js'); const O = window.__oyu; O.step(20, false); for (let k = 0; k < ${taps}; k++) { if (O.game.state === 'play') window.__bot.act(O.game, 'smart', Math.random); O.step(27, false); } O.step(1, true); })()`);
+      await B.shot(path.join(art, file));
+      console.log(file);
+    };
+    await play(1, 0, 'shot-1-first-level.png');
+    await play(13, 7, 'shot-2-pattern.png');
+    // a finished picture and its stars
+    await B.open(`${S.url}/oyu/?debug&nopulse&lang=en&level=9`, 1920, 1080);
+    await B.js(`(async () => { window.__bot = await import('/oyu/tools/bot.js'); const O = window.__oyu; O.step(20, false); for (let k = 0; k < 4000 && O.mode !== 'won'; k++) { if (O.game.state === 'play' && k % 20 === 0) window.__bot.act(O.game, 'smart', Math.random); O.step(1, false); } O.step(90, false); O.step(1, true); })()`);
+    await new Promise((r) => setTimeout(r, 2000)); // the stars and the panel animate in real time
+    await B.shot(path.join(art, 'shot-3-done.png'));
+    console.log('shot-3-done.png');
+    // the carpet of a player who has come a long way
+    const done = Array.from({ length: 24 }, (_, i) => i);
+    const stars = Object.fromEntries(done.map((i) => [i, 1 + ((i * 7) % 3)]));
+    await B.init(`window.requestAnimationFrame = () => 0; try { localStorage.clear(); localStorage.setItem('oyu.progress', ${JSON.stringify(JSON.stringify({ done, level: 24, stars }))}); } catch {}`);
+    await B.open(`${S.url}/oyu/?debug&nopulse&lang=en`, 1920, 1080);
+    await B.js(`(() => { [...document.querySelectorAll('#ui .btn')].find((b) => /Carpet/.test(b.textContent)).click(); window.__oyu.step(30, false); window.__oyu.step(1, true); })()`);
+    await new Promise((r) => setTimeout(r, 1500));
+    await B.shot(path.join(art, 'shot-4-carpet.png'));
+    console.log('shot-4-carpet.png');
+  } else if (process.argv.includes('--try')) {
     for (const lv of [5, 9, 11, 13, 16, 22, 28, 30, 31, 41]) {
       await scene(lv, 1920, 1080, 'landscape');
       await B.shot(path.join(out, `try-${lv}.png`));
