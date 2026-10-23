@@ -23,7 +23,7 @@
 <link rel="preload" href="fonts/rubik-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
 <!-- три.js и модели начинают качаться сразу, а не после всех скриптов (было лесенкой: +2–3 с к загрузке) -->
 <!-- карта импортов — раньше любых модулей и modulepreload: иначе браузер иногда разбирает GLTFLoader до неё и не находит "three" -->
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audar.js":"./js/audar.js?v=mvkult1m","./js/audio.js":"./js/audio.js?v=mvkult1m","./js/boot-pg.js":"./js/boot-pg.js?v=mvkult1m","./js/boot.js":"./js/boot.js?v=mvkult1m","./js/career.js":"./js/career.js?v=mvkult1m","./js/crowd.js":"./js/crowd.js?v=mvkult1m","./js/flags.js":"./js/flags.js?v=mvkult1m","./js/game.js":"./js/game.js?v=mvkult1m","./js/icons.js":"./js/icons.js?v=mvkult1m","./js/kazan.js":"./js/kazan.js?v=mvkult1m","./js/net.js":"./js/net.js?v=mvkult1m","./js/portal.js":"./js/portal.js?v=mvkult1m","./js/pulse.js":"./js/pulse.js?v=mvkult1m","./js/rider.js":"./js/rider.js?v=mvkult1m","./js/serke.js":"./js/serke.js?v=mvkult1m","./js/trees.js":"./js/trees.js?v=mvkult1m","./js/world.js":"./js/world.js?v=mvkult1m"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","./js/audar.js":"./js/audar.js?v=mvkv96k9","./js/audio.js":"./js/audio.js?v=mvkv96k9","./js/boot-pg.js":"./js/boot-pg.js?v=mvkv96k9","./js/boot.js":"./js/boot.js?v=mvkv96k9","./js/career.js":"./js/career.js?v=mvkv96k9","./js/crowd.js":"./js/crowd.js?v=mvkv96k9","./js/flags.js":"./js/flags.js?v=mvkv96k9","./js/game.js":"./js/game.js?v=mvkv96k9","./js/icons.js":"./js/icons.js?v=mvkv96k9","./js/kazan.js":"./js/kazan.js?v=mvkv96k9","./js/net.js":"./js/net.js?v=mvkv96k9","./js/portal.js":"./js/portal.js?v=mvkv96k9","./js/pulse.js":"./js/pulse.js?v=mvkv96k9","./js/rider.js":"./js/rider.js?v=mvkv96k9","./js/serke.js":"./js/serke.js?v=mvkv96k9","./js/trees.js":"./js/trees.js?v=mvkv96k9","./js/world.js":"./js/world.js?v=mvkv96k9"}}</script>
 <link rel="modulepreload" href="./vendor/three.module.js" fetchpriority="high">
 <link rel="modulepreload" href="./vendor/three.core.js" fetchpriority="high">
 <link rel="modulepreload" href="./vendor/loaders/GLTFLoader.js">
@@ -98,6 +98,8 @@
   .btn { position: fixed; border: 0; border-radius: 50%; color: #fff; display: none; touch-action: none; font-family: 'Russo One', sans-serif; text-shadow: 0 1px 2px rgba(0,0,0,.5); box-shadow: 0 4px 14px rgba(0,0,0,.35), inset 0 -4px 0 rgba(0,0,0,.25); }
   body.touch .btn { display: block; }
   #btnTug { right: max(22px, env(safe-area-inset-right)); bottom: 34px; width: 100px; height: 100px; font-size: 15px; background: radial-gradient(circle at 40% 30%, #b8862a, #6a4810); }
+  #btnTug.now { background: radial-gradient(circle at 40% 30%, #b8ffc4, #2f9a4a); box-shadow: 0 0 30px #5be27a; transform: scale(1.08); }
+  #tug.now #tugtip { color: #8dff9e; font-size: 26px; }
   #btnTug.ready { background: radial-gradient(circle at 40% 30%, #ffe27a, #e08a12); box-shadow: 0 0 22px var(--gold), inset 0 -4px 0 rgba(0,0,0,.25); }
   #btnWhip { right: 140px; bottom: 26px; width: 74px; height: 74px; font-size: 12px; background: radial-gradient(circle at 40% 30%, #6a6a6a, #2a2a2a); }
   body.touch #stamwrap { left: auto; right: max(22px, env(safe-area-inset-right)); bottom: 150px; width: 100px; }
@@ -586,6 +588,6 @@
 <button id="btnTug" class="btn"></button>
 <div id="menu" hidden><div id="hub"></div></div>
 </div>
-<script type="module" src="./js/game.js?v=mvkult1m"></script>
+<script type="module" src="./js/game.js?v=mvkv96k9"></script>
 </body>
 </html>

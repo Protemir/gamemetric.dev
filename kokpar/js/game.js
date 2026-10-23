@@ -35,7 +35,7 @@ const V = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(
 const TEXT = {
   ru: {
     red: 'Красные', blue: 'Синие', loading: 'Загрузка степи…', ready: 'Готовьтесь!', go: 'Вперёд!', goal: 'ГОЛ!', goalBy: (t) => t,
-    tug: 'Тартыс!', tugSub: 'Схватка за серке', jHit: 'Попал!', jPerfect: 'В яблочко!', jMiss: 'Мимо', jGallop: 'на скаку', jAim: 'Жми <kbd>E</kbd>, когда прицел подлетит к слитку', jAimT: 'Жми ВЫСТРЕЛ, когда прицел подлетит к слитку', jRide: 'Скачи к шесту с жамбы — стреляй на ходу', jBest: 'Рекорд', jRecord: 'Новый рекорд!', auTip: 'Жми E, когда он откидывается назад', auTipT: 'Жми СХВАТКА, когда он откидывается назад', auSlip: 'Руки сорвались — хватаемся снова…', auPulled: 'Стащил!', auBack: 'Улетел назад!', auFoeBack: 'Сам улетел назад!', to2: 'до 2', wrestle: 'Аудар!', wrestleSub: 'Стащи его с коня', canWrestle: '<kbd>E</kbd> — схватиться', canWrestleT: 'СХВАТКА — схватиться', btnGrip: 'СХВАТКА', mashGrip: 'Жми СХВАТКА быстрее!', btnShoot: 'ВЫСТРЕЛ', to3: 'до 3', downed: 'Сбросил!', downedMe: 'Тебя сбросили!', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
+    tug: 'Тартыс!', tugSub: 'Схватка за серке', jHit: 'Попал!', jPerfect: 'В яблочко!', jMiss: 'Мимо', jGallop: 'на скаку', jAim: 'Жми <kbd>E</kbd>, когда прицел подлетит к слитку', jAimT: 'Жми ВЫСТРЕЛ, когда прицел подлетит к слитку', jRide: 'Скачи к шесту с жамбы — стреляй на ходу', jBest: 'Рекорд', jRecord: 'Новый рекорд!', auTip: 'Жми E, когда он откидывается назад', auTipT: 'Жми СХВАТКА, когда он откидывается назад', auSlip: 'Руки сорвались — хватаемся снова…', auNow: 'СЕЙЧАС! Дёргай!', auPulled: 'Стащил!', auBack: 'Улетел назад!', auFoeBack: 'Сам улетел назад!', to2: 'до 2', wrestle: 'Аудар!', wrestleSub: 'Стащи его с коня', canWrestle: '<kbd>E</kbd> — схватиться', canWrestleT: 'СХВАТКА — схватиться', btnGrip: 'СХВАТКА', mashGrip: 'Жми СХВАТКА быстрее!', btnShoot: 'ВЫСТРЕЛ', to3: 'до 3', downed: 'Сбросил!', downedMe: 'Тебя сбросили!', stoleMe: 'Вырвал!', stoleThem: 'Серке вырвали', heldMe: 'Удержал!', heldThem: 'Не отдал',
     fumble: 'Выронил серке!', win: 'Победа', lose: 'Поражение', draw: 'Ничья', again: 'Ещё раз', stamina: 'Сила коня',
     btnTug: 'ВЫРВАТЬ', btnWhip: 'КАМЧА', btnRear: 'СВЕЧКА', mashKey: 'Жми E быстрее!', mashTap: 'Жми ВЫРВАТЬ быстрее!', canTug: '<kbd>E</kbd> — вырвать серке',
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
@@ -47,7 +47,7 @@ const TEXT = {
   },
   en: {
     red: 'Red', blue: 'Blue', loading: 'Loading the steppe…', ready: 'Get ready!', go: 'Go!', goal: 'GOAL!', goalBy: (t) => t,
-    tug: 'Tug of war!', jHit: 'Hit!', jPerfect: 'Bullseye!', jMiss: 'Miss', jGallop: 'at a gallop', jAim: 'Press <kbd>E</kbd> when the sight bounces up to the ingot', jAimT: 'Tap SHOOT when the sight bounces up to the ingot', jRide: 'Ride past the pole — shoot on the move', jBest: 'Best', jRecord: 'New record!', auTip: 'Press E when he leans back', auTipT: 'Tap GRAPPLE when he leans back', auSlip: 'Grip lost — grabbing again…', auPulled: 'Pulled him off!', auBack: 'Flew off backwards!', auFoeBack: 'He flew off backwards!', to2: 'first to 2', wrestle: 'Wrestle!', wrestleSub: 'Pull him off the horse', canWrestle: '<kbd>E</kbd> — grapple', canWrestleT: 'GRAPPLE — grab him', btnGrip: 'GRAPPLE', mashGrip: 'Tap GRAPPLE fast!', btnShoot: 'SHOOT', to3: 'first to 3', downed: 'Knocked him off!', downedMe: 'You got pulled off!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
+    tug: 'Tug of war!', jHit: 'Hit!', jPerfect: 'Bullseye!', jMiss: 'Miss', jGallop: 'at a gallop', jAim: 'Press <kbd>E</kbd> when the sight bounces up to the ingot', jAimT: 'Tap SHOOT when the sight bounces up to the ingot', jRide: 'Ride past the pole — shoot on the move', jBest: 'Best', jRecord: 'New record!', auTip: 'Press E when he leans back', auTipT: 'Tap GRAPPLE when he leans back', auSlip: 'Grip lost — grabbing again…', auNow: 'NOW! Pull!', auPulled: 'Pulled him off!', auBack: 'Flew off backwards!', auFoeBack: 'He flew off backwards!', to2: 'first to 2', wrestle: 'Wrestle!', wrestleSub: 'Pull him off the horse', canWrestle: '<kbd>E</kbd> — grapple', canWrestleT: 'GRAPPLE — grab him', btnGrip: 'GRAPPLE', mashGrip: 'Tap GRAPPLE fast!', btnShoot: 'SHOOT', to3: 'first to 3', downed: 'Knocked him off!', downedMe: 'You got pulled off!', tugSub: 'Fight for the serke', stoleMe: 'Stolen!', stoleThem: 'They stole it', heldMe: 'Held on!', heldThem: 'They held on',
     fumble: 'Fumble!', win: 'Victory', lose: 'Defeat', draw: 'Draw', again: 'Play again', stamina: 'Horse stamina',
     btnTug: 'GRAB', btnWhip: 'WHIP', btnRear: 'REAR UP', mashKey: 'Mash E!', mashTap: 'Tap GRAB fast!', canTug: '<kbd>E</kbd> — grab the serke',
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
@@ -864,7 +864,7 @@ function startAudar() {
   el.menu.hidden = true; el.tut.hidden = true; delete el.hint.dataset.keep;
   const foe = ents.find((e) => e.team === 1);
   modeOff();
-  audar = { foe, skill: Math.min(0.85, 0.55 + career.duels().w * 0.04), ang: 0, speed: 0, acc: 0 }; // каждая победа — соперник чуть смекалистей
+  audar = { foe, skill: Math.min(0.85, 0.35 + career.duels().w * 0.06), ang: 0, speed: 0, acc: 0 }; // каждая победа — соперник чуть смекалистей
   onlyOnField([me, foe]);
   state.score = [0, 0]; state.clock = 999; state.golden = false; state.events = [];
   audarKick(true);
@@ -1394,10 +1394,14 @@ function hud(dt) {
   const T = state.tug, mine = T && (T.att === me || T.car === me);
   const grapple = audar && audar.S && state.phase === 'play' && !me.r.fallen && !audar.foe.r.fallen;
   hid(el.tug, !mine && !grapple);
+  if (!grapple) { el.tug.classList.remove('now'); el.btnTug.classList.remove('now'); }
   if (grapple) { // + — соперника тянет ко мне
     const v = clamp((audar.S.b.th - audar.S.a.th) / 1.4, -1, 1);
     sty(el.tugbar, 'left', `${50 + v * 50}%`);
-    txt(el.tugtip, audar.S.grip ? (touch ? tr('auTipT') : tr('auTip')) : tr('auSlip'));
+    // подсказка момента: соперник откидывается назад и рывок готов — «Сейчас!», кнопка и полоса вспыхивают
+    const now = audar.S.grip && audar.S.b.w < -0.15 && audar.S.a.cd <= 0 && audar.S.a.th > -0.55;
+    txt(el.tugtip, !audar.S.grip ? tr('auSlip') : now ? tr('auNow') : touch ? tr('auTipT') : tr('auTip'));
+    el.tug.classList.toggle('now', now); el.btnTug.classList.toggle('now', now);
   } else if (mine) {
     const v = clamp(T.att === me ? T.bar : -T.bar, -1, 1); // + — в мою пользу
     sty(el.tugbar, 'left', `${50 + v * 50}%`);
