@@ -11,17 +11,17 @@
 <meta property="og:image" content="https://gamemetric.dev/img/aryq.jpg">
 <meta property="og:url" content="https://gamemetric.dev/aryq/">
 <meta name="theme-color" content="#1f2420">
-<link rel="stylesheet" href="style.css?v=010f35b8">
-<script type="importmap">{"imports":{"./js/audio.js":"./js/audio.js?v=3148c4bd","./js/boot.js":"./js/boot.js?v=ea1ff678","./js/main.js":"./js/main.js?v=cc7fa493","./js/portal.js":"./js/portal.js?v=d14497ba","./js/pulse.js":"./js/pulse.js?v=2b6285c7","./js/render.js":"./js/render.js?v=ad7f9c08","./js/sim.js":"./js/sim.js?v=763cd011","./js/terrain.js":"./js/terrain.js?v=81eb28ed","./js/util.js":"./js/util.js?v=06999920"}}</script>
+<link rel="stylesheet" href="style.css?v=fe7d6b5f">
+<script type="importmap">{"imports":{"./js/audio.js":"./js/audio.js?v=3148c4bd","./js/boot.js":"./js/boot.js?v=ea1ff678","./js/main.js":"./js/main.js?v=c83b65e4","./js/portal.js":"./js/portal.js?v=d14497ba","./js/pulse.js":"./js/pulse.js?v=2b6285c7","./js/render.js":"./js/render.js?v=ad7f9c08","./js/sim.js":"./js/sim.js?v=15732436","./js/terrain.js":"./js/terrain.js?v=81eb28ed","./js/util.js":"./js/util.js?v=06999920"}}</script>
 <link rel="modulepreload" href="./js/audio.js?v=3148c4bd">
-<link rel="modulepreload" href="./js/main.js?v=cc7fa493">
+<link rel="modulepreload" href="./js/main.js?v=c83b65e4">
 <link rel="modulepreload" href="./js/portal.js?v=d14497ba">
 <link rel="modulepreload" href="./js/pulse.js?v=2b6285c7">
 <link rel="modulepreload" href="./js/render.js?v=ad7f9c08">
-<link rel="modulepreload" href="./js/sim.js?v=763cd011">
+<link rel="modulepreload" href="./js/sim.js?v=15732436">
 <link rel="modulepreload" href="./js/terrain.js?v=81eb28ed">
 <link rel="modulepreload" href="./js/util.js?v=06999920">
-<script type="module" src="./js/main.js?v=cc7fa493"></script>
+<script type="module" src="./js/main.js?v=c83b65e4"></script>
 </head>
 <body>
 <canvas id="game" aria-label="Aryk"></canvas>
@@ -29,6 +29,7 @@
   <div class="hud-season">
     <p id="season"><span id="seasonName"></span><small id="yearNo"></small></p>
     <div class="bar"><i id="dayBar"></i></div>
+    <div class="bar goal" id="goalWrap" hidden><i id="goalBar"></i></div>
   </div>
   <p class="stat" title="Кетмень: сколько клеток можно выкопать">⛏ <b id="dig"></b></p>
   <p class="stat" title="Урожай">🍏 <b id="harvest"></b></p>

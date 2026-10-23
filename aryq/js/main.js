@@ -239,6 +239,9 @@ const TEXT = {
     pullTip: 'Не тапай, а тяни: зажми у реки и веди пальцем к саду.',
     autoDug: 'Вот так! Арык ведут пальцем от реки к саду. Следующий — сам.',
     ripeTip: 'Спелое яблоко! Нажми на него: +{n} 🍏',
+    goalNew: 'Весна! Ледник тает — воды вдоволь до лета. Цель года: {n} 🍏 — награда +{d} ⛏ и +{a} 🍏.',
+    goalDone: 'Цель года! +{d} ⛏ и +{a} 🍏',
+    goalTitle: 'Цель года: ещё {n} 🍏',
     find_coins: '+{n} 🍏 монеты!',
     find_jug: '+{n} ⛏ старый кувшин',
     find_spring: 'родник! воды больше',
@@ -361,6 +364,9 @@ const TEXT = {
     pullTip: "Don't tap, pull: press by the river and drag to the orchard.",
     autoDug: 'Like this! Drag a canal from the river to the orchard. The next one is yours.',
     ripeTip: 'A ripe apple! Tap it: +{n} 🍏',
+    goalNew: 'Spring! The glacier melts: plenty of water until summer. Goal of the year: {n} 🍏, reward +{d} ⛏ and +{a} 🍏.',
+    goalDone: 'Goal of the year! +{d} ⛏ and +{a} 🍏',
+    goalTitle: 'Goal of the year: {n} 🍏 to go',
     find_coins: '+{n} 🍏 coins!',
     find_jug: '+{n} ⛏ an old jug',
     find_spring: 'a spring! more water',
@@ -918,6 +924,14 @@ function updateHud() {
   $('yearNo').classList.toggle('low', share != null && share < 1);
   $('yearNo').title = t('water');
   $('dayBar').style.width = `${(g.day / S.YEAR_DAYS) * 100}%`;
+  // the goal of the year: a gold bar under the days, full when it is reached
+  const left = S.goalLeft(g);
+  $('goalWrap').hidden = left == null;
+  if (left != null) {
+    $('goalBar').style.width = `${g.goalDone ? 100 : Math.min(100, (1 - left / g.goalNeed) * 100)}%`;
+    $('goalWrap').title = g.goalDone ? t('goalDone', { d: S.GOAL.dig, a: S.GOAL.apples }) : t('goalTitle', { n: Math.ceil(left) });
+    $('goalWrap').classList.toggle('done', !!g.goalDone);
+  }
   $('dig').textContent = g.dig;
   $('dig').parentElement.classList.toggle('empty', g.dig < 1);
   $('harvest').textContent = Math.floor(g.harvest);
@@ -1258,6 +1272,13 @@ function frame(now) {
         view.burst(ev.obj.y * W + ev.obj.x, 'leaf');
         tip('grew', 4500, 2);
       }
+      if (ev.type === 'goal') {
+        sfx.yearDone();
+        happytime();
+        say(t('goalDone', { d: S.GOAL.dig, a: S.GOAL.apples }), 5000);
+        for (const o of g.objects) if (o.type === 'garden' && o.s >= 0.6) view.burst(o.y * W + o.x, 'coin');
+        updateHud();
+      }
       if (ev.type === 'find') {
         view.float(ev.cell, t('find_' + ev.kind, { n: ev.kind === 'coins' ? S.FINDS.coins : S.FINDS.jug }));
         view.burst(ev.cell, ev.kind === 'spring' ? 'splash' : 'coin');
@@ -1274,6 +1295,10 @@ function frame(now) {
       }
     }
     if (!paused && !g.over && !hud.hidden) ripen(dt);
+    if (g.goalNeed && !g.goalDone && state.goalTold !== g.year && !ui.firstChild && !g.over && g.day < S.WINTER) {
+      state.goalTold = g.year;
+      say(t('goalNew', { n: g.goalNeed, d: S.GOAL.dig, a: S.GOAL.apples }), 7000);
+    }
     pickGhost(now);
     coach(now);
     listen(g);

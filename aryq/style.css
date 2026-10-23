@@ -166,6 +166,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .stat.empty { animation: empty 0.9s ease-in-out infinite; }
 @keyframes empty { 50% { background: #f6c3b4; color: #8f1f12; } }
+.bar.goal { height: 4px; margin-top: 3px; background: #efe0b8; }
+.bar.goal i { background: linear-gradient(90deg, #e3a72f, #f6cf4a); }
+.bar.goal.done i { background: #6fb43f; }
 .hud-season p small.low { color: #c0392b; font-weight: 800; animation: lowwater 1.1s ease-in-out infinite; }
 @keyframes lowwater { 50% { color: #ff6a4d; } }
 

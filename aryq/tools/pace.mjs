@@ -19,6 +19,9 @@ let sim = fs.readFileSync(src + 'sim.js', 'utf8');
 const want = variant.split('+');
 if (want.includes('tut7')) sim = sim.replace('g.gardensEver < 4 ? 2.5', 'g.gardensEver < 7 ? 2.5');
 if (want.includes('shrink9')) sim = sim.replace('1 - 0.13 * (year - 1)', '1 - 0.09 * (year - 1)');
+if (want.includes('spring')) sim = sim.replace('  return q * melt * Math.max(0.5, 1 - 0.13 * (year - 1));', '  if (year > 1 && day < 30) q = Math.max(q, 8 - (day * 2) / 30); return q * melt * Math.max(0.5, 1 - 0.13 * (year - 1));');
+if (want.includes('g100')) sim = sim.replace('more: 1.15', 'more: 1.0');
+if (want.includes('g90')) sim = sim.replace('more: 1.15', 'more: 0.9');
 if (want.includes('y2soft')) sim = sim.replace('Math.max(5, 11 - g.year)', '(g.year === 2 ? 12 : Math.max(5, 11 - g.year))');
 if (want.includes('ration')) {
   const m = want.includes('m85') ? 0.85 : 0.92;
@@ -36,7 +39,7 @@ const rnd = () => ((r = (Math.imul(r, 1103515245) + 12345) >>> 0) / 4294967296);
 const rows = [];
 for (let k = 0; k < games; k++) {
   const g = S.newGame(16, 26, 9000 + k, 'wide');
-  let real = 0, idle = 0, idle2 = 0, year1End = null;
+  let real = 0, idle = 0, idle2 = 0, year1End = null, goals = 0;
   const seen = new Map(); // object -> real time it became thirsty
   const react = new Map();
   while (!g.over && real < 25 * 60) {
@@ -59,13 +62,13 @@ for (let k = 0; k < games; k++) {
       }
     }
     for (const o of g.objects) if (o.s >= 0.6) seen.delete(o);
-    for (const ev of g.events.splice(0)) if (ev.type === 'year') { if (year1End == null) year1End = real; S.reward(g, S.REWARDS[Math.floor(rnd() * 3)]); }
+    for (const ev of g.events.splice(0)) if (ev.type === 'goal') goals++; else if (ev.type === 'year') { if (year1End == null) year1End = real; S.reward(g, S.REWARDS[Math.floor(rnd() * 3)]); }
     S.advance(g, (dtReal * (g.day >= S.WINTER ? 4 : calm ? CALM : 1)) / S.DAY_SEC);
     real += dtReal;
   }
   let why = 'alive';
   if (g.over) { const o = g.objects.find((x) => x.x === g.over.x && x.y === g.over.y) || g.objects.reduce((a, b) => (b.thirst > a.thirst ? b : a)); const p = S.planFor(g, o); const share = S.waterShare(g); why = o.got > 0.01 ? (share != null && share < 1 ? 'river short' : 'canal full / share') : !p ? 'no way' : p.cells.length > g.dig ? 'no digging left (' + p.cells.length + '>' + g.dig + ')' : g.kind[p.from] === S.CANAL && g.flow[p.from] < o.need ? (g.flow[p.from] < 0.02 ? 'way from a dry canal' : 'way from a thin canal') : 'missed / late'; }
-  rows.push({ why, harvest: g.harvest, min: real / 60, idle2, idleShare: idle / real, year: g.year, y1: year1End });
+  rows.push({ goals, when: g.over ? 'y' + g.year + ':d' + Math.floor(g.day / 20) * 20 : 'alive', why, harvest: g.harvest, min: real / 60, idle2, idleShare: idle / real, year: g.year, y1: year1End });
 }
 const avg = (f) => rows.reduce((s, x) => s + f(x), 0) / rows.length;
 const med = (f) => { const a = rows.map(f).sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
@@ -74,5 +77,9 @@ console.log(`${variant.padEnd(16)} session min avg ${avg((x) => x.min).toFixed(1
 const whys = {};
 for (const x of rows) { const k = x.why.split(' (')[0]; whys[k] = (whys[k] || 0) + 1; }
 console.log('   why lost:', JSON.stringify(whys));
+const whens = {};
+for (const x of rows) whens[x.when] = (whens[x.when] || 0) + 1;
+console.log('   goals of the year reached per game: ' + avg((x) => x.goals).toFixed(2) + ', years with a goal ' + avg((x) => Math.max(0, x.year - 1)).toFixed(2));
+console.log('   lost when:', Object.entries(whens).sort().map(([k, v]) => k + ' ' + v).join(', '));
 const hv = rows.map((x) => x.harvest).sort((a, b) => a - b);
 console.log('   harvest per game: p25 ' + Math.round(hv[Math.floor(hv.length * 0.25)]) + ', median ' + Math.round(hv[Math.floor(hv.length / 2)]) + ', p75 ' + Math.round(hv[Math.floor(hv.length * 0.75)]));

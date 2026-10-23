@@ -50,7 +50,26 @@ export function sourceFlow(day, year, melt = 1) {
       break;
     }
   }
+  // from the second year spring comes as a flood (24.10: the orchards of last year all wake at once
+  // while the glacier gave its least, and most later games were lost in the first days of a year;
+  // a human-paced bot: those losses mostly gone, the game 1.7 min longer)
+  if (year > 1 && day < SPRING_FLOOD) q = Math.max(q, 8 - (day * 2) / SPRING_FLOOD);
   return q * melt * Math.max(0.5, 1 - 0.13 * (year - 1));
+}
+export const SPRING_FLOOD = 30; // days
+
+// From the second year each year has a goal: about the harvest of the year before (a human-paced bot
+// reaches it in ~60% of the years it plays through; the glacier shrinks every year). Reaching it
+// gives ketmen and apples (a reason to carry on through the hard second year).
+export const GOAL = { more: 0.9, least: 300, dig: 10, apples: 50 };
+function setGoal(g) {
+  const got = g.harvest - (g.yearStart || 0);
+  g.yearStart = g.harvest;
+  g.goalNeed = Math.max(GOAL.least, Math.round((got * GOAL.more) / 10) * 10);
+  g.goalDone = 0;
+}
+export function goalLeft(g) {
+  return g.goalNeed ? Math.max(0, g.goalNeed - (g.harvest - (g.yearStart || 0))) : null;
 }
 
 export function newGame(W, H, seed = 1, valley = 'mountain', gen = GEN) {
@@ -508,6 +527,12 @@ function tick(g, dt) {
     if (g.dig < DIG_CAP) g.dig += 1;
   }
   if (g.day < WINTER && g.day + dt >= WINTER) g.events.push({ type: 'winter' });
+  if (g.goalNeed && !g.goalDone && g.harvest - (g.yearStart || 0) >= g.goalNeed) {
+    g.goalDone = 1;
+    g.dig += GOAL.dig;
+    g.harvest += GOAL.apples;
+    g.events.push({ type: 'goal', year: g.year });
+  }
   g.day += dt;
   if (g.day < WINTER) {
     if (g.day >= g.nextGarden) {
@@ -528,6 +553,7 @@ function tick(g, dt) {
     g.dig += DIG_PER_YEAR;
     g.nextGarden = 0;
     g.nextHouse = 6;
+    setGoal(g);
     g.events.push({ type: 'year', year: g.year });
     g.giftDue = g.year; // until a gift is picked (it is saved: a game closed on the gift panel gets it back)
   }
@@ -737,7 +763,7 @@ export function save(g) {
     objects: g.objects.map(({ type, x, y, need, thirst, flood, born, tap, got, grown }) => ({ type, x, y, need, thirst, flood, born, tap, got, grown })),
     flow: Array.from(g.flow, (v) => Math.round(v * 1000) / 1000),
     day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
-    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0, banked: g.banked || 0, dugCount: g.dugCount || 0, nextFind: g.nextFind || 5, finds: g.finds || 0, mercy: g.mercy || 0, shield: g.shield || 0,
+    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0, banked: g.banked || 0, dugCount: g.dugCount || 0, nextFind: g.nextFind || 5, finds: g.finds || 0, mercy: g.mercy || 0, shield: g.shield || 0, yearStart: g.yearStart || 0, goalNeed: g.goalNeed || 0, goalDone: g.goalDone || 0,
   };
 }
 
@@ -777,6 +803,9 @@ export function load(d) {
   g.revived = d.revived || 0;
   g.mercy = Number.isFinite(d.mercy) ? d.mercy : 0;
   g.shield = Number.isFinite(d.shield) ? d.shield : 0;
+  g.yearStart = Number.isFinite(d.yearStart) ? d.yearStart : 0;
+  g.goalNeed = Number.isFinite(d.goalNeed) ? d.goalNeed : 0;
+  g.goalDone = d.goalDone ? 1 : 0;
   g.rand = rng((d.seed ^ (d.year * 7919) ^ (d.gardensEver * 104729)) >>> 0);
   g.order = null;
   g.events = [];

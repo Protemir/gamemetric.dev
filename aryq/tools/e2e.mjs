@@ -476,6 +476,9 @@ try {
   await wait(300);
   r = await B.js(`JSON.stringify({ cap: ${A}.g.cap, panel: document.getElementById('ui').innerText })`).then(JSON.parse);
   check('the gift works and play goes on', r.cap > cap0 && r.panel === '', JSON.stringify(r));
+  await wait(300);
+  r = await B.js(`JSON.stringify({ bar: !document.getElementById('goalWrap').hidden, title: document.getElementById('goalWrap').title, hint: document.getElementById('hint').textContent, need: ${A}.g.goalNeed })`).then(JSON.parse);
+  check('the second year shows its goal: a gold bar and a tip with the spring flood', r.bar && r.need >= 300 && /Цель года/.test(r.title) && /Весна/.test(r.hint) && r.hint.includes(String(r.need)), JSON.stringify(r));
 
   // 7. saving: a reload offers to continue the same game
   const before = await B.js(`JSON.stringify({ day: Math.round(${A}.g.day), year: ${A}.g.year, strokes: ${A}.g.strokes.length })`);
@@ -485,7 +488,9 @@ try {
   const cont = await clickText('Продолжить');
   await wait(200);
   const after = await B.js(`JSON.stringify({ day: Math.round(${A}.g.day), year: ${A}.g.year, strokes: ${A}.g.strokes.length })`);
-  check('continue after a reload', cont && before === after, `${before} -> ${after}`);
+  // (the game runs on between the look and the save: the day may move on a little)
+  const [b0, a0] = [JSON.parse(before), JSON.parse(after)];
+  check('continue after a reload', cont && b0.year === a0.year && b0.strokes === a0.strokes && Math.abs(b0.day - a0.day) <= 1, `${before} -> ${after}`);
   await clickText('Продолжить'); // the pause panel
 
   // 8. losing and starting again
@@ -677,6 +682,25 @@ try {
     Sim.giveHeadStart(g, true);
     const back = Sim.load(JSON.parse(JSON.stringify(Sim.save(g))));
     check('the head start survives a save', back.mercy === 0.6 && back.shield === 45, `${back.mercy} ${back.shield}`);
+    // the second year (24.10): spring comes as a flood, and the year has a goal with a reward
+    check('from the second year spring gives more water, summer as before',
+      Sim.sourceFlow(0, 2) > Sim.sourceFlow(0, 1) * 1.5 && Sim.sourceFlow(0, 1) === Sim.sourceFlow(0, 1, 1) && Math.abs(Sim.sourceFlow(60, 2) - Sim.sourceFlow(60, 1) * 0.87) < 1e-9,
+      `${Sim.sourceFlow(0, 1).toFixed(2)} -> ${Sim.sourceFlow(0, 2).toFixed(2)}`);
+    const y = Sim.newGame(16, 26, 11, 'wide');
+    Sim.advance(y, 0.01);
+    y.harvest = 700;
+    y.day = 119.99;
+    Sim.advance(y, 0.05);
+    const goal0 = { need: y.goalNeed, left: Sim.goalLeft(y) };
+    const dig0 = y.dig;
+    y.events.length = 0;
+    y.harvest += y.goalNeed;
+    Sim.advance(y, 0.05);
+    const reached = y.events.some((e) => e.type === 'goal');
+    const y2 = Sim.load(JSON.parse(JSON.stringify(Sim.save(y))));
+    check('the second year sets a goal of ~90% of the first harvest; reaching it gives ketmen and apples once, a save keeps it',
+      Sim.goalLeft(Sim.newGame(16, 26, 11, 'wide')) === null && goal0.need === 630 && goal0.left === 630 && reached && y.dig >= dig0 + Sim.GOAL.dig && y.goalDone === 1 && y2.goalDone === 1 && y2.goalNeed === 630 && y2.yearStart === 700,
+      JSON.stringify({ goal0, reached, dig: [dig0, y.dig], back: [y2.goalNeed, y2.goalDone, y2.yearStart] }));
   }
   for (const [w, h, seed] of [[390, 844, 1004], [924, 520, 1004], [390, 844, 7], [844, 390, 21]]) {
     await B.init('try { localStorage.clear(); } catch {}');
