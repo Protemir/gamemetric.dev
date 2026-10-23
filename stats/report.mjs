@@ -12,12 +12,12 @@ const key = fs.readFileSync(keyFile, 'utf8').trim();
 const base = process.env.PULSE || 'https://gm-pulse.protemir.workers.dev';
 const r = await (await fetch(`${base}/report?days=${days}&key=${encodeURIComponent(key)}`)).json();
 
-const NAMES = { asem: 'Әсем Жол (asemface.com)', jekpe: 'Жекпе-жек (gamemetric.dev)', oyu: 'Ою (gamemetric.dev/oyu)', aryq: 'Арык (gamemetric.dev/aryq, CG)' };
+const NAMES = { asem: 'Әсем Жол (asemface.com)', jekpe: 'Жекпе-жек (gamemetric.dev)', oyu: 'Ою (gamemetric.dev/oyu)', aryq: 'Арык (gamemetric.dev/aryq, CG)', kokpar: 'Көкпар (gamemetric.dev/kokpar, CG)' };
 const pct = (a, b) => (b ? Math.round((100 * a) / b) + '%' : '—');
 const pad = (s, n) => String(s).padEnd(n);
 
 console.log(`Период ${r.from} … ${r.today} (время Алматы)\n`);
-for (const site of ['asem', 'jekpe', 'oyu', 'aryq']) {
+for (const site of ['asem', 'jekpe', 'oyu', 'aryq', 'kokpar']) {
   console.log('== ' + NAMES[site]);
   const ev = (day, e) => r.events.filter((x) => x.site === site && x.day === day && x.ev === e).reduce((s, x) => s + x.n, 0);
   // "played to the end": the race reached the finish or ran out of time; the fight was over
@@ -39,6 +39,10 @@ for (const site of ['asem', 'jekpe', 'oyu', 'aryq']) {
   console.log('каналы:  ' + top(r.channels, (x) => `${x.ch} ${x.n}`));
   console.log('откуда:  ' + top(r.refs, (x) => `${x.host} ${x.n}`));
   console.log('старты:  ' + top(r.args.filter((x) => x.ev === 'start'), (x) => `${x.arg} ${x.n}`));
+  if (site === 'kokpar') {
+    // старт/конец по режимам и где уходят: "<экран>:<режим>:m<минута>:n<сколько начато>:<счёт>"
+    for (const e of ['leave', 'end', 'daily']) console.log(pad(e + ':', 9) + top(r.args.filter((x) => x.ev === e), (x) => `${x.arg} ${x.n}`, 30));
+  }
   if (site === 'aryq') {
     // where players go away: "<screen>:m<minute>" (on CG every visit is its own session)
     for (const e of ['leave', 'over', 'year', 'more', 'daily']) console.log(pad(e + ':', 9) + top(r.args.filter((x) => x.ev === e), (x) => `${x.arg} ${x.n}`, 30));
