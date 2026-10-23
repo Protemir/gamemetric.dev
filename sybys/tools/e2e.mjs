@@ -194,6 +194,9 @@ try {
   t = await uiText();
   check('the kurultai shows three elders and the choices', t.includes('Kurultai') && t.includes('Kokzhal') && t.includes('Arkar') && t.includes('Sit on the white felt'), t.slice(0, 60).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'kurultai.png'));
+  // each elder's seat shows trust against the line it had to cross
+  const sb = await B.js(`(() => { const v = ${A}.g.vote; return [...document.querySelectorAll('.seat .bar')].map((b, k) => Math.abs(parseFloat(b.style.getPropertyValue('--at')) - v.votes[k].line * 100) < 0.5 && b.firstChild.style.width !== '').join(','); })()`);
+  check('kurultai seats show trust against the line', sb === 'true,true,true', sb);
   await clickText('Sit on the white felt');
   await wait(200);
   t = await uiText();

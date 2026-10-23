@@ -601,6 +601,7 @@ function updateHud() {
   const chips = $('tribes').children;
   for (let k = 0; k < 3; k++) {
     chips[k].querySelector('i').style.width = `${v.votes[k].trust * 100}%`;
+    chips[k].style.setProperty('--at', `${v.votes[k].line * 100}%`);
     chips[k].classList.toggle('ok', v.votes[k].yes);
     const tr = g.tribes[k];
     const marks = (tr.grievance ? 'g' : '') + (tr.fear > 0.25 ? 'f' : '') + (tr.talks ? 't' : '');
@@ -867,6 +868,11 @@ function showKurultai(council = false) {
     const ava = el('div', 'ava');
     ava.innerHTML = face(x.tribe);
     s.append(el('span', 'whip', '·'), ava, el('b', null, tribeName(x.tribe)), el('small', null, Math.round(x.trust * 100) + '%'));
+    // trust against the line it had to cross: why a clan said no, without words
+    const bar = Object.assign(el('div', 'bar'), { innerHTML: '<i></i>' });
+    bar.style.setProperty('--at', `${x.line * 100}%`);
+    bar.firstChild.style.width = `${Math.min(1, x.trust) * 100}%`;
+    s.append(bar);
     if (g.traits) s.append(el('small', 'trait', T().traits[g.traits[x.tribe]][0]));
     ring.append(s);
     return s;

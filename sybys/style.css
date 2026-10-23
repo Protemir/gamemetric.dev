@@ -103,7 +103,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tribe .tn { display: block; font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tribe .bar { margin-top: 5px; position: relative; height: 9px; overflow: visible; }
 .tribe .bar i { border-radius: 4px; }
-.tribe .bar::after { content: ""; position: absolute; left: 55%; top: -4px; bottom: -4px; width: 3px; border-radius: 2px; background: var(--ink); }
+.tribe .bar::after { content: ""; position: absolute; left: var(--at, 55%); top: -4px; bottom: -4px; width: 3px; border-radius: 2px; background: var(--ink); }
 .tribe .bar i { background: var(--c); }
 .tribe.ok .bar i { background: var(--gold); }
 .tribe .fear { position: absolute; right: 4px; top: 2px; font-size: 11px; letter-spacing: -3px; }
@@ -363,6 +363,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .seat.yes { transform: translateY(-6px); background: #fff1c4; }
 .seat.yes em { color: #8a6412; }
 .seat.no { opacity: 0.75; }
+.seat .bar { align-self: stretch; flex: 0 0 auto; margin: 4px 6px 2px; height: 7px; position: relative; overflow: visible; }
+.seat .bar i { background: var(--c); border-radius: 3px; }
+.seat .bar::after { content: ""; position: absolute; left: var(--at, 55%); top: -3px; bottom: -3px; width: 2px; border-radius: 1px; background: var(--gold-hi); }
+.seat.yes .bar i { background: var(--gold); }
+.seat.no .whip { color: #e0805a; }
 .seat.no em { color: var(--red); }
 .warn { color: var(--red); font-weight: 800; }
 .pic svg { display: block; width: 100%; height: auto; border-radius: 12px; margin-bottom: 12px; }
@@ -425,6 +430,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .seat { width: 104px; padding: 5px 4px; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 2px 6px; }
   .seat .ava { width: 30px; height: 30px; }
   .seat .whip { font-size: 18px; }
+  .seat .bar { flex-basis: 100%; margin: 2px 4px; height: 5px; }
   .faces .ava { width: 40px; height: 40px; }
   .speaker { margin: 4px 0; }
   .speaker .ava { width: 40px; height: 40px; }
