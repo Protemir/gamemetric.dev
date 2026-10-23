@@ -69,6 +69,51 @@ export class View {
     this.floats.push({ cell, text, at: performance.now() });
   }
 
+  // where a ripe apple hangs over its orchard: a little up and to the side, bobbing
+  applePos(o, age) {
+    const [px, py] = this.center(o.y * this.g.W + o.x);
+    return [px + this.cs * 0.42, py - this.cs * 0.72 + Math.sin(age * 4) * this.cs * 0.06];
+  }
+
+  drawRipe(list, now) {
+    const cx = this.cx;
+    const r = Math.max(9, this.cs * 0.3);
+    for (const a of list) {
+      const [x, y] = this.applePos(a.o, a.age);
+      const born = Math.min(1, a.age / 0.25); // pops in
+      const leaving = a.age > 7 ? 0.45 + 0.55 * Math.abs(Math.sin(a.age * 9)) : 1; // blinks before it falls
+      cx.save();
+      cx.globalAlpha = leaving;
+      cx.fillStyle = `rgba(255,226,92,${0.42 + 0.2 * Math.sin(now / 160)})`;
+      cx.beginPath();
+      cx.arc(x, y, r * 2.1 * born, 0, Math.PI * 2);
+      cx.fill();
+      // a ring that keeps going out from it: something here to tap
+      const k = (now % 1100) / 1100;
+      cx.strokeStyle = `rgba(255,248,220,${0.85 * (1 - k)})`;
+      cx.lineWidth = 2;
+      cx.beginPath();
+      cx.arc(x, y, r * (1.3 + 1.6 * k) * born, 0, Math.PI * 2);
+      cx.stroke();
+      cx.fillStyle = '#d8382a';
+      cx.strokeStyle = 'rgba(60,20,10,0.7)';
+      cx.lineWidth = 1.5;
+      cx.beginPath();
+      cx.arc(x, y, r * born, 0, Math.PI * 2);
+      cx.fill();
+      cx.stroke();
+      cx.fillStyle = 'rgba(255,255,255,0.55)';
+      cx.beginPath();
+      cx.arc(x - r * 0.35, y - r * 0.35, r * 0.28 * born, 0, Math.PI * 2);
+      cx.fill();
+      cx.fillStyle = '#4f9a2f';
+      cx.beginPath();
+      cx.ellipse(x + r * 0.3, y - r * 1.05, r * 0.42 * born, r * 0.2 * born, -0.5, 0, Math.PI * 2);
+      cx.fill();
+      cx.restore();
+    }
+  }
+
   drawFloats(now) {
     if (!this.floats.length) return;
     const cx = this.cx;
@@ -151,13 +196,15 @@ export class View {
     const same = this.g === g && this.terrain && this.paintedRot === this.rot;
     this.g = g;
     this.paintJob = (this.paintJob || 0) + 1;
-    if (!same) this.terrain = this.paintTerrain(g, 1);
+    // (23.10: at 3 pixels per point a slow phone spent ~2.5 s here before the game could start; the
+    // first look is now at most 1.25 pixels per point, a few times less work, and sharpens a moment later)
+    if (!same) this.terrain = this.paintTerrain(g, Math.min(1, 1.25 / this.dpr));
     this.paintedRot = this.rot;
     const job = this.paintJob;
     clearTimeout(this.sharpTimer);
     this.sharpTimer = setTimeout(() => {
       if (job === this.paintJob) this.paintTerrain(g, TERRAIN_SHARP, (c) => { if (job === this.paintJob) this.terrain = c; });
-    }, same ? 250 : 600);
+    }, same ? 250 : 300);
     if (keep && keep.rot === this.rot) {
       this.zoomAt(keep.z, this.ox, this.oy);
       this.pan(w / 2 - (this.ox + keep.bx * this.cs), h / 2 - (this.oy + keep.by * this.cs));
@@ -343,7 +390,7 @@ export class View {
     const slice = () => {
       if (job !== this.paintJob) return; // the screen changed again: a newer painting is on its way
       const t0 = performance.now();
-      while (y < Hp && performance.now() - t0 < 8) {
+      while (y < Hp && performance.now() - t0 < 11) {
         rows(y, Math.min(Hp, y + 6));
         y += 6;
       }
@@ -548,8 +595,9 @@ export class View {
     this.drawBits(now);
     this.drawStroke(g);
     this.startLabel = ui.startLabel;
+    this.handOn = !!ui.hand; // while a new player learns (the first three orchards)
     this.labelRects = [];
-    if (ui.labels) this.drawLabels(ui.labels, now);
+    if (ui.labels) this.drawLabels(ui.labels, now, ui.ghost);
     if (ui.ghost) this.drawGhost(ui.ghost, now);
     if (ui.hintPath) this.drawGhost(ui.hintPath, now);
     if (ui.blocked && now - ui.blocked.at < 1400) {
@@ -581,6 +629,7 @@ export class View {
       }
     }
     if (g.day >= S.WINTER) this.drawSnow();
+    if (ui.ripe && ui.ripe.length && !g.over) this.drawRipe(ui.ripe, now);
     this.drawFloats(now);
     if (ui.loupe && this.cs < LOUPE_UNTIL) this.drawLoupe(ui.loupe);
     if (g.over) {
@@ -774,7 +823,7 @@ export class View {
   }
 
   // names on the field the first time: a tag above the thing with a short stem to it
-  drawLabels(labels, now) {
+  drawLabels(labels, now, ghost) {
     const { cx, cs } = this;
     this.labelRects = [];
     const fade = clamp((labels.until - now) / 600, 0, 1);
@@ -785,14 +834,43 @@ export class View {
     for (const { i, text } of labels.list) {
       const [px, py] = this.center(i);
       const tw = cx.measureText(text).width + 14, th = Math.max(20, Math.min(26, cs * 0.6));
-      const lx = Math.min(Math.max(px - tw / 2, this.ox + 4), this.ox + this.bw - tw - 4);
-      const ly = Math.max(this.oy + 4, py - cs * 0.9 - th);
+      // above the thing, else below, right or left: wherever it covers least of the dashed path (23.10:
+      // "Orchard — give it water" lay right on it), the things in the valley and the labels already placed
+      const path = ghost ? [ghost.from, ...ghost.cells].map((c) => this.center(c)) : [];
+      const objs = this.g.objects.map((o) => this.center(o.y * this.g.W + o.x));
+      const fitX = (x) => Math.min(Math.max(x, this.ox + 4), this.ox + this.bw - tw - 4);
+      const fitY = (y) => Math.min(Math.max(y, this.oy + 4), this.oy + this.bh - th - 4);
+      const spots = [
+        [fitX(px - tw / 2), fitY(py - cs * 0.9 - th), 'up'],
+        [fitX(px - tw / 2), fitY(py + cs * 0.9), 'down'],
+        [fitX(px + cs * 0.9), fitY(py - th / 2), 'side'],
+        [fitX(px - cs * 0.9 - tw), fitY(py - th / 2), 'side'],
+      ];
+      const near = (pts, x, y, m) => pts.filter(([qx, qy]) => qx > x - m && qx < x + tw + m && qy > y - m && qy < y + th + m).length;
+      const score = ([x, y]) =>
+        near(path, x, y, cs * 0.6) * 2 + near(objs, x, y, cs * 0.3) +
+        this.labelRects.filter(([bx, by, bw, bh]) => bx < x + tw && bx + bw > x && by < y + th && by + bh > y).length * 3;
+      let best = spots[0], least = score(spots[0]);
+      for (const p of spots.slice(1)) {
+        const n = score(p);
+        if (n < least) {
+          least = n;
+          best = p;
+        }
+      }
+      const [lx, ly, where] = best;
       this.labelRects.push([lx, ly, tw, th]);
       cx.strokeStyle = 'rgba(255,248,234,0.9)';
       cx.lineWidth = 2;
       cx.beginPath();
-      cx.moveTo(px, ly + th);
-      cx.lineTo(px, py - cs * 0.3);
+      if (where === 'side') {
+        const ex = lx > px ? lx : lx + tw;
+        cx.moveTo(ex, ly + th / 2);
+        cx.lineTo(px + (lx > px ? cs * 0.3 : -cs * 0.3), py);
+      } else {
+        cx.moveTo(px, ly > py ? ly : ly + th);
+        cx.lineTo(px, ly > py ? py + cs * 0.3 : py - cs * 0.3);
+      }
       cx.stroke();
       cx.fillStyle = 'rgba(0,0,0,0.35)';
       this.roundRect(lx + 1, ly + 2, tw, th, 8);
@@ -1073,7 +1151,31 @@ export class View {
     const seg = f * (pts.length - 1);
     const k = Math.min(Math.floor(seg), pts.length - 2);
     const [x1, y1] = pts[k], [x2, y2] = pts[k + 1];
-    this.ball(lerp(x1, x2, seg - k), lerp(y1, y2, seg - k), cs * 0.3, '#ffffff', '#d9d2c4', 0.3);
+    const hx = lerp(x1, x2, seg - k), hy = lerp(y1, y2, seg - k);
+    this.ball(hx, hy, cs * 0.3, '#ffffff', '#d9d2c4', 0.3);
+    if (this.handOn) this.hand(hx, hy, now % T, T);
+  }
+
+  // a pointing hand, its fingertip at (x, y): it comes down, drags, and lifts at the end
+  hand(x, y, t, T) {
+    const cx = this.cx;
+    const s = Math.max(34, Math.min(64, this.cs * 1.25));
+    const down = t < 500 ? t / 500 : t > T - 600 ? Math.max(0, (T - t - 300) / 300) : 1;
+    const lift = (1 - down) * s * 0.35;
+    cx.save();
+    cx.globalAlpha = 0.25 + 0.75 * Math.min(1, t / 250) * (t > T - 300 ? (T - t) / 300 : 1);
+    cx.font = `${s}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+    cx.textAlign = 'center';
+    cx.textBaseline = 'top';
+    cx.shadowColor = 'rgba(0,0,0,0.45)';
+    cx.shadowBlur = 6;
+    cx.shadowOffsetY = 3;
+    // the emoji's fingertip is near the top middle of its box
+    const sc = 1 + 0.12 * (1 - down);
+    cx.translate(x + s * 0.08, y - s * 0.06 + lift);
+    cx.scale(sc, sc);
+    cx.fillText('👆', 0, 0);
+    cx.restore();
   }
 }
 

@@ -11,11 +11,14 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const hash = (f) => crypto.createHash('sha1').update(fs.readFileSync(path.join(root, f))).digest('hex').slice(0, 8);
 const js = fs.readdirSync(path.join(root, 'js')).filter((f) => f.endsWith('.js')).sort();
 const map = Object.fromEntries(js.map((f) => [`./js/${f}`, `./js/${f}?v=${hash('js/' + f)}`]));
-const block = `<script type="importmap">${JSON.stringify({ imports: map })}</script>`;
+// every module the game needs is asked for at once, right after the map (a preload before the map
+// would freeze it): no waterfall main -> sim -> util over a slow phone network (23.10)
+const preload = js.filter((f) => f !== 'boot.js').map((f) => `<link rel="modulepreload" href="${map['./js/' + f]}">`).join('\n');
+const block = `<script type="importmap">${JSON.stringify({ imports: map })}</script>\n${preload}`;
 
 const file = path.join(root, 'index.html');
 let html = fs.readFileSync(file, 'utf8');
-html = html.replace(/<script type="importmap">.*?<\/script>\n?/s, '');
+html = html.replace(/<script type="importmap">.*?<\/script>\n?/s, '').replace(/<link rel="modulepreload"[^>]*>\n?/g, '');
 html = html.replace(/<link rel="stylesheet" href="style\.css[^"]*">/, `<link rel="stylesheet" href="style.css?v=${hash('style.css')}">`);
 html = html.replace(/<script type="module" src="(\.\/)?js\/main\.js[^"]*"><\/script>/,`${block}\n<script type="module" src="${map['./js/main.js']}"></script>`);
 fs.writeFileSync(file, html);

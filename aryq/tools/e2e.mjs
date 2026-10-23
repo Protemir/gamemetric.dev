@@ -645,10 +645,97 @@ try {
     await B.open(page('&lang=ru&seed=1004'), w, h);
     await clickText('Играть');
     await wait(300);
-    await B.js(`${A}.g.harvest = 300; ${A}.g.objects.forEach((o) => (o.thirst = 1.5)); ${A}.step(0.2)`);
+    await B.js(`${A}.g.harvest = 300; ${A}.g.objects.forEach((o) => (o.thirst = 1.5)); ${A}.g.shield = 0; ${A}.step(0.2)`);
     await wait(500);
     r = await B.js(`(() => { const p = document.querySelector('#ui .panel.over').getBoundingClientRect(); const out = [...document.querySelectorAll('#ui .panel.over button')].filter((b) => { const q = b.getBoundingClientRect(); return q.top < 0 || q.bottom > innerHeight; }).length; return JSON.stringify({ top: Math.round(p.top), bottom: Math.round(p.bottom), vh: innerHeight, out, up: !!document.querySelector('#ui .village-up') }); })()`).then(JSON.parse);
     check(`the game-over panel fits a ${w}x${h} screen`, r.up && r.top >= 0 && r.bottom <= r.vh && r.out === 0, JSON.stringify(r));
+  }
+  await B.init('');
+  // 10g. the first minute of a brand-new player (23.10: on CrazyGames many left without digging once,
+  // and a dozen lost the easy valley in the first two minutes)
+  {
+    const Sim = await import('../js/sim.js');
+    // the very first game: nothing can dry up before day 45 of year 1, thirst grows slower; later games
+    // keep only the slower thirst, and from the fourth on there is no head start
+    const dryRun = (first, days) => {
+      const g = Sim.newGame(16, 26, 11, 'wide');
+      if (first != null) Sim.giveHeadStart(g, first);
+      Sim.advance(g, 0.01);
+      g.events.length = 0;
+      let lostAt = null;
+      for (let d = 0; d < days && !g.over; d += 0.25) {
+        Sim.advance(g, 0.25);
+        if (g.over && lostAt == null) lostAt = g.day;
+      }
+      return { lostAt, thirst: Math.max(...g.objects.map((o) => o.thirst)) };
+    };
+    const plain = dryRun(null, 60), first = dryRun(true, 44), firstLater = dryRun(true, 80), second = dryRun(false, 60);
+    check('a dry orchard is lost in the plain game, never before day 45 in the first one, later in the second',
+      plain.lostAt != null && first.lostAt == null && first.thirst <= 0.95 && firstLater.lostAt != null && firstLater.lostAt >= 45 && second.lostAt > plain.lostAt,
+      JSON.stringify({ plain: plain.lostAt, first: first.lostAt, firstLater: firstLater.lostAt, second: second.lostAt }));
+    const g = Sim.newGame(16, 26, 11, 'wide');
+    Sim.giveHeadStart(g, true);
+    const back = Sim.load(JSON.parse(JSON.stringify(Sim.save(g))));
+    check('the head start survives a save', back.mercy === 0.6 && back.shield === 45, `${back.mercy} ${back.shield}`);
+  }
+  for (const [w, h, seed] of [[390, 844, 1004], [924, 520, 1004], [390, 844, 7], [844, 390, 21]]) {
+    await B.init('try { localStorage.clear(); } catch {}');
+    await B.open(page(`&lang=ru&seed=${seed}`), w, h);
+    await clickText('Играть');
+    await wait(900);
+    r = await B.js(`(() => { const a = ${A}, v = a.view, gh = a.state.ghost; if (!gh) return JSON.stringify({ ghost: false });
+      const pts = [gh.from, ...gh.cells].map((c) => v.center(c));
+      const under = (v.labelRects || []).reduce((n, [x, y, bw, bh]) => n + pts.filter(([px, py]) => px > x && px < x + bw && py > y && py < y + bh).length, 0);
+      return JSON.stringify({ ghost: true, hand: a.state.hand, labels: (v.labelRects || []).length, under, mercy: a.g.mercy, shield: a.g.shield }); })()`).then(JSON.parse);
+    check(`a new player on ${w}x${h}: the hand shows the path, no label covers it, the first game has a head start`, r.ghost && r.hand && r.labels >= 2 && r.under === 0 && r.mercy === 0.6 && r.shield === 45, JSON.stringify(r));
+    if (w !== 390 || seed !== 1004) continue;
+    // two taps instead of a pull: the first says to pull, the second digs the first canal along the path
+    const [sx, sy] = await B.js(`JSON.stringify(${A}.view.center(${A}.state.ghost.from))`).then(JSON.parse);
+    await mouse('mousePressed', sx, sy);
+    await mouse('mouseReleased', sx, sy);
+    await wait(150);
+    const tip1 = await B.js(`JSON.stringify({ hint: document.getElementById('hint').textContent, strokes: ${A}.g.strokes.length })`).then(JSON.parse);
+    await mouse('mousePressed', sx, sy);
+    await mouse('mouseReleased', sx, sy);
+    await wait(1200);
+    r = await B.js(`JSON.stringify({ strokes: ${A}.g.strokes.length, s: ${A}.g.objects[0].s, hint: document.getElementById('hint').textContent })`).then(JSON.parse);
+    check('a tapping new player is told to pull, then the first canal digs itself and waters the orchard', /тяни/.test(tip1.hint) && tip1.strokes === 0 && r.strokes === 1 && r.s >= 0.6 && /Вот так/.test(r.hint), JSON.stringify([tip1, r]));
+    // ripe apples (23.10): while every orchard drinks one now and then hangs over a happy orchard; a tap
+    // picks it for +5 and digs nothing; none in winter
+    await B.js(`${A}.state.ripeT = 10`);
+    let apple = null;
+    for (let k = 0; k < 12 && !apple; k++) {
+      await wait(150);
+      apple = await B.js(`${A}.state.ripe.length ? JSON.stringify(${A}.view.applePos(${A}.state.ripe[0].o, ${A}.state.ripe[0].age)) : null`);
+    }
+    if (apple) {
+      const [ax, ay] = JSON.parse(apple);
+      const h0 = await B.js(`${A}.g.harvest`);
+      const tipA = await B.js(`document.getElementById('hint').textContent`);
+      await mouse('mousePressed', ax, ay);
+      await mouse('mouseReleased', ax, ay);
+      await wait(200);
+      r = await B.js(`JSON.stringify({ gain: Math.round(${A}.g.harvest - ${h0}), ripe: ${A}.state.ripe.length, strokes: ${A}.g.strokes.length, cur: !!${A}.g.cur })`).then(JSON.parse);
+      check('a ripe apple comes while all drink, a tap picks it for +5 and digs nothing', /яблоко/.test(tipA) && r.gain >= 5 && r.gain <= 6 && r.ripe === 0 && r.strokes === 1 && !r.cur, JSON.stringify({ tipA, ...r }));
+    } else check('a ripe apple comes while all drink, a tap picks it for +5 and digs nothing', false, 'no apple');
+    await B.js(`${A}.state.ripeT = 10; ${A}.g.day = ${A}.S.WINTER + 1`);
+    await wait(600);
+    check('no ripe apples in winter', (await B.js(`${A}.state.ripe.length`)) === 0);
+    // once the player has watered orchards the taps do nothing of the sort
+    await B.init(`try { localStorage.clear(); localStorage.setItem('aryq.taught', '5'); localStorage.setItem('aryq.played', '4'); } catch {}`);
+    await B.open(page(`&lang=ru&seed=${seed}`), w, h);
+    await clickText('Играть');
+    await wait(900);
+    r = await B.js(`JSON.stringify({ hand: ${A}.state.hand, mercy: ${A}.g.mercy || 0, shield: ${A}.g.shield || 0, from: ${A}.state.ghost ? ${A}.view.center(${A}.state.ghost.from) : null })`).then(JSON.parse);
+    if (r.from) {
+      for (let k = 0; k < 2; k++) {
+        await mouse('mousePressed', ...r.from);
+        await mouse('mouseReleased', ...r.from);
+        await wait(150);
+      }
+    }
+    const later = await B.js(`${A}.g.strokes.length`);
+    check('a player who knows the game: no hand, no head start, taps dig nothing', !r.hand && r.mercy === 0 && r.shield === 0 && later === 0, JSON.stringify({ ...r, strokes: later }));
   }
   await B.init('');
   // a careless player for five years against the rules: water downhill and adding up, saves that
@@ -663,7 +750,9 @@ try {
 
 
   // a 320 px phone: the season card keeps its words next to the buttons (19.10: it showed "Ле")
+  await B.init('try { localStorage.clear(); } catch {}');
   await B.open(page('&lang=ru&seed=1004'), 320, 568);
+  await B.init('');
   await clickText('Играть');
   await wait(250);
   r = await B.js(`(() => { const s = document.querySelector('.hud-season').getBoundingClientRect(), n = document.getElementById('seasonName').getBoundingClientRect(); return JSON.stringify({ card: Math.round(s.width), nameRight: Math.round(n.right), cardRight: Math.round(s.right) }); })()`).then(JSON.parse);
@@ -675,8 +764,12 @@ try {
   await B.js(`location.reload()`);
   await wait(1200);
   r = await B.js(`(() => { const t = performance.now(); [...document.querySelectorAll('button')].find((x) => x.className === 'btn').click(); return Math.round(performance.now() - t); })()`);
-  await wait(2500);
-  const sharp = await B.js(`${A}.view.terrain.width`);
+  // (23.10: the first look is painted coarse so the game starts at once, the sharp one comes within seconds)
+  let sharp = 0;
+  for (let k = 0; k < 24 && sharp < 1000; k++) {
+    await wait(250);
+    sharp = await B.js(`${A}.view.terrain ? ${A}.view.terrain.width : 0`);
+  }
   check('Play starts in under a second on a 2x phone, the sharp ground follows', r < 1000 && sharp >= 1000, `${r} ms, ground ${sharp} px wide`);
   await B.cdp('Emulation.clearDeviceMetricsOverride');
 
@@ -823,7 +916,7 @@ try {
   await wait(1200);
   const villageHint = await B.js(`document.getElementById('hint').textContent`);
   check('a new game starts with the village bonus and says so', r.dig === 35 && /Аул даёт/.test(villageHint), `${r.dig} ⛏, "${villageHint}"`);
-  await B.js(`${A}.g.harvest = 300; ${A}.g.objects.forEach((o) => (o.thirst = 1.5)); ${A}.step(0.2)`);
+  await B.js(`${A}.g.harvest = 300; ${A}.g.objects.forEach((o) => (o.thirst = 1.5)); ${A}.g.shield = 0; ${A}.step(0.2)`);
   await wait(700);
   r = await B.js(`JSON.stringify({ village: +localStorage.getItem('aryq.village'), text: (document.querySelector('#ui .village') || {}).innerText || '' })`).then(JSON.parse);
   check('the loss puts the harvest into the village and shows the level up', r.village === 2700 && /уровень 2/.test(r.text) && /Аул вырос/.test(r.text), JSON.stringify(r));

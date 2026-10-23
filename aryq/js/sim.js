@@ -454,15 +454,31 @@ export function advance(g, days) {
   }
 }
 
+// A head start for a new player's first games (23.10: on CrazyGames a dozen of ~160 lost the easy
+// valley in the first two minutes, before they had learned anything). In year 1 thirst grows slower
+// (mercy, a share of DRY), and in the very first game nothing can dry up before day `shield` of year 1:
+// the red ring still fills and warns, it just stops short.
+export function giveHeadStart(g, firstEver) {
+  g.mercy = 0.6;
+  g.shield = firstEver ? 45 : 0;
+}
+
 function tick(g, dt) {
   flowStep(g);
   const sleeping = g.day >= WINTER;
+  const dry = DRY * (g.mercy && g.year === 1 ? g.mercy : 1);
+  // when the shield ends the orchards held at the edge get a few more days, not all dry up at once
+  if (g.shield && (g.year > 1 || g.day >= g.shield)) {
+    for (const o of g.objects) o.thirst = Math.min(o.thirst, 0.7);
+    g.shield = 0;
+  }
+  const cap = g.shield && g.year === 1 && g.day < g.shield ? 0.95 : 1;
   for (const o of g.objects) {
     const s = o.need > 0 ? clamp(o.got / o.need, 0, 1) : 1;
     o.s = s;
     if (!sleeping) {
-      const d = s < ENOUGH ? (DRY * (ENOUGH - s)) / ENOUGH : (-WET * (s - ENOUGH)) / (1 - ENOUGH);
-      o.thirst = clamp(o.thirst + d * dt * (o.type === 'house' ? 0.6 : 1), 0, 1);
+      const d = s < ENOUGH ? (dry * (ENOUGH - s)) / ENOUGH : (-WET * (s - ENOUGH)) / (1 - ENOUGH);
+      o.thirst = clamp(o.thirst + d * dt * (o.type === 'house' ? 0.6 : 1), 0, cap);
       if (o.type === 'garden' && s >= ENOUGH) g.harvest += dt;
     }
     if (o.type === 'house') {
@@ -721,7 +737,7 @@ export function save(g) {
     objects: g.objects.map(({ type, x, y, need, thirst, flood, born, tap, got, grown }) => ({ type, x, y, need, thirst, flood, born, tap, got, grown })),
     flow: Array.from(g.flow, (v) => Math.round(v * 1000) / 1000),
     day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
-    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0, banked: g.banked || 0, dugCount: g.dugCount || 0, nextFind: g.nextFind || 5, finds: g.finds || 0,
+    nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0, banked: g.banked || 0, dugCount: g.dugCount || 0, nextFind: g.nextFind || 5, finds: g.finds || 0, mercy: g.mercy || 0, shield: g.shield || 0,
   };
 }
 
@@ -759,6 +775,8 @@ export function load(d) {
   g.giftDue = d.giftDue === g.year ? g.year : 0;
   g.banked = Number.isFinite(d.banked) ? d.banked : 0;
   g.revived = d.revived || 0;
+  g.mercy = Number.isFinite(d.mercy) ? d.mercy : 0;
+  g.shield = Number.isFinite(d.shield) ? d.shield : 0;
   g.rand = rng((d.seed ^ (d.year * 7919) ^ (d.gardensEver * 104729)) >>> 0);
   g.order = null;
   g.events = [];

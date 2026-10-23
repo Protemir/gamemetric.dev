@@ -48,7 +48,7 @@ try {
       await B.js(`${A}.g.day = 112; ${A}.view.zoomAt(2.2, ${w / 2}, ${h / 2})`);
       await sleep(400);
       await B.shot(name('07-winter-zoom'));
-      await B.js(`${A}.view.zoomAt(1, 0, 0); ${A}.g.day = 50; ${A}.g.objects.forEach((o) => (o.thirst = 1.5)); ${A}.step(0.2)`);
+      await B.js(`${A}.view.zoomAt(1, 0, 0); ${A}.g.day = 50; ${A}.g.objects.forEach((o) => (o.thirst = 1.5)); ${A}.g.shield = 0; ${A}.step(0.2)`);
       await sleep(700);
       await B.shot(name('08-over'));
     }

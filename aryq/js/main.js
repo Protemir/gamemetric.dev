@@ -61,6 +61,10 @@ function start(m = mode, restored = null) {
   paused = false;
   state.ghost = null;
   state.calmShown = false;
+  state.taps = 0;
+  state.ripe = [];
+  state.ripeT = 0;
+  state.picked = 0;
   state.startedAt = performance.now();
   state.firstWet = 0;
   g.restored = !!restored;
@@ -71,6 +75,12 @@ function start(m = mode, restored = null) {
   if (!restored) S.advance(g, 0.01); // the first garden appears
   pulse('start', restored ? m + ':resume' : m);
   // the village's levels make every new game start better (not the valley of the day: it is the same for all)
+  // the first three games give a head start, the very first cannot be lost in its first ~2 minutes
+  if (!restored && m !== 'daily') {
+    const played = store.get('aryq.played', 0);
+    if (played < 3) S.giveHeadStart(g, played === 0);
+    store.set('aryq.played', played + 1);
+  }
   const vl = S.villageLevel(store.get('aryq.village', 0));
   if (!restored && m !== 'daily' && vl > 0) {
     S.applyVillage(g, vl);
@@ -226,6 +236,9 @@ const TEXT = {
     daily: 'Долина дня',
     dailySub: 'одна на всех сегодня, {d}',
     bestShort: 'рекорд {b}',
+    pullTip: 'Не тапай, а тяни: зажми у реки и веди пальцем к саду.',
+    autoDug: 'Вот так! Арык ведут пальцем от реки к саду. Следующий — сам.',
+    ripeTip: 'Спелое яблоко! Нажми на него: +{n} 🍏',
     find_coins: '+{n} 🍏 монеты!',
     find_jug: '+{n} ⛏ старый кувшин',
     find_spring: 'родник! воды больше',
@@ -345,6 +358,9 @@ const TEXT = {
     daily: 'Valley of the day',
     dailySub: 'the same for everyone today, {d}',
     bestShort: 'best {b}',
+    pullTip: "Don't tap, pull: press by the river and drag to the orchard.",
+    autoDug: 'Like this! Drag a canal from the river to the orchard. The next one is yours.',
+    ripeTip: 'A ripe apple! Tap it: +{n} 🍏',
     find_coins: '+{n} 🍏 coins!',
     find_jug: '+{n} ⛏ an old jug',
     find_spring: 'a spring! more water',
@@ -445,6 +461,8 @@ cv.addEventListener('pointerdown', (e) => {
   cv.setPointerCapture(e.pointerId);
   const r = cv.getBoundingClientRect();
   press = { cell: c, tapped: c, moved: false, x: e.clientX - r.left, y: e.clientY - r.top };
+  press.apple = ripeAt(press.x, press.y);
+  if (press.apple) return;
   // an orchard or a yurt is drawn as big as its cell: a press near its edge still means it
   press.obj = g.objAt[c] || null;
   if (!press.obj && !S.isWater(g, c)) {
@@ -682,6 +700,25 @@ cv.addEventListener('wheel', (e) => {
   view.zoomAt(view.zoom * Math.exp(-e.deltaY * 0.0015), e.clientX - rr.left, e.clientY - rr.top);
 }, { passive: false });
 
+// A new player who taps instead of pulling (23.10: on CrazyGames most of those who left in the first
+// minute never dug at all): the first tap says to pull; on the second the first canal digs itself
+// along the dashed path, so the first orchard drinks and the player sees how it goes.
+function autoDig() {
+  if (g.strokes.length || g.cur || !state.ghost || store.get('aryq.taught', 0) > 0) return false;
+  state.taps = (state.taps || 0) + 1;
+  if (state.taps < 2) {
+    say(t('pullTip'), 4500);
+    return true;
+  }
+  const gh = state.ghost;
+  if (!S.startStroke(g, gh.from)) return false;
+  for (const c of gh.cells) if (!ext(c).ok) break;
+  S.endStroke(g);
+  state.ghostAt = 0;
+  say(t('autoDug'), 6000);
+  return true;
+}
+
 function release() {
   // the tip about light cells is for while digging; once the finger is up it is only in the way
   if (hintEl.textContent === t('lit')) {
@@ -690,6 +727,16 @@ function release() {
   }
   if (!press || !g) return;
   state.reach = null;
+  if (!press.moved && press.apple) {
+    pickApple(press.apple);
+    press = null;
+    return;
+  }
+  if (!press.moved && autoDig()) {
+    press = null;
+    updateHud();
+    return;
+  }
   if (!press.moved && press.obj) {
     // a tap on an orchard or a yurt shows how to bring it water
     const o = press.obj;
@@ -1070,7 +1117,7 @@ function pickGhost(now, force) {
   const learning = taught < 3;
   // for the next few orchards the path still comes soon, not only when it is nearly dry
   // (19.10: a new player waited ~20 s at the 4th orchard with only a drop to go by)
-  const soon = taught < 8 ? 0.12 : 0.45;
+  const soon = (taught < 8 ? 0.12 : 0.45) * (g.mercy && g.year === 1 ? g.mercy : 1); // as soon in seconds with the head start
   let target = null;
   if (g.day < S.WINTER) {
     for (const o of g.objects) {
@@ -1143,6 +1190,50 @@ function listen(g) {
 
 // ---------- loop ----------
 
+// Ripe apples (22.10): while every garden drinks there was nothing to do for 10–30 s at a time, and
+// most players left in the first two minutes. Now and then a happy orchard shows a ripe apple; a tap
+// picks it for a few apples of harvest. It does not hurry the year, it gives the hands something.
+const RIPE = { gain: 5, every: 4.5, life: 9, max: 2 };
+function ripen(dt) {
+  for (const a of state.ripe) a.age += dt;
+  state.ripe = state.ripe.filter((a) => a.age < RIPE.life && a.o.s >= 0.6 && g.objects.includes(a.o) && g.day < S.WINTER);
+  if (!state.calm || g.day >= S.WINTER) return;
+  state.ripeT += dt;
+  if (state.ripeT < RIPE.every || state.ripe.length >= RIPE.max) return;
+  const free = g.objects.filter((o) => o.type === 'garden' && o.s >= 0.6 && !state.ripe.some((a) => a.o === o));
+  if (!free.length) return;
+  state.ripeT = 0;
+  state.ripe.push({ o: free[Math.floor(Math.random() * free.length)], age: 0 });
+  if (!told.get('ripeTip')) {
+    told.set('ripeTip', 1);
+    say(t('ripeTip', { n: RIPE.gain }), 5000);
+  }
+}
+function ripeAt(x, y) {
+  let best = null, bd = Math.max(28, view.cs * 0.9);
+  for (const a of state.ripe || []) {
+    const [ax, ay] = view.applePos(a.o, a.age);
+    const d = Math.hypot(ax - x, ay - y);
+    if (d < bd) {
+      bd = d;
+      best = a;
+    }
+  }
+  return best;
+}
+function pickApple(a) {
+  state.ripe = state.ripe.filter((b) => b !== a);
+  if (!g.objects.includes(a.o)) return;
+  const cell = a.o.y * W + a.o.x;
+  g.harvest += RIPE.gain;
+  state.picked += 1;
+  view.float(cell, '+' + RIPE.gain + ' 🍏');
+  view.burst(cell, 'coin');
+  sfx.watered();
+  if (hintEl.textContent === t('ripeTip', { n: RIPE.gain })) hintUntil = 0;
+  updateHud();
+}
+
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
@@ -1182,6 +1273,7 @@ function frame(now) {
         showYear(ev);
       }
     }
+    if (!paused && !g.over && !hud.hidden) ripen(dt);
     pickGhost(now);
     coach(now);
     listen(g);
@@ -1190,6 +1282,7 @@ function frame(now) {
     if (state.hintPath && now > state.hintPath.until) state.hintPath = null;
     if (state.labels && now > state.labels.until) state.labels = null;
     state.startLabel = t('startHere');
+    state.hand = store.get('aryq.taught', 0) < 3;
     const wait = Math.max(1, Math.ceil(((S.DIG_REGEN - (g.digTimer || 0)) * S.DAY_SEC) / speed));
     state.tags = { high: t('tagHigh'), up: t('tagHigh'), tired: g.dig < 1 && g.cur ? t('tagTiredIn', { s: wait }) : t('tagTired'), object: t('tagObject'), ice: t('tagIce') };
     view.draw(g, now, state);
