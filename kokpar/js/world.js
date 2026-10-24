@@ -13,14 +13,21 @@ const P = new URLSearchParams(location.search);
 const Q = P.get('q') || (() => { try { return localStorage.getItem('kokpar.q'); } catch { return null; } })() || (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high');
 const PR_MAX = Math.min(devicePixelRatio, Q === 'high' ? 2 : Q === 'medium' ? 1.5 : 1);
 // авто-разрешение: если кадров мало — рисуем в меньшем разрешении, стало легче — возвращаем
-const autoRes = { pr: PR_MAX, slow: 0, fast: 0 };
+const autoRes = { pr: PR_MAX, slow: 0, fast: 0, lite: 0 };
+// разрешение уже минимальное, а кадров всё равно мало — снимаем дорогое: сначала тени, потом траву.
+// 24.10: при <30 кадров первый матч бросали 22 из 35, при 45+ — 58 из 135. Дошли до травы — в следующий раз сразу «низкое».
+const LITE = [() => { sun.castShadow = false; }, () => { LITE.grass?.(); try { localStorage.setItem('kokpar.q', 'low'); } catch { /* закрыто */ } }];
 function tuneRes(dt) {
   if (P.has('fixres')) return;
   const fps = 1 / Math.max(dt, 1e-3);
   autoRes.slow = fps < 32 ? autoRes.slow + dt : 0;
   autoRes.fast = fps > 56 ? autoRes.fast + dt : 0;
   let pr = autoRes.pr;
-  if (autoRes.slow > 2.5) { pr = Math.max(0.6, pr - 0.15); autoRes.slow = 0; }
+  if (autoRes.slow > 1.5) { // быстрее вниз: при 20 кадрах первая минута матча не должна пройти в слайдшоу
+    autoRes.slow = 0;
+    if (pr > 0.6) pr = Math.max(0.6, pr - 0.25);
+    else if (autoRes.lite < LITE.length) LITE[autoRes.lite++]();
+  }
   if (autoRes.fast > 6) { pr = Math.min(PR_MAX, pr + 0.1); autoRes.fast = 0; }
   if (pr !== autoRes.pr) { autoRes.pr = pr; renderer.setPixelRatio(pr); renderer.setSize(view.w, view.h); }
 }
@@ -287,6 +294,7 @@ if (GRASS) {
   }
   grass.receiveShadow = true;
   if (!OFF.has('grass')) scene.add(grass);
+  LITE.grass = () => { grass.visible = false; };
 }
 function mergeQuads(list) {
   const pos = [], uv = [], nor = [], idx = [];

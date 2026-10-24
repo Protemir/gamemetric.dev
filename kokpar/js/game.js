@@ -633,7 +633,7 @@ function playerInput(dt) {
     h.gait = keys.KeyW || keys.ArrowUp || keys.KeyZ ? 4 : keys.KeyS || keys.ArrowDown ? 0 : h.steer ? 1 : 0;
     if (h.rearClock != null) h.gait = 0; // во время свечки стоит
   }
-  autoRide = rookie && !rodeOnce && !audar && !jamby && !online.role && state.phase === 'play' && (idleT += dt) > 2.5;
+  autoRide = rookie && !rodeOnce && !audar && !jamby && !online.role && state.phase === 'play' && (idleT += dt) > 1.5;
   if (autoRide && h.rearClock == null) h.gait = 3; // стоит без дела — конь сам трогается кентером, рулит помощь ниже
   if (jamby && h.gait > 3) h.gait = 3; // жамбы ату — на ровном кентере: шаг ~0,5 с, ритм ловится
   if (rookie && !audar && !jamby && h.gait >= 2 && !state.tug) {
@@ -667,7 +667,7 @@ function stepEnt(e, dt) {
   e.sprint = Math.max(0, e.sprint - dt);
   e.tugCD = Math.max(0, e.tugCD - dt); e.pickCD = Math.max(0, e.pickCD - dt); e.stun = Math.max(0, e.stun - dt);
   const tugging = state.tug && (state.tug.car === e || state.tug.att === e);
-  e.h.speedMul = (e.sprint > 0 ? 1.22 : 1) * (sack.carrier === e ? 0.9 : 1) * (e.stun > 0 ? 0.6 : 1) * (tugging ? 0.75 : 1) * (e.tired ? 0.82 : 1) * (e.team === 1 ? DIFF.speed : HB.speed) * (e.bot?.role === "chase" && !e.me ? e.boost || 1 : 1);
+  e.h.speedMul = (e.sprint > 0 ? 1.22 : 1) * (sack.carrier === e ? 0.9 : 1) * (e.stun > 0 ? 0.6 : 1) * (tugging ? 0.75 : 1) * (e.tired ? 0.82 : 1) * (e.team === 1 ? DIFF.speed * (rookieHero() ? 0.85 : 1) : HB.speed) * (e.bot?.role === "chase" && !e.me ? e.boost || 1 : 1);
 }
 function stepSack(dt) {
   if (audar || jamby) return; // в мини-режимах туши нет
@@ -879,7 +879,8 @@ function startAudar() {
   el.menu.hidden = true; el.tut.hidden = true; delete el.hint.dataset.keep;
   const foe = ents.find((e) => e.team === 1);
   modeOff();
-  audar = { foe, skill: Math.min(0.85, 0.35 + career.duels().w * 0.06), ang: 0, speed: 0, acc: 0 }; // каждая победа — соперник чуть смекалистей
+  const dw = career.duels().w;
+  audar = { foe, skill: Math.min(0.85, 0.35 + dw * 0.06), pow: Math.min(1, 0.8 + dw * 0.06), ang: 0, speed: 0, acc: 0 }; // каждая победа — соперник смекалистей и сильнее; в первых боях его рывок слабее (24.10: побеждали 10 из 39)
   onlyOnField([me, foe]);
   state.score = [0, 0]; state.clock = 999; state.golden = false; state.events = [];
   audarKick(true);
@@ -1165,7 +1166,7 @@ function audarStep(dt) {
   const wasGrip = S.grip;
   while (A.acc >= 1 / 60) { // своя физика — ровным шагом 1/60, как в тестах
     A.acc -= 1 / 60;
-    if (AUD.botWants(S, 'b', A.skill, rnd) && AUD.tap(S, 'b')) audarYankFx(foe);
+    if (AUD.botWants(S, 'b', A.skill, rnd) && AUD.tap(S, 'b')) { S.b.force *= A.pow; audarYankFx(foe); }
     AUD.step(S, 1 / 60);
     if (S.over) break;
   }
