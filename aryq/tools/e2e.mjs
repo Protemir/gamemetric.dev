@@ -712,6 +712,13 @@ try {
       const under = (v.labelRects || []).reduce((n, [x, y, bw, bh]) => n + pts.filter(([px, py]) => px > x && px < x + bw && py > y && py < y + bh).length, 0);
       return JSON.stringify({ ghost: true, hand: a.state.hand, labels: (v.labelRects || []).length, under, mercy: a.g.mercy, shield: a.g.shield }); })()`).then(JSON.parse);
     check(`a new player on ${w}x${h}: the hand shows the path, no label covers it, the first game has a head start`, r.ghost && r.hand && r.labels >= 2 && r.under === 0 && r.mercy === 0.6 && r.shield === 45, JSON.stringify(r));
+    if (w === 924) {
+      // one who touches nothing (24.10): after ~3 s of the valley on screen the first canal digs itself
+      // under the hand and the first orchard drinks within the first ten seconds
+      await wait(4600);
+      r = await B.js(`JSON.stringify({ strokes: ${A}.g.strokes.length, wet: ${A}.g.objects.filter((o) => o.s >= 0.6).length, f: ${A}.state.firstWet, demo: !!${A}.state.demo, hint: document.getElementById('hint').textContent })`).then(JSON.parse);
+      check('a new player who touches nothing sees the first canal dig itself and the orchard drink in under 10 s', r.strokes === 1 && r.wet >= 1 && r.f === 1 && !r.demo && /Вот так/.test(r.hint), JSON.stringify(r));
+    }
     if (w !== 390 || seed !== 1004) continue;
     // two taps instead of a pull: the first says to pull, the second digs the first canal along the path
     const [sx, sy] = await B.js(`JSON.stringify(${A}.view.center(${A}.state.ghost.from))`).then(JSON.parse);
@@ -721,7 +728,7 @@ try {
     const tip1 = await B.js(`JSON.stringify({ hint: document.getElementById('hint').textContent, strokes: ${A}.g.strokes.length })`).then(JSON.parse);
     await mouse('mousePressed', sx, sy);
     await mouse('mouseReleased', sx, sy);
-    await wait(1200);
+    await wait(2500);
     r = await B.js(`JSON.stringify({ strokes: ${A}.g.strokes.length, s: ${A}.g.objects[0].s, hint: document.getElementById('hint').textContent })`).then(JSON.parse);
     check('a tapping new player is told to pull, then the first canal digs itself and waters the orchard', /тяни/.test(tip1.hint) && tip1.strokes === 0 && r.strokes === 1 && r.s >= 0.6 && /Вот так/.test(r.hint), JSON.stringify([tip1, r]));
     // ripe apples (23.10): while every orchard drinks one now and then hangs over a happy orchard; a tap

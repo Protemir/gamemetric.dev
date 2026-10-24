@@ -599,6 +599,8 @@ export class View {
     this.labelRects = [];
     if (ui.labels) this.drawLabels(ui.labels, now, ui.ghost);
     if (ui.ghost) this.drawGhost(ui.ghost, now);
+    // the first canal digging itself for a new player: the hand pressed at its end
+    if (ui.demoTip != null) this.hand(...this.center(ui.demoTip), 600, 1600);
     if (ui.hintPath) this.drawGhost(ui.hintPath, now);
     if (ui.blocked && now - ui.blocked.at < 1400) {
       const [px, py] = this.center(ui.blocked.cell);

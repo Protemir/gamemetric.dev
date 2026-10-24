@@ -67,6 +67,9 @@ function start(m = mode, restored = null) {
   state.picked = 0;
   state.startedAt = performance.now();
   state.firstWet = 0;
+  state.demo = null;
+  state.demoTip = null;
+  state.seen = 0;
   g.restored = !!restored;
   state.harvestAtYear = 0;
   told.clear();
@@ -462,6 +465,7 @@ cv.addEventListener('pointerdown', (e) => {
   }
   sfx.audioInit();
   if (!g || g.over || paused) return;
+  if (state.demo) finishDemo();
   const c = toCell(e);
   if (c < 0) return;
   cv.setPointerCapture(e.pointerId);
@@ -710,19 +714,60 @@ cv.addEventListener('wheel', (e) => {
 // minute never dug at all): the first tap says to pull; on the second the first canal digs itself
 // along the dashed path, so the first orchard drinks and the player sees how it goes.
 function autoDig() {
+  if (state.demo) return true;
   if (g.strokes.length || g.cur || !state.ghost || store.get('aryq.taught', 0) > 0) return false;
   state.taps = (state.taps || 0) + 1;
   if (state.taps < 2) {
     say(t('pullTip'), 4500);
     return true;
   }
+  return startDemo();
+}
+
+// ... and one who does nothing at all (24.10: still a third of those who left in the first minute had
+// never touched the valley): after a few seconds of the valley on screen the first canal digs itself,
+// a cell at a time under the hand, so the water runs and the first orchard drinks within the first
+// ten seconds. A press on the valley finishes it at once and the press goes on as usual.
+const DEMO_AT = 3; // seconds of the valley on screen, not counting a hidden page, a panel or a pause
+const DEMO_STEP = 0.26; // seconds a cell, after the hand has pressed by the river for DEMO_HOLD
+const DEMO_HOLD = 0.45;
+function startDemo() {
   const gh = state.ghost;
-  if (!S.startStroke(g, gh.from)) return false;
-  for (const c of gh.cells) if (!ext(c).ok) break;
+  if (!gh || !S.startStroke(g, gh.from)) return false;
+  state.demo = { cells: gh.cells.slice(), i: 0, t: -DEMO_HOLD };
+  state.demoTip = gh.from;
+  state.ghost = null;
+  return true;
+}
+function finishDemo() {
+  const d = state.demo;
+  if (!d) return;
+  for (; d.i < d.cells.length; d.i++) if (!ext(d.cells[d.i]).ok) break;
   S.endStroke(g);
+  state.demo = null;
+  state.demoTip = null;
   state.ghostAt = 0;
   say(t('autoDug'), 6000);
-  return true;
+}
+function demo(dt) {
+  const d = state.demo;
+  if (d) {
+    if (paused || g.over) return;
+    d.t += dt;
+    while (d.i < d.cells.length && d.t >= DEMO_STEP * (d.i + 1)) {
+      if (!ext(d.cells[d.i]).ok) {
+        d.i = d.cells.length;
+        break;
+      }
+      state.demoTip = d.cells[d.i++];
+    }
+    if (d.i >= d.cells.length) finishDemo();
+    return;
+  }
+  if (g.restored || g.strokes.length || g.cur || press || !state.ghost || store.get('aryq.taught', 0) > 0) return;
+  if (paused || g.over || ui.firstChild || hud.hidden || document.hidden || !cv.clientWidth) return;
+  state.seen = (state.seen || 0) + dt;
+  if (state.seen >= DEMO_AT) startDemo();
 }
 
 function release() {
@@ -1302,6 +1347,7 @@ function frame(now) {
       state.goalTold = g.year;
       say(t('goalNew', { n: g.goalNeed, d: S.GOAL.dig, a: S.GOAL.apples }), 7000);
     }
+    demo(dt);
     pickGhost(now);
     coach(now);
     listen(g);
