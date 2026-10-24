@@ -29,7 +29,7 @@ const RU = {
   clockHold: 'Курултай: время пойдёт после советов',
   clock: (mm, n) => `Курултай через ${mm} · за тебя ${n} из 3 (нужно 2)`,
   c: {
-    send: 'Конь прежнего хана вернулся один. Начни с соседей Орды: нажми у руки.',
+    send: 'Конь прежнего хана вернулся один. Начни с соседей Орды: нажми на аул под стрелкой.',
     watch: 'Слово хана растекается к соседям.',
     more: (n) => `Ещё ${n}: туда, где колеблются.`,
     false: 'Без пунктира — не твой гонец. Лови!',
@@ -291,7 +291,7 @@ const EN = {
   clockHold: 'Kurultai: the clock starts after the advice',
   clock: (mm, n) => `Kurultai in ${mm} · ${n} of 3 with you (2 needed)`,
   c: {
-    send: "The old khan's horse came back alone. Start next to the Orda: tap by the hand.",
+    send: "The old khan's horse came back alone. Start next to the Orda: tap the pasture under the arrow.",
     watch: "The khan's word flows to the neighbours.",
     more: (n) => `${n} more: where they are undecided.`,
     false: 'No dotted line: not your rider. Catch him!',

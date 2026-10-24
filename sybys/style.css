@@ -673,3 +673,13 @@ button.busy { transform: translateY(2px) scale(0.98); filter: brightness(1.15); 
 /* the +N% sat on the clan's name or trait: it drops just under the chip instead, on every screen */
 .delta { top: auto; bottom: -17px; right: 4px; padding: 0 5px; border-radius: 4px; background: rgba(16, 10, 6, 0.85); line-height: 16px; font-size: 12px; animation-name: dropIn; z-index: 3; }
 @keyframes dropIn { from { transform: translateY(-6px); opacity: 0; } 20% { opacity: 1; } 75% { opacity: 1; } to { transform: translateY(3px); opacity: 0; } }
+
+/* the ending: each clan's face with its whip up or down */
+.endvotes { display: flex; justify-content: center; gap: 14px; margin: 6px 0 2px; }
+.endvotes .ev { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 3px; border: 1px solid var(--c); border-radius: 999px; background: rgba(22, 15, 10, 0.8); }
+.endvotes .ava { width: 30px; height: 30px; }
+.endvotes i { font-style: normal; font-size: 16px; line-height: 1; }
+.endvotes .yes { box-shadow: 0 0 10px rgba(243, 207, 122, 0.35); }
+.endvotes .yes i { color: var(--gold-hi); }
+.endvotes .no { opacity: 0.7; }
+.endvotes .no i { color: #e0805a; }

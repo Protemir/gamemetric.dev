@@ -65,7 +65,7 @@ try {
   };
   const handXY = () => B.js(`(() => { const s = ${A}; const r = s.g.map.regions[s.look.hand]; return r ? s.view.toScreen(r.x, r.y) : null; })()`);
   let st = await B.js(`JSON.stringify({ step: ${A}.coach.step, hold: ${A}.g.hold, said: document.getElementById('coach').innerText })`).then(JSON.parse);
-  check('lesson 1: Aria points at a pasture', st.step === 'send' && st.hold && st.said.includes('tap by the hand'), st.step);
+  check('lesson 1: Aria points at a pasture', st.step === 'send' && st.hold && st.said.includes('under the arrow'), st.step);
   // the bubble thins out over a pasture it would hide
   const thin = await B.js(`(async () => { const s = ${A}; const b = document.getElementById('coach').getBoundingClientRect(); const was = s.look.hand;
     const id = s.g.map.regions.findIndex((r) => { const [x, y] = s.view.toScreen(r.x, r.y); return x > b.left && x < b.right && y > b.top && y < b.bottom; });
@@ -202,6 +202,8 @@ try {
   t = await uiText();
   const end = await B.js(`${A}.g.result && ${A}.g.result.end`);
   check('an ending with its chronicle', !!end && t.includes('Chronicle') && t.includes('Another campaign') && t.includes('Glory'), end);
+  const ev = await B.js(`(() => { const v = ${A}.g.vote.votes; const s = [...document.querySelectorAll('.endvotes .ev')]; return s.length >= 3 && v.every((x, k) => s[k].classList.contains(x.yes ? 'yes' : 'no')) && document.querySelectorAll('.endvotes .yes').length === ${A}.g.result.yes; })()`);
+  check('the ending shows how each clan voted', ev === true, ev);
   await B.shot(path.join(out, 'end.png'));
   check('the ending is remembered', (await B.js(`localStorage.getItem('sybys.ends')`))?.includes(end));
 

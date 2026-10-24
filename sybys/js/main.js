@@ -997,7 +997,32 @@ function showEnd(rec) {
   const said = el('div', 'said');
   said.append(el('b', null, t.culpritWas(t.who[r.culprit])), el('p', r.nailed ? 'ok' : 'warn', r.nailed ? '✓ ' + t.named.right : r.named ? t.named.wrong(t.who[r.named]) : t.named.none));
   who.append(a, said);
-  box.append(who, el('p', 'small', t.endStat(r.score, r.yes)));
+  box.append(who);
+  // how each clan voted, readable without words: its face, ▲ for, ▼ against
+  if (g.vote) {
+    const row = el('div', 'endvotes');
+    for (const x of g.vote.votes) {
+      const s = el('span', 'ev ' + (x.yes ? 'yes' : 'no'));
+      s.style.setProperty('--c', `rgb(${TRIBE_RGB[x.tribe].join(',')})`);
+      s.title = tribeName(x.tribe);
+      const ava = el('div', 'ava');
+      ava.innerHTML = face(x.tribe);
+      s.append(ava, el('i', null, x.yes ? '▲︎' : '▼︎'));
+      row.append(s);
+    }
+    // the extra voice the elders' council adds (Orazbai) — so the faces add up to the count below
+    if (r.yes > g.vote.yes) {
+      const s = el('span', 'ev yes');
+      s.style.setProperty('--c', 'var(--gold)');
+      s.title = t.who.orazbai;
+      const ava = el('div', 'ava');
+      ava.innerHTML = face('orazbai');
+      s.append(ava, el('i', null, '▲︎'));
+      row.append(s);
+    }
+    box.append(row);
+  }
+  box.append(el('p', 'small', t.endStat(r.score, r.yes)));
   if (rec) {
     box.append(el('p', 'glory', t.gloryGain(rec.gained, rec.total)));
     for (const d of rec.newDeeds) box.append(el('p', 'deed', `✦ ${t.newDeed}: ${t.deeds[d][0]}`));
