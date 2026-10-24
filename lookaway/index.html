@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Не отворачивайся</title>
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+      #unity-canvas { position: fixed; inset: 0; width: 100%; height: 100%; background: #000; display: block; outline: none; }
+      #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+                 color: #6d6a64; font: 13px/1.4 system-ui, sans-serif; letter-spacing: .2em; pointer-events: none; }
+      #bar { width: 180px; height: 2px; background: #1a1a1a; }
+      #fill { width: 0; height: 100%; background: #8a857c; transition: width .15s; }
+      #err { position: fixed; left: 16px; right: 16px; bottom: 16px; color: #c66; font: 13px system-ui, sans-serif; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="loading"><div id="bar"><div id="fill"></div></div><div>НЕ ОТВОРАЧИВАЙСЯ</div></div>
+    <div id="err"></div>
+    <script>
+      // замер: время до первого кадра игры (игра пишет в лог FIRST_FRAME)
+      window.__lw = { t0: performance.now(), loaded: null, firstFrame: null };
+      // на localhost строки игры уходят на сервер (tools/serve.mjs печатает их) — для замеров FPS в обычном окне
+      var beacon = location.hostname === "localhost" ? function (s) { fetch("/log", { method: "POST", body: s }).catch(function () {}); } : null;
+      if (beacon) try {
+        var gl = document.createElement("canvas").getContext("webgl2"), ext = gl && gl.getExtension("WEBGL_debug_renderer_info");
+        beacon("gpu " + (ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "?") + " dpr=" + devicePixelRatio + " " + innerWidth + "x" + innerHeight);
+      } catch (e) {}
+      ["log", "info", "warn", "error"].forEach(function (k) {
+        var orig = console[k].bind(console);
+        console[k] = function () {
+          var s = arguments.length ? String(arguments[0]) : "";
+          if (beacon && (s.indexOf("[lookaway]") >= 0 || k === "error")) beacon(Math.round(performance.now()) + " " + s);
+          if (window.__lw.firstFrame === null && s.indexOf("FIRST_FRAME") >= 0) {
+            window.__lw.firstFrame = Math.round(performance.now());
+            orig("[lookaway] first frame at " + window.__lw.firstFrame + " ms");
+          }
+          return orig.apply(null, arguments);
+        };
+      });
+
+      var canvas = document.querySelector("#unity-canvas");
+      var buildUrl = "Build";
+      var config = {
+        arguments: [],
+        dataUrl: buildUrl + "/release.data.br",
+        frameworkUrl: buildUrl + "/release.framework.js.br",
+        codeUrl: buildUrl + "/release.wasm.br",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "gamemetric",
+        productName: "Lookaway",
+        productVersion: "1.0",
+        devicePixelRatio: 1,
+      };
+      var script = document.createElement("script");
+      script.src = buildUrl + "/release.loader.js";
+      script.onload = function () {
+        createUnityInstance(canvas, config, function (p) {
+          document.querySelector("#fill").style.width = (100 * p) + "%";
+        }).then(function (inst) {
+          window.__lw.loaded = Math.round(performance.now());
+          window.unityInstance = inst;
+          document.querySelector("#loading").remove();
+          canvas.focus();
+        }).catch(function (msg) {
+          document.querySelector("#err").textContent = String(msg);
+        });
+      };
+      document.body.appendChild(script);
+      canvas.addEventListener("mousedown", function () { canvas.focus(); });
+    </script>
+  </body>
+</html>
