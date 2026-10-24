@@ -20,7 +20,7 @@ let starts = 0; // сколько матчей и режимов начато з
 if ((P.get('no') || '').includes('ui')) document.documentElement.classList.add('noui'); // ?no=ui — замер без интерфейса
 const OFF_RIDERS = (P.get('no') || '').includes('riders'), NO_SHADOW_RIDERS = (P.get('no') || '').includes('rshadow');
 const MATCH_LEN = Number(P.get('len') || 180); // с
-const ROOKIE_LEN = 120; // первый матч в жизни игрока
+const ROOKIE_LEN = 120, SECOND_LEN = 150; // первый и второй матчи в жизни игрока (24.10: второй бросали на 4–7-й минуте, посреди полного матча)
 let rookie = false;
 let rodeOnce = false, idleT = 0, autoRide = false; // первый матч: пока новичок ничего не нажал, конь сам идёт к серке
 const rookieHero = () => rookie && !state.events.some((x) => x.t === 'goal' && x.me); // первый матч, игрок ещё не забил
@@ -1497,7 +1497,7 @@ function startMatch(how = '') {
   applyStage(); applyLang();
   el.menu.hidden = true;
   if (!SIM) pulse('start', 'cup:' + (rookie ? 'new' : 'p' + Math.min(career.played(), 20)) + ':n' + Math.min(++starts, 9) + how);
-  state.score = [0, 0]; state.clock = rookie ? ROOKIE_LEN : MATCH_LEN; state.golden = false; state.events = []; kickoff(true); // первый матч короче — новичок точно доходит до итогов и призовых
+  state.score = [0, 0]; state.clock = rookie ? ROOKIE_LEN : career.played() === 1 && !P.has('len') && !SIM ? SECOND_LEN : MATCH_LEN; state.golden = false; state.events = []; kickoff(true); // первый матч короче — новичок точно доходит до итогов и призовых
 }
 el.pause.addEventListener('click', (e) => {
   const b = e.target.closest('[data-p]');
