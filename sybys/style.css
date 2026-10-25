@@ -597,14 +597,16 @@ button:active:not(:disabled) { transform: scale(0.95); }
 @keyframes gain { 30% { box-shadow: 0 0 0 2px var(--gold-hi), 0 0 18px rgba(243, 207, 122, 0.6); transform: scale(1.06); } }
 
 /* the elder's temper on the clan chip */
-.tribe .tb { display: grid; grid-template-columns: 1fr auto; align-items: baseline; column-gap: 4px; }
+.tribe .tb { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto; align-items: baseline; column-gap: 4px; }
 .tribe .tb .bar { grid-column: 1 / -1; grid-row: 2; }
-.tribe .trait { grid-row: 1; grid-column: 2; font-size: 10px; font-family: var(--serif); font-style: italic; color: var(--gold); white-space: nowrap; }
+.tribe .trait { grid-row: 1; grid-column: 2; justify-self: end; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 10px; font-family: var(--serif); font-style: italic; color: var(--gold); white-space: nowrap; }
+/* on a wide chip the marks stand after the temper, not on top of it */
+.tribe .tb .fear { position: static; grid-row: 1; grid-column: 3; display: flex; gap: 1px; }
 .seat .trait { font-family: var(--serif); font-style: italic; color: var(--gold); }
 @media (max-width: 560px) { .tribe .trait { display: none; } }
 
 .tribe:has(.trait) { width: 184px; }
-@media (max-width: 1100px) { .tribe .trait { display: none; } .tribe:has(.trait) { width: 150px; } }
+@media (max-width: 1100px) { .tribe .trait { display: none; } .tribe:has(.trait) { width: 150px; } .tribe .tb .fear { position: absolute; right: 4px; top: 2px; } }
 @media (max-width: 760px), (max-height: 520px) { .tribe:has(.trait) { width: 112px; } }
 @media (max-width: 560px) { .tribe:has(.trait) { width: auto; } }
 
@@ -683,3 +685,5 @@ button.busy { transform: translateY(2px) scale(0.98); filter: brightness(1.15); 
 .endvotes .yes i { color: var(--gold-hi); }
 .endvotes .no { opacity: 0.7; }
 .endvotes .no i { color: #e0805a; }
+/* four answers (kurultai, events): two by two, not three and a lonely fourth */
+@media (min-height: 501px) and (min-width: 400px) { .screen:not(.suspects) .choices:has(> .choice:nth-child(4):last-child) { grid-template-columns: repeat(2, 1fr); } }

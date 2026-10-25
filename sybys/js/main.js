@@ -511,7 +511,8 @@ function buildHud() {
       box.append(el('span', 'trait', tt[0]));
       c.title = `${tribeName(k)} — ${tt[0]}: ${tt[1]}`;
     }
-    c.append(ava, box, el('span', 'fear'), el('span', 'tick', '✓'));
+    box.append(el('span', 'fear'));
+    c.append(ava, box, el('span', 'tick', '✓'));
     tr.append(c);
   }
   actionsEl.replaceChildren();
@@ -620,6 +621,7 @@ function updateHud() {
   look.actIcon = '· ' + T()[action];
   look.ordaName = T().hintOrda;
   look.trustTag = T().trustTag;
+  look.lines = v.votes.map((x) => Math.round(x.line * 100));
   $('speedBtn').textContent = '×' + speed;
   const pi = paused ? 'play' : 'pause', si = sound.on ? 'soundOn' : 'soundOff';
   if ($('pauseBtn').dataset.i !== pi) { $('pauseBtn').dataset.i = pi; $('pauseBtn').innerHTML = ICONS[pi]; }

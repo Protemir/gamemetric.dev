@@ -186,6 +186,9 @@ try {
   check('Zaltyr marks a forged rider', zw === 'seen', zw);
   await wait(200);
   await B.shot(path.join(out, 'autumn.png'));
+  // a clan's marks (grudge, fear, whispers) stand beside its temper on the chip, never on top of it
+  const chipMarks = await B.js(`(async () => { const s = ${A}; const keep = s.g.tribes.map((tr) => [tr.grievance, tr.fear, tr.talks]); for (const tr of s.g.tribes) { tr.grievance = 1; tr.fear = 0.6; tr.talks = true; } s.step(0.05); await new Promise((r) => setTimeout(r, 300)); const bad = [...document.querySelectorAll('#tribes .tribe')].filter((c) => { const a = c.querySelector('.trait')?.getBoundingClientRect(); const b = c.querySelector('.fear').getBoundingClientRect(); const n = c.querySelector('.tn').getBoundingClientRect(); const box = c.getBoundingClientRect(); return !a || !b.width || a.right > b.left + 0.5 || n.right > a.left + 0.5 || b.right > box.right; }).map((c) => { const f = (s) => { const r = c.querySelector(s).getBoundingClientRect(); return Math.round(r.left) + "-" + Math.round(r.right); }; return f(".tn") + "|" + f(".trait") + "|" + f(".fear") + "|" + f(".tb"); }).join(" ") || 0; s.g.tribes.forEach((tr, k) => { [tr.grievance, tr.fear, tr.talks] = keep[k]; }); s.step(0.05); return bad; })()`);
+  check('clan marks do not cover the temper on the chip', chipMarks === 0, String(chipMarks));
   // the same clue twice is one line with ×2 in the journal
   const jr = await B.js(`(() => { const g = ${A}.g; if (g.phase !== 'map') return 'phase ' + g.phase; const k = g.clues.length; g.clues.push({ kind: 'forged', hint: -1 }, { kind: 'forged', hint: -1 }); document.getElementById('journalBtn').click(); const rows = [...document.querySelectorAll('.journal li')].filter((li) => li.textContent.includes(${JSON.stringify('A forged order')})); const r = rows.length + ':' + (rows[0] ? rows[0].textContent.includes('×') : false); g.clues.splice(k); [...document.querySelectorAll('.journal button')].pop().click(); return r; })()`);
   check('the journal folds a repeated clue into one line with ×N', jr === '1:true', jr);
@@ -194,6 +197,9 @@ try {
   t = await uiText();
   check('the kurultai shows three elders and the choices', t.includes('Kurultai') && t.includes('Kokzhal') && t.includes('Arkar') && t.includes('Sit on the white felt'), t.slice(0, 60).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'kurultai.png'));
+  // the answers sit in even rows: four go two by two, none is left alone on the last row
+  const rows = await B.js(`(() => { const bs = [...document.querySelectorAll('.kurultai .choices > .choice')]; const by = {}; for (const b of bs) { const y = Math.round(b.getBoundingClientRect().top); by[y] = (by[y] || 0) + 1; } return bs.length + ':' + Object.values(by).join(','); })()`);
+  check('the kurultai answers leave no lonely button', !/^4:/.test(rows) || rows === '4:2,2', rows);
   // each elder's seat shows trust against the line it had to cross
   const sb = await B.js(`(() => { const v = ${A}.g.vote; return [...document.querySelectorAll('.seat .bar')].map((b, k) => Math.abs(parseFloat(b.style.getPropertyValue('--at')) - v.votes[k].line * 100) < 0.5 && b.firstChild.style.width !== '').join(','); })()`);
   check('kurultai seats show trust against the line', sb === 'true,true,true', sb);

@@ -876,7 +876,7 @@ export class View {
     const { ctx } = this;
     const name = r.tribe < 0 ? look.ordaName : look.names?.[r.tribe];
     if (!name) return;
-    const text = r.tribe < 0 ? name : look.trustTag ? look.trustTag(name, Math.round(g.t[id] * 100)) : `${name} · ${Math.round(g.t[id] * 100)}%`;
+    const text = r.tribe < 0 ? name : look.trustTag ? look.trustTag(name, Math.round(g.t[id] * 100), look.lines?.[r.tribe] ?? 55) : `${name} · ${Math.round(g.t[id] * 100)}%`;
     ctx.font = '700 13px system-ui, sans-serif';
     const w = ctx.measureText(text).width + 18;
     let x = look.mouse[0] + 16, y = look.mouse[1] + 18;
