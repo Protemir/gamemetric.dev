@@ -804,6 +804,7 @@ function showEvent() {
     b.disabled = !c.ok;
     b.append(el('b', null, label), el('small', null, fmt(note, ...names)));
     if (c.cost) { const cs = el('span', 'cost'); cs.innerHTML = ICONS.horse + ' ' + c.cost; b.append(cs); }
+    else if (c.gain) { const cs = el('span', 'cost gain'); cs.innerHTML = ICONS.horse + ' +' + c.gain; b.append(cs); }
     if (!c.ok) {
       const why = g.horses < c.cost ? t.whyOff.horses(c.cost) : t.whyOff.aria;
       b.title = why;

@@ -109,6 +109,9 @@ try {
   t = await uiText();
   check('the first decision', t.includes('first decision') && t.includes('Call the clans'), t.slice(0, 40).replace(/\n/g, ' '));
   await B.shot(path.join(out, 'event.png'));
+  // a choice that brings horses says so with the horse icon, not only in words
+  const gain = await B.js(`(() => { const b = [...document.querySelectorAll('.event .choice')].find((b) => b.textContent.includes('Power to Karasai')); const s = b && b.querySelector('.cost.gain'); return s ? s.textContent.trim() + ':' + !!s.querySelector('svg') : 'none'; })()`);
+  check('a choice shows the horses it brings', gain === '+2:true', gain);
   await clickText('Call the clans');
   await wait(100);
   check('the choice closes the scene', (await B.js(`${A}.g.phase`)) === 'map' && (await uiText()) === '');
@@ -219,6 +222,13 @@ try {
     await wait(200);
     const L = await B.js(`(() => { const out = []; for (const e of document.querySelectorAll('.hud > *, .actions > *')) { const r = e.getBoundingClientRect(); if (r.width && (r.right > innerWidth + 1 || r.left < -1 || r.bottom > innerHeight + 1)) out.push(e.className || e.id); } const v = ${A}.view; return { out, map: v.s > 0 && v.ox >= 0 && v.oy >= 0 }; })()`);
     check(`layout ${w}×${h}`, !L.out.length && L.map, L.out.join(', '));
+    if (w < 900) {
+      // the seconds of a cooldown never sit on top of the adviser's name
+      await B.js(`(() => { const s = ${A}; s.g.karasaiCD = 15; s.step(0.1); })()`);
+      await wait(100);
+      const cd = await B.js(`(() => { const b = document.querySelector('.act[data-key="karasai"]'), c = b && b.querySelector('.cdn'); if (!c) return 'no timer'; const a = c.getBoundingClientRect(), q = b.querySelector('.an').getBoundingClientRect(); return a.right <= q.left || a.left >= q.right || a.bottom <= q.top || a.top >= q.bottom ? 'clear' : 'over the name'; })()`);
+      check(`cooldown clear of the name ${w}×${h}`, cd === 'clear', cd);
+    }
     await B.shot(path.join(out, `layout-${w}x${h}.png`));
   }
 

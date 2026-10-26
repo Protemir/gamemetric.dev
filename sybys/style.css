@@ -545,6 +545,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .choice:hover:not(:disabled) { border-color: var(--gold-hi); box-shadow: 0 0 16px rgba(217, 164, 65, 0.3); transform: translateY(-1px); }
 .choice .cost { color: var(--gold); display: flex; align-items: center; gap: 2px; }
 .choice .cost svg { width: 14px; height: 14px; }
+.choice .cost.gain { color: #8fd17a; }
 .seat { background: linear-gradient(180deg, rgba(48, 34, 22, 0.9), rgba(22, 15, 10, 0.9)); border: 1px solid var(--c); border-radius: 10px; }
 .seat b { font-family: var(--serif); }
 .seat.yes { background: linear-gradient(180deg, rgba(110, 78, 30, 0.95), rgba(40, 28, 14, 0.95)); box-shadow: 0 0 18px rgba(243, 207, 122, 0.35); }
@@ -643,6 +644,10 @@ button:active:not(:disabled) { transform: scale(0.95); }
 /* a cooldown on an action shows on its button */
 .act .cdn { position: absolute; right: 6px; top: 4px; font-size: 11px; font-weight: 800; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
 .act { position: relative; }
+/* on a phone the name fills the button: the seconds sit on the portrait instead */
+@media (max-width: 760px), (max-height: 520px) {
+  .act .cdn { top: auto; right: auto; left: 3px; bottom: 3px; font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 7px; background: rgba(12, 8, 5, 0.85); }
+}
 /* the turn-your-phone hint on the title */
 .title .rotate { display: none; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; font-size: 13px; color: #e9d3ae; }
 .title .rotate svg { width: 20px; height: 20px; animation: tilt 2.4s ease-in-out infinite; }

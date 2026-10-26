@@ -693,6 +693,9 @@ function openEvent(g, id) {
   g.phase = 'event';
 }
 
+// horses a choice brings back, shown on its button like the cost
+const GAIN = { 'horse.karasai': 2, 'drought.neighbor': 3, 'drought.sarman': 2 };
+
 export function eventChoices(g) {
   const e = g.event;
   if (!e) return [];
@@ -706,7 +709,7 @@ export function eventChoices(g) {
     plot: [['amnesty', 0], ['proof', 0], ['trap', 0], ['council', 1]],
     truth: [['publish', 0], ['aria', 0], ['blackmail', 0], ['bury', 0]],
   }[e.id];
-  return list.map(([key, cost]) => ({ key, cost, ok: g.horses >= cost && !(e.id === 'well' && key === 'aria' && g.aria.trust < 0.3) }));
+  return list.map(([key, cost]) => ({ key, cost, gain: GAIN[`${e.id}.${key}`] || 0, ok: g.horses >= cost && !(e.id === 'well' && key === 'aria' && g.aria.trust < 0.3) }));
 }
 
 export function choose(g, key) {
