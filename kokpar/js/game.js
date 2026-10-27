@@ -303,7 +303,7 @@ function stepFallen(e, dt) {
   if (!e.r.fallen) return;
   // конь без всадника сбавляет ход, разворачивается и подходит к хозяину
   const hp = e.h.obj.position, rp = e.r.root.position, d = Math.hypot(rp.x - hp.x, rp.z - hp.z);
-  if (e.r.fallen.landed && d > 1.8 && e.down > 0) steerTo(e, rp.x, rp.z, d > 9 ? 3 : 1);
+  if (e.r.fallen.landed && d > 1.8 && e.down > 0) steerTo(e, rp.x, rp.z, d > 9 ? 3 : e.mash ? 2 : 1); // жмёт «встать» — конь подходит рысью, иначе нажатия упирались в коня, идущего шагом
   else { e.h.gait = 0; e.h.steer = 0; }
   if (e.r.stepFall(dt, e.down < 0.95) && !SIM) { dustBurst(rp.x, rp.z, 6, 9); bump(rp.x, rp.z, 5); } // плюхнулся в пыль
   if (!SIM) dizzy(e, dt);
@@ -588,10 +588,12 @@ function steerTo(e, tx, tz, gait) {
 const keys = {};
 let stick = null, tugTap = false;
 const touch = matchMedia('(pointer: coarse)').matches;
+const typing = (e) => !!e.target?.closest?.('input, textarea, select, [contenteditable="true"]'); // пишет название клуба — это не игра
 addEventListener('keydown', (e) => {
+  if (typing(e)) return;
   if (/^(Key[WASDZQ]|Arrow)/.test(e.code)) rodeOnce = true;
-  if (e.repeat) return;
   keys[e.code] = true;
+  if (e.repeat) return;
   initAudio();
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyP' && !SIM) togglePause();
@@ -599,6 +601,15 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && online.role === 'guest') online.myRear++;
   else if (e.code === 'KeyR' && canRear()) me.h.rear(); // свечка — только стоя
 });
+// ушёл со вкладки или в другое окно — отпускание клавиш туда не придёт: отпускаем всё сами (W не «залипает»)
+function releaseAll() {
+  for (const k in keys) keys[k] = false;
+  whipHeld = false; tugTap = false;
+  if (stick) { stick = null; el.stick.style.display = 'none'; }
+  if (me?.throw?.aiming) me.throw = null; // заряд броска — без броска
+}
+addEventListener('blur', () => releaseAll());
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
 addEventListener('keyup', (e) => { keys[e.code] = false; if ((e.code === 'KeyE' || e.code === 'Space') && me) releaseAim(me); });
 function readInput() { // что сейчас жмёт этот игрок
   const h = me.h, o = { s: 0, g: 0, w: !!(keys.ShiftLeft || keys.ShiftRight || whipHeld) };
@@ -874,6 +885,7 @@ function endMatch() {
 let audar = null; // { foe, skill, S — схватка (audar.js), ang/speed — где на круге и как быстро }
 const AUDAR_WIN = 2, AU_R = 22, AU_V = 6.2; // до двух побед; круг скачки (радиус, м), скорость кентера
 function startAudar() {
+  if (online.role) onlineReset();
   pulse('start', 'duel:n' + Math.min(++starts, 9));
   applyStage(); applyLang();
   el.menu.hidden = true; el.tut.hidden = true; delete el.hint.dataset.keep;
@@ -930,6 +942,7 @@ const jambyGear = (() => {
   return { post, ing, rope, arrow, ret, mark };
 })();
 function startJamby() {
+  if (online.role) onlineReset();
   pulse('start', 'jamby:n' + Math.min(++starts, 9));
   modeOff();
   applyStage(); applyLang();
@@ -1493,6 +1506,7 @@ for (const ev of ['pointerup', 'pointercancel']) el.btnTug.addEventListener(ev, 
 el.btnWhip.addEventListener('pointerdown', (e) => { e.preventDefault(); if (canRear()) me.h.rear(); else whipHeld = true; });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.btnWhip.addEventListener(ev, () => { whipHeld = false; });
 function startMatch(how = '') {
+  if (online.role) onlineReset();
   modeOff();
   applyStage(); applyLang();
   el.menu.hidden = true;
@@ -1513,7 +1527,12 @@ el.pause.addEventListener('click', (e) => {
     if (setMode === 'pause' && !confirm(PT[lang].reload)) return;
     try { localStorage.setItem('kokpar.q', arg); } catch { /* приватный режим */ }
     location.reload();
-  } else if (act === 'quit') { togglePause(false); state.tug = null; showMenu(); }
+  } else if (act === 'quit') {
+    togglePause(false); state.tug = null;
+    const was = online.role;
+    if (was) { onlineReset(); if (was === 'guest') { location.hash = ''; location.reload(); return; } }
+    showMenu();
+  }
 });
 el.pause.addEventListener('input', (e) => { // ползунки громкости
   const k = e.target.dataset?.v;
@@ -1527,7 +1546,7 @@ el.pauseBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
 addEventListener('blur', () => { if (!SIM && state.phase === 'play' && !P.has('debug') && !online.role) togglePause(true); }); // ушёл со вкладки — пауза
 career.initCareer(document.getElementById('hub'), () => { initAudio(); goLandscape(); startMatch(); }, openSettings, () => { initAudio(); onlineOpen(); }, () => { initAudio(); goLandscape(); startAudar(); }, () => { initAudio(); goLandscape(); startJamby(); });
 function showMenu() {
-  modeOff();
+  modeOff(); releaseAll();
   state.phase = 'menu';
   applyStage(); // соперник в своих цветах уже в меню
   el.banner.classList.remove('on'); bannerT = 0;
@@ -1904,4 +1923,4 @@ if (SIM) {
   const go = () => { performance.mark('k:frame'); requestAnimationFrame(frame); };
   if (renderer.compileAsync) renderer.compileAsync(scene, camera).then(go, go); else go();
 }
-if (P.has('debug')) window.__kokpar = { ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, startAudar, startJamby, get audar() { return audar; }, get jamby() { return jamby; }, keys, jshoot: () => jambyShoot(), autap: () => audarTap(), jhit: () => !!(jamby && jamby.tgt.k != null && jHit(jamby.tgt)), endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, play(n, dt = 1 / 60) { for (let i = 0; i < n; i++) { let d = dt; if (juice.stop > 0) { juice.stop -= dt; d *= 0.12; } else if (juice.slow > 0) { juice.slow -= dt; d *= 0.4; } step(d); updateCamera(d); juiceEvents(); stepConfetti(dt); shakeCamera(dt); } hud(dt); renderAll(); }, getProto };
+if (P.has('debug')) window.__kokpar = { get online() { return online; }, ents, me, sack, state, kazans, step, camera, renderer, thr() { const c = sack.carrier; if (c) throwSack(c); return c; }, setCoat, startTug, startAudar, startJamby, get audar() { return audar; }, get jamby() { return jamby; }, keys, jshoot: () => jambyShoot(), autap: () => audarTap(), jhit: () => !!(jamby && jamby.tgt.k != null && jHit(jamby.tgt)), endNow(a, b) { state.score = [a, b]; endMatch(); }, fall(i) { const e = ents[i]; fallRider(e, Math.cos(e.h.yaw), -Math.sin(e.h.yaw)); return e; }, view(px, py, pz, lx, ly, lz) { camera.position.set(px, py, pz); camera.lookAt(lx, ly, lz); renderAll(); }, freeze(f) { frozen = f; if (!f) { last = performance.now(); requestAnimationFrame(frame); } }, run(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); updateCamera(dt); hud(dt); renderAll(); }, play(n, dt = 1 / 60) { for (let i = 0; i < n; i++) { let d = dt; if (juice.stop > 0) { juice.stop -= dt; d *= 0.12; } else if (juice.slow > 0) { juice.slow -= dt; d *= 0.4; } step(d); updateCamera(d); juiceEvents(); stepConfetti(dt); shakeCamera(dt); } hud(dt); renderAll(); }, getProto };
