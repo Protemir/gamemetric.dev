@@ -146,6 +146,17 @@ try {
   // 5b'. no horses: the horses chip shivers red, nothing is sent
   const short = await B.js(`(() => { const s = ${A}; const h = s.g.horses; s.g.horses = 0; const id = s.g.map.regions.findIndex((r, i) => i > 0 && r.tribe >= 0); const sent = s.act('word', id); const on = document.getElementById('horsesChip').classList.contains('short'); s.g.horses = h; return JSON.stringify({ sent, on }); })()`).then(JSON.parse);
   check('no horses: the horses chip shivers', short.on && short.sent === false, JSON.stringify(short));
+  // 5b''. a pasture that crosses to the khan rings once with a golden wave, and not again on a flicker at the line
+  const wonId = await B.js(`${A}.g.map.regions.findIndex((r, i) => i > 0 && r.tribe >= 0 && ${A}.g.t[i] < 0.45)`);
+  const wonN = () => B.js(`${A}.view.fx.filter((f) => f.text === '▲' && f.region === ${wonId}).length`);
+  const wonT0 = await B.js(`${A}.g.t[${wonId}]`);
+  await B.js(`${A}.g.t[${wonId}] = 0.6`); await wait(150);
+  const w1 = await wonN();
+  await B.js(`${A}.g.t[${wonId}] = 0.54`); await wait(150);
+  await B.js(`${A}.g.t[${wonId}] = 0.58`); await wait(150);
+  const w2 = await wonN();
+  await B.js(`${A}.g.t[${wonId}] = ${wonT0}`); await wait(50);
+  check('a pasture won rings once with a golden wave', wonId > 0 && w1 === 1 && w2 === 1, `${wonId}:${w1},${w2}`);
   // 5c. the camera: a drag moves the map and sends nobody, the wheel zooms, ⤢ shows the whole map again
   const before = await B.js(`JSON.stringify({ h: ${A}.g.horses, n: ${A}.g.riders.filter((r) => r.kind === 'word').length })`).then(JSON.parse);
   await B.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 360, deltaX: 0, deltaY: -600 });
@@ -222,7 +233,7 @@ try {
     await wait(200);
     const L = await B.js(`(() => { const out = []; for (const e of document.querySelectorAll('.hud > *, .actions > *')) { const r = e.getBoundingClientRect(); if (r.width && (r.right > innerWidth + 1 || r.left < -1 || r.bottom > innerHeight + 1)) out.push(e.className || e.id); } const v = ${A}.view; return { out, map: v.s > 0 && v.ox >= 0 && v.oy >= 0 }; })()`);
     check(`layout ${w}×${h}`, !L.out.length && L.map, L.out.join(', '));
-    if (w < 900) {
+    {
       // the seconds of a cooldown never sit on top of the adviser's name
       await B.js(`(() => { const s = ${A}; s.g.karasaiCD = 15; s.step(0.1); })()`);
       await wait(100);

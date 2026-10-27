@@ -1062,6 +1062,24 @@ let hitStop = 0;
 let lastHorses = -1;
 let lastMusic = -1;
 let lastMood = '';
+// an aul that crosses to the khan gets a golden wave and a soft chime, so a win is felt, not only read;
+// it must fall a little below the line before it can ring again, so a pasture on the edge does not chime on every flicker
+let wonFor = null, wonSeen = null;
+function wonTick(now) {
+  const fresh = wonFor !== g;
+  if (fresh) { wonFor = g; wonSeen = []; }
+  const live = !fresh && !g.demo && !tourState && g.phase === 'map';
+  let n = 0;
+  for (const r of g.map.regions) {
+    if (r.tribe < 0) continue;
+    const t = g.t[r.id];
+    if (t >= S.WON_AT && !wonSeen[r.id]) {
+      wonSeen[r.id] = true;
+      if (live) { view.pushFx({ type: 'won', region: r.id }, now); n++; }
+    } else if (t < S.WON_AT - 0.03) wonSeen[r.id] = false;
+  }
+  if (n) sfx.won();
+}
 function frame(now) {
   const raw = (now - last) / 1000;
   const dt = Math.min(0.05, raw);
@@ -1093,6 +1111,7 @@ function frame(now) {
       if (f.type === 'raid' && !g.demo) { sfx.drums(); if (!tourState) advise('karasai', T().c.raid, 7000); }
     }
     for (const tt of g.toasts.splice(0)) showToast(tt);
+    wonTick(now);
     tourTick(now);
     if (!g.demo && !tourState) {
       lessonTick(now);

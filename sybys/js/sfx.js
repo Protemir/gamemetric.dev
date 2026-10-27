@@ -319,6 +319,7 @@ export const sfx = {
   // a rider sets off: hooves on dry ground
   send() { for (let k = 0; k < 6; k++) noiseHit(k * 0.11 + (k % 2) * 0.03, 0.06, 260, 2, 0.35, 'lowpass'); },
   word() { bell(880); bell(1320, 0.09, 0.05); },
+  won() { bell(1047, 0.18, 0.06); bell(1568, 0.3, 0.045); },
   lie() { tone(150, 0.5, 'sawtooth', 0.035, 0, 0.7); noiseHit(0, 0.5, 300, 1, 0.08); },
   force() { noiseHit(0, 0.3, 120, 1, 0.5, 'lowpass'); tone(90, 0.35, 'square', 0.06, 0.02, 0.6); noiseHit(0.05, 0.2, 3000, 4, 0.12); },
   caught() { noiseHit(0, 0.05, 2500, 3, 0.4, 'highpass'); bell(1175, 0.04, 0.07); bell(1760, 0.12, 0.05); },

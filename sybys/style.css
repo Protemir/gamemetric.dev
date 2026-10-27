@@ -641,12 +641,11 @@ button:active:not(:disabled) { transform: scale(0.95); }
   .titlerow .link { margin-top: 6px; }
   .styles { margin-top: 6px; }
 }
-/* a cooldown on an action shows on its button */
-.act .cdn { position: absolute; right: 6px; top: 4px; font-size: 11px; font-weight: 800; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+/* a cooldown on an action shows on its button: the name fills the button, so the seconds sit on the portrait */
+.act .cdn { position: absolute; left: 4px; bottom: 4px; font-size: 11px; line-height: 15px; padding: 0 5px; border-radius: 8px; background: rgba(12, 8, 5, 0.85); font-weight: 800; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
 .act { position: relative; }
-/* on a phone the name fills the button: the seconds sit on the portrait instead */
 @media (max-width: 760px), (max-height: 520px) {
-  .act .cdn { top: auto; right: auto; left: 3px; bottom: 3px; font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 7px; background: rgba(12, 8, 5, 0.85); }
+  .act .cdn { left: 3px; bottom: 3px; font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 7px; }
 }
 /* the turn-your-phone hint on the title */
 .title .rotate { display: none; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; font-size: 13px; color: #e9d3ae; }

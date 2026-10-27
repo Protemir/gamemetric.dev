@@ -923,7 +923,7 @@ export class View {
   pushFx(f, now) {
     if (f.type === 'word' || f.type === 'force') this.flash.set(f.region, now);
     if (f.type === 'word' && f.chain >= 2) { this.fx.push({ region: f.region, text: '×' + f.chain, color: '#ffd76a', ring: true, t0: now, big: true }); return; }
-    const look = { clash: ['⚔', '#ffb08a', true], fire: ['', '#ff7a3a', true], raid: ['', '#ff4a3a', true], trade: ['+1', '#ffe7a0', false], word: ['+', '#ffe7a0', true], lie: ['−', '#e0b0ff', true], force: ['⚔', '#ff8f7a', true], clue: ['✦', '#ffe7a0', false], caught: ['✓', '#fff', true], aria: ['◉', '#d9c4ff', false] }[f.type];
+    const look = { clash: ['⚔', '#ffb08a', true], fire: ['', '#ff7a3a', true], raid: ['', '#ff4a3a', true], trade: ['+1', '#ffe7a0', false], word: ['+', '#ffe7a0', true], lie: ['−', '#e0b0ff', true], force: ['⚔', '#ff8f7a', true], clue: ['✦', '#ffe7a0', false], won: ['▲', '#ffd76a', true], caught: ['✓', '#fff', true], aria: ['◉', '#d9c4ff', false] }[f.type];
     if (look) this.fx.push({ region: f.region, text: look[0], color: look[1], ring: look[2], t0: now });
   }
 }

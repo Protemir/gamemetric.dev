@@ -20,6 +20,8 @@ export const ZALTYR_STAY = 30;
 export const KARASAI_CD = 25;
 export const ARIA_STAY = 12;
 export const VOTE_AT = 0.55;
+// the trust at which a single pasture counts as the khan's (gold medal, ring on the ground)
+export const WON_AT = 0.55;
 export const SEASONS = {
   1: [['horse', 20], ['well', 85], ['caravan', 165], ['letter', 245]],
   2: [['army', 30], ['drought', 100], ['plot', 180], ['truth', 250]],
