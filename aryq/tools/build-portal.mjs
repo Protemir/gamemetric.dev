@@ -62,6 +62,7 @@ if (portal === 'playgama') {
       minimumDelayBetweenInterstitial: 120,
       initialInterstitialDelay: 120,
       interstitial: { placementFallback: 'year_end', placements: [{ id: 'year_end' }, { id: 'game_over' }] },
+      rewarded: { placementFallback: 'one_more_year', placements: [{ id: 'one_more_year' }] },
     },
   };
   fs.writeFileSync(path.join(out, 'playgama-bridge-config.json'), JSON.stringify(config, null, 4) + '\n');

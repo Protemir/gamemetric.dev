@@ -822,8 +822,9 @@ export const REVIVE_DIG = 15;
 export function canRevive(g) {
   return !!g.over && (g.revived || 0) < REVIVES;
 }
-export function revive(g) {
-  if (!canRevive(g)) return false;
+// paid: after an ad for a reward, as many times as the player likes (Playgama, 27.10)
+export function revive(g, paid) {
+  if (!(canRevive(g) || (paid && g.over))) return false;
   const dead = g.objAt[g.over.y * g.W + g.over.x];
   if (dead) removeObject(g, dead);
   for (const o of g.objects) o.thirst = Math.min(o.thirst, 0.35);

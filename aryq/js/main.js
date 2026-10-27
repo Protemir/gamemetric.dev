@@ -2,7 +2,7 @@ import * as S from './sim.js';
 import { View } from './render.js';
 import { el, store, clamp } from './util.js';
 import * as sfx from './audio.js';
-import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute, onPortalPause, adBreak } from './portal.js';
+import { PORTAL, portalLang, gameplay, loadingDone, happytime, onPortalMute, onPortalPause, adBreak, canReward, rewarded } from './portal.js';
 import { pulse, minute } from './pulse.js';
 
 const q = new URLSearchParams(location.search);
@@ -113,7 +113,7 @@ function start(m = mode, restored = null) {
     };
   }
   updateHud();
-  if (DEBUG) window.__aryq = { g, S, view, state, step: (d) => S.advance(g, d) };
+  if (DEBUG) window.__aryq = { g, S, view, state, sound: sfx.sound, step: (d) => S.advance(g, d) };
   // a game closed on the gift panel gets its gift back
   if (restored && g.giftDue) showYear({ year: g.giftDue });
 }
@@ -146,6 +146,10 @@ const TEXT = {
     best: 'Лучший урожай {b}',
     oneMore: 'Ещё год',
     oneMoreSub: 'засохший сад уйдёт, остальным передышка и +{d} ⛏ · раз за игру',
+    adMore: 'Ещё год за рекламу',
+    adMoreSub: 'засохший сад уйдёт, остальным передышка и +{d} ⛏',
+    adWait: 'реклама загружается…',
+    adNone: 'рекламы сейчас нет, попробуй позже',
     revived: 'Долина живёт дальше: +{d} ⛏. Напои тех, кому мало воды.',
     streak: 'Серия: {n} дн. подряд',
     streakBonus: 'Серия {n} дн. подряд: +{b} ⛏ на старте',
@@ -271,6 +275,10 @@ const TEXT = {
     best: 'Best harvest {b}',
     oneMore: 'One more year',
     oneMoreSub: 'the dry orchard goes, the rest get a breather and +{d} ⛏ · once a game',
+    adMore: 'One more year for an ad',
+    adMoreSub: 'the dry orchard goes, the rest get a breather and +{d} ⛏',
+    adWait: 'loading the ad…',
+    adNone: 'no ad right now, try again later',
     revived: 'The valley goes on: +{d} ⛏. Water the ones that are short.',
     streak: 'Streak: {n} days in a row',
     streakBonus: '{n} days in a row: +{b} ⛏ to start with',
@@ -1045,25 +1053,49 @@ function showOver() {
     if (v.up) setTimeout(() => sfx.yearDone(), 350);
   }
   pulse('over', g.mode + ':y' + Math.min(g.year, 9) + ':' + minute());
+  const goOn = (paid) => {
+    if (!S.revive(g, paid)) return;
+    pulse('more', (paid ? 'ad:' : '') + 'y' + Math.min(g.year, 9));
+    ui.replaceChildren();
+    hud.hidden = false;
+    paused = false;
+    saveNow();
+    updateHud();
+    pickGhost(performance.now(), true);
+    say(t('revived', { d: S.REVIVE_DIG }), 4500);
+  };
   // once a game the valley can go on: players used to leave right here (21.10)
+  const offer = S.canRevive(g) || canReward();
   if (S.canRevive(g)) {
     const more = el('button', 'btn');
     more.append(el('span', null, t('oneMore')), el('small', null, t('oneMoreSub', { d: S.REVIVE_DIG })));
     more.addEventListener('click', () => {
       sfx.audioInit();
-      if (!S.revive(g)) return;
-      pulse('more', 'y' + Math.min(g.year, 9));
-      ui.replaceChildren();
-      hud.hidden = false;
-      paused = false;
-      saveNow();
-      updateHud();
-      pickGhost(performance.now(), true);
-      say(t('revived', { d: S.REVIVE_DIG }), 4500);
+      goOn(false);
+    });
+    acts.append(more);
+  } else if (canReward()) {
+    // ... and after that again and again for an ad, where the portal has ads for a reward (Playgama,
+    // 27.10). The year goes on only when the ad says it was watched; otherwise the button says there
+    // is no ad and can be pressed again later.
+    const lost = g;
+    const more = el('button', 'btn');
+    const sub = el('small', null, t('adMoreSub', { d: S.REVIVE_DIG }));
+    more.append(el('span', null, t('adMore')), sub);
+    more.addEventListener('click', async () => {
+      if (more.disabled) return;
+      sfx.audioInit();
+      more.disabled = true;
+      sub.textContent = t('adWait');
+      const ok = await rewarded('one_more_year');
+      if (g !== lost || !g.over || !more.isConnected) return;
+      if (ok) return goOn(true);
+      sub.textContent = t('adNone');
+      more.disabled = false;
     });
     acts.append(more);
   }
-  const again = el('button', S.canRevive(g) ? 'btn ghost' : 'btn', t('again'));
+  const again = el('button', offer ? 'btn ghost' : 'btn', t('again'));
   again.addEventListener('click', () => {
     sfx.audioInit();
     start(g.mode);

@@ -128,8 +128,8 @@ export function onPortalMute(fn) {
   }
   const b = pg();
   if (b) {
-    const st = { audio: true, ad: false, paused: false };
-    const tell = () => fn(!st.audio || st.ad || st.paused);
+    const st = { audio: true, ad: false, reward: false, paused: false };
+    const tell = () => fn(!st.audio || st.ad || st.reward || st.paused);
     try {
       st.audio = b.platform.isAudioEnabled !== false;
       b.platform.on(b.EVENT_NAME.AUDIO_STATE_CHANGED, (on) => {
@@ -142,6 +142,10 @@ export function onPortalMute(fn) {
       });
       b.advertisement.on(b.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, (state) => {
         st.ad = state === 'opened';
+        tell();
+      });
+      b.advertisement.on(b.EVENT_NAME.REWARDED_STATE_CHANGED, (state) => {
+        st.reward = state === 'opened' || state === 'rewarded';
         tell();
       });
     } catch {
@@ -199,4 +203,55 @@ export function adBreak(placement) {
   } catch {
     return false;
   }
+}
+
+// An ad for a reward (Playgama, 27.10): "one more year" again after the free one is used. The reward
+// is only for the 'rewarded' state; an ad that fails, never opens or is closed early gives nothing.
+// While it is open the sound holds (onPortalMute), and the next full-screen ad waits two minutes more.
+export function canReward() {
+  const b = pg();
+  try {
+    return !!(b && b.advertisement.isRewardedSupported);
+  } catch {
+    return false;
+  }
+}
+let onReward = null; // the state handler of the ad being shown, if any
+let rewardWired = false;
+export function rewarded(placement) {
+  const b = pg();
+  if (!canReward() || onReward) return Promise.resolve(false);
+  return new Promise((done) => {
+    let got = false;
+    let opened = false;
+    let slow = 0;
+    let stuck = 0;
+    const finish = (v) => {
+      if (!onReward) return;
+      onReward = null;
+      clearTimeout(slow);
+      clearTimeout(stuck);
+      lastAd = performance.now();
+      done(v);
+    };
+    onReward = (state) => {
+      if (state === 'opened') opened = true;
+      if (state === 'rewarded') got = true;
+      if (state === 'closed') finish(got);
+      if (state === 'failed') finish(false);
+    };
+    // an ad that does not open in 15 s is not coming; one that never closes does not hold the game
+    slow = setTimeout(() => !opened && finish(false), 15000);
+    stuck = setTimeout(() => finish(got), 180000);
+    try {
+      if (!rewardWired) {
+        rewardWired = true;
+        b.advertisement.on(b.EVENT_NAME.REWARDED_STATE_CHANGED, (state) => onReward && onReward(state));
+      }
+      const r = b.advertisement.showRewarded(placement);
+      if (r && r.catch) r.catch(() => finish(false));
+    } catch {
+      finish(false);
+    }
+  });
 }
