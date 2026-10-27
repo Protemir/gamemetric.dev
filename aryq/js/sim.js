@@ -64,6 +64,7 @@ export const SPRING_FLOOD = 30; // days
 export const GOAL = { more: 0.9, least: 300, dig: 10, apples: 50 };
 function setGoal(g) {
   const got = g.harvest - (g.yearStart || 0);
+  g.yearGot = got; // the harvest of the year just over, for its panel (also after a reload on it)
   g.yearStart = g.harvest;
   g.goalNeed = Math.max(GOAL.least, Math.round((got * GOAL.more) / 10) * 10);
   g.goalDone = 0;
@@ -764,7 +765,17 @@ export function save(g) {
     flow: Array.from(g.flow, (v) => Math.round(v * 1000) / 1000),
     day: g.day, year: g.year, dig: g.dig, harvest: g.harvest, lost: g.lost, gardensEver: g.gardensEver,
     nextGarden: g.nextGarden, nextHouse: g.nextHouse, cap: g.cap, melt: g.melt, giftDue: g.giftDue || 0, revived: g.revived || 0, banked: g.banked || 0, dugCount: g.dugCount || 0, nextFind: g.nextFind || 5, finds: g.finds || 0, mercy: g.mercy || 0, shield: g.shield || 0, yearStart: g.yearStart || 0, goalNeed: g.goalNeed || 0, goalDone: g.goalDone || 0,
+    yearGot: g.yearGot || 0,
+    // every cell ever dug (an undone canal's ground gives no second find) and where the orchards' and
+    // yurts' dice are, so a loaded game grows the same valley on (27.10, external check)
+    dug: dugList(g),
+    rs: g.rand.state(),
   };
+}
+function dugList(g) {
+  const out = [];
+  for (let i = 0; i < g.W * g.H; i++) if (g.dugEver[i]) out.push(i);
+  return out;
 }
 
 // a save worth offering: written by this game for this size of valley (a cut-off write in a portal's
@@ -785,6 +796,7 @@ export function load(d) {
   }
   g.loading = false;
   for (let i = 0; i < g.W * g.H; i++) if (g.kind[i] === CANAL) g.dugEver[i] = 1;
+  if (Array.isArray(d.dug)) for (const i of d.dug) if (Number.isInteger(i) && i >= 0 && i < g.W * g.H) g.dugEver[i] = 1;
   if (Number.isFinite(d.dugCount)) g.dugCount = d.dugCount;
   if (Number.isFinite(d.nextFind)) g.nextFind = d.nextFind;
   if (Number.isFinite(d.finds)) g.finds = d.finds;
@@ -806,7 +818,10 @@ export function load(d) {
   g.yearStart = Number.isFinite(d.yearStart) ? d.yearStart : 0;
   g.goalNeed = Number.isFinite(d.goalNeed) ? d.goalNeed : 0;
   g.goalDone = d.goalDone ? 1 : 0;
+  g.yearGot = Number.isFinite(d.yearGot) ? d.yearGot : null;
+  // a save from before 27.10 has no place in the sequence: it starts a new one from what it has
   g.rand = rng((d.seed ^ (d.year * 7919) ^ (d.gardensEver * 104729)) >>> 0);
+  if (Number.isFinite(d.rs)) g.rand.state(d.rs);
   g.order = null;
   g.events = [];
   if (d.flow && d.flow.length === g.W * g.H) g.flow.set(d.flow);

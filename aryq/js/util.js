@@ -4,13 +4,19 @@ export const lerp = (a, b, t) => a + (b - a) * t;
 // small deterministic random, so a valley with the same seed is the same valley
 export function rng(seed) {
   let a = seed >>> 0;
-  return () => {
+  const next = () => {
     a = (a + 0x6d2b79f5) >>> 0;
     let t = a;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+  // where it is in its sequence, to save and go on from (27.10: a loaded game grew other orchards)
+  next.state = (v) => {
+    if (v !== undefined) a = v >>> 0;
+    return a;
+  };
+  return next;
 }
 
 // smooth value noise in -1..1 over a W×H grid, one random knot every `step` cells

@@ -113,7 +113,7 @@ function start(m = mode, restored = null) {
     };
   }
   updateHud();
-  if (DEBUG) window.__aryq = { g, S, view, state, sound: sfx.sound, step: (d) => S.advance(g, d) };
+  if (DEBUG) window.__aryq = { g, S, view, state, sound: sfx.sound, say: (s, ms) => say(s, ms), step: (d) => S.advance(g, d) };
   // a game closed on the gift panel gets its gift back
   if (restored && g.giftDue) showYear({ year: g.giftDue });
 }
@@ -281,6 +281,7 @@ const TEXT = {
     adNone: 'no ad right now, try again later',
     revived: 'The valley goes on: +{d} ⛏. Water the ones that are short.',
     streak: 'Streak: {n} days in a row',
+    streak1: 'Streak: 1 day',
     streakBonus: '{n} days in a row: +{b} ⛏ to start with',
     tomorrow: 'A new valley of the day comes tomorrow. Come back for a {n}-day streak and +{b} ⛏ to start.',
     playDaily: 'Play the valley of the day: every day in a row gives more ketmen to start with.',
@@ -415,6 +416,12 @@ function applyLang() {
   $('pauseBtn').setAttribute('aria-label', t('pause'));
   $('soundBtn').setAttribute('aria-label', t('sound'));
   cv.setAttribute('aria-label', t('title'));
+  quiet();
+}
+// a tip of the game left over in the menu, or in the language just switched from, goes away
+function quiet() {
+  hintEl.textContent = '';
+  hintUntil = 0;
 }
 applyLang();
 
@@ -857,8 +864,14 @@ window.addEventListener('blur', () => {
 
 window.addEventListener('keydown', (e) => {
   if (!g) return;
+  // a key on a focused button is that button's (27.10: Space on the pause or sound button both
+  // pressed it and toggled the pause, so the pause never stayed)
+  if (e.target instanceof Element && e.target.closest('button, input, textarea, select, [contenteditable]')) return;
   if (e.key === 'z' || e.key === 'Backspace') doUndo();
-  if (e.key === ' ') togglePause();
+  if (e.key === ' ') {
+    e.preventDefault();
+    togglePause();
+  }
 });
 
 // ---------- HUD ----------
@@ -945,7 +958,7 @@ function showYear(ev) {
   const yurts = g.objects.filter((o) => o.type === 'house').length;
   box.append(
     el('h2', null, t('yearTitle', { y: ev.year - 1 })),
-    el('p', 'big', t('yearStats', { h: Math.floor(g.harvest - (state.harvestAtYear || 0)), n: S.gardens(g), u: yurts })),
+    el('p', 'big', t('yearStats', { h: Math.floor(Number.isFinite(g.yearGot) ? g.yearGot : g.harvest - (state.harvestAtYear || 0)), n: S.gardens(g), u: yurts })),
     el('p', 'muted', t('yearPick')),
   );
   state.harvestAtYear = g.harvest;
@@ -1121,6 +1134,7 @@ function showOver() {
 
 function showStart() {
   hud.hidden = true;
+  quiet();
   const box = el('div', 'panel menu');
   box.append(el('h1', null, t('title')));
   // on portals the game is listed as "Aryk: Water the Valley": the start screen says the same
@@ -1156,7 +1170,7 @@ function showStart() {
     const btn = el('button', 'choice' + (m === mode && !saved ? ' picked' : ''));
     const best = store.get(bestKey(m), 0);
     const st = m === 'daily' ? streakNow() : null;
-    const sub = m === 'daily' ? (st.n ? t('streak', { n: st.n }) : t('dailySub', { d: today.slice(8, 10) + '.' + today.slice(5, 7) })) : t(m + 'Sub');
+    const sub = m === 'daily' ? (st.n ? t(st.n === 1 && TEXT[lang].streak1 ? 'streak1' : 'streak', { n: st.n }) : t('dailySub', { d: today.slice(8, 10) + '.' + today.slice(5, 7) })) : t(m + 'Sub');
     btn.append(icon(m), el('b', null, t(m)), el('small', null, sub + (best ? ' · ' + t('bestShort', { b: best }) : '')));
     btn.addEventListener('click', () => {
       sfx.audioInit();
