@@ -43,7 +43,7 @@ const TEXT = {
     help: '<kbd>W</kbd> вперёд · <kbd>S</kbd> стоп · <kbd>A</kbd><kbd>D</kbd> поворот · <kbd>Shift</kbd> камча · <kbd>E</kbd> вырвать серке · <kbd>R</kbd> свечка',
     canPass: '<kbd>E</kbd> — взять серке у своего', passMe: 'Пас!', ram: 'Таран!',
     helpTouch: 'Палец слева — куда скакать · ВЫРВАТЬ — отнять серке · КАМЧА — рывок',
-    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!', getUpKey: 'Жми <kbd>E</kbd> — встанешь быстрее', nudgeK: 'Держи <kbd>W</kbd> — в галоп!', nudgeT: '👆 Веди пальцем здесь', getUpTap: 'Жми ВСТАТЬ — поднимешься быстрее', btnUp: 'ВСТАТЬ',
+    home: 'Аксай', btnThrow: 'БРОСОК', canThrow: 'Зажми <kbd>E</kbd> — сила, отпусти — бросок в казан', aimTouch: 'Держи БРОСОК — сила, отпусти — бросок', thrown: 'Бросок!', missed: 'Мимо казана!', unhorsed: 'Сбит с коня!', getUpKey: 'Жми <kbd>E</kbd> — встанешь быстрее', nudgeK: 'Держи <kbd>W</kbd> — в галоп!', nudgeF: 'Кликни по игре и держи <kbd>W</kbd>', nudgeT: '👆 Веди пальцем здесь', getUpTap: 'Жми ВСТАТЬ — поднимешься быстрее', btnUp: 'ВСТАТЬ',
     league: 'Лига аулов Жетысу', vs: 'Соперник', play: 'В седло!', next: 'Дальше', retry: 'Ещё раз', champion: 'Чемпион Жетысу!',
     stageOf: (a, b) => 'Аул ' + a + ' из ' + b, unlocked: 'Следующий соперник', menuSub: 'Командная скачка за тушу в предгорьях Алатау · 3 на 3',
   },
@@ -55,7 +55,7 @@ const TEXT = {
     help: '<kbd>W</kbd> go · <kbd>S</kbd> stop · <kbd>A</kbd><kbd>D</kbd> steer · <kbd>Shift</kbd> whip · <kbd>E</kbd> grab the serke · <kbd>R</kbd> rear up',
     canPass: '<kbd>E</kbd> — take the serke from a teammate', passMe: 'Pass!', ram: 'Ram!',
     helpTouch: 'Left thumb — where to ride · GRAB — take the serke · WHIP — burst',
-    home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!', getUpKey: 'Mash <kbd>E</kbd> to get up faster', nudgeK: 'Hold <kbd>W</kbd> to gallop!', nudgeT: '👆 Drag here to ride', getUpTap: 'Tap GET UP to get up faster', btnUp: 'GET UP',
+    home: 'Aksay', btnThrow: 'THROW', canThrow: 'Hold <kbd>E</kbd> for power, release to throw', aimTouch: 'Hold THROW for power, release to throw', thrown: 'Throw!', missed: 'Missed the kazan!', unhorsed: 'Unhorsed!', getUpKey: 'Mash <kbd>E</kbd> to get up faster', nudgeK: 'Hold <kbd>W</kbd> to gallop!', nudgeF: 'Click the game, then hold <kbd>W</kbd>', nudgeT: '👆 Drag here to ride', getUpTap: 'Tap GET UP to get up faster', btnUp: 'GET UP',
     league: 'Zhetysu village league', vs: 'Opponent', play: 'Ride!', next: 'Next', retry: 'Try again', champion: 'Zhetysu champion!',
     stageOf: (a, b) => 'Village ' + a + ' of ' + b, unlocked: 'Next opponent', menuSub: 'Team horseback fight for the carcass in the Alatau foothills · 3 vs 3',
   },
@@ -1455,7 +1455,7 @@ function hud(dt) {
   else if (can && !touch) html(el.hint, pass ? tr('canPass') : tr('canTug'));
   else if (!el.hint.dataset.keep) txt(el.hint, '');
   if (state.phase === 'menu') txt(el.hint, ''); // под меню подсказок нет
-  hid(el.nudge, !autoRide || paused); if (autoRide) html(el.nudge, touch ? tr('nudgeT') : tr('nudgeK'));
+  hid(el.nudge, !autoRide || paused); if (autoRide) html(el.nudge, touch ? tr('nudgeT') : document.hasFocus() ? tr('nudgeK') : tr('nudgeF'));
   // стрелка к цели по краю экрана: к мешку или к чужому казану
   const target = jamby ? (jamby.tgt.live ? V2.copy(jamby.tgt.ing).setY(2) : null) : audar ? V2.copy(audar.foe.h.obj.position).setY(1) : sack.carrier === me ? new THREE.Vector3(kazans[1 - me.team].x, 1, 0) : sack.carrier && sack.carrier.team === me.team ? null : sack.pos;
   if (target) {
@@ -1895,6 +1895,7 @@ if (SIM) {
   window.__sim = res;
   document.title = 'SIM DONE';
 } else {
+  try { window.focus(); } catch { /* не дали */ }
   window.__loadDone?.(); setTimeout(() => { el.load.remove(); requestAnimationFrame(() => portal.gameReady()); }, 150); // Playgama: «готово» — когда экран загрузки снят и кадр нарисован
   portal.loadingDone();
   portal.onPortalMute(setPortalMute);

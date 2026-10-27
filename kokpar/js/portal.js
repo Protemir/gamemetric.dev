@@ -67,7 +67,9 @@ export function onPortalMute(fn) {
 // портал ставит игру на паузу (и снимает)
 export function onPortalPause(fn) {
   const b = pg(), y = ya();
-  if (b) { try { b.platform.on(b.EVENT_NAME.PAUSE_STATE_CHANGED, (p) => fn(!!p)); } catch { /* нет события */ } }
+  // Bridge шлёт «пауза» и просто потому, что у фрейма нет фокуса (игрок ещё не кликнул по игре) — новичок видел меню паузы
+  // вместо матча. Слушаемся, только когда вкладка скрыта или идёт реклама; уход фокуса во время игры ловит сама игра (blur).
+  if (b) { try { b.platform.on(b.EVENT_NAME.PAUSE_STATE_CHANGED, (p) => { if (p && !document.hidden && !adOpen) return; fn(!!p); }); } catch { /* нет события */ } }
   if (y) { try { y.on('game_api_pause', () => fn(true)); y.on('game_api_resume', () => fn(false)); } catch { /* старый SDK */ } }
 }
 
