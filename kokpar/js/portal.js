@@ -73,7 +73,8 @@ export function onPortalPause(fn) {
 
 // ---------- реклама (Playgama и Яндекс): межэкранная в итогах, не чаще раза в 2 минуты; за награду — по кнопке ----------
 const AD_GAP = Number(new URLSearchParams(location.search).get('adgap') ?? 120000); // ?adgap — для автотеста
-let lastAd = performance.now(); // первая — не раньше чем через 2 минуты игры
+// первая — не раньше 4-й минуты: итоги первого матча новичка (~2:10) без рекламы, он как раз решает, играть ли дальше
+let lastAd = performance.now() + Math.min(AD_GAP, 120000);
 let adWatch = false;
 const setAd = (open) => { adOpen = open; window.__adOpen = open; pushMute(); };
 function watchAds(b) {
@@ -106,7 +107,7 @@ export function rewarded() {
   if (!b && !y) return Promise.resolve(false);
   return new Promise((done) => {
     let got = false, over = false;
-    const finish = (v) => { if (!over) { over = true; setAd(false); done(v); } };
+    const finish = (v) => { if (!over) { over = true; setAd(false); lastAd = performance.now(); done(v); } }; // после рекламы за награду межэкранная — не сразу
     try {
       if (y) {
         y.adv.showRewardedVideo({ callbacks: { onOpen: () => setAd(true), onRewarded: () => { got = true; }, onClose: () => finish(got), onError: () => finish(false) } });
