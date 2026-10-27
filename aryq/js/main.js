@@ -150,6 +150,13 @@ const TEXT = {
     adMoreSub: 'засохший сад уйдёт, остальным передышка и +{d} ⛏',
     adWait: 'реклама загружается…',
     adNone: 'рекламы сейчас нет, попробуй позже',
+    qWater1: 'Напои сад',
+    qWater3: 'Напои 3 сада сразу',
+    qApple: 'Сорви спелое яблоко, когда все пьют',
+    qYurt: 'Проведи воду к юрте',
+    qHarvest: 'Собери урожай 100 🍏',
+    qDone: '✓ Готово! +{d} ⛏',
+    qAll: '✓ Все задания! +{d} ⛏ Теперь продержи долину до зимы',
     revived: 'Долина живёт дальше: +{d} ⛏. Напои тех, кому мало воды.',
     streak: 'Серия: {n} дн. подряд',
     streakBonus: 'Серия {n} дн. подряд: +{b} ⛏ на старте',
@@ -279,6 +286,13 @@ const TEXT = {
     adMoreSub: 'the dry orchard goes, the rest get a breather and +{d} ⛏',
     adWait: 'loading the ad…',
     adNone: 'no ad right now, try again later',
+    qWater1: 'Water an orchard',
+    qWater3: 'Water 3 orchards at once',
+    qApple: 'Pick a ripe apple when all drink',
+    qYurt: 'Bring water to a yurt',
+    qHarvest: 'Gather a harvest of 100 🍏',
+    qDone: '✓ Done! +{d} ⛏',
+    qAll: '✓ All tasks done! +{d} ⛏ Now keep the valley alive through the year',
     revived: 'The valley goes on: +{d} ⛏. Water the ones that are short.',
     streak: 'Streak: {n} days in a row',
     streak1: 'Streak: 1 day',
@@ -1317,6 +1331,54 @@ function ripen(dt) {
     say(t('ripeTip', { n: RIPE.gain }), 5000);
   }
 }
+// A new player's first tasks, one at a time under the top bar (27.10: on CrazyGames most of those who
+// left in the first minute had already watered the first orchard; nothing said what to do next).
+// Each one done gives a little digging. Saved across games; a player who knew the game skips them.
+const QUESTS = [
+  { key: 'qWater1', need: 1, got: () => g.objects.filter((o) => o.type === 'garden' && o.s >= 0.6).length },
+  { key: 'qWater3', need: 3, got: () => g.objects.filter((o) => o.type === 'garden' && o.s >= 0.6).length },
+  { key: 'qApple', need: 1, got: () => state.picked || 0 },
+  { key: 'qYurt', need: 1, got: () => g.objects.filter((o) => o.type === 'house' && o.s >= 0.6).length },
+  { key: 'qHarvest', need: 100, got: () => Math.floor(g.harvest) },
+];
+const QUEST_DIG = 3;
+const questEl = $('quest');
+function questNow() {
+  let q = store.get('aryq.quest', null);
+  if (q == null) {
+    q = store.get('aryq.taught', 0) >= 3 ? QUESTS.length : 0;
+    store.set('aryq.quest', q);
+  }
+  return q;
+}
+function quests(now) {
+  const q = questNow();
+  const show = q < QUESTS.length && !g.over && !hud.hidden && !ui.firstChild && g.day < S.WINTER;
+  // the "done" flash stays up for a moment, then the next task
+  if (state.questDone && now < state.questDone) {
+    questEl.hidden = !!ui.firstChild || hud.hidden;
+    return;
+  }
+  questEl.classList.remove('done');
+  state.questDone = 0;
+  questEl.hidden = !show;
+  if (!show) return;
+  const Q = QUESTS[q];
+  const n = Math.min(Q.need, Q.got());
+  if (n >= Q.need) {
+    store.set('aryq.quest', q + 1);
+    g.dig += QUEST_DIG;
+    sfx.watered();
+    questEl.textContent = t(q + 1 < QUESTS.length ? 'qDone' : 'qAll', { d: QUEST_DIG });
+    questEl.classList.add('done');
+    state.questDone = now + 1600;
+    updateHud();
+    return;
+  }
+  const text = `${q + 1}/${QUESTS.length} · ${t(Q.key)}${Q.need > 1 ? ` · ${n}/${Q.need}` : ''}`;
+  if (questEl.textContent !== text) questEl.textContent = text;
+}
+
 function ripeAt(x, y) {
   let best = null, bd = Math.max(28, view.cs * 0.9);
   for (const a of state.ripe || []) {
@@ -1394,6 +1456,7 @@ function frame(now) {
       say(t('goalNew', { n: g.goalNeed, d: S.GOAL.dig, a: S.GOAL.apples }), 7000);
     }
     demo(dt);
+    quests(now);
     pickGhost(now);
     coach(now);
     listen(g);

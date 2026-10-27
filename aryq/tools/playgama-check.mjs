@@ -79,11 +79,21 @@ try {
   p = await pg();
   const kept = p.store.aryq ? Object.keys(JSON.parse(p.store.aryq)) : [];
   check('saves go to Bridge storage under one key, nothing to localStorage', kept.includes('aryq.save') && Object.keys(p.store).length === 1 && (await B.js('localStorage.length')) === 0, `${p.sets} sets, keys ${kept.join(',')}`);
-  // the platform pauses (its menu, an ad): the game stops behind its pause panel and the sound holds
+  // Bridge says "paused" while the game's frame has not been clicked yet (27.10, found on Kokpar): the
+  // page is visible and no ad is open, so the valley goes on and the sound waits for the click
+  const day0 = await B.js(`${A}.g.day`);
   await B.js(`window.__pgFire('pause_state_changed', true)`);
+  await sleep(800);
+  const nofocus = { panel: await B.js(`document.getElementById('ui').innerText`), on: (await B.js(`${A}.g.day`)) > day0, held: await B.js(`${A}.sound.held`) };
+  check('a pause from Bridge without focus (page visible, no ad) does not stop the game; the sound holds', nofocus.panel === '' && nofocus.on && nofocus.held, JSON.stringify(nofocus));
+  await B.js(`window.__pgFire('pause_state_changed', false)`);
+  await sleep(200);
+  check('... and comes back on the click', !(await B.js(`${A}.sound.held`)));
+  // the platform pauses during an ad: the game stops behind its pause panel
+  await B.js(`window.__pgFire('interstitial_state_changed', 'opened'); window.__pgFire('pause_state_changed', true)`);
   await sleep(300);
-  check('a pause from the platform pauses the game', /Пауза/.test(await B.js(`document.getElementById('ui').innerText`)) && (await pg()).msgs.includes('level_paused'));
-  await B.js(`window.__pgFire('pause_state_changed', false); document.getElementById('pauseBtn').click()`);
+  check('a pause from the platform during an ad pauses the game', /Пауза/.test(await B.js(`document.getElementById('ui').innerText`)) && (await pg()).msgs.includes('level_paused'));
+  await B.js(`window.__pgFire('interstitial_state_changed', 'closed'); window.__pgFire('pause_state_changed', false); document.getElementById('pauseBtn').click()`);
   await sleep(300);
   check('the game goes on after the pause', (await B.js(`!${A}.g.over && document.getElementById('ui').innerText === ''`)) && (await pg()).msgs.includes('level_resumed'));
   // the platform's sound off and back

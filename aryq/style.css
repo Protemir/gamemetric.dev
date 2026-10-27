@@ -106,6 +106,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .hint-line:empty { display: none; }
 
+/* a new player's task of the moment, under the top bar */
+.quest {
+  position: fixed;
+  left: 8px;
+  top: calc(max(8px, env(safe-area-inset-top)) + 54px);
+  max-width: min(320px, calc(100vw - 16px));
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  pointer-events: none;
+  z-index: 5;
+}
+.quest[hidden] { display: none; }
+.quest.done { background: #6fb43f; color: #fff; animation: questpop 0.5s ease-out; }
+@keyframes questpop { 0% { transform: scale(0.85); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
 /* a panel taller than the screen scrolls instead of being cut at both ends (CrazyGames frame is 520 px high) */
 #ui { position: fixed; inset: 0; display: flex; overflow-y: auto; padding: 10px 0; pointer-events: none; z-index: 10; }
 #ui > * { margin: auto; flex: none; }

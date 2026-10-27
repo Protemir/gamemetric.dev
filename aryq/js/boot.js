@@ -15,6 +15,12 @@ async function playgama() {
     return;
   }
   window.ARYQ_BRIDGE = b;
+  // the game's frame asks for the keyboard and the platform's "no focus" pause right away
+  try {
+    window.focus();
+  } catch {
+    /* a frame that may not */
+  }
   let data = {};
   try {
     const got = await Promise.race([b.storage.get(['aryq']), wait(4000)]);

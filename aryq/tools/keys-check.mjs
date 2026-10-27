@@ -1,5 +1,5 @@
 // The external check of 27.10, Aryk part, in the browser: AR-01 Space on a focused button, AR-04 the gift panel
-// after a reload, AR-05 no tip left in the menu, AR-06 "1 day".   node aryq/tools/keys-check.mjs
+// after a reload, AR-05 no tip left in the menu, AR-06 "1 day"; and a new player's first tasks (27.10).   node aryq/tools/keys-check.mjs
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve, chrome } from '../../oyu/tools/cdp.mjs';
@@ -88,6 +88,22 @@ try {
   const after = ((await B.js(`document.getElementById('ui').innerText`)).match(/Урожай за год (\d+)/) || [])[1];
   check('AR-04: "harvest this year" on the gift panel is the same after a reload', before === after && +before > 600 && +before < 760, { before, after, ui: (await B.js(`document.getElementById('ui').innerText`)).slice(0, 160), save: await B.js(`(localStorage.getItem('aryq.save') || '').slice(0, 60)`) });
   await B.js(`sessionStorage.removeItem('keep')`);
+  // a new player's first tasks: the first shows at once, is done when the first orchard drinks (the
+  // canal digs itself after ~3 s) and gives +3 ketmen; one who knew the game sees none
+  await B.init(`try { localStorage.clear(); } catch {}`);
+  await B.open(`${S.url}/aryq/?debug&lang=en`, 924, 520);
+  await B.js(`[...document.querySelectorAll('button')].find((x) => x.className === 'btn').click()`);
+  await sleep(500);
+  const q1 = await B.js(`document.getElementById('quest').hidden ? '' : document.getElementById('quest').textContent`);
+  const dig0 = await B.js(`${A}.g.dig`);
+  await sleep(5000);
+  const q2 = await B.js(`JSON.stringify({ q: document.getElementById('quest').textContent, done: document.getElementById('quest').classList.contains('done'), dig: ${A}.g.dig, store: localStorage.getItem('aryq.quest') })`).then(JSON.parse);
+  check('a new player sees task 1/5 at once; it is done when the first orchard drinks, +3 ketmen', /^1\/5 · Water an orchard/.test(q1) && q2.store === '1' && q2.done && q2.q.includes('Done! +3'), JSON.stringify({ q1, q2, dig0 }));
+  await B.init(`try { localStorage.clear(); localStorage.setItem('aryq.taught', '3'); } catch {}`);
+  await B.open(`${S.url}/aryq/?debug&lang=en`, 924, 520);
+  await B.js(`[...document.querySelectorAll('button')].find((x) => x.className === 'btn').click()`);
+  await sleep(800);
+  check('a player who knew the game sees no tasks', await B.js(`document.getElementById('quest').hidden`));
   check('no page errors', B.errors.length === 0, B.errors.slice(0, 3));
 } finally { B.close(); S.close(); }
 console.log(bad ? `${bad} failed` : 'all passed');

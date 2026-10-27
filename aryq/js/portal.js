@@ -164,13 +164,23 @@ export function onPortalMute(fn) {
   }
 }
 
-// fn() when the portal asks the game to pause (Playgama: another tab, an ad, the platform's menu)
+// fn() when the portal asks the game to pause (Playgama: another tab, an ad). Not when the game's frame
+// has simply not been clicked yet: Bridge says "paused" then too (27.10, found on Kokpar), and a new
+// player saw the pause panel instead of the valley and its first canal digging itself. The sound
+// stays off until that click (onPortalMute).
 export function onPortalPause(fn) {
   if (ya()) return yaCall((y) => y.on('game_api_pause', () => fn()));
   const b = pg();
   if (!b) return;
+  const ad = { inter: false, reward: false };
   try {
-    b.platform.on(b.EVENT_NAME.PAUSE_STATE_CHANGED, (paused) => paused && fn());
+    b.advertisement.on(b.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, (state) => (ad.inter = state === 'opened'));
+    b.advertisement.on(b.EVENT_NAME.REWARDED_STATE_CHANGED, (state) => (ad.reward = state === 'opened' || state === 'rewarded'));
+  } catch {
+    /* no ad events */
+  }
+  try {
+    b.platform.on(b.EVENT_NAME.PAUSE_STATE_CHANGED, (paused) => paused && (document.hidden || ad.inter || ad.reward) && fn());
   } catch {
     /* no pause events */
   }

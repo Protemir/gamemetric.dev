@@ -30,6 +30,16 @@ if (want.includes('ration')) {
   sim = sim.replace('const take = Math.min(q, o.need - o.got);', 'const take = Math.min(q, o.need * ration - o.got);');
   if (!sim.includes('* ration;') || !sim.includes('o.need * ration - o.got')) throw new Error('ration patch failed');
 }
+// pull: in the first year, while everybody drinks, the next orchard comes within 1.5 days (pullall: every year)
+if (want.includes('pull') || want.includes('pullall')) {
+  const d = (want.find((w) => /^d\d+$/.test(w)) || '').slice(1);
+  const e = (want.find((w) => /^e\d+$/.test(w)) || '').slice(1);
+  const cond = (want.includes('pullall') ? 'true' : 'g.year === 1') + (d ? ` && g.day < ${d}` : '') + (e ? ` && g.gardensEver < ${e}` : '');
+  const at = '  if (g.day < WINTER) {\n    if (g.day >= g.nextGarden) {';
+  if (!sim.includes(at)) throw new Error('pull patch failed');
+  sim = sim.replace(at, `  if (g.day < WINTER && ${cond} && g.objects.length && g.objects.every((o) => o.s >= 0.6)) g.nextGarden = Math.min(g.nextGarden, g.day + 1.5);\n` + at);
+}
+if (want.includes('y1six')) sim = sim.replace('g.gardensEver < 4 ? 2.5 : Math.max(5, 11 - g.year)', 'g.gardensEver < 4 ? 2.5 : g.year === 1 ? 6 : Math.max(5, 11 - g.year)');
 fs.writeFileSync(path.join(dir, 'sim.js'), sim);
 const S = await import(pathToFileURL(path.join(dir, 'sim.js')).href);
 const CALM = want.includes('calm4') ? 4 : 2.5;
@@ -39,6 +49,7 @@ const rnd = () => ((r = (Math.imul(r, 1103515245) + 12345) >>> 0) / 4294967296);
 const rows = [];
 for (let k = 0; k < games; k++) {
   const g = S.newGame(16, 26, 9000 + k, 'wide');
+  if (want.includes('first')) { S.advance(g, 0.01); S.giveHeadStart(g, true); }
   let real = 0, idle = 0, idle2 = 0, year1End = null, goals = 0;
   const seen = new Map(); // object -> real time it became thirsty
   const react = new Map();
