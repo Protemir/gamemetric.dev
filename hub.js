@@ -11,7 +11,7 @@ const TEXT = {
     check: 'Test yourself',
     'shift-depot.name': 'Shift Depot',
     'shift-depot.genre': 'Puzzle',
-    'shift-depot.meta': '24 levels',
+    'shift-depot.meta': '38 levels',
     'shift-depot.desc': 'Slide rows and columns of a tiny warehouse. Parcels ride along with the floor, then every conveyor takes one more step. Deliver every parcel to its dock.',
     'sybys.name': 'Whispers of the Steppe',
     'sybys.genre': 'Strategy & intrigue',
