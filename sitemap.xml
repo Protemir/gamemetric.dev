@@ -6,6 +6,11 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/?lang=en"/>
   </url>
   <url>
+    <loc>https://gamemetric.dev/caravan/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/caravan/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/caravan/?lang=en"/>
+  </url>
+  <url>
     <loc>https://gamemetric.dev/shift-depot/</loc>
     <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/shift-depot/?lang=ru"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/shift-depot/?lang=en"/>
