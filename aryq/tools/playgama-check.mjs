@@ -30,7 +30,7 @@ const check = (name, ok, info = '') => {
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}${info ? ' — ' + info : ''}`);
 };
 const fake = (lang) => `
-  const pg = (window.__pg = { msgs: [], ads: [], rewards: [], sets: 0, store: JSON.parse(sessionStorage.getItem('pgstore') || '{}') });
+  const pg = (window.__pg = { msgs: [], ads: [], rewards: [], events: [], sets: 0, store: JSON.parse(sessionStorage.getItem('pgstore') || '{}') });
   const ls = {};
   const on = (ev, f) => (ls[ev] = ls[ev] || []).push(f);
   window.__pgFire = (ev, v) => (ls[ev] || []).forEach((f) => f(v));
@@ -38,6 +38,7 @@ const fake = (lang) => `
     EVENT_NAME: { AUDIO_STATE_CHANGED: 'audio_state_changed', PAUSE_STATE_CHANGED: 'pause_state_changed', INTERSTITIAL_STATE_CHANGED: 'interstitial_state_changed', REWARDED_STATE_CHANGED: 'rewarded_state_changed' },
     initialize: async () => { pg.msgs.push('init'); },
     platform: { language: '${lang}', isAudioEnabled: true, on, sendMessage: async (m) => { pg.msgs.push(m); } },
+    analytics: { send: (e, d) => { pg.events.push(d ? e + ' ' + JSON.stringify(d) : e); } },
     storage: {
       get: async (keys) => keys.map((k) => (k in pg.store ? pg.store[k] : null)),
       set: async (keys, vals) => { keys.forEach((k, i) => (pg.store[k] = vals[i])); pg.sets++; sessionStorage.setItem('pgstore', JSON.stringify(pg.store)); },
@@ -111,7 +112,24 @@ try {
   await B.js(`${A}.g.objects.forEach((o) => (o.thirst = 0)); ${A}.g.day = 119.97`);
   await sleep(900);
   check('no ad at the end of a year in the first two minutes', (await pg()).ads.length === 0);
-  await B.js(`document.querySelector('#ui .choice') && document.querySelector('#ui .choice').click()`);
+  // all three gifts for an ad (04.11): the button is on the year panel and on screen; an ad that fails
+  // gives nothing and lets the single gifts be picked again; a watched one gives all three
+  const fits = await B.js(`(() => { const r = document.querySelector('#ui .gifts-ad').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()`);
+  check('the year panel offers all three gifts for an ad, on screen without scrolling', fits);
+  const g0 = await B.js(`JSON.stringify({ dig: ${A}.g.dig, cap: ${A}.g.cap, melt: ${A}.g.melt })`).then(JSON.parse);
+  await B.js(`window.__pgReward = 'fail'; document.querySelector('#ui .gifts-ad').click()`);
+  await sleep(100);
+  const held = await B.js(`[...document.querySelectorAll('#ui .choice')].every((b) => b.disabled)`);
+  await sleep(500);
+  const failed = await B.js(`JSON.stringify({ t: document.querySelector('#ui .gifts-ad').innerText, open: [...document.querySelectorAll('#ui .choice')].every((b) => !b.disabled), dig: ${A}.g.dig })`).then(JSON.parse);
+  check('... while the ad loads the single gifts wait; a failed ad gives nothing and they come back', held && /рекламы сейчас нет/.test(failed.t) && failed.open && failed.dig === g0.dig, JSON.stringify({ held, failed }));
+  await B.js(`window.__pgReward = 'ok'; document.querySelector('#ui .gifts-ad').click()`);
+  await sleep(2000);
+  const g1 = await B.js(`JSON.stringify({ dig: ${A}.g.dig, cap: ${A}.g.cap, melt: ${A}.g.melt, panel: document.getElementById('ui').innerText, paused: ${A}.paused })`).then(JSON.parse);
+  // (dig: the year runs on for a moment after the panel closes and earns its own ketmen)
+  check('... a watched ad gives all three gifts and the year goes on', g1.dig >= g0.dig + 15 && Math.abs(g1.cap - g0.cap - 0.6) < 1e-6 && Math.abs(g1.melt / g0.melt - 1.12) < 1e-6 && g1.panel === '' && (await pg()).rewards.at(-1) === 'all_gifts:ok', JSON.stringify({ g0, g1 }));
+  const ev = (await pg()).events;
+  check('game events go to Playgama analytics (start, year, gifts)', ['start', 'year', 'gifts'].every((e) => ev.some((x) => x.split(' ')[0] === e)), ev.slice(0, 8).join(' | '));
   console.log('     (waiting out the two minutes, the game paused)');
   await sleep(300);
   await B.js(`document.getElementById('pauseBtn').click()`);

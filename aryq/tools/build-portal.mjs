@@ -9,8 +9,8 @@
 // index.html at the root of the zip.
 // On a portal saves go to the portal's storage (CrazyGames Data module, Playgama Bridge storage),
 // there is no update check and the page title is the full English name. Playgama allows no requests
-// besides Bridge itself: there js/pulse.js counts nothing, and playgama-bridge-config.json sets the
-// full-screen ads apart. Yandex Games hosts the SDK itself at /sdk.js; there too js/pulse.js counts
+// besides Bridge itself: there js/pulse.js sends its events to Playgama analytics through Bridge, and
+// playgama-bridge-config.json sets the full-screen ads apart. Yandex Games hosts the SDK itself at /sdk.js; there too js/pulse.js counts
 // nothing, the page blocks the browser's long-press menu and pull-to-refresh, and the scripts lose
 // their comment lines. Run node aryq/tools/stamp.mjs first so the versions in index.html are fresh.
 import fs from 'node:fs';
@@ -37,7 +37,31 @@ fs.mkdirSync(path.join(out, 'js'), { recursive: true });
 fs.copyFileSync(path.join(game, 'style.css'), path.join(out, 'style.css'));
 for (const f of fs.readdirSync(path.join(game, 'js'))) if (f.endsWith('.js')) fs.copyFileSync(path.join(game, 'js', f), path.join(out, 'js', f));
 
-if (own) {
+if (portal === 'playgama') {
+  // Playgama: the same events go to Playgama's own analytics through Bridge (04.11: the cabinet shows
+  // where players stop; the sandbox could not tell why the average play stayed under 5:00)
+  fs.writeFileSync(
+    path.join(out, 'js', 'pulse.js'),
+    `// This build sends no requests of its own: its events go to Playgama analytics through Bridge
+// (tools/build-portal.mjs puts this file in place of js/pulse.js).
+const opened = performance.now();
+export function minute() {
+  const m = Math.floor((performance.now() - opened) / 60000);
+  return m <= 10 ? 'm' + m : m < 30 ? 'm' + Math.floor(m / 5) * 5 : 'm30+';
+}
+export function pulse(e, a = '') {
+  try {
+    const b = window.ARYQ_BRIDGE;
+    if (!b || !b.analytics || !b.analytics.send) return;
+    const r = a === '' ? b.analytics.send(e) : b.analytics.send(e, { a: String(a).slice(0, 40), min: Math.floor((performance.now() - opened) / 60000) });
+    if (r && r.catch) r.catch(() => {});
+  } catch {
+    /* counting never breaks the game */
+  }
+}
+`,
+  );
+} else if (own) {
   fs.writeFileSync(
     path.join(out, 'js', 'pulse.js'),
     `// This build counts nothing of its own: the platform allows no requests besides its SDK
@@ -62,7 +86,7 @@ if (portal === 'playgama') {
       minimumDelayBetweenInterstitial: 120,
       initialInterstitialDelay: 120,
       interstitial: { placementFallback: 'year_end', placements: [{ id: 'year_end' }, { id: 'game_over' }] },
-      rewarded: { placementFallback: 'one_more_year', placements: [{ id: 'one_more_year' }] },
+      rewarded: { placementFallback: 'one_more_year', placements: [{ id: 'one_more_year' }, { id: 'all_gifts' }] },
     },
   };
   fs.writeFileSync(path.join(out, 'playgama-bridge-config.json'), JSON.stringify(config, null, 4) + '\n');

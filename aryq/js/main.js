@@ -150,6 +150,8 @@ const TEXT = {
     adMoreSub: 'засохший сад уйдёт, остальным передышка и +{d} ⛏',
     adWait: 'реклама загружается…',
     adNone: 'рекламы сейчас нет, попробуй позже',
+    adGifts: '🎬 Все три подарка',
+    adGiftsSub: 'за рекламу: +15 ⛏, шире арыки и щедрее ледник',
     qWater1: 'Напои сад',
     qWater3: 'Напои 3 сада сразу',
     qApple: 'Сорви спелое яблоко, когда все пьют',
@@ -286,6 +288,8 @@ const TEXT = {
     adMoreSub: 'the dry orchard goes, the rest get a breather and +{d} ⛏',
     adWait: 'loading the ad…',
     adNone: 'no ad right now, try again later',
+    adGifts: '🎬 All three gifts',
+    adGiftsSub: 'for an ad: +15 ⛏, wider canals and a more generous glacier',
     qWater1: 'Water an orchard',
     qWater3: 'Water 3 orchards at once',
     qApple: 'Pick a ripe apple when all drink',
@@ -993,6 +997,40 @@ function showYear(ev) {
     list.append(btn);
   }
   box.append(list);
+  // where the portal has ads for a reward (Playgama, 04.11): all three gifts instead of one. Ad shows
+  // per play were 0.28 of the 0.30 the sandbox wants, and a full-screen ad loses a third of players;
+  // this one is asked for. While the ad is on, the single gifts wait: the year must not start behind it.
+  if (canReward()) {
+    const year = g.year;
+    const all = el('button', 'btn ghost gifts-ad');
+    const sub = el('small', null, t('adGiftsSub'));
+    all.append(el('span', null, t('adGifts')), sub);
+    const hold = (on) => list.querySelectorAll('button').forEach((b) => (b.disabled = on));
+    box.classList.add('with-ad');
+    all.addEventListener('click', async () => {
+      if (all.disabled) return;
+      sfx.audioInit();
+      all.disabled = true;
+      hold(true);
+      sub.textContent = t('adWait');
+      const ok = await rewarded('all_gifts');
+      if (!all.isConnected || g.over || g.year !== year) return;
+      if (!ok) {
+        sub.textContent = t('adNone');
+        all.disabled = false;
+        hold(false);
+        return;
+      }
+      for (const kind of S.REWARDS) S.reward(g, kind);
+      pulse('gifts', 'ad:y' + Math.min(year - 1, 9));
+      sfx.click();
+      saveNow();
+      ui.replaceChildren();
+      paused = false;
+      updateHud();
+    });
+    box.append(all);
+  }
   ui.replaceChildren(box);
 }
 
