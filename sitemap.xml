@@ -60,4 +60,9 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/test/"/>
     <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/test/?lang=ru"/>
   </url>
+  <url>
+    <loc>https://gamemetric.dev/xo/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/xo/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/xo/?lang=en"/>
+  </url>
 </urlset>

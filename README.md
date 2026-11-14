@@ -6,6 +6,7 @@ Free browser games by TEMIRLAB, no download and no sign-up. The home page is a l
 - [`/asem/`](https://gamemetric.dev/asem/): **Әсем Жол**, a racing game through Almaty and around Kazakhstan, see [asem/README.md](asem/README.md). It used to live at asemface.com, which now forwards here and brings the player's saves along.
 - [`/jekpe/`](https://gamemetric.dev/jekpe/): **Жекпе-жек**, a fighting game with Kazakh characters and no blood, see [jekpe/README.md](jekpe/README.md). It used to be the home page; old online room links (`/#room=...`) are forwarded.
 - [`/test/`](https://gamemetric.dev/test/): a gamer brain test (reaction, aim, clicks, memory).
+- [`/xo/`](https://gamemetric.dev/xo/): tic-tac-toe for two players on one screen or against a bot (easy, medium, unbeatable). The rules and the bots are in `xo/logic.js`; `node xo/tools/test.mjs` checks them, with `--browser` it also plays the page in headless Chrome on 22 screen sizes. `node xo/tools/art.mjs` redraws the card picture, the link preview and the icon.
 
 The list itself is `index.html`, `hub.css` and `hub.js`; card pictures and the short clips that play on hover are in `img/`.
 

@@ -1,0 +1,550 @@
+:root {
+  color-scheme: dark;
+  --bg: #0e0a19;
+  --card: #18122a;
+  --card-hi: #231a3b;
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #f5f0fa;
+  --muted: #b2a8c2;
+  --gold: #f4b93a;
+  --x: #ff5d6c;
+  --o: #3fd3e6;
+  --font: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --vh: 100vh;
+}
+/* the height that is really visible on a phone, without the browser's bars */
+@supports (height: 100dvh) {
+  :root { --vh: 100dvh; }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: var(--vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.4;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+button { margin: 0; font: inherit; color: inherit; -webkit-appearance: none; appearance: none; touch-action: manipulation; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+/* the same soft light as on the list of games */
+.glow {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60vw 50vh at 12% -10%, rgba(244, 185, 58, 0.14), transparent 70%),
+    radial-gradient(50vw 50vh at 95% 5%, rgba(138, 92, 246, 0.2), transparent 70%),
+    radial-gradient(70vw 60vh at 50% 110%, rgba(63, 211, 230, 0.1), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M24 14l6 10-6 10-6-10z' fill='none' stroke='%23ffffff' stroke-opacity='.035' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+
+/* ---------- top bar: 52 px tall, the board's size is counted from it ---------- */
+.top {
+  flex: none;
+  width: 100%;
+  max-width: 1180px;
+  height: 52px;
+  margin: var(--safe-t) auto 0;
+  padding: 8px max(16px, var(--safe-r)) 0 max(16px, var(--safe-l));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home, .back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 40px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.home { padding: 0 14px 0 8px; margin-left: -8px; }
+.home .mark { width: 24px; height: 24px; }
+.back { padding: 0 16px 0 8px; margin-left: -8px; gap: 4px; border: 0; background: none; cursor: pointer; }
+.back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.home:hover, .back:hover { background: rgba(255, 255, 255, 0.07); }
+
+.tools { margin-left: auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.tag {
+  min-width: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.icon:hover { background: rgba(255, 255, 255, 0.12); }
+.icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.icon .spk { fill: currentColor; stroke-width: 1.2; }
+.icon .mute { display: none; }
+.icon[aria-pressed="false"] { color: var(--muted); }
+.icon[aria-pressed="false"] .wave { display: none; }
+.icon[aria-pressed="false"] .mute { display: inline; }
+
+.langs { flex: none; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); }
+.langs button {
+  font-size: 13px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.langs button[aria-pressed="true"] { background: var(--gold); color: #1d1405; }
+
+main { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
+.view { animation: view-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes view-in { from { opacity: 0; transform: translateY(10px); } }
+
+/* ---------- the marks: one set of rules for the board, the menu picture and the small icons ---------- */
+.m { fill: none; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; }
+.m.x { stroke: var(--x); }
+.m.o { stroke: var(--o); }
+.m path {
+  /* a dash as long as the path; shifted a hair past its start, so no round cap shows before the drawing begins */
+  stroke-dasharray: 1 2;
+  stroke-dashoffset: 1.02;
+  animation: draw 0.24s ease-out var(--d, 0s) forwards;
+}
+.m.x path + path { animation-delay: calc(var(--d, 0s) + 0.13s); }
+.m.o path { animation-duration: 0.36s; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+/* icons are not drawn stroke by stroke */
+.m.mini path, .m.still path { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
+.m.mini { stroke-width: 15; }
+
+/* ---------- menu ---------- */
+.menu {
+  width: 100%;
+  max-width: 552px;
+  margin: 0 auto;
+  padding: 4px max(16px, var(--safe-r)) 8px max(16px, var(--safe-l));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.intro { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.art {
+  --a: clamp(96px, var(--vh) - 470px, 180px);
+  width: var(--a);
+  height: var(--a);
+  margin-bottom: 4px;
+}
+.art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: perspective(520px) rotateX(22deg) rotateZ(-7deg);
+  filter: drop-shadow(0 18px 20px rgba(0, 0, 0, 0.5));
+  animation: float 6s ease-in-out 1.6s infinite;
+}
+@keyframes float {
+  50% { transform: perspective(520px) rotateX(22deg) rotateZ(-7deg) translateY(-6px); }
+}
+.tiles rect { fill: #221939; stroke: rgba(255, 255, 255, 0.12); stroke-width: 1.5; }
+.win {
+  fill: none;
+  stroke: #ffd25a;
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-dasharray: 1 2;
+  stroke-dashoffset: 1.02;
+  animation: draw 0.45s ease-out var(--d, 0s) forwards;
+}
+
+h1 {
+  margin: 10px 0 6px;
+  font-size: clamp(30px, 8.6vw, 46px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  font-weight: 900;
+}
+.lead { margin: 0 0 18px; max-width: 430px; color: var(--muted); font-size: clamp(15px, 2.1vw, 17px); text-wrap: balance; }
+
+.modes { width: 100%; display: grid; gap: 12px; }
+.mode {
+  width: 100%;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--card-hi), var(--card));
+  box-shadow: 0 18px 40px -26px rgba(0, 0, 0, 0.8);
+}
+.mode.duo { --accent: var(--gold); cursor: pointer; transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s, box-shadow 0.25s; }
+.mode.bot { --accent: #a78bfa; flex-direction: column; align-items: stretch; gap: 12px; }
+.mode.duo:hover {
+  transform: translateY(-3px);
+  border-color: rgba(244, 185, 58, 0.55);
+  box-shadow: 0 22px 44px -24px rgba(244, 185, 58, 0.45);
+}
+.mode.duo:active { transform: scale(0.985); }
+.mode-head { display: flex; align-items: center; gap: 14px; }
+.mode-ico {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.mode-ico svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.mode-ico .dot { fill: currentColor; stroke: none; }
+.mode-text { min-width: 0; }
+.mode-text b { display: block; font-size: 20px; line-height: 1.2; font-weight: 900; letter-spacing: -0.015em; }
+.mode-text small { display: block; margin-top: 2px; color: var(--muted); font-size: 13.5px; line-height: 1.3; text-wrap: balance; }
+.go {
+  flex: none;
+  margin-left: auto;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #1d1405;
+  transition: transform 0.2s;
+}
+.go svg { width: 22px; height: 22px; fill: currentColor; }
+.mode.duo:hover .go { transform: translateX(3px); }
+
+.levels { display: flex; gap: 8px; }
+.level {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 8px 11px;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.2s, background 0.2s;
+}
+.level:hover {
+  transform: translateY(-2px);
+  border-color: var(--c);
+  background: rgba(255, 255, 255, 0.09);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+.level:active { transform: scale(0.97); }
+.dots { display: flex; gap: 4px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
+.dots i.on { background: var(--c); box-shadow: 0 0 8px var(--c); }
+
+.foot { flex: none; text-align: center; color: var(--muted); font-size: 13px; padding: 8px 16px calc(14px + var(--safe-b)); }
+.foot a { color: var(--text); text-decoration-color: rgba(255, 255, 255, 0.3); text-underline-offset: 3px; }
+.noscript { text-align: center; color: var(--muted); padding: 24px; }
+
+/* ---------- game ----------
+   Everything except the board has a fixed height, so the board takes exactly what is left:
+   52 top bar + 10 + 64 score + 14 + board + 12 + 28 status + 10 + 46 buttons + 12 = board + 248 */
+.game {
+  --n: max(150px, min(100vw - 32px, var(--vh) - 248px - var(--safe-t) - var(--safe-b), 500px));
+  /* the score and the buttons are never narrower than a comfortable row, even when the board is small */
+  --w: max(var(--n), min(100vw - 32px, 340px));
+  display: grid;
+  justify-content: center;
+  justify-items: center;
+  grid-template-columns: var(--w);
+  grid-template-areas: "score" "board" "status" "actions";
+  padding: 0 16px calc(12px + var(--safe-b));
+}
+
+.score {
+  grid-area: score;
+  width: var(--w);
+  height: 64px;
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 0.72fr 1fr;
+  gap: 8px;
+}
+.side, .draws {
+  min-width: 0;
+  padding: 0 8px;
+  display: grid;
+  grid-template-rows: 20px 28px;
+  row-gap: 2px;
+  align-content: center;
+  justify-items: center;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--card-hi), var(--card));
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.side.x { --c: var(--x); }
+.side.o { --c: var(--o); }
+.who {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.who span { overflow: hidden; text-overflow: ellipsis; }
+.who .m { flex: none; width: 15px; height: 15px; }
+.num { font-size: 26px; line-height: 28px; font-weight: 900; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.side .num { color: var(--c); }
+.side.active { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 12px 26px -16px var(--c); }
+.side.active .who { color: var(--text); }
+.num.bump { animation: bump 0.45s cubic-bezier(0.2, 1.6, 0.4, 1); }
+@keyframes bump { 35% { transform: scale(1.45); } }
+
+.board {
+  grid-area: board;
+  position: relative;
+  width: var(--n);
+  height: var(--n);
+  margin-top: 14px;
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  /* a share of the board, so the line through the winning cells can be placed in percent */
+  gap: calc(var(--n) * 0.032);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.board[data-over="x"] { --c: var(--x); }
+.board[data-over="o"] { --c: var(--o); }
+.cell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: calc(var(--n) * 0.055);
+  border: 1px solid var(--line);
+  background-color: var(--card);
+  background-image: linear-gradient(180deg, var(--card-hi), var(--card));
+  background-repeat: no-repeat;
+  background-position: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 24px -16px rgba(0, 0, 0, 0.9);
+  cursor: default;
+  transition: transform 0.12s, border-color 0.2s, opacity 0.3s;
+}
+.cell .m {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transition: opacity 0.3s;
+}
+.cell .m.x { filter: drop-shadow(0 0 calc(var(--n) * 0.022) rgba(255, 93, 108, 0.5)); }
+.cell .m.o { filter: drop-shadow(0 0 calc(var(--n) * 0.022) rgba(63, 211, 230, 0.5)); }
+
+/* a cell that can be played: the pointer, a press, and on a computer a faint mark under the mouse */
+.board[data-go] .cell:empty { cursor: pointer; }
+.board[data-go] .cell:empty:active { transform: scale(0.95); }
+@media (hover: hover) and (pointer: fine) {
+  .board[data-go] .cell:empty:hover { border-color: rgba(255, 255, 255, 0.24); }
+  .board[data-go="x"] .cell:empty:hover {
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M26 26L74 74M74 26L26 74' fill='none' stroke='%23ff5d6c' stroke-opacity='.3' stroke-width='11' stroke-linecap='round'/%3E%3C/svg%3E"),
+      linear-gradient(180deg, var(--card-hi), var(--card));
+  }
+  .board[data-go="o"] .cell:empty:hover {
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='24.5' fill='none' stroke='%233fd3e6' stroke-opacity='.3' stroke-width='11'/%3E%3C/svg%3E"),
+      linear-gradient(180deg, var(--card-hi), var(--card));
+  }
+}
+
+/* the round is over: a tap anywhere on the board starts the next one */
+.board[data-over] .cell { cursor: pointer; }
+.board[data-over="x"] .cell:not(.win) .m,
+.board[data-over="o"] .cell:not(.win) .m { opacity: 0.32; }
+.board[data-over="draw"] .cell .m { opacity: 0.6; }
+.cell.win {
+  border-color: var(--c);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--c) 30%, var(--card-hi)), color-mix(in srgb, var(--c) 14%, var(--card)));
+  animation: win-pop 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.1s;
+}
+@keyframes win-pop { 40% { transform: scale(1.06); } }
+
+/* the glow is on the whole picture: Safari does not put filters on the parts of an SVG */
+.strike {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(255, 200, 70, 0.9));
+}
+.strike path {
+  fill: none;
+  stroke: #ffe08a;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-dasharray: 1 2;
+  stroke-dashoffset: 1.02;
+  animation: draw 0.4s ease-out 0.12s forwards;
+}
+
+.status {
+  grid-area: status;
+  max-width: var(--w);
+  height: 28px;
+  margin: 12px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.status .m { flex: none; width: 19px; height: 19px; stroke-width: 15; }
+.status.done { animation: status-pop 0.4s cubic-bezier(0.2, 1.5, 0.4, 1); }
+.status.done[data-tone="x"] { color: var(--x); }
+.status.done[data-tone="o"] { color: var(--o); }
+.status.done[data-tone="draw"] { color: var(--gold); }
+@keyframes status-pop { from { transform: scale(0.8); opacity: 0; } }
+/* three dots that fill one after another while the bot is thinking */
+.status .wait { display: inline-flex; gap: 4px; margin-left: 2px; }
+.status .wait i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.25; animation: wait 0.9s infinite; }
+.status .wait i:nth-child(2) { animation-delay: 0.15s; }
+.status .wait i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes wait { 30% { opacity: 1; } 60% { opacity: 0.25; } }
+
+.actions { grid-area: actions; width: var(--w); height: 46px; margin-top: 10px; display: flex; gap: 8px; }
+.btn {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.12s, opacity 0.2s;
+}
+.btn:hover { background: rgba(255, 255, 255, 0.13); }
+.btn:active { transform: scale(0.97); }
+.btn.primary { border-color: transparent; background: var(--gold); color: #1d1405; font-weight: 900; }
+.btn.primary:hover { background: #ffc94f; }
+.btn.ghost { flex: 0 0 auto; background: none; color: var(--muted); }
+.btn.ghost:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn:disabled:hover { background: rgba(255, 255, 255, 0.07); }
+.btn.ghost:disabled:hover { background: none; color: var(--muted); }
+.btn:disabled:active { transform: none; }
+
+.confetti { position: fixed; inset: 0; z-index: 5; width: 100%; height: 100%; pointer-events: none; }
+
+/* ---------- a phone on its side: the board on the left, everything else beside it ---------- */
+@media (orientation: landscape) and (max-height: 540px) {
+  .game {
+    /* 52 top bar + board + 16 */
+    --n: max(150px, min(var(--vh) - 68px - var(--safe-t) - var(--safe-b), 48vw));
+    --w: min(340px, 100vw - var(--n) - 56px - var(--safe-l) - var(--safe-r));
+    grid-template-columns: var(--n) var(--w);
+    grid-template-rows: 1fr auto auto auto 1fr;
+    grid-template-areas: "board ." "board score" "board status" "board actions" "board .";
+    column-gap: 24px;
+    padding: 0 max(16px, var(--safe-r)) calc(8px + var(--safe-b)) max(16px, var(--safe-l));
+  }
+  .score, .board { margin-top: 0; }
+
+  .menu { max-width: 800px; flex-direction: row; align-items: center; gap: 28px; padding-top: 0; }
+  .intro { flex: 0 0 40%; min-width: 0; align-items: flex-start; text-align: left; }
+  .modes { flex: 1; min-width: 0; gap: 10px; }
+  .art { --a: clamp(60px, var(--vh) - 240px, 120px); }
+  h1 { font-size: clamp(20px, 3.7vw, 34px); white-space: nowrap; }
+  .lead { margin-bottom: 0; font-size: 15px; }
+  .mode { padding: 10px 14px; }
+  .mode.bot { gap: 10px; }
+  .foot { padding-top: 4px; padding-bottom: calc(8px + var(--safe-b)); }
+}
+
+/* a small phone on its side: the names of the modes say enough */
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 600px) {
+  .mode-text small { display: none; }
+}
+
+/* three equal buttons when the card is wide enough for the longest name */
+.modes { container-type: inline-size; }
+@container (min-width: 420px) {
+  .level { flex: 1 1 0; }
+}
+
+/* small phones: a tighter menu, no picture when there is no room for it */
+@media (max-width: 380px) {
+  .level { font-size: 13px; padding-left: 6px; padding-right: 6px; }
+  .mode { padding: 12px 14px; gap: 12px; }
+  .mode-head { gap: 12px; }
+  .mode-text small { font-size: 13px; }
+  .btn { font-size: 14px; padding: 0 10px; }
+}
+@media (orientation: portrait) and (max-height: 560px) {
+  .art { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view, .art svg, .num.bump, .cell.win, .status.done, .status .wait i { animation: none; }
+  .m path, .win, .strike path { animation: none; stroke-dashoffset: 0; }
+  .cell, .mode.duo, .level, .btn, .go { transition: none; }
+}
