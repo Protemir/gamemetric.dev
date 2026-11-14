@@ -78,6 +78,8 @@ export async function chrome() {
   let initScript = null;
   return {
     cdp,
+    // fn(message) for every DevTools event (screencast frames and the like)
+    on: (fn) => listeners.push(fn),
     js,
     errors,
     // a script that runs before the page's own code on every load
@@ -111,7 +113,14 @@ export async function chrome() {
     close() {
       ws.close();
       proc.kill();
-      setTimeout(() => fs.rmSync(profile, { recursive: true, force: true }), 500);
+      // Chrome may still hold its files for a moment; a leftover temp folder is not worth a crash
+      setTimeout(() => {
+        try {
+          fs.rmSync(profile, { recursive: true, force: true });
+        } catch {
+          /* left in temp */
+        }
+      }, 500);
     },
   };
 }

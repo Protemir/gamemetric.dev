@@ -56,6 +56,14 @@
   .chips span { padding: 10px 22px; border-radius: 999px; font-size: 26px; font-weight: 800; background: rgba(255, 255, 255, 0.08); border: 1.5px solid rgba(255, 255, 255, 0.14); }
   .chips span:first-child { background: var(--gold); border-color: transparent; color: #1d1405; }
 
+  /* portal covers: the English name */
+  .title { position: absolute; display: flex; flex-direction: column; text-align: center; }
+  .title h1 { margin: 0; font-weight: 900; letter-spacing: -0.035em; line-height: 0.95; color: #fff; text-shadow: 0 0 0.25em rgba(170, 130, 255, 0.55), 0 0.05em 0 rgba(40, 20, 80, 0.9); white-space: nowrap; }
+  .title h1 .x { color: var(--x); text-shadow: 0 0 0.22em rgba(255, 93, 108, 0.8); }
+  .title h1 .o { color: var(--o); text-shadow: 0 0 0.22em rgba(63, 211, 230, 0.8); }
+  .title p { margin: 0.28em 0 0; font-weight: 900; letter-spacing: 0.32em; padding-left: 0.32em; color: var(--gold); text-shadow: 0 0 0.4em rgba(244, 185, 58, 0.6); white-space: nowrap; }
+  .title .tag { align-self: center; margin-top: 0.9em; padding: 0.35em 1em; border-radius: 999px; font-weight: 800; color: var(--text); background: rgba(255, 255, 255, 0.09); border: 2px solid rgba(255, 255, 255, 0.16); white-space: nowrap; }
+
   /* icon */
   .icon svg.big { position: absolute; inset: 0; width: 100%; height: 100%; }
   .icon .m.x { filter: drop-shadow(0 0 5px rgba(255, 93, 108, 0.6)); }
@@ -94,6 +102,36 @@
     far('o', 92, 40, 100, 0, 1.5, 0.5);
     far('x', 806, 384, 120, 20, 1.5, 0.6);
     board(266, 44, 428);
+  } else if (['land', 'port', 'tall', 'square'].includes(kind)) {
+    // covers for the portals; the name stays away from the top-left corner, where CrazyGames puts its labels
+    const title = (css, h, p, tag) =>
+      add(`<div class="title" style="${css}"><h1 style="font-size:${h}px"><span class="x">Tic</span>-Tac-<span class="o">Toe</span></h1><p style="font-size:${p}px">NEON DUEL</p>${tag ? `<span class="tag" style="font-size:${tag}px">2 players · vs bot</span>` : ''}</div>`);
+    if (kind === 'land') {
+      far('x', -110, 640, 420, -16, 4, 0.6);
+      far('o', 1620, -90, 400, 0, 5, 0.55);
+      far('o', 900, 840, 170, 0, 2, 0.45);
+      far('x', 1760, 820, 190, 20, 2, 0.5);
+      board(170, 170, 720);
+      title('left: 980px; width: 860px; top: 330px;', 150, 64, 40);
+    } else if (kind === 'square') {
+      far('x', -70, 520, 260, -16, 3, 0.55);
+      far('o', 590, -50, 260, 0, 4, 0.5);
+      board(196, 60, 408);
+      title('left: 0; right: 0; top: 560px;', 102, 40, 0);
+    } else if (kind === 'port') {
+      far('x', -90, 720, 300, -16, 3, 0.55);
+      far('o', 580, -40, 280, 0, 4, 0.5);
+      far('x', 640, 1050, 160, 20, 2, 0.45);
+      board(150, 150, 500);
+      title('left: 0; right: 0; top: 780px;', 104, 42, 30);
+    } else {
+      far('x', -120, 1220, 420, -16, 4, 0.55);
+      far('o', 780, 90, 380, 0, 5, 0.5);
+      far('x', 860, 1640, 200, 20, 2, 0.45);
+      far('o', 60, 120, 150, 0, 2, 0.4);
+      board(170, 400, 740);
+      title('left: 0; right: 0; top: 1300px;', 140, 56, 40);
+    }
   } else if (kind === 'og') {
     far('o', 1010, -70, 270, 0, 4.5, 0.5);
     far('x', 1040, 440, 190, 18, 2.5, 0.55);

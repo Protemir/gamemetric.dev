@@ -1,19 +1,25 @@
 // Tic-tac-toe: the menu, the board, the score and the sounds. The rules and the bots are in logic.js.
 import { result, botMove, other } from './logic.js';
 import { boardArt, MARK } from './art.js';
+import { PORTAL, portalLang, loadingDone, gameplay, happytime, onPortalMute, onPortalPause, adBreak } from './portal.js';
+
+// the name on portals, where the game is listed in English
+const PORTAL_NAME = 'Tic-Tac-Toe: Neon Duel';
 
 const $ = (sel) => document.querySelector(sel);
+// on a portal the saves go to its storage (boot.js puts it in window.XO_DATA)
+const store = () => window.XO_DATA || localStorage;
 const local = {
   get(key) {
     try {
-      return localStorage.getItem(key);
+      return store().getItem(key);
     } catch {
       return null;
     }
   },
   set(key, value) {
     try {
-      localStorage.setItem(key, value);
+      store().setItem(key, value);
     } catch {
       /* private mode */
     }
@@ -110,7 +116,8 @@ const TEXT = {
 
 // the same choice as on the list of games: the address, then what was picked before, then the browser
 const nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
-let lang = new URLSearchParams(location.search).get('lang') || local.get('gm.lang') || (/^(ru|kk|ky|be|uz|tg|uk)\b/i.test(nav) ? 'ru' : 'en');
+// (on a portal the portal knows the player's language best)
+let lang = new URLSearchParams(location.search).get('lang') || (PORTAL && portalLang()) || local.get('gm.lang') || (/^(ru|kk|ky|be|uz|tg|uk)\b/i.test(nav) ? 'ru' : 'en');
 if (lang !== 'ru' && lang !== 'en') lang = 'en';
 const t = (key) => TEXT[lang][key] ?? key;
 
@@ -146,9 +153,10 @@ const saveScores = () => local.set('xo.score', JSON.stringify(scores));
 
 // ---------- sound: a few notes made on the spot, no files ----------
 let soundOn = local.get('xo.sound') !== '0';
+let portalMuted = false; // the portal's own sound switch, its pause or an ad
 let ac = null;
 function note(freq, at, dur, type, vol) {
-  if (!soundOn) return;
+  if (!soundOn || portalMuted) return;
   try {
     ac = ac || new (window.AudioContext || window.webkitAudioContext)();
     if (ac.state === 'suspended') {
@@ -301,10 +309,18 @@ function paint(quiet = false) {
   again.classList.toggle('primary', !!over);
   again.disabled = !over && S.board.every((m) => !m);
   $('#reset').disabled = !(sc.x || sc.o || sc.d);
+  tellPortal();
+}
+
+// the portal hears when a round is being played; a round with no marks yet is a fresh one
+function tellPortal() {
+  loadingDone();
+  gameplay(S.view === 'game' && !S.res && !paused, S.board.every((m) => !m));
 }
 
 // ---------- a round ----------
 let botTimer = 0;
+let paused = false; // Playgama paused the game (its menu, an ad)
 
 function clearRound() {
   clearTimeout(botTimer);
@@ -316,7 +332,7 @@ function clearRound() {
 
 function think() {
   clearTimeout(botTimer);
-  if (S.view !== 'game' || !botsTurn()) return;
+  if (S.view !== 'game' || !botsTurn() || paused) return;
   // a short pause, so the bot does not answer before the player's own mark is drawn
   botTimer = setTimeout(() => place(botMove(S.board, 'o', S.mode.slice(4))), 480 + Math.random() * 380);
 }
@@ -349,11 +365,14 @@ function finish(r) {
     SFX.win();
     buzz([15, 50, 15, 50, 30]);
     confetti(r.winner);
+    if (isBot()) happytime();
   }
 }
 
 // after a finished round the other side moves first; a round restarted halfway keeps its first move
 function nextRound() {
+  // on Playgama a full-screen ad may come between finished rounds
+  if (S.res) adBreak('next_round');
   if (S.res) S.starter = other(S.starter);
   clearRound();
   paint();
@@ -434,7 +453,13 @@ function show(view) {
   $('#game').hidden = menu;
   $('#back').hidden = menu;
   $('#modeTag').hidden = menu;
+  // portals allow no links out
+  if (PORTAL) {
+    $('#home').hidden = true;
+    $('#foot').hidden = true;
+  }
   if (menu) clearTimeout(botTimer);
+  tellPortal();
 }
 
 // True while a screen is being changed with the keyboard (a click made with a key has detail 0).
@@ -537,12 +562,12 @@ $('#sound').addEventListener('click', () => {
 
 function applyLang() {
   document.documentElement.lang = lang;
-  document.title = t('title');
+  document.title = PORTAL ? PORTAL_NAME : t('title');
   document.querySelectorAll('[data-t]').forEach((n) => (n.textContent = t(n.dataset.t)));
   document.querySelectorAll('[data-t-label]').forEach((n) => n.setAttribute('aria-label', t(n.dataset.tLabel)));
   document.querySelectorAll('[data-lang]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
   // the list of games opens in the same language
-  $('#home').href = '../?lang=' + lang;
+  if (!PORTAL) $('#home').href = '../?lang=' + lang;
   paint(true);
 }
 document.querySelectorAll('[data-lang]').forEach((b) =>
@@ -552,6 +577,16 @@ document.querySelectorAll('[data-lang]').forEach((b) =>
     applyLang();
   }),
 );
+
+onPortalMute((m) => {
+  portalMuted = m;
+});
+onPortalPause((p) => {
+  paused = p;
+  if (p) clearTimeout(botTimer);
+  else think();
+  tellPortal();
+});
 
 $('#art').innerHTML = boardArt();
 paintSound();

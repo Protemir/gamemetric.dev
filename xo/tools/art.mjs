@@ -14,11 +14,22 @@ const out = outArg < 0 ? null : path.resolve(process.argv[outArg + 1]);
 if (out) fs.mkdirSync(out, { recursive: true });
 const place = (file) => (out ? path.join(out, path.basename(file)) : path.join(repo, file));
 
-const PICTURES = [
+// --portal: the covers for CrazyGames and Playgama, dist/xo-art/cover-WxH.png
+const PORTAL_PICTURES = [
+  ['land', 1920, 1080],
+  ['port', 800, 1200],
+  ['square', 800, 800],
+  ['tall', 1080, 1920],
+];
+const forPortals = process.argv.includes('--portal');
+const SITE_PICTURES = [
   ['cover', 960, 540, 'img/xo.jpg', 'jpeg'],
   ['og', 1200, 630, 'xo/og.jpg', 'jpeg'],
   ['icon', 180, 180, 'xo/icon-180.png', 'png'],
 ];
+
+const PICTURES = forPortals ? PORTAL_PICTURES.map(([k, w, h]) => [k, w, h, `dist/xo-art/cover-${w}x${h}.png`, 'png']) : SITE_PICTURES;
+if (forPortals && !out) fs.mkdirSync(path.join(repo, 'dist', 'xo-art'), { recursive: true });
 
 const S = await serve(repo);
 const B = await chrome();
