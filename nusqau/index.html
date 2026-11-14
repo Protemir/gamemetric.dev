@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Нұсқау — AI-инструктажи по ОТ, ПБ и АТЗ</title>
+<meta name="description" content="Демо TEMIRLAB: генерация инструктажа со ссылками на НПА РК, теста и видео-инструктажа с проверкой человеком.">
+<link rel="icon" href="favicon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><span class="logo">Н</span><div><b>Нұсқау</b><small>AI-инструктажи, тесты и видео по ОТ, ПБ и АТЗ</small></div></div>
+    <div class="who">Демо студии <a href="https://temirlab.com" target="_blank" rel="noopener">TEMIRLAB</a> к задаче SkillPass на AstanaHub</div>
+  </div>
+</header>
+
+<div class="warn wrap">
+  <b>Это черновики ИИ, а не готовые инструктажи.</b> Каждый нормативный тезис привязан к пункту НПА из базы знаний или помечен «непроверено». В MVP весь текст проверяет и утверждает специалист по охране труда заказчика. База знаний демо — 47 пунктов из 4 актов, сверены с adilet.zan.kz 14.11.2026.
+</div>
+
+<main class="wrap">
+  <section class="card" id="params">
+    <h2><span class="n">1</span> Должность и вид инструктажа</h2>
+    <div class="samples">
+      <span>Готовые примеры:</span>
+      <button data-sample="shveya-ru" class="chip">Швея-мотористка · первичный · ОТ · RU · с видео</button>
+      <button data-sample="kuzet-kk" class="chip">Күзетші · жоспардан тыс · АТЗ · KZ</button>
+    </div>
+    <form id="form" autocomplete="off">
+      <label>Вид инструктажа
+        <select name="kind">
+          <option value="intro">Вводный</option>
+          <option value="primary" selected>Первичный на рабочем месте</option>
+          <option value="repeat">Повторный</option>
+          <option value="unplanned">Внеплановый</option>
+          <option value="target">Целевой</option>
+        </select>
+      </label>
+      <label>Направление
+        <select name="area">
+          <option value="ot">Охрана труда</option>
+          <option value="pb">Пожарная безопасность</option>
+          <option value="atz">Антитеррористическая защищённость</option>
+          <option value="san">Санитарные нормы (в демо-базе норм нет)</option>
+        </select>
+      </label>
+      <label>Язык
+        <select name="lang"><option value="ru">Русский</option><option value="kk">Қазақша</option></select>
+      </label>
+      <label class="w2">Отрасль<input name="industry" maxlength="120" placeholder="Швейное производство"></label>
+      <label class="w2">Должность / профессия<input name="position" maxlength="120" required placeholder="Швея-мотористка"></label>
+      <label class="w3">Виды работ и оборудование<input name="works" maxlength="400" placeholder="Промышленная швейная машина, электроутюг, парогенератор"></label>
+      <label class="w3">Условия труда<input name="conditions" maxlength="300" placeholder="Цех, шум, текстильная пыль"></label>
+      <label class="w3 reason">Причина внепланового инструктажа<input name="reason" maxlength="200" placeholder="Замена оборудования, новые нормы, перерыв более 60 дней…"></label>
+      <div class="w3 actions">
+        <button type="submit" class="primary" id="go">Сгенерировать черновик</button>
+        <span id="budget" class="muted"></span>
+      </div>
+    </form>
+    <p class="muted small">Персональные данные не нужны и не принимаются: поля с ИИН, телефоном или e-mail воркер отклоняет.</p>
+  </section>
+
+  <div id="status" class="status hidden"></div>
+
+  <section class="card hidden" id="flow">
+    <ol class="steps" id="steps">
+      <li data-s="draft">Черновик ИИ</li>
+      <li data-s="checked">Автосверка с НПА</li>
+      <li data-s="approved">Утверждено методистом</li>
+      <li data-s="published">Тест и видео</li>
+    </ol>
+  </section>
+
+  <section class="card hidden" id="notes"></section>
+
+  <section class="card hidden" id="instr">
+    <div class="head">
+      <h2><span class="n">2</span> Инструктаж</h2>
+      <div class="legend">
+        <span class="tag cited">норма со ссылкой</span>
+        <span class="tag unverified">непроверено — нет источника</span>
+        <span class="tag practice">практика — решает специалист</span>
+      </div>
+    </div>
+    <div id="instrBody"></div>
+    <div class="approve" id="approveBox">
+      <p class="muted small">Текст можно править прямо здесь (клик по пункту), пункт — удалить. Тест и видео строятся только из утверждённой версии.</p>
+      <button class="primary" id="approve">Утвердить и сделать тест и сценарий видео</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="test">
+    <div class="head">
+      <h2><span class="n">3</span> Тест для проверки знаний</h2>
+      <div><label class="inline"><input type="checkbox" id="showAns" checked> показывать ответы</label>
+      <button class="ghost" id="dlTest">JSON</button></div>
+    </div>
+    <div id="testBody"></div>
+  </section>
+
+  <section class="card hidden" id="video">
+    <div class="head">
+      <h2><span class="n">4</span> Видео-инструктаж</h2>
+      <div><button class="ghost" id="dlSrt">SRT</button><button class="ghost" id="dlScript">Сценарий JSON</button></div>
+    </div>
+    <div id="videoBody"></div>
+  </section>
+
+  <section class="card hidden" id="audit">
+    <h2><span class="n">5</span> Журнал аудита</h2>
+    <p class="muted small">Что запрашивали, какая модель и версия промпта, какая версия базы НПА, сколько стоило. В продукте — в БД, с пользователем и организацией.</p>
+    <div id="auditBody"></div>
+  </section>
+
+  <section class="card" id="how">
+    <h2>Как это устроено</h2>
+    <div class="how">
+      <div><b>1. База знаний НПА.</b> Пункты актов РК с id, текстом, редакцией и ссылкой на adilet. Модель получает выдержку по направлению и виду инструктажа.</div>
+      <div><b>2. Генерация.</b> Модель пишет инструктаж и программу в JSON. Ссылки — только id из выдержки. Чужие id код отбрасывает, тезис без источника получает статус «непроверено».</div>
+      <div><b>3. Автосверка.</b> Вторая модель-проверяющий сравнивает каждый тезис с текстом пункта (ok / partial / no) и оценивает практику (ok / doubt). Тест проверяется так же.</div>
+      <div><b>4. Человек.</b> Методист правит, удаляет, утверждает. Тест и видео — только из утверждённой версии. Всё пишется в журнал аудита.</div>
+    </div>
+    <p class="muted small">Демо: Cloudflare Workers AI, модель gpt-oss-120b, суточный лимит ниже бесплатной квоты. Видео в примере собрано локально: голос Windows (ru-RU), слайды из HTML, ffmpeg → MP4 1080p H.264 + SRT. В продукте — модели и синтез речи RU/KZ на серверах в РК. <a href="#" id="kbLink">Посмотреть базу знаний демо</a>.</p>
+    <div id="kbBody" class="hidden"></div>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <span>© 2026 <a href="https://temirlab.com" target="_blank" rel="noopener">TEMIRLAB</a> (ИП «TEMIR KUSSAINOV»). Демо для отклика на AstanaHub; SkillPass — продукт ТОО «AKE Group».</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
