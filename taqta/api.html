@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API «Игры для урока» — черновик контракта</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<style>
+  :root { --bg:#f6f4ef; --ink:#1b2130; --muted:#6a7184; --line:#e5e1d7; --code:#17312a; --chalk:#f4f1e8; --hl:#ffd43b; --primary:#1f4fd1; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 'Segoe UI', Roboto, 'Noto Sans', Arial, sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 8px; letter-spacing: -.01em; }
+  h2 { margin: 40px 0 12px; font-size: 22px; }
+  h3 { margin: 24px 0 8px; font-size: 17px; }
+  p, li { color: #3a4256; }
+  .lead { color: var(--muted); max-width: 680px; }
+  a { color: var(--primary); }
+  code { font-family: 'Cascadia Code', Consolas, monospace; font-size: .92em; background: #ebe7de; padding: 1px 6px; border-radius: 6px; }
+  pre { background: var(--code); color: var(--chalk); padding: 16px 18px; border-radius: 12px; overflow: auto; font: 13.5px/1.55 'Cascadia Code', Consolas, monospace; }
+  pre code { background: none; padding: 0; color: inherit; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #faf8f4; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  .m { font-weight: 800; font-family: Consolas, monospace; font-size: 13px; padding: 2px 8px; border-radius: 6px; color: #fff; }
+  .get { background: #217a4b; } .post { background: #1f4fd1; } .put { background: #9a6200; } .del { background: #c4372f; }
+  .wrap { overflow-x: auto; }
+  .note { background: #fff4dc; border-radius: 12px; padding: 12px 16px; color: #6b4500; }
+  .back { display: inline-block; margin-bottom: 18px; text-decoration: none; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="./">← К демо</a>
+  <h1>API модуля «Игры для урока»</h1>
+  <p class="lead">Черновик контракта, на котором работает демо (в демо сервер имитируется в браузере). Это стартовая точка для согласования на первой неделе: имена полей, коды ошибок и путь подстраиваются под правила платформы.</p>
+
+  <h2>Общие правила</h2>
+  <ul>
+    <li>Базовый путь: <code>/api/v1/lesson-games</code>. JSON, UTF-8, даты — ISO 8601 в UTC, идентификаторы — UUID.</li>
+    <li>Авторизация — существующая схема платформы (например, <code>Authorization: Bearer &lt;токен&gt;</code>). Владелец игры берётся из токена, а не из тела запроса. Своей регистрации у модуля нет.</li>
+    <li>Чужая игра → <code>403</code>, несуществующая → <code>404</code>, истёкший токен → <code>401</code> (фронтенд показывает повторный вход и не теряет форму).</li>
+    <li>Защита от перезаписи: <code>PUT</code> принимает заголовок <code>If-Match: &lt;version&gt;</code>; если игру уже поменяли в другой вкладке — <code>409</code>.</li>
+    <li>Тексты заданий хранятся как ввёл учитель, без нормализации (казахские буквы, кавычки, тире).</li>
+  </ul>
+
+  <h2>Эндпоинты</h2>
+  <div class="wrap">
+  <table>
+    <tr><th>Метод и путь</th><th>Что делает</th><th>Ответы</th></tr>
+    <tr><td><span class="m get">GET</span> <code>/formats</code></td><td>Каталог форматов MVP</td><td>200</td></tr>
+    <tr><td><span class="m get">GET</span> <code>/games</code></td><td>Игры текущего учителя, новые сверху. Параметры: <code>limit</code>, <code>cursor</code>, <code>q</code>, <code>format</code></td><td>200</td></tr>
+    <tr><td><span class="m post">POST</span> <code>/games</code></td><td>Создать игру вместе с заданиями</td><td>201, 401, 422</td></tr>
+    <tr><td><span class="m get">GET</span> <code>/games/{id}</code></td><td>Игра для редактора</td><td>200, 401, 403, 404</td></tr>
+    <tr><td><span class="m put">PUT</span> <code>/games/{id}</code></td><td>Сохранить игру целиком (название, язык, задания и их порядок)</td><td>200, 401, 403, 404, 409, 422</td></tr>
+    <tr><td><span class="m del">DELETE</span> <code>/games/{id}</code></td><td>Удалить игру (мягкое удаление)</td><td>204, 401, 403, 404</td></tr>
+    <tr><td><span class="m get">GET</span> <code>/games/{id}/play</code></td><td>Данные для режима показа: задания в порядке показа вместе с ответами. Только владельцу, <code>Cache-Control: no-store</code></td><td>200, 401, 403, 404</td></tr>
+  </table>
+  </div>
+
+  <h2>Модель игры</h2>
+<pre><code>{
+  "id": "6e8611d1-8957-4274-8490-9c6d8c88cb34",
+  "title": "Природа Казахстана",
+  "format": "true_false",            // true_false | fill_gap | matching
+  "language": "ru",                  // kk | ru
+  "status": "ready",                 // draft | ready
+  "version": 3,
+  "createdAt": "2026-11-14T06:57:10Z",
+  "updatedAt": "2026-11-14T07:02:44Z",
+  "tasks": [ ... ]                   // порядок в массиве = порядок показа
+}</code></pre>
+
+  <h3>Задания трёх форматов</h3>
+<pre><code>// «Правда или ложь»
+{ "id": "…", "type": "true_false", "statement": "Иртыш впадает в Каспийское море.", "answer": false }
+
+// «Заполни пропуск»: ровно один маркер ___ и правильный ответ
+{ "id": "…", "type": "fill_gap", "text": "Единица измерения силы — ___.", "answer": "ньютон" }
+
+// «Найди соответствие»: от 2 до 6 пар, подсказка необязательна
+{ "id": "…", "type": "matching", "prompt": "Страна — столица",
+  "pairs": [ { "id": "…", "left": "Казахстан", "right": "Астана" },
+             { "id": "…", "left": "Кыргызстан", "right": "Бишкек" } ] }</code></pre>
+
+  <h3>Правила проверки (одинаковые на фронте и на сервере)</h3>
+  <ul>
+    <li>Название обязательно, до 120 символов. Заданий от 1 до 50, все — формата игры. Формат после создания не меняется.</li>
+    <li>«Правда или ложь»: утверждение до 300 символов, ответ <code>true</code> или <code>false</code>.</li>
+    <li>«Заполни пропуск»: текст до 300 символов, ровно один <code>___</code>, ответ не пустой.</li>
+    <li>«Найди соответствие»: 2–6 пар, каждая половина до 80 символов, без повторов в столбце.</li>
+  </ul>
+
+  <h2>Ошибки</h2>
+<pre><code>HTTP/1.1 422 Unprocessable Entity
+{
+  "error": {
+    "code": "validation_failed",
+    "message": "Validation failed",
+    "fields": {
+      "title": { "key": "v.required" },
+      "byTask": { "b1c…": { "gap": { "key": "v.pickGap" } } }
+    }
+  }
+}</code></pre>
+  <p>Коды: <code>unauthorized</code> (401), <code>forbidden</code> (403), <code>not_found</code> (404), <code>version_conflict</code> (409), <code>validation_failed</code> (422). В <code>fields</code> — ключи сообщений, тексты на kk/ru берёт фронтенд.</p>
+
+  <h2>Хранение (PostgreSQL)</h2>
+<pre><code>lesson_games (
+  id uuid pk, owner_id text not null, title text not null,
+  format text not null, language text not null, status text not null,
+  version int not null default 1,
+  created_at timestamptz not null, updated_at timestamptz not null, deleted_at timestamptz null
+)  index (owner_id, updated_at desc) where deleted_at is null
+
+lesson_game_tasks (
+  id uuid pk, game_id uuid fk → lesson_games on delete cascade,
+  position int not null, type text not null, payload jsonb not null,
+  unique (game_id, position)
+)</code></pre>
+  <p><code>PUT</code> заменяет задания игры целиком в одной транзакции — так порядок всегда совпадает с тем, что прислал клиент. Миграции — инструментом, принятым у заказчика.</p>
+
+  <h2>Аналитика (фронтенд)</h2>
+  <p>Пять событий: <code>format_selected</code>, <code>game_first_saved</code>, <code>show_started</code>, <code>answer_revealed</code>, <code>show_finished</code>. Передаются только id игры, формат, номер задания и технические параметры. Тексты заданий и ответов в аналитику не уходят.</p>
+
+  <p class="note">Демо: <a href="./">gamemetric.dev/taqta/</a>. Кнопка «Проверка» в правом нижнем углу включает сбои API (обрыв сети, 401, ошибку загрузки) и показывает события аналитики.</p>
+</main>
+</body>
+</html>
