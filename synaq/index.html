@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Сынақ — ИИ-генератор тестов</title>
+<meta name="description" content="Демо: учитель загружает параграф (PDF, DOCX, TXT), ИИ составляет тест на казахском или русском, система проверяет вопросы, учитель правит и выгружает JSON или игры «Тақта».">
+<meta property="og:title" content="Сынақ — ИИ-генератор тестов">
+<meta property="og:description" content="Параграф учебника → черновик теста с ответами, объяснениями и ссылкой на фрагмент. Казахский и русский.">
+<meta property="og:image" content="https://gamemetric.dev/synaq/og.png">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="./">
+      <img src="favicon.svg" alt="" width="34" height="34">
+      <span><b>Сынақ</b><small>ИИ-генератор тестов · демо</small></span>
+    </a>
+    <div class="top-meta" id="engineInfo">Модель: проверяю…</div>
+  </div>
+</header>
+
+<main class="wrap layout">
+  <aside class="side">
+    <section class="panel">
+      <h2><span class="step">1</span> Материал</h2>
+      <p class="hint">Примеры (свои тексты, не из учебников):</p>
+      <div class="chips" id="samples"></div>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Загрузить файл">
+        <input type="file" id="file" accept=".pdf,.docx,.txt" hidden>
+        <b>Загрузите PDF, DOCX или TXT</b>
+        <span>до 50 страниц · перетащите сюда или нажмите</span>
+      </div>
+      <p class="hint small">Проверить загрузку: <a href="samples/fotosintez-ru.pdf" download>пример PDF</a> · <a href="samples/qazaq-khandygy-kk.docx" download>пример DOCX</a></p>
+      <div id="fileError" class="alert err" hidden></div>
+      <div id="docCard" class="doc" hidden></div>
+      <details class="paste">
+        <summary>или вставить текст</summary>
+        <textarea id="pasteText" rows="6" placeholder="Вставьте текст параграфа…"></textarea>
+        <button class="btn small" id="pasteBtn" type="button">Взять этот текст</button>
+      </details>
+      <div class="grid2">
+        <label>Предмет<input id="subject" maxlength="60" placeholder="напр. Биология"></label>
+        <label>Класс<select id="grade"></select></label>
+      </div>
+      <div class="field">
+        <span class="lbl">Язык заданий</span>
+        <div class="seg" id="langSeg" role="radiogroup">
+          <button type="button" data-v="kk" role="radio">Қазақша</button>
+          <button type="button" data-v="ru" role="radio">Русский</button>
+        </div>
+      </div>
+      <div id="piiBox" class="pii"></div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="step">2</span> Настройки теста</h2>
+      <div class="field">
+        <span class="lbl">Число вопросов: <b id="countOut">10</b></span>
+        <input type="range" id="count" min="5" max="50" step="1" value="10">
+        <div id="countHint" class="hint small"></div>
+      </div>
+      <div class="field">
+        <span class="lbl">Типы вопросов</span>
+        <div class="checks" id="types"></div>
+        <span class="lbl sub">Для игр «Тақта»</span>
+        <div class="checks" id="gameTypes"></div>
+      </div>
+      <div class="field">
+        <span class="lbl">Сложность</span>
+        <div class="checks" id="levels"></div>
+      </div>
+      <div class="field">
+        <span class="lbl">Модель</span>
+        <select id="model"></select>
+      </div>
+      <button class="btn primary big" id="genBtn" type="button">Сгенерировать тест</button>
+      <div id="genError" class="alert err" hidden></div>
+    </section>
+
+    <section class="panel note">
+      <h3>Как устроено</h3>
+      <ol>
+        <li>Файл читается прямо в браузере. ИИН, телефоны и почта маскируются до отправки, сервер ещё раз проверяет и отказывает, если видит ИИН.</li>
+        <li>Материал делится на части, каждая уходит в модель отдельным запросом. Модель отвечает строгим JSON: вопрос, варианты, ответ, объяснение, уровень, цитата из текста.</li>
+        <li>Проверка без ИИ: цитата и ответ есть в материале, правильных вариантов сколько нужно, нет дублей, язык совпадает.</li>
+        <li>Учитель правит, перегенерирует отдельный вопрос, утверждает и выгружает JSON или игры «Тақта».</li>
+      </ol>
+      <p class="hint small">Сделано в <a href="https://temirlab.com" target="_blank" rel="noopener">TEMIRLAB</a> для заявки на AstanaHub. Это прототип: входа и базы здесь нет, работа хранится в браузере.</p>
+    </section>
+  </aside>
+
+  <section class="main">
+    <div class="panel results">
+      <div class="res-head">
+        <h2><span class="step">3</span> <span id="testTitle">Черновик теста</span></h2>
+        <div class="stats" id="stats"></div>
+      </div>
+      <div id="progress" class="progress" hidden></div>
+      <div class="toolbar" id="toolbar" hidden>
+        <div class="seg small" id="filterSeg">
+          <button type="button" data-v="all">Все</button>
+          <button type="button" data-v="flag">С замечаниями</button>
+          <button type="button" data-v="approved">Утверждённые</button>
+        </div>
+        <button class="btn small" id="approveOk" type="button">Утвердить все без замечаний</button>
+      </div>
+      <div id="list" class="list"></div>
+      <div id="empty" class="empty">
+        <img src="favicon.svg" alt="" width="56" height="56">
+        <h3>Здесь появится черновик теста</h3>
+        <p>Выберите пример слева или загрузите свой параграф и нажмите «Сгенерировать тест». 10 вопросов — около 20–30 секунд.</p>
+        <p class="small">Или откройте готовый результат без ожидания: <a href="?demo=ru">история, русский</a> · <a href="?demo=kk">биология, казахский</a></p>
+      </div>
+      <div class="exportbar" id="exportbar" hidden>
+        <div>
+          <b id="exportCount">0</b> утверждено
+          <span class="hint small" id="reviewTime"></span>
+        </div>
+        <div class="exp-btns">
+          <button class="btn" id="jsonBtn" type="button">Скачать JSON</button>
+          <button class="btn taqta" id="taqtaBtn" type="button">Открыть в «Тақта»</button>
+        </div>
+      </div>
+      <div id="taqtaDone" class="alert ok" hidden></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="srcDlg" class="dlg">
+  <div class="dlg-head"><b id="srcTitle">Материал</b><button class="x" type="button" data-close aria-label="Закрыть">×</button></div>
+  <div class="dlg-body" id="srcBody"></div>
+</dialog>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
