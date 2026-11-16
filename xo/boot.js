@@ -60,6 +60,12 @@ async function crazygames() {
     wait(8000).then(() => null),
   ]);
   if (ready && ready.data) window.XO_DATA = ready.data;
+  // CrazyGames measures the load time up to loadingStop (portal.js calls it when the menu is up)
+  try {
+    if (ready) ready.game.loadingStart();
+  } catch {
+    /* not important */
+  }
   return ready;
 }
 

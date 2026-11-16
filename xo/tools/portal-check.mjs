@@ -46,6 +46,8 @@ const FAKE = {
       },
       game: {
         settings,
+        loadingStart: () => note('loading'),
+        loadingStop: () => note('loaded'),
         gameplayStart: () => note('start'),
         gameplayStop: () => note('stop'),
         happytime: () => note('happy'),
@@ -102,6 +104,7 @@ for (const portal of ['crazygames', 'playgama']) {
     let l = await log();
     check('the SDK is started first', l[0] === 'init');
     if (portal === 'playgama') check('says game_ready once', l.filter((m) => m === 'game_ready').length === 1);
+    if (portal === 'crazygames') check('loading start and stop are reported once', l.filter((m) => m === 'loading').length === 1 && l.filter((m) => m === 'loaded').length === 1, l.join(','));
     check('nothing is played in the menu yet', !l.includes('start') && !l.includes('level_started'));
 
     // a round against the unbeatable bot

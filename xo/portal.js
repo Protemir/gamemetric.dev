@@ -32,9 +32,16 @@ const say = (msg) => {
 
 let loaded = false;
 export function loadingDone() {
-  if (loaded || !bridge) return;
+  if (loaded || !(bridge || sdk)) return;
   loaded = true;
-  say('game_ready');
+  if (bridge) say('game_ready');
+  else {
+    try {
+      sdk.game.loadingStop();
+    } catch {
+      /* not important */
+    }
+  }
 }
 
 // called after every change with "is a round being played right now"; the portal hears only changes
