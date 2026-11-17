@@ -198,7 +198,7 @@ for (const portal of ['crazygames', 'playgama']) {
       // ads: none in the first 2.5 minutes, then one before the next round, not more often
       check('no ad in the first minutes', !(await log()).some((m) => m.startsWith('ad:')));
       await js(`(() => { const p = performance.now.bind(performance); let shift = 0; window.__skip = (ms) => (shift += ms); performance.now = () => p() + shift; })()`);
-      await js(`window.__skip(160000)`);
+      await js(`window.__skip(190000)`);
       for (let k = 0; k < 9 && !(await js(`!!document.querySelector('#board').dataset.over`)); k++) {
         await waitFor(`!!document.querySelector('#board').dataset.go || !!document.querySelector('#board').dataset.over`);
         if (await js(`!!document.querySelector('#board').dataset.over`)) break;
@@ -206,7 +206,7 @@ for (const portal of ['crazygames', 'playgama']) {
       }
       await click('#again');
       await sleep(80);
-      check('an ad before the next round after 2.5 minutes', (await log()).filter((m) => m.startsWith('ad:')).length === 1);
+      check('an ad before the next round after 3 minutes', (await log()).filter((m) => m.startsWith('ad:')).length === 1);
       check('the game pauses for the ad', (await log()).at(-1) === 'level_paused' || (await log()).includes('ad:next_round'));
       await sleep(2700);
       for (let k = 0; k < 9 && !(await js(`!!document.querySelector('#board').dataset.over`)); k++) {

@@ -132,9 +132,9 @@ export function onPortalPause(fn) {
   }
 }
 
-// A full-screen ad before the next round, on Playgama only: never in the first 2.5 minutes of a
-// visit and at most once in 2.5 minutes (playgama-bridge-config.json says the same)
-export const AD_GAP = 150000;
+// A full-screen ad before the next round, on Playgama only: never in the first 3 minutes of a
+// visit and at most once in 3 minutes (playgama-bridge-config.json says the same)
+export const AD_GAP = 180000;
 let lastAd = performance.now();
 export function adBreak(placement) {
   if (!bridge || performance.now() - lastAd < AD_GAP) return false;

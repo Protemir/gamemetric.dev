@@ -30,8 +30,8 @@ for (const f of ['style.css', 'favicon.svg', 'app.js', 'logic.js', 'art.js', 'po
 if (portal === 'playgama') {
   const config = {
     advertisement: {
-      minimumDelayBetweenInterstitial: 150,
-      initialInterstitialDelay: 150,
+      minimumDelayBetweenInterstitial: 180,
+      initialInterstitialDelay: 180,
       interstitial: { placementFallback: 'next_round', placements: [{ id: 'next_round' }] },
     },
   };
