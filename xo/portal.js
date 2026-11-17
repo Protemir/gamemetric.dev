@@ -148,3 +148,18 @@ export function adBreak(placement) {
     return false;
   }
 }
+
+// Custom events for the Playgama dashboard (Bridge analytics): which mode people pick, how rounds
+// end and when they go back to the menu, with the minutes since the page opened.
+// Nothing is sent anywhere else, and nothing at all outside Playgama.
+const opened = performance.now();
+export function track(name, params = {}) {
+  if (!bridge) return;
+  try {
+    if (!bridge.analytics || !bridge.analytics.send) return;
+    const r = bridge.analytics.send(name, { ...params, min: Math.floor((performance.now() - opened) / 60000) });
+    if (r && r.catch) r.catch(() => {});
+  } catch {
+    /* counting never breaks the game */
+  }
+}

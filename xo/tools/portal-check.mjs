@@ -65,6 +65,7 @@ const FAKE = {
         get: async (keys) => keys.map((k) => (k in store ? store[k] : null)),
         set: async (keys, vals) => { keys.forEach((k, i) => (store[k] = vals[i])); note('save'); },
       },
+      analytics: { send: async (name, p) => note('ev:' + name + ':' + JSON.stringify(p)) },
       advertisement: {
         isInterstitialSupported: true, on,
         showInterstitial: (p) => { note('ad:' + p); window.__fire('ad', 'opened'); setTimeout(() => window.__fire('ad', 'closed'), 2500); },
@@ -124,11 +125,16 @@ for (const portal of ['crazygames', 'playgama']) {
     }
     l = await log();
     check('the end of the round is reported', l.at(-1) === stopMsg || l.at(-1) === 'save', l.slice(-3).join(','));
+    if (portal === 'playgama') {
+      const ev = l.filter((m) => m.startsWith('ev:'));
+      check('events: the mode and the end of the round are sent', ev.some((m) => m.startsWith('ev:mode_start:{"mode":"bot-hard"')) && ev.some((m) => /^ev:round_end:\{"mode":"bot-hard","result":"(lose|draw)","round":1,"moves":\d,"min":0\}$/.test(m)), ev.join(' '));
+    }
     check('no win, no happytime against the unbeatable bot', !l.includes('happy') && !l.includes('player_got_achievement'));
 
     // a win over the easy bot: try a few rounds
     await click('#back');
     await sleep(80);
+    if (portal === 'playgama') check('events: going back to the menu is sent', (await log()).some((m) => m.startsWith('ev:menu:{"mode":"bot-hard","rounds":1')), (await log()).filter((m) => m.startsWith('ev:menu')).join(' '));
     check('back in the menu, nothing is played', (await log()).filter((m) => m === startMsg || m === stopMsg).at(-1) === stopMsg);
     await click('[data-start="bot-easy"]');
     let won = false;

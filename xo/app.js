@@ -1,7 +1,7 @@
 // Tic-tac-toe: the menu, the board, the score and the sounds. The rules and the bots are in logic.js.
 import { result, botMove, other } from './logic.js';
 import { boardArt, MARK } from './art.js';
-import { PORTAL, portalLang, loadingDone, gameplay, happytime, onPortalMute, onPortalPause, adBreak } from './portal.js';
+import { PORTAL, portalLang, loadingDone, gameplay, happytime, onPortalMute, onPortalPause, adBreak, track } from './portal.js';
 
 // the name on portals, where the game is listed in English
 const PORTAL_NAME = 'Tic-Tac-Toe: Neon Duel';
@@ -353,6 +353,10 @@ function place(i) {
 function finish(r) {
   S.res = r;
   S.endedAt = performance.now();
+  S.rounds = (S.rounds || 0) + 1;
+  // with the bot the result is the player's; two players report which mark won
+  const result = r.winner === 'draw' ? 'draw' : isBot() ? (r.winner === 'x' ? 'win' : 'lose') : r.winner;
+  track('round_end', { mode: S.mode, result, round: S.rounds, moves: S.board.filter(Boolean).length });
   const sc = score();
   if (r.winner === 'draw') sc.d++;
   else sc[r.winner]++;
@@ -470,6 +474,8 @@ let byKeyboard = false;
 function start(mode) {
   S.mode = mode;
   S.starter = 'x';
+  S.rounds = 0;
+  track('mode_start', { mode });
   clearRound();
   show('game');
   paint(true);
@@ -488,6 +494,7 @@ function route() {
   if (mode) {
     if (S.view !== 'game' || S.mode !== mode) start(mode);
   } else if (S.view !== 'menu') {
+    track('menu', { mode: S.mode, rounds: S.rounds || 0, unfinished: S.board.some(Boolean) && !S.res ? 1 : 0 });
     show('menu');
     const from = document.querySelector(`[data-start="${S.mode}"]`);
     if (byKeyboard && from) from.focus({ preventScroll: true });
