@@ -63,7 +63,6 @@ const TEXT = {
     'xo.meta': 'Two players or vs bot',
     'xo.desc': 'Three in a row wins. Play a friend on one screen or take on the bot: easy, medium or unbeatable.',
     made: 'Games by',
-    source: 'Source code',
   },
 };
 

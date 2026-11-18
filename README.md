@@ -12,4 +12,4 @@ The list itself is `index.html`, `hub.css` and `hub.js`; card pictures and the s
 
 Play counter: every game sends anonymous events (open, start, win/fail) to `stats/worker.js`, a Cloudflare Worker with one SQLite Durable Object that keeps daily totals. No cookies, no names, no IP addresses; a random id in localStorage tells new players from returning ones. Open a game once with `?nopulse` to stop counting your device. `node stats/deploy.mjs <token file> <key file>` updates the worker, `node stats/report.mjs <key file> [days]` prints the numbers.
 
-Code under the MIT license.
+All rights reserved. See LICENSE.
