@@ -1,20 +1,22 @@
-// Skinned characters: a rigged soldier (both teams, tinted) and a civilian for the hostages,
+// Skinned characters: a rigged soldier for the assault team, a man in a black suit for the guards
+// and a civilian for the hostages,
 // with idle / walk / run clips. Crouching, aiming the upper body and holding the gun are done
 // on top of the clips: the legs bend, the spine follows the view and two-bone IK puts the hands on the gun.
 import * as THREE from '../vendor/three.module.min.js';
 import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
-import { clone as cloneSkinned } from '../vendor/utils/SkeletonUtils.js';
+import { clone as cloneSkinned, retargetClip } from '../vendor/utils/SkeletonUtils.js';
 import { Body, thirdPersonGun } from './actors.js';
 
 const A = { ready: false };
 
 export async function loadPeople() {
   const loader = new GLTFLoader();
-  const [s, m] = await Promise.all([loader.loadAsync('assets/models/Soldier.glb'), loader.loadAsync('assets/models/Michelle.glb')]);
+  const [s, m, gd] = await Promise.all(['Soldier', 'Michelle', 'Guard'].map((n) => loader.loadAsync(`assets/models/${n}.glb`)));
   A.soldier = prep(s.scene);
   A.civil = prep(m.scene);
   A.clips = {};
   for (const c of s.animations) A.clips[c.name] = c;
+  A.guard = prepGuard(gd.scene);
   // the civilian has other proportions: borrow only the rotations of the soldier's clips
   A.civilClips = {};
   for (const n of ['Idle', 'Walk', 'Run']) {
@@ -46,6 +48,93 @@ function prep(scene) {
     o.frustumCulled = false;
   });
   return scene;
+}
+
+// The guards: a man in a suit (a Ready Player Me avatar). The suit is repainted black with a white shirt,
+// he gets sunglasses, and the soldier's clips are retargeted onto his skeleton (the bone names match Mixamo).
+function prepGuard(scene) {
+  scene.traverse((o) => {
+    if (o.isMesh && /Outfit/.test(o.name) && o.material.map) o.material.map = blackSuit(o.material.map, /Top/.test(o.name));
+  });
+  prep(scene);
+  const bones = {};
+  let skin = null;
+  scene.traverse((o) => {
+    if (o.isBone) bones[o.name] = o;
+    if (o.isSkinnedMesh && !skin) skin = o;
+  });
+  // sunglasses, put on in the rest pose and carried by the head
+  const le = bones.LeftEye.getWorldPosition(new THREE.Vector3()), re = bones.RightEye.getWorldPosition(new THREE.Vector3());
+  const mid = le.clone().add(re).multiplyScalar(0.5);
+  const half = Math.abs(le.x - re.x) / 2;
+  const lens = new THREE.BoxGeometry(half * 1.55, 0.03, 0.006);
+  const parts = [];
+  for (const sx of [-1, 1]) parts.push(lens.clone().translate(sx * half, 0, 0));
+  parts.push(new THREE.BoxGeometry(half * 0.5, 0.006, 0.006).translate(0, 0.009, 0));
+  for (const sx of [-1, 1]) parts.push(new THREE.BoxGeometry(0.004, 0.006, 0.09).translate(sx * half * 1.78, 0.008, -0.045));
+  const glasses = new THREE.Mesh(mergeBoxes(parts), new THREE.MeshLambertMaterial({ color: 0x0c0d10 }));
+  glasses.position.set(mid.x, mid.y + 0.004, mid.z + 0.03);
+  glasses.frustumCulled = false;
+  scene.add(glasses);
+  bones.Head.attach(glasses);
+  // retarget idle / walk / run from a copy of the soldier standing in his rest pose
+  const src = cloneSkinned(A.soldier);
+  src.updateMatrixWorld(true);
+  let sskin = null;
+  src.traverse((o) => {
+    if (o.isSkinnedMesh && !sskin) sskin = o;
+  });
+  A.guardClips = {};
+  for (const n of ['Idle', 'Walk', 'Run']) {
+    A.guardClips[n] = retargetClip(skin, sskin, A.clips[n], { hip: 'mixamorigHips', getBoneName: (b) => 'mixamorig' + b.name, scale: 1 });
+  }
+  skin.skeleton.pose();
+  return scene;
+}
+
+function mergeBoxes(list) {
+  const pos = [], nor = [], idx = [];
+  for (const g of list) {
+    const base = pos.length / 3;
+    pos.push(...g.attributes.position.array);
+    nor.push(...g.attributes.normal.array);
+    for (const i of g.index.array) idx.push(base + i);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setIndex(idx);
+  return out;
+}
+
+// repaint a wedding suit into a guard's black one: light, grey pixels (the shirt) stay white, the rest goes charcoal
+function blackSuit(map, shirt) {
+  const im = map.image;
+  const c = document.createElement('canvas');
+  c.width = im.width;
+  c.height = im.height;
+  const g = c.getContext('2d');
+  g.drawImage(im, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), a = d.data;
+  for (let i = 0; i < a.length; i += 4) {
+    const r = a[i] / 255, gr = a[i + 1] / 255, b = a[i + 2] / 255;
+    const mx = Math.max(r, gr, b), mn = Math.min(r, gr, b), l = (mx + mn) / 2;
+    const s = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
+    if (shirt && l > 0.8 && s < 0.3) {
+      a[i] = a[i + 1] = a[i + 2] = (0.78 + (l - 0.8) * 0.8) * 255;
+      continue;
+    }
+    const v = 0.05 + l * 0.2;
+    a[i] = a[i + 1] = v * 255;
+    a[i + 2] = v * 1.12 * 255;
+  }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.flipY = map.flipY;
+  t.wrapS = map.wrapS;
+  t.wrapT = map.wrapT;
+  return t;
 }
 
 function blobTexture() {
@@ -96,11 +185,11 @@ function ik(up, fore, hand, T, pole) {
   turn(fore, _q.setFromUnitVectors(_u, _v));
 }
 
-const TINT = { A: new THREE.Color(0.8, 0.9, 1.08), B: new THREE.Color(0.6, 0.42, 0.4), H: new THREE.Color(1, 1, 1) };
+const TINT = { A: new THREE.Color(0.8, 0.9, 1.08), B: new THREE.Color(1, 1, 1), H: new THREE.Color(1, 1, 1) };
 
 export class SkinnedBody {
   constructor(look) {
-    const src = look === 'H' ? A.civil : A.soldier;
+    const src = look === 'H' ? A.civil : look === 'B' ? A.guard : A.soldier;
     this.look = look;
     this.lookKey = look;
     this.root = new THREE.Group();
@@ -116,6 +205,7 @@ export class SkinnedBody {
     this.model.traverse((o) => {
       if (o.isMesh) {
         o.material = o.material.clone();
+        o.material.userData.base = o.material.color.clone();
         this.mats.push(o.material);
       }
     });
@@ -134,10 +224,12 @@ export class SkinnedBody {
       if (o.isBone) this.rest.push([o, o.quaternion.clone(), o.position.clone()]);
     });
     if (look !== 'H') {
-      this.mixer = new THREE.AnimationMixer(this.model);
+      // the guard's retargeted clips address bones through a skinned mesh (".bones[Hips]...")
+      this.mixer = new THREE.AnimationMixer(look === 'B' ? this.firstSkin() : this.model);
+      const clips = look === 'B' ? A.guardClips : A.clips;
       this.act = {};
       for (const [k, n] of [['idle', 'Idle'], ['walk', 'Walk'], ['run', 'Run']]) {
-        const a = this.mixer.clipAction(A.clips[n]);
+        const a = this.mixer.clipAction(clips[n]);
         a.play();
         a.setEffectiveWeight(k === 'idle' ? 1 : 0);
         this.act[k] = a;
@@ -161,6 +253,14 @@ export class SkinnedBody {
     this.fallDir = 1;
     this.walkPhase = 0;
     this.lightK = 1;
+  }
+
+  firstSkin() {
+    let skin = null;
+    this.model.traverse((o) => {
+      if (o.isSkinnedMesh && !skin) skin = o;
+    });
+    return skin;
   }
 
   setGun(kind) {
@@ -281,7 +381,7 @@ export class SkinnedBody {
   }
 
   applyLight() {
-    for (const m of this.mats) m.color.copy(this.tint).multiplyScalar(this.lightK);
+    for (const m of this.mats) m.color.copy(m.userData.base).multiply(this.tint).multiplyScalar(this.lightK);
     this.gunMat.color.setScalar(this.lightK);
   }
 

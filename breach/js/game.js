@@ -9,7 +9,7 @@ import { Brain } from './bots.js';
 import { FX } from './fx.js';
 import { t, lang, BOT_NAMES } from './i18n.js';
 
-const GRAV = 16, JUMP = 5.6, FREEZE = 5, ROUND = 115, BUYTIME = 22, WIN_ROUNDS = 8, DM_KILLS = 60, DM_TIME = 600;
+const GRAV = 16, JUMP = 5.45, FREEZE = 5, ROUND = 115, BUYTIME = 22, WIN_ROUNDS = 8, DM_KILLS = 60, DM_TIME = 600;
 const angDiff = (a, b) => {
   let d = b - a;
   while (d > Math.PI) d -= Math.PI * 2;
@@ -1244,6 +1244,8 @@ export class Game {
       s.vy = JUMP;
       s.onGround = false;
     }
+    // average of the speeds before and after the step: the jump is just as high at 20 fps as at 144
+    const vy0 = s.vy;
     s.vy -= GRAV * dt;
     const px = s.x + s.vx * dt, pz = s.z + s.vz * dt;
     s.x = px;
@@ -1268,7 +1270,7 @@ export class Game {
         s.z += (dz / d) * p;
       }
     }
-    s.feet += s.vy * dt;
+    s.feet += (vy0 + s.vy) * 0.5 * dt;
     // head against the ceiling or a window lintel
     const cell = this.map.cellAt(s.x, s.z);
     if (cell >= 0 && this.map.indoor[cell]) {

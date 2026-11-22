@@ -298,8 +298,8 @@ function glove(at, color, wrap = 1) {
 }
 
 export function firstPersonArms(kind, team) {
-  const sleeve = team === 'A' ? 0x2f4361 : 0x6e2228;
-  const cuff = team === 'A' ? 0x1d2126 : 0x1e1e22;
+  const sleeve = team === 'A' ? 0x2f4361 : 0x24252a;
+  const cuff = team === 'A' ? 0x1d2126 : 0xc9c9c9;
   const gloveC = team === 'A' ? 0x23262b : 0x1a1a1c;
   const info = GUN_INFO[kind];
   const parts = [...glove([0, 0, 0], gloveC)];

@@ -2,4 +2,6 @@ Textures (assets/tex): Poly Haven, https://polyhaven.com — CC0 (public domain)
 Characters (assets/models): Soldier.glb and Michelle.glb from the three.js examples
 (https://github.com/mrdoob/three.js/tree/r170/examples/models/gltf), characters and
 animations made with Adobe Mixamo; used inside the game only.
+Guard.glb: the readyplayer.me.glb avatar from the same three.js examples (Ready Player Me),
+slimmed by tools/slim-guard.mjs (no hat, no normal maps); the suit is repainted black in the game.
 Three.js r170 (vendor/) — MIT, see vendor/LICENSE.
