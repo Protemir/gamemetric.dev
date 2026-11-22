@@ -57,6 +57,9 @@ export class GameMap {
     this.walk = new Uint8Array(n);
     this.cost = new Float32Array(n);
     for (let i = 0; i < n; i++) this.walk[i] = this.h[i] === 0 && !this.noWalk[i] ? 1 : 0;
+    // cells a soldier can jump onto and over: window sills and waist-high crates
+    this.hop = new Uint8Array(n);
+    for (let i = 0; i < n; i++) if ((this.kind[i] === K.WINDOW && this.h[i] <= 1.05) || (this.kind[i] === K.CRATE && this.h[i] <= 1.0)) this.hop[i] = this.kind[i] === K.WINDOW ? 1 : 2;
     for (let z = 0; z < H; z++)
       for (let x = 0; x < W; x++) {
         let c = 1;
@@ -323,6 +326,12 @@ export class GameMap {
       [[66, 42], [60, 38.5], [50.5, 31.5]],
       [[66, 42], [66, 28], [58, 27.5]],
       [[24, 50], [22.5, 44], [18.5, 32]],
+      [[30, 50], [30.5, 44], [33, 35]],
+      [[41, 50], [41.5, 44], [38.5, 35]],
+      [[49, 50], [49.5, 44], [50.5, 31.5]],
+      [[15, 50], [15.5, 44], [18.5, 32]],
+      [[6, 44], [6, 34.5], [13, 35.5], [18.5, 32]],
+      [[66, 30], [66, 14.5], [58, 13]],
     ];
     this.rescue = { x0: 26, z0: 57, x1: 46, z1: 62 };
   }
@@ -452,7 +461,8 @@ export class GameMap {
   }
 
   // ---------- bots: A* on the grid ----------
-  path(sx, sz, tx, tz) {
+  // hops: may the path go over window sills and low crates (soldiers jump them; hostages cannot)
+  path(sx, sz, tx, tz, hops = false) {
     let s = this.nearestWalk(Math.floor(sx), Math.floor(sz));
     let t = this.nearestWalk(Math.floor(tx), Math.floor(tz));
     if (s < 0 || t < 0) return null;
@@ -518,11 +528,14 @@ export class GameMap {
         for (let dx = -1; dx <= 1; dx++) {
           if (!dx && !dz) continue;
           const nx = cx + dx, nz = cz + dz;
-          if (!this.walkable(nx, nz)) continue;
-          if (dx && dz && (!this.walkable(cx + dx, cz) || !this.walkable(cx, cz + dz))) continue;
           const nc = nz * W + nx;
+          const hop = hops && this.inb(nx, nz) ? this.hop[nc] : 0;
+          if (!hop && !this.walkable(nx, nz)) continue;
+          // over a sill or a crate only straight across, never along it or round its corner
+          if (hop && (dx && dz || this.hop[c])) continue;
+          if (dx && dz && (!this.walkable(cx + dx, cz) || !this.walkable(cx, cz + dz))) continue;
           if (closed[nc] === stamp) continue;
-          const ng = g[c] + (dx && dz ? 1.414 : 1) * this.cost[nc];
+          const ng = g[c] + (hop ? (hop === 1 ? 2.6 : 3.6) : (dx && dz ? 1.414 : 1) * this.cost[nc]);
           if (seen[nc] !== stamp || ng < g[nc]) {
             seen[nc] = stamp;
             g[nc] = ng;
@@ -535,7 +548,8 @@ export class GameMap {
     const cells = [];
     for (let c = t; c !== -1; c = from[c]) cells.push(c);
     cells.reverse();
-    const pts = cells.map((c) => [(c % W) + 0.5, ((c / W) | 0) + 0.5]);
+    // a third value marks the cells to jump onto
+    const pts = cells.map((c) => [(c % W) + 0.5, ((c / W) | 0) + 0.5, this.hop[c] && !this.walk[c] ? 1 : 0]);
     pts.push([tx, tz]);
     return this.smooth(sx, sz, pts);
   }

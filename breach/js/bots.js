@@ -114,7 +114,9 @@ export class Brain {
   }
 
   setGoalPoint(x, z) {
-    const p = this.g.map.path(this.s.x, this.s.z, x, z);
+    // jump through windows and over crates, except when leading a hostage
+    const leading = this.g.hostages.some((h) => h.leader === this.s);
+    const p = this.g.map.path(this.s.x, this.s.z, x, z, !leading);
     this.path = p;
     this.pi = 0;
     this.repathAt = this.g.time + 3 + Math.random();
@@ -478,6 +480,11 @@ export class Brain {
     }
     const moveYaw = yawTo(dx, dz);
     const look = lookYaw ?? moveYaw;
+    // a sill or a crate ahead: jump onto it
+    const dist = Math.hypot(dx, dz);
+    if (p[2] && dist < 1.15 && s.onGround) s.in.jump = true;
+    // now and then a hop while running in the open, like people do
+    else if (!careful && s.onGround && dist > 2 && !g.map.isIndoor(s.x, s.z) && Math.random() < dt * 0.07) s.in.jump = true;
     this.applyLook(dt, look, 0);
     // move relative to facing
     const rel = angDiff(s.yaw, moveYaw);
