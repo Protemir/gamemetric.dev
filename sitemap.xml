@@ -36,6 +36,13 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/asyk/?lang=en"/>
   </url>
   <url>
+    <loc>https://gamemetric.dev/breach/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/breach/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/breach/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gamemetric.dev/breach/"/>
+    <lastmod>2026-11-22</lastmod>
+  </url>
+  <url>
     <loc>https://gamemetric.dev/kokpar/</loc>
     <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/kokpar/?lang=ru"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/kokpar/?lang=en"/>

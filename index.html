@@ -27,6 +27,7 @@
  "name": "GameMetric",
  "url": "https://gamemetric.dev/",
  "itemListElement": [
+  { "@type": "ListItem", "position": 1, "item": { "@type": "VideoGame", "name": "Штурм особняка", "alternateName": "Mansion Breach", "url": "https://gamemetric.dev/breach/", "image": "https://gamemetric.dev/img/breach.jpg", "genre": ["Shooter", "Tactical"], "gamePlatform": "Web browser", "isAccessibleForFree": true } },
   { "@type": "ListItem", "position": 1, "item": { "@type": "VideoGame", "name": "Не отворачивайся", "alternateName": "Hold Their Gaze", "url": "https://gamemetric.dev/lookaway/", "image": "https://gamemetric.dev/img/lookaway.jpg", "genre": ["Horror"], "gamePlatform": "Web browser", "isAccessibleForFree": true } },
   { "@type": "ListItem", "position": 1, "item": { "@type": "VideoGame", "name": "Последний караван", "alternateName": "The Last Caravan", "url": "https://gamemetric.dev/caravan/", "image": "https://gamemetric.dev/img/caravan.jpg", "genre": ["Adventure", "Puzzle"], "gamePlatform": "Web browser", "isAccessibleForFree": true } },
   { "@type": "ListItem", "position": 1, "item": { "@type": "VideoGame", "name": "Сыбыс", "alternateName": "Whispers of the Steppe", "url": "https://gamemetric.dev/sybys/", "image": "https://gamemetric.dev/img/sybys.jpg", "genre": ["Strategy", "Story"], "gamePlatform": "Web browser", "isAccessibleForFree": true } },
@@ -83,9 +84,22 @@
   </section>
 
   <section class="games" aria-label="Игры" data-t-label="games">
-    <a class="card hero" href="/kokpar/" data-game="kokpar" style="--accent:#e0393e">
+    <a class="card hero" href="/breach/" data-game="breach" style="--accent:#f2b13a">
       <div class="media">
-        <img src="img/kokpar.jpg" width="960" height="540" alt="" fetchpriority="high">
+        <img src="img/breach.jpg" width="960" height="540" alt="" fetchpriority="high">
+        <span class="badge" data-t="new">Новинка</span>
+      </div>
+      <div class="body">
+        <div class="chips"><span data-t="breach.genre">Тактический шутер · 3D</span><span data-t="breach.meta">5 на 5 с ботами · для ПК</span></div>
+        <h2 data-t="breach.name">Штурм особняка</h2>
+        <p data-t="breach.desc">Спецназ против охраны в особняке с заложниками. Закупай оружие, бери дом штурмом через двор, гараж или кухню и выводи заложников к воротам. Раунды до восьми побед или командный бой, боты трёх уровней. Летает даже на встроенной видеокарте.</p>
+        <span class="play"><span data-t="play">Играть</span> <i aria-hidden="true">▶</i></span>
+      </div>
+    </a>
+
+    <a class="card" href="/kokpar/" data-game="kokpar" style="--accent:#e0393e">
+      <div class="media">
+        <img src="img/kokpar.jpg" width="960" height="540" alt="" loading="lazy">
         <video muted loop playsinline preload="none" poster="img/kokpar.jpg" data-src="img/kokpar.mp4"></video>
         <span class="badge" data-t="new">Новинка</span>
       </div>

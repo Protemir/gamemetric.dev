@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Штурм особняка — тактический шутер 5 на 5 в браузере | GameMetric</title>
+<meta name="description" content="Бесплатный тактический шутер от первого лица прямо в браузере: спецназ против охраны в особняке с заложниками, закупка оружия, раунды, боты трёх уровней. Летит даже на встроенной видеокарте.">
+<link rel="canonical" href="https://gamemetric.dev/breach/">
+<link rel="alternate" hreflang="ru" href="https://gamemetric.dev/breach/?lang=ru">
+<link rel="alternate" hreflang="en" href="https://gamemetric.dev/breach/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://gamemetric.dev/breach/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0d1014">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://gamemetric.dev/breach/">
+<meta property="og:title" content="Штурм особняка — шутер 5 на 5 в браузере">
+<meta property="og:description" content="Спецназ против охраны, заложники, закупка и раунды. Бесплатно, без скачивания, тянет даже слабый ноутбук.">
+<meta property="og:image" content="https://gamemetric.dev/breach/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "VideoGame",
+ "name": "Штурм особняка",
+ "alternateName": "Mansion Breach",
+ "url": "https://gamemetric.dev/breach/",
+ "image": "https://gamemetric.dev/breach/og.jpg",
+ "genre": ["Shooter", "First-person shooter", "Tactical"],
+ "playMode": "SinglePlayer",
+ "gamePlatform": "Web browser",
+ "inLanguage": ["ru", "en"],
+ "isAccessibleForFree": true
+}
+</script>
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud" hidden>
+  <canvas id="radar" width="190" height="190"></canvas>
+  <div id="topbar">
+    <div class="team ta"><div class="dots" id="alive-a"></div><b id="sc-a">0</b></div>
+    <div class="mid"><div id="timer">0:00</div><div id="hostages"></div></div>
+    <div class="team tb"><b id="sc-b">0</b><div class="dots" id="alive-b"></div></div>
+  </div>
+  <div id="feed"></div>
+  <div id="crosshair"><i class="l"></i><i class="r"></i><i class="u"></i><i class="d"></i><i class="c"></i></div>
+  <div id="hitmark" class="hitmark"><i></i><i></i><i></i><i></i></div>
+  <div id="hurt-layer"></div>
+  <div id="vignette"></div>
+  <div id="scope" hidden><div class="hole"></div><i class="sh"></i><i class="sv"></i></div>
+  <div id="center-msg"></div>
+  <div id="banner" class="banner" hidden><b></b><span></span></div>
+  <div id="prompt" hidden></div>
+  <div id="spec" hidden></div>
+  <div id="reloading" hidden></div>
+  <div id="vitals">
+    <div id="hp-box" class="vbox"><svg viewBox="0 0 20 20"><path d="M7 1h6v6h6v6h-6v6H7v-6H1V7h6z"/></svg><b id="hp">100</b></div>
+    <div class="vbox"><svg viewBox="0 0 20 20"><path d="M10 1l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V4z"/></svg><b id="armor">0</b><span id="helmet" hidden>⛑</span></div>
+    <div id="money">$800</div>
+  </div>
+  <div id="weapon">
+    <div id="slots"></div>
+    <div id="wname"></div>
+    <div id="ammo-box"><b id="ammo">12</b><span id="reserve">/ 48</span></div>
+  </div>
+  <div id="fps" hidden></div>
+  <div id="board" hidden><table id="board-a"></table><table id="board-b"></table></div>
+  <div id="buy" hidden>
+    <div class="buy-head"><b data-t="buy"></b><span id="buy-money"></span><span id="buy-time"></span></div>
+    <div id="buy-grid"></div>
+    <div class="buy-hint" data-t="buyHint"></div>
+  </div>
+  <div id="flash-white" hidden></div>
+</div>
+
+<div id="match-over" class="overlay" hidden>
+  <div class="panel">
+    <h2 id="mo-title"></h2>
+    <div id="mo-score"></div>
+    <p id="mo-stats"></p>
+    <div class="row"><button id="mo-again" class="btn primary" data-t="again"></button><button id="mo-menu" class="btn" data-t="menu"></button></div>
+  </div>
+</div>
+
+<div id="pause" class="overlay" hidden>
+  <div class="panel">
+    <h2 data-t="paused"></h2>
+    <button id="p-resume" class="btn primary" data-t="resume"></button>
+    <button id="p-settings" class="btn" data-t="settings"></button>
+    <button id="p-quit" class="btn" data-t="quit"></button>
+  </div>
+</div>
+
+<div id="menu" class="overlay menu">
+  <div class="menu-bg"></div>
+  <header class="menu-top">
+    <a class="back" href="/" data-t="allGames"></a>
+    <nav class="langs"><button data-lang="ru">RU</button><button data-lang="en">EN</button></nav>
+  </header>
+  <div class="menu-main">
+    <h1><span data-t="title"></span></h1>
+    <p class="tagline" data-t="tagline"></p>
+    <div class="sides">
+      <button class="side ta" data-side="A"><b data-t="sideA"></b><span data-t="sideAdesc"></span></button>
+      <button class="side tb" data-side="B"><b data-t="sideB"></b><span data-t="sideBdesc"></span></button>
+    </div>
+    <div class="opts">
+      <div class="opt"><label data-t="mode"></label>
+        <div class="seg" id="seg-mode"><button data-v="hostage"><b data-t="modeHostage"></b><small data-t="modeHostageDesc"></small></button><button data-v="dm"><b data-t="modeDM"></b><small data-t="modeDMDesc"></small></button></div>
+      </div>
+      <div class="opt"><label data-t="diff"></label>
+        <div class="seg small" id="seg-diff"><button data-v="easy" data-t="easy"></button><button data-v="normal" data-t="normal"></button><button data-v="hard" data-t="hard"></button></div>
+      </div>
+    </div>
+    <button id="play" class="btn primary big" data-t="play"></button>
+    <p id="pc-only" hidden data-t="pcOnly"></p>
+    <div class="row links"><button id="m-settings" class="link" data-t="settings"></button><button id="m-controls" class="link" data-t="controls"></button></div>
+  </div>
+  <footer class="menu-foot"><span data-t="made"></span> <a href="https://temirlab.com" target="_blank" rel="noopener">TEMIRLAB</a></footer>
+</div>
+
+<div id="settings" class="overlay" hidden>
+  <div class="panel wide">
+    <h2 data-t="settings"></h2>
+    <label class="field"><span data-t="sens"></span><input type="range" id="s-sens" min="0.2" max="4" step="0.05"><output id="o-sens"></output></label>
+    <label class="field"><span data-t="fov"></span><input type="range" id="s-fov" min="60" max="90" step="1"><output id="o-fov"></output></label>
+    <label class="field"><span data-t="volume"></span><input type="range" id="s-vol" min="0" max="1" step="0.05"><output id="o-vol"></output></label>
+    <div class="field"><span data-t="quality"></span><div class="seg small" id="seg-q"><button data-v="auto">Auto</button><button data-v="1">100%</button><button data-v="0.75">75%</button><button data-v="0.5">50%</button></div></div>
+    <label class="field check"><input type="checkbox" id="s-fps"><span data-t="showFps"></span></label>
+    <button id="s-back" class="btn primary" data-t="back"></button>
+  </div>
+</div>
+
+<div id="controls" class="overlay" hidden>
+  <div class="panel wide">
+    <h2 data-t="controls"></h2>
+    <dl id="ctrl-list"></dl>
+    <button id="c-back" class="btn primary" data-t="back"></button>
+  </div>
+</div>
+
+<div id="click-to-play" class="overlay" hidden><div class="panel"><b data-t="clickToPlay"></b></div></div>
+<div id="loading" class="overlay" hidden><div class="panel"><b data-t="loading"></b></div></div>
+</body>
+</html>
