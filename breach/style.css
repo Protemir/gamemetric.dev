@@ -317,3 +317,16 @@ body.touch #prompt { top: auto; bottom: 34%; }
 /* no double-tap zoom on the buy menu and the buttons */
 html { touch-action: manipulation; }
 @media (max-height: 520px) { .panel { padding: 16px 18px; } .lb-team { min-height: 104px; } }
+
+/* interface size (settings): every HUD block and the phone buttons */
+:root { --ui: 1; }
+#radar, #topbar, #vitals, #weapon, #feed, #prompt, #center-msg, #spec, #reloading, #variant, #touch .tb, #touch .stick { zoom: var(--ui); }
+#announce { zoom: calc(0.4 + var(--ui) * 0.6); }
+/* short phone screens: the round message sits under the score bar, not across the view */
+@media (max-height: 420px) {
+  #center-msg { top: 21%; font-size: 17px; }
+  #prompt { font-size: 13px; padding: 4px 10px; }
+  #touch .tz-move { width: 46%; }
+}
+#seg-fun { flex-wrap: wrap; } #seg-fun button { flex: 1 1 22%; }
+#variant { top: auto; bottom: 18px; }

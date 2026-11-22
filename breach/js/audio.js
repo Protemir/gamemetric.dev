@@ -22,6 +22,36 @@ export function initAudio() {
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
 }
 
+// the steady sound of rain; on = false stops it; level 0..1 (softer indoors)
+let rain = null;
+export function rainSound(on, level = 1) {
+  if (!ctx) return;
+  if (!on) {
+    if (rain) {
+      try {
+        rain.src.stop();
+      } catch {}
+      rain = null;
+    }
+    return;
+  }
+  if (!rain) {
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 2400;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    src.connect(f).connect(g).connect(master);
+    src.start();
+    rain = { src, g, f };
+  }
+  rain.g.gain.setTargetAtTime(0.11 * level, ctx.currentTime, 0.4);
+  rain.f.frequency.setTargetAtTime(level < 1 ? 900 : 2400, ctx.currentTime, 0.4);
+}
+
 export function setVolume(v) {
   volume = v;
   if (master) master.gain.value = v;
@@ -276,6 +306,19 @@ export function sfx(name, pos = null, opt = {}) {
       tone(d, t, 0.9, 'sawtooth', f * 1.6, f, 0.09);
       tone(d, t + 0.05, 0.8, 'square', f * 1.2, f * 0.8, 0.04);
       noise(d, t, 0.7, 'bandpass', 400, 2, 0.06);
+      break;
+    }
+    case 'thunder': {
+      const d = out({ gain: 1, pan: (Math.random() - 0.5) * 0.6 });
+      noise(d, t, 2.6, 'lowpass', 220, 0.7, 0.55, 0.05, 1.6);
+      noise(d, t + 0.1, 1.2, 'lowpass', 600, 0.8, 0.25, 0.01, 2);
+      tone(d, t, 1.8, 'sine', 55, 30, 0.25, 0.05);
+      break;
+    }
+    case 'spray': {
+      const P = place(pos, 12);
+      if (!P) return;
+      noise(out(P), t, 0.45, 'highpass', 5000, 0.6, 0.12, 0.02);
       break;
     }
     case 'cluck': {

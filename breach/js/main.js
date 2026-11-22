@@ -17,7 +17,7 @@ const canvas = $('view');
 const q = new URLSearchParams(location.search);
 
 // ---------- settings ----------
-const DEF = { sens: 1.2, fov: 74, vol: 0.8, bright: 1.2, fun: {}, quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
+const DEF = { sens: 1.2, tsens: 1, ui: 1, fov: 74, vol: 0.8, bright: 1.2, fun: {}, quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
 let settings = { ...DEF };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem('breach.settings') || '{}'));
@@ -124,13 +124,40 @@ sides();
 const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 let touchOnly = !q.has('mouse') && (q.has('touch') || (navigator.maxTouchPoints > 0 && mobileUA) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches));
 
+// a phone held sideways is short: less interface, more view, unless the player chose otherwise
+function phoneDefaults() {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem('breach.settings') || '{}');
+  } catch {}
+  if (saved.ui == null) settings.ui = 0.78;
+  if (saved.fov == null) settings.fov = 82;
+  applyUi();
+  for (const k of ['ui', 'fov']) {
+    const el = $('s-' + k);
+    if (el) {
+      el.value = settings[k];
+      el.dispatchEvent(new Event('sync'));
+    }
+  }
+}
+function applyUi() {
+  document.documentElement.style.setProperty('--ui', settings.ui ?? 1);
+  // the gun in hand shrinks with the interface on a small screen
+  settings.vmScale = touchOnly ? 0.84 : 1;
+  // and on a phone the crosshair is helped onto targets a little
+  settings.assist = touchOnly;
+}
+
 function slider(id, key, fmt) {
   const el = $('s-' + id), out = $('o-' + id);
   el.value = settings[key];
   out.textContent = fmt(settings[key]);
+  el.addEventListener('sync', () => (out.textContent = fmt(settings[key])));
   el.addEventListener('input', () => {
     settings[key] = +el.value;
     out.textContent = fmt(settings[key]);
+    if (key === 'ui') applyUi();
     if (key === 'vol') setVolume(settings.vol);
     if (key === 'bright') renderer.toneMappingExposure = settings.bright;
     save();
@@ -140,6 +167,9 @@ slider('sens', 'sens', (v) => (+v).toFixed(2));
 slider('fov', 'fov', (v) => `${v}°`);
 slider('vol', 'vol', (v) => `${Math.round(v * 100)}%`);
 slider('bright', 'bright', (v) => `${Math.round(v * 100)}%`);
+slider('ui', 'ui', (v) => `${Math.round(v * 100)}%`);
+slider('tsens', 'tsens', (v) => (+v).toFixed(2));
+applyUi();
 $('s-fps').checked = settings.showFps;
 $('s-fps').addEventListener('change', () => {
   settings.showFps = $('s-fps').checked;
@@ -322,9 +352,11 @@ let touchCtl = null;
 function enableTouch() {
   if (touchCtl) return;
   touchOnly = true;
+  phoneDefaults();
   touchCtl = setupTouch({
     input,
     look,
+    getSens: () => settings.tsens ?? 1,
     getGame: () => (state === 'play' ? game : null),
     actions: {
       tap(a) {
@@ -355,13 +387,12 @@ function enableTouch() {
   touchCtl.label();
   applyTexts();
   // a game already running carries on with the new controls
-  if (game && state !== 'menu') {
-    document.exitPointerLock?.();
-    lockPointer();
-  }
+  if (game && state === 'pause' && !$('pause').hidden) {
+    /* a menu was up: leave it to the player */
+  } else if (game && state !== 'menu') lockPointer();
 }
 if (touchOnly) enableTouch();
-else if (!q.has('mouse'))
+else if (!q.has('mouse') && (mobileUA || !matchMedia('(any-pointer: fine)').matches))
   window.addEventListener(
     'touchstart',
     () => {
@@ -471,7 +502,7 @@ window.addEventListener('keydown', (e) => {
   input.keys.add(e.code);
   // keep Ctrl+R, Ctrl+1.. and friends from reloading or switching tabs while crouching
   if (e.ctrlKey || e.metaKey || ['Space', 'ArrowUp', 'ArrowDown', 'ControlLeft', 'ControlRight', 'KeyS', 'KeyW', 'KeyR', 'KeyD', 'KeyB', 'KeyE', 'KeyF'].includes(e.code)) e.preventDefault();
-  const map = { Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', KeyQ: 'last', KeyR: 'reload', KeyE: 'use', KeyF: 'inspect' };
+  const map = { Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', KeyQ: 'last', KeyR: 'reload', KeyE: 'use', KeyF: 'inspect', KeyT: 'spray' };
   if (map[e.code]) game.playerAction(map[e.code]);
   if (e.code === 'KeyB') openBuy();
 });

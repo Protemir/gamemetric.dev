@@ -4,6 +4,7 @@ import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos } from './map.js';
 import { buildDecor } from './decor.js';
 import { buildProps, propsReady } from './props.js';
 import { Chickens } from './chickens.js';
+import { Rain } from './weather.js';
 import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
@@ -255,11 +256,13 @@ export class Game {
     for (const m of this.map.buildMeshes(this.tex, propsReady())) this.scene.add(m);
     for (const m of buildDecor(this.map, this.tex)) this.scene.add(m);
     this.buildSurroundings();
+    if (opts.fun?.rain && !opts.preview) this.rainPending = true;
     this.fx = new FX(this.scene);
     // the silly options: big heads, low gravity, exploding chickens
     this.fun = opts.fun || {};
     this.grav = this.fun.lowgrav ? 6 : GRAV;
     this.chickens = new Chickens(this);
+    if (this.rainPending) this.rain = new Rain(this);
     this.vm = new ViewModel();
     this.vm.flash.material.map = this.fx.flashes[0].s.material.map;
     this.lightCache = new Float32Array(W * H).fill(-1);
@@ -1126,9 +1129,40 @@ export class Game {
     if (this.mode === 'dm') o.respawnAt = this.variant === 'zombie' && o.team === 'A' ? 0 : this.time + 3;
     if (this.variant === 'gun' && by && by !== o && by.team !== o.team && this.role !== 'client') this.gunProgress(by, o, weapon);
     if (o.isPlayer) {
+      this.streak = 0;
       this.hud.center(by && by !== o ? `${t('killedBy')} ${by.name}` : t('youDied'), 2.5);
       this.vm.mesh.visible = false;
     }
+  }
+
+  // a tag on the wall, like the old shooters: one every few seconds, within arm's reach
+  spray(s) {
+    if (this.time < (s.sprayAt || 0)) return;
+    const eye = s.feet + s.eyeH();
+    const dx = -Math.sin(s.yaw) * Math.cos(s.pitch), dy = Math.sin(s.pitch), dz = -Math.cos(s.yaw) * Math.cos(s.pitch);
+    const hit = this.map.raycast(s.x, eye, s.z, dx, dy, dz, 3.5);
+    if (!hit) return;
+    s.sprayAt = this.time + 4;
+    this.fx.sprayDecal(s.x + dx * hit.t, eye + dy * hit.t, s.z + dz * hit.t, hit.nx, hit.ny, hit.nz, s.sprayKind ?? (s.sprayKind = Math.floor(Math.random() * 6)));
+    sfx('spray', [s.x, eye, s.z]);
+  }
+
+  // phones: a gentle pull towards an enemy who is almost under the crosshair, stronger while firing
+  aimAssist(p, dt) {
+    const eye = p.feet + p.eyeH();
+    let best = null, bestA = 0.09;
+    for (const o of this.soldiers) {
+      if (!o.alive || o.team === p.team) continue;
+      const tx = o.x - p.x, tz = o.z - p.z, ty = o.feet + o.eyeH() - 0.3 - eye, d = Math.hypot(tx, tz);
+      if (d > 45 || d < 0.5) continue;
+      const dyaw = angDiff(p.yaw, Math.atan2(-tx, -tz)), dp = Math.atan2(ty, d) - p.pitch;
+      const a = Math.hypot(dyaw, dp);
+      if (a < bestA && this.map.los(p.x, eye, p.z, o.x, o.feet + o.eyeH() - 0.3, o.z)) (bestA = a), (best = { dyaw, dp });
+    }
+    if (!best) return;
+    const k = Math.min(1, dt * (this.vm.kick > 0.05 || p.justFired ? 5 : 2)) * 0.5;
+    p.yaw += best.dyaw * k;
+    p.pitch += best.dp * k;
   }
 
   // ---------- the extra modes ----------
@@ -1163,7 +1197,11 @@ export class Game {
       }
     }
     s.shown = null;
-    if (s.remote) this.nh?.onPicked(s, { kind: s.kind, mag: s.ammoOf(s.kind).mag ?? 0, res: s.ammoOf(s.kind).res ?? 0 });
+    if (s.remote) {
+      const k = s.slots[s.cur] || 'knife';
+      const a = s.ammo[k] || { mag: 0, res: 0 };
+      this.nh?.onPicked(s, { kind: k, mag: a.mag, res: a.res });
+    }
   }
 
   // gun game: a kill moves the killer one gun on; a knife kill at the end wins; knifed victims step back
@@ -1202,7 +1240,7 @@ export class Game {
     const near = s.isPlayer ? 0.32 : 0.45, side = s.isPlayer ? 0.16 : 0.12, y = eye - (s.isPlayer ? 0.12 : 0.3);
     const x = s.x + fx * near + rx * side, z = s.z + fz * near + rz * side;
     const sp = 1.4 + Math.random() * 0.8;
-    this.fx.shell(x, y, z, rx * sp + s.vx * 0.8 + (Math.random() - 0.5) * 0.4, 1.6 + Math.random() * 0.8, rz * sp + s.vz * 0.8 + (Math.random() - 0.5) * 0.4, (px, pz) => this.map.groundAt(px, pz, 0.02, 3), (px, py, pz) => sfx('shell', [px, py, pz]));
+    this.fx.shell(x, y, z, rx * sp + s.vx * 0.8 + (Math.random() - 0.5) * 0.4, 1.6 + Math.random() * 0.8, rz * sp + s.vz * 0.8 + (Math.random() - 0.5) * 0.4, (px, pz, py) => this.map.groundAt(px, pz, 0.02, py), (px, py, pz) => sfx('shell', [px, py, pz]));
   }
 
   // blood behind someone who was hit: on the wall within reach, or on the floor
@@ -1777,6 +1815,11 @@ export class Game {
     this.updateHostages(dt);
     this.updateDrops();
     this.chickens.update(dt);
+    if (this.mode === 'dm' && this.time > (this.flockAt || 0)) {
+      this.flockAt = this.time + 45;
+      if (this.chickens.list.length < 5) this.chickens.spawn();
+    }
+    this.rain?.update(dt);
     if (this.variant === 'zombie') for (const s of this.soldiers) if (s.team === 'B' && s.alive && Math.random() < dt * 0.12) sfx('groan', [s.x, s.feet + 1.6, s.z]);
     this.updateNades(dt);
     this.fx.update(dt);
@@ -1799,6 +1842,7 @@ export class Game {
     } else if (a === 'last') {
       if (p.hasSlot(p.prev)) p.switchSlot(p.prev);
     } else if (a === 'reload') this.reload(p);
+    else if (a === 'spray') this.spray(p);
     else if (a === 'inspect') {
       if (!p.reloadUntil && this.time >= p.switchUntil && !p.scoped) this.vm.inspect = 2.4;
     }
@@ -1868,6 +1912,11 @@ export class Game {
 
   // the dead drop their main gun, or the pistol when there is none
   dropFrom(s) {
+    if (this.variant) {
+      s.body.setGun(null);
+      s.shown = null;
+      return;
+    }
     const kind = s.slots[1] || s.slots[2];
     if (!kind) return;
     const w = WEAPONS[kind];
@@ -1915,7 +1964,7 @@ export class Game {
 
   // a gun at the player's feet worth pressing E for
   nearDrop(p) {
-    if (!p.alive || !this.drops.length) return null;
+    if (!p.alive || !this.drops.length || this.variant) return null;
     let best = null, bd = 1.5;
     for (const d of this.drops) {
       if (p.slots[WEAPONS[d.kind].slot] === d.kind) continue;
@@ -1930,7 +1979,7 @@ export class Game {
 
   // walking over a gun picks it up when that slot is empty; bots also swap up to a dearer gun
   updateDrops() {
-    if (this.role === 'client' || !this.drops.length) return;
+    if (this.role === 'client' || !this.drops.length || this.variant) return;
     if (this.mode === 'dm') {
       for (const d of [...this.drops]) if (this.time - d.born > 30) {
         this.removeDrop(d);
@@ -1978,7 +2027,7 @@ export class Game {
     const v = this.view;
     let src = p;
     if (!p.alive) {
-      if (this.mode === 'hostage' && this.time - p.deadAt > 2) {
+      if ((this.mode === 'hostage' || !p.respawnAt) && this.time - p.deadAt > 2) {
         if (!this.spec || !this.spec.alive) {
           this.spec = null;
           this.nextSpectate();
@@ -1992,6 +2041,7 @@ export class Game {
         const sens = settings.sens * 0.0022 * (p.scoped === 1 ? 0.45 : p.scoped === 2 ? 0.2 : 1);
         p.yaw -= look.dx * sens;
         p.pitch -= look.dy * sens;
+        if (settings.assist) this.aimAssist(p, dt);
         p.pitch = Math.max(-1.5, Math.min(1.5, p.pitch));
       }
       v.yaw = p.yaw;
@@ -2071,7 +2121,11 @@ export class Game {
       vm.inspect = Math.max(0, (vm.inspect || 0) - dt);
       const ins = vm.inspect > 0 ? Math.sin(Math.min(1, (2.4 - vm.inspect) / 2.4) * Math.PI) : 0;
       const h = vm.holder;
-      const o = VM_OFFSET[p.kind] || VM_OFFSET.rifle;
+      // phones: a smaller gun, a little lower, so the middle of the screen stays clear
+      const vs = settings.vmScale ?? 1;
+      h.scale.setScalar(VM_SCALE * vs);
+      const o0 = VM_OFFSET[p.kind] || VM_OFFSET.rifle;
+      const o = vs < 1 ? [o0[0] + 0.012, o0[1] - 0.018, o0[2], o0[3]] : o0;
       h.position.set(
         o[0] + Math.sin(vm.bob) * 0.012 * bobAmt + vm.swayX,
         o[1] + Math.abs(Math.cos(vm.bob)) * 0.012 * bobAmt + vm.swayY - vm.draw * 0.25 - reloadK * 0.12 - p.crouchK * 0.01,
@@ -2127,8 +2181,13 @@ export class Game {
       s.name = name;
       s.netKind = null;
       s.nb = null;
-      if (s.alive) this.kill(s, null, 'knife', false, 0, 0);
-      if (this.mode === 'dm') s.respawnAt = this.time + 2;
+      s.gunLevel = 0;
+      if (s.alive) {
+        const fb = this.firstBlood;
+        this.kill(s, null, 'knife', false, 0, 0);
+        this.firstBlood = fb;
+      }
+      if (this.mode === 'dm' && !(this.variant === 'zombie' && s.team === 'A')) s.respawnAt = this.time + 2;
       return s;
     }
     return null;
@@ -2155,6 +2214,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    this.rain?.dispose();
     this.chickens?.dispose();
     this.envRT?.dispose();
     const all = [];

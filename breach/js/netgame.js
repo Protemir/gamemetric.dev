@@ -460,8 +460,15 @@ export class NetGame {
     p.flash = L.fl;
     p.money = L.m;
     p.gunLevel = L.gl || 0;
-    if (bought && WEAPONS[bought] && (WEAPONS[bought].slot === 1 || WEAPONS[bought].slot === 2)) p.switchSlot(WEAPONS[bought].slot);
-    else if (!p.hasSlot(p.cur)) p.switchSlot(p.bestSlot(), true);
+    // 11 the gun game level-up, told to the player on a friend's machine too
+    if (g.variant === 'gun' && p.gunLevel > (this.lastLevel ?? 0)) {
+      g.hud.center(`${t('level')} ${p.gunLevel + 1}/10`, 2);
+      sfx('streak', null, { n: Math.min(5, 1 + Math.floor(p.gunLevel / 2)) });
+    }
+    this.lastLevel = p.gunLevel;
+    if (bought && WEAPONS[bought] && (WEAPONS[bought].slot === 1 || WEAPONS[bought].slot === 2) && p.hasSlot(WEAPONS[bought].slot)) p.switchSlot(WEAPONS[bought].slot);
+    else if (bought === 'knife') p.switchSlot(3, true);
+    if (!p.hasSlot(p.cur)) p.switchSlot(p.bestSlot(), true);
     else if (fresh) p.switchSlot(p.bestSlot(), true);
   }
 }

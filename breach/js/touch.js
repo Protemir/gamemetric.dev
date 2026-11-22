@@ -4,7 +4,7 @@ import { t } from './i18n.js';
 
 const LOOK_K = 2.0; // touch pixels count double against the mouse sensitivity
 
-export function setupTouch({ input, look, getGame, actions }) {
+export function setupTouch({ input, look, getGame, actions, getSens = () => 1 }) {
   document.body.classList.add('touch');
   const root = document.createElement('div');
   root.id = 'touch';
@@ -86,8 +86,9 @@ export function setupTouch({ input, look, getGame, actions }) {
       if (o.kind === 'stick') setStick(tch.clientX, tch.clientY);
       else if (o.kind === 'look' || (o.kind === 'btn' && o.a === 'fire')) {
         // dragging on the right, or on the fire button, turns the view
-        look.dx += (tch.clientX - o.x) * LOOK_K;
-        look.dy += (tch.clientY - o.y) * LOOK_K;
+        const k = LOOK_K * getSens();
+        look.dx += (tch.clientX - o.x) * k;
+        look.dy += (tch.clientY - o.y) * k;
         o.x = tch.clientX;
         o.y = tch.clientY;
       }
@@ -118,6 +119,8 @@ export function setupTouch({ input, look, getGame, actions }) {
   root.addEventListener('touchcancel', end, { passive: false });
   // the crouch button shows whether it is on
   const crouchBtn = $('.tb-crouch');
+  const btnBuy = $('.tb-buy'), btnNade = $('.tb-nade'), btnUse = $('.tb-use'), btnAlt = $('.tb-alt');
+  let slowAt = 0;
   return {
     show(on) {
       root.hidden = !on;
@@ -138,11 +141,14 @@ export function setupTouch({ input, look, getGame, actions }) {
     },
     update(g) {
       crouchBtn.classList.toggle('lit', !!input.touch.crouch);
+      const now = performance.now();
+      if (now < slowAt) return;
+      slowAt = now + 120;
       const p = g.player;
-      $('.tb-buy').hidden = !(p.alive && g.canBuy(p) && g.mode !== 'dm' && g.phase !== 'end');
-      $('.tb-nade').hidden = !(p.alive && (p.he > 0 || p.flash > 0));
-      $('.tb-use').classList.toggle('lit', !!(g.nearHostage() || g.nearDrop(p)));
-      $('.tb-alt').hidden = !(p.alive && (p.kind === 'knife' || p.kind === 'sniper' || p.kind === 'scout'));
+      btnBuy.hidden = !(p.alive && g.canBuy(p) && g.mode !== 'dm' && g.phase !== 'end');
+      btnNade.hidden = !(p.alive && (p.he > 0 || p.flash > 0));
+      btnUse.classList.toggle('lit', !!(g.nearHostage() || g.nearDrop(p)));
+      btnAlt.hidden = !(p.alive && (p.kind === 'knife' || p.kind === 'sniper' || p.kind === 'scout'));
     },
     label() {
       for (const [cls, key] of Object.entries({ fire: 'fire', alt: 'aLabelAlt', jump: 'aLabelJump', crouch: 'aLabelCrouch', reload: 'aLabelReload', use: 'aLabelUse', next: 'aLabelNext', nade: 'aLabelNade', buy: 'buy', score: 'aLabelScore', pause: 'aLabelPause' }))

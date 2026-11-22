@@ -91,6 +91,8 @@ export class FX {
     this.bloodI = 0;
     scene.add(this.blood);
     this.m = new THREE.Matrix4();
+    this._e = new THREE.Euler();
+    this._one = new THREE.Vector3(1, 1, 1);
     this.q = new THREE.Quaternion();
     this.v = new THREE.Vector3();
     this.zAxis = new THREE.Vector3(0, 0, 1);
@@ -118,6 +120,45 @@ export class FX {
     this.decalI = (this.decalI + 1) % MAX_DECALS;
     this.decals.count = Math.max(this.decals.count, this.decalI === 0 ? MAX_DECALS : this.decalI);
     this.decals.instanceMatrix.needsUpdate = true;
+  }
+
+  // a spray tag on a wall
+  sprayDecal(x, y, z, nx, ny, nz, kind) {
+    if (!this.sprayTex) {
+      this.sprayTex = [];
+      const tags = ['💀', '🐔', '😎', '🔥', '👑', 'GG'];
+      for (const t of tags) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 128;
+        const g = c.getContext('2d');
+        g.fillStyle = 'rgba(255,255,255,0)';
+        g.fillRect(0, 0, 128, 128);
+        g.font = t === 'GG' ? '900 70px Arial Black, Impact, sans-serif' : '86px serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.shadowColor = 'rgba(0,0,0,0.5)';
+        g.shadowBlur = 6;
+        g.fillStyle = t === 'GG' ? '#ff4fb0' : '#fff';
+        g.fillText(t, 64, 70);
+        const tex = new THREE.CanvasTexture(c);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        this.sprayTex.push(tex);
+      }
+      this.sprays = [];
+    }
+    const mat = new THREE.MeshBasicMaterial({ map: this.sprayTex[kind % this.sprayTex.length], transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, opacity: 0.92 });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), mat);
+    this.v.set(nx, ny, nz);
+    m.quaternion.setFromUnitVectors(this.zAxis, this.v);
+    m.position.set(x + nx * 0.01, y + ny * 0.01, z + nz * 0.01);
+    this.scene.add(m);
+    this.sprays.push(m);
+    if (this.sprays.length > 12) {
+      const old = this.sprays.shift();
+      this.scene.remove(old);
+      old.geometry.dispose();
+      old.material.dispose();
+    }
   }
 
   // a splash of blood on a surface (size in metres)
@@ -198,7 +239,7 @@ export class FX {
         p.z += p.vz * dt;
         p.rx += p.sx * dt;
         p.ry += p.sy * dt;
-        const fy = (p.floor ? p.floor(p.x, p.z) : 0) + 0.006;
+        const fy = (p.floor ? p.floor(p.x, p.z, p.y) : 0) + 0.006;
         if (p.y < fy && p.vy < 0) {
           p.y = fy;
           p.vy = -p.vy * 0.35;
@@ -207,14 +248,17 @@ export class FX {
           p.sx *= 0.5;
           p.sy *= 0.5;
           p.bounces++;
-          if (p.bounces === 1) p.onTink?.(p.x, p.y, p.z);
+          if (p.bounces === 1 && performance.now() - (this.tinkAt || 0) > 90) {
+            this.tinkAt = performance.now();
+            p.onTink?.(p.x, p.y, p.z);
+          }
           if (p.bounces >= 3) p.rx = Math.PI / 2;
         }
       }
     }
     for (const p of this.sh) {
-      this.q.setFromEuler(new THREE.Euler(p.rx, p.ry, 0));
-      this.m.compose(this.v.set(p.x, p.y, p.z), this.q, new THREE.Vector3(1, 1, 1));
+      this.q.setFromEuler(this._e.set(p.rx, p.ry, 0));
+      this.m.compose(this.v.set(p.x, p.y, p.z), this.q, this._one);
       this.shells.setMatrixAt(ns++, this.m);
     }
     this.shells.count = ns;

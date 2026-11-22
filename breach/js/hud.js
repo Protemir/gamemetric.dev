@@ -210,7 +210,7 @@ export class Hud {
     $('mo-title').textContent = t(win === null ? 'draw' : win ? 'matchWin' : 'matchLose');
     $('mo-title').className = win === null ? '' : win ? 'good' : 'bad';
     $('mo-again').hidden = game.role !== 'solo';
-    $('mo-score').textContent = game.mode === 'dm' ? `${game.dmKills.A} : ${game.dmKills.B}` : `${game.score.A} : ${game.score.B}`;
+    $('mo-score').textContent = game.variant === 'zombie' ? `${t('peopleLeft')}: ${game.soldiers.filter((s) => s.team === 'A' && s.alive).length}` : game.variant === 'gun' ? '' : game.mode === 'dm' ? `${game.dmKills.A} : ${game.dmKills.B}` : `${game.score.A} : ${game.score.B}`;
     const p = game.player;
     $('mo-stats').textContent = `${t('kills')}: ${p.kills} · ${t('deaths')}: ${p.deaths}`;
     document.exitPointerLock?.();
@@ -219,7 +219,6 @@ export class Hud {
   // ---------- per frame ----------
   update(game, now, settings, fps) {
     this.lowHealth(game.player.alive ? game.player.hp : 0);
-    this.variantInfo(game);
     const p = game.player;
     this.drawRadar(game);
     // crosshair gap follows the real spread
@@ -247,6 +246,7 @@ export class Hud {
 
     if (now - this.lastDom < 66) return;
     this.lastDom = now;
+    this.variantInfo(game);
     if (now > this.centerUntil) this.centerEl.classList.remove('show');
     if (now > this.bannerUntil) this.bannerEl.hidden = true;
     // vitals of whoever we are watching
@@ -303,7 +303,7 @@ export class Hud {
     const spec = $('spec');
     if (!p.alive) {
       spec.hidden = false;
-      if (game.mode === 'dm') spec.textContent = `${t('respawn')} ${Math.max(0, Math.ceil((p.respawnAt || 0) - game.time))}`;
+      if (game.mode === 'dm' && p.respawnAt) spec.textContent = `${t('respawn')} ${Math.max(0, Math.ceil(p.respawnAt - game.time))}`;
       else spec.textContent = game.specTarget ? `${t('spectating')}: ${game.specTarget.name}` : t('youDied');
     } else spec.hidden = true;
     // hostage prompt
@@ -344,7 +344,9 @@ export class Hud {
     const head = `<tr><th>${t('player')}</th><th>${t('kills')}</th><th>${t('deaths')}</th>${dm ? '' : `<th>${t('money')}</th>`}</tr>`;
     const alive = (team) => game.soldiers.filter((s) => s.team === team && s.alive).length;
     const you = (team) => (team === mine ? ` · ${t('yourTeam')}` : '');
-    const sub = dm ? t('toKills').replace('{n}', 60) : `${t('round')} ${game.round} · ${t('toWins').replace('{n}', 8)}`;
+    const v = game.variant;
+    const lead = v === 'gun' ? game.soldiers.reduce((b, s) => ((s.gunLevel || 0) > (b.gunLevel || 0) ? s : b), game.soldiers[0]) : null;
+    const sub = v === 'gun' ? `${t('modeGun')} · ${t('leader')}: ${esc(lead.name)} (${(lead.gunLevel || 0) + 1}/10)` : v === 'zombie' ? `${t('modeZombie')} · ${t('peopleLeft')}: ${game.soldiers.filter((s) => s.team === 'A' && s.alive).length}` : v === 'knife' ? t('toKills').replace('{n}', 30) : dm ? t('toKills').replace('{n}', 60) : `${t('round')} ${game.round} · ${t('toWins').replace('{n}', 8)}`;
     $('board-head').innerHTML = `<div class="bh-team ta">${t('sideA')}</div><div class="bh-score"><span class="ta">${sc.A}</span><i>:</i><span class="tb">${sc.B}</span></div><div class="bh-team tb">${t('sideB')}</div><div class="bh-sub">${sub}</div>`;
     $('board-a').innerHTML = `<caption>${t('aliveN')} ${alive('A')}/5${you('A')}</caption>${head}${rows('A')}`;
     $('board-b').innerHTML = `<caption>${t('aliveN')} ${alive('B')}/5${you('B')}</caption>${head}${rows('B')}`;
