@@ -196,7 +196,10 @@ input[type='range'] { accent-color: var(--accent); width: 100%; }
 .seg.small button { text-align: center; padding: 8px; align-items: center; }
 .seg button.on { border-color: var(--accent); background: rgba(242, 177, 58, 0.14); }
 .play-row { justify-content: flex-start; flex-wrap: wrap; margin-top: 4px; }
-.btn.online { font-size: 18px; padding: 15px 26px; }
+/* playing with friends: a solid blue button that reads on any background */
+.btn.online { font-size: 18px; padding: 15px 26px; background: linear-gradient(180deg, #3b7fd0, #2a62a8); color: #fff; border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); display: inline-flex; align-items: center; gap: 10px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+.btn.online:hover { background: linear-gradient(180deg, #4a8ee0, #3170ba); }
+.btn.online svg { width: 22px; height: 22px; flex: none; fill: currentColor; }
 .lobby { gap: 10px; }
 .lobby h2 b { color: var(--accent); font-family: var(--mono); letter-spacing: 0.12em; }
 .muted { color: var(--muted); }
@@ -330,3 +333,11 @@ html { touch-action: manipulation; }
 }
 #seg-fun { flex-wrap: wrap; } #seg-fun button { flex: 1 1 22%; }
 #variant { top: auto; bottom: 18px; }
+/* the menu reads on any part of the scene behind it: denser cards, a wider shade, outlined links */
+.menu-bg { background: linear-gradient(90deg, rgba(6, 8, 12, 0.94) 0%, rgba(6, 8, 12, 0.82) 45%, rgba(6, 8, 12, 0.35) 70%, rgba(6, 8, 12, 0.05) 90%), linear-gradient(0deg, rgba(6, 8, 12, 0.75), rgba(6, 8, 12, 0) 35%); }
+.side, .seg button { background: rgba(16, 20, 27, 0.78); }
+.side.on.ta { background: rgba(30, 60, 100, 0.82); }
+.side.on.tb { background: rgba(100, 34, 30, 0.82); }
+.seg button.on { background: rgba(80, 60, 20, 0.85); }
+.link, .menu-foot { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+.link { color: #c8d0d8; }
