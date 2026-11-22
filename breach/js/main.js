@@ -398,7 +398,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.repeat) return;
   if (buyOpen) {
-    const it = BUY_ITEMS.find((b) => 'Digit' + b.key === e.code || 'Numpad' + b.key === e.code || 'Key' + b.key === e.code);
+    const it = BUY_ITEMS.find((b) => 'Digit' + b.key === e.code || 'Numpad' + b.key === e.code);
     if (it) {
       doBuy(it.item);
       e.preventDefault();

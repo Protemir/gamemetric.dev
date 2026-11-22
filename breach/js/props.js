@@ -39,7 +39,7 @@ export const propsReady = () => P.ready;
 
 // where everything goes: x, z (metres), yaw (front faces +z at 0), s scale or h height to fit, y lift
 const R = Math.PI;
-export function places() {
+function places() {
   const out = [];
   const put = (m, x, z, yaw = 0, o = {}) => out.push({ m, x, z, yaw, ...o });
   // garage and courtyard: cars under covers
@@ -79,9 +79,8 @@ export function places() {
   pic('hanging_picture_frame_01', 28.02, 35.0, R / 2, 2.1, 2.1);
   pic('hanging_picture_frame_02', 44.98, 34.0, -R / 2, 2.1, 2.1);
   pic('hanging_picture_frame_02', 44.98, 42.2, -R / 2, 2.1, 2.1);
-  // pictures only on solid wall: not over the lounge doors (41,13-14) and (51-53,8)
-  pic('fancy_picture_frame_01', 55.5, 9.02, 0, 2.2, 2.3);
-  pic('hanging_picture_frame_02', 42.02, 18.0, R / 2, 2.15, 2.2);
+  pic('fancy_picture_frame_01', 53.5, 9.02, 0, 2.75, 2.4);
+  pic('hanging_picture_frame_02', 42.02, 14.0, R / 2, 2.15, 2.2);
   pic('fancy_picture_frame_01', 27.6, 9.02, 0, 2.15, 2.3);
   pic('hanging_picture_frame_01', 25.02, 20.5, R / 2, 2.1, 1.9);
   pic('hanging_picture_frame_01', 26.98, 36.0, -R / 2, 2.1, 1.9);

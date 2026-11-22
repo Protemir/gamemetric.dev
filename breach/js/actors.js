@@ -139,8 +139,7 @@ function partsFor(key) {
 const GUNS = {};
 const AT = {
   knife: [0.16, -0.19, -0.27], pistol: [0.045, -0.05, -0.43], deagle: [0.045, -0.05, -0.43], smg: [0.11, -0.11, -0.15],
-  shotgun: [0.11, -0.11, -0.13], rifle: [0.11, -0.11, -0.13], sniper: [0.11, -0.11, -0.12],
-  m4: [0.11, -0.11, -0.13], scout: [0.11, -0.11, -0.12], mg: [0.11, -0.12, -0.12], he: [0.2, 0.0, -0.22], flash: [0.2, 0.0, -0.22],
+  shotgun: [0.11, -0.11, -0.13], rifle: [0.11, -0.11, -0.13], sniper: [0.11, -0.11, -0.12], he: [0.2, 0.0, -0.22], flash: [0.2, 0.0, -0.22],
 };
 export function thirdPersonGun(kind) {
   if (GUNS[kind]) return GUNS[kind];

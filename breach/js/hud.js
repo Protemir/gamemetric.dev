@@ -12,18 +12,15 @@ export const BUY_ITEMS = [
   { key: '3', item: 'smg', group: 'primaries' },
   { key: '4', item: 'shotgun', group: 'primaries' },
   { key: '5', item: 'rifle', group: 'primaries' },
-  { key: '6', item: 'm4', group: 'primaries' },
-  { key: '7', item: 'scout', group: 'primaries' },
-  { key: '8', item: 'sniper', group: 'primaries' },
-  { key: '9', item: 'mg', group: 'primaries' },
-  { key: 'Z', item: 'armor', group: 'gear' },
-  { key: 'X', item: 'helmet', group: 'gear' },
-  { key: 'C', item: 'he', group: 'gear' },
-  { key: 'V', item: 'flash', group: 'gear' },
+  { key: '6', item: 'sniper', group: 'primaries' },
+  { key: '7', item: 'armor', group: 'gear' },
+  { key: '8', item: 'helmet', group: 'gear' },
+  { key: '9', item: 'he', group: 'gear' },
+  { key: '0', item: 'flash', group: 'gear' },
 ];
 
 const ICON = {
-  knife: '🗡', pistol: '🔫', deagle: '🔫', smg: '▬', shotgun: '▬', rifle: '▬', sniper: '▬', m4: '▬', scout: '▬', mg: '▬', he: '💥', flash: '✸',
+  knife: '🗡', pistol: '🔫', deagle: '🔫', smg: '▬', shotgun: '▬', rifle: '▬', sniper: '▬', he: '💥', flash: '✸',
 };
 
 export class Hud {

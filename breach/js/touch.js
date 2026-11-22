@@ -137,7 +137,7 @@ export function setupTouch({ input, look, getGame, actions }) {
       $('.tb-buy').hidden = !(p.alive && g.canBuy(p) && g.mode !== 'dm' && g.phase !== 'end');
       $('.tb-nade').hidden = !(p.alive && (p.he > 0 || p.flash > 0));
       $('.tb-use').classList.toggle('lit', !!(g.nearHostage() || g.nearDrop(p)));
-      $('.tb-alt').hidden = !(p.alive && (p.kind === 'knife' || p.kind === 'sniper' || p.kind === 'scout'));
+      $('.tb-alt').hidden = !(p.alive && (p.kind === 'knife' || p.kind === 'sniper'));
     },
     label() {
       $('.tb-fire').setAttribute('aria-label', t('fire'));
