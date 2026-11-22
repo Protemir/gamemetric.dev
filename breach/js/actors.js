@@ -142,9 +142,19 @@ const AT = {
   shotgun: [0.11, -0.11, -0.13], rifle: [0.11, -0.11, -0.13], sniper: [0.11, -0.11, -0.12],
   m4: [0.11, -0.11, -0.13], scout: [0.11, -0.11, -0.12], mg: [0.11, -0.12, -0.12], he: [0.2, 0.0, -0.22], flash: [0.2, 0.0, -0.22], smoke: [0.2, 0.0, -0.22],
 };
+const LONG = ['smg', 'shotgun', 'rifle', 'sniper', 'm4', 'scout', 'mg'];
 export function thirdPersonGun(kind) {
   if (GUNS[kind]) return GUNS[kind];
-  GUNS[kind] = { geo: gunGeometry(kind), hold: { r: [0, 0, 0.01], l: GUN_INFO[kind].l, at: AT[kind] } };
+  const geo = gunGeometry(kind);
+  let at = AT[kind];
+  // long guns: the butt in the shoulder and the sights up at the eye, wherever the grip is on that model
+  // (a fixed grip point left the long stocks poking out of the back)
+  if (LONG.includes(kind)) {
+    geo.computeBoundingBox();
+    const butt = geo.boundingBox.max.z;
+    at = [0.07, -0.035, Math.max(-0.46, -butt + 0.06)];
+  }
+  GUNS[kind] = { geo, hold: { r: [0, 0, 0.01], l: GUN_INFO[kind].l, at } };
   return GUNS[kind];
 }
 

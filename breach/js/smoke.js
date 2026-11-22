@@ -2,7 +2,7 @@
 // about fifteen and thins away. Bots cannot see through it, and a camera inside it sees grey.
 import * as THREE from '../vendor/three.module.min.js';
 
-const LIFE = 16, GROW = 1.4, FADE = 3, R = 3.1, PUFFS = 30;
+const LIFE = 16, GROW = 1.4, FADE = 3, R = 3.1, PUFFS = 14;
 
 let tex = null;
 function puffTexture() {
@@ -36,13 +36,17 @@ export class Smokes {
     const g = this.g;
     const group = new THREE.Group();
     const puffs = [];
+    // three shared materials per cloud (one fade for all; a few shades and turns so it is not uniform)
+    const mats = [0, 1, 2].map((j) => {
+      const shade = 0.36 + j * 0.05;
+      const m = new THREE.SpriteMaterial({ map: puffTexture(), color: new THREE.Color(shade, shade, shade * 1.03), transparent: true, depthWrite: false, opacity: 0, fog: true });
+      m.rotation = j * 2.1;
+      return m;
+    });
     for (let i = 0; i < PUFFS; i++) {
       // a squat dome: wide on the floor, lower on top
       const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R * 0.85;
-      const shade = 0.36 + Math.random() * 0.1;
-      const m = new THREE.SpriteMaterial({ map: puffTexture(), color: new THREE.Color(shade, shade, shade * 1.03), transparent: true, depthWrite: false, opacity: 0, fog: true });
-      m.rotation = Math.random() * Math.PI * 2;
-      const s = new THREE.Sprite(m);
+      const s = new THREE.Sprite(mats[i % 3]);
       let px = Math.cos(a) * r, pz = Math.sin(a) * r;
       // a puff behind a wall is pulled back towards the can
       for (let k = 0; k < 4 && !g.map.los(x, y + 0.6, z, x + px, y + 0.6, z + pz); k++) {
@@ -51,14 +55,14 @@ export class Smokes {
       }
       const py = 0.5 + Math.random() * (2.2 - (r / R) * 1.2);
       s.position.set(px, py, pz);
-      puffs.push({ s, size: 3 + Math.random() * 1.8, spin: (Math.random() - 0.5) * 0.12, rise: 0.02 + Math.random() * 0.05 });
+      puffs.push({ s, size: 3.6 + Math.random() * 2, spin: 0, rise: 0.02 + Math.random() * 0.05 });
       group.add(s);
     }
     // the cloud sits on the floor under the can, never inside the wall it bounced off
-    const floor = g.map.groundAt(x, z, 0.1, Math.max(0, y));
+    const floor = Math.max(g.map.groundAt(x, z, 0.1, Math.max(0, y)), g.map.inWater(x, z) ? 0.12 : -9);
     group.position.set(x, floor, z);
     g.scene.add(group);
-    this.list.push({ x, y: floor, z, t0: g.time, group, puffs });
+    this.list.push({ x, y: floor, z, t0: g.time, group, puffs, mats });
   }
 
   // how big the cloud is now (0 before it pops or after it has gone)
@@ -102,15 +106,20 @@ export class Smokes {
       const fade = age > LIFE - FADE ? (LIFE - age) / FADE : 1;
       for (const p of c.puffs) {
         p.s.scale.setScalar(p.size * (0.25 + 0.75 * k) * (1 + (1 - fade) * 0.3));
-        p.s.material.opacity = 0.97 * Math.min(1, age * 3) * fade;
-        p.s.material.rotation += p.spin * dt;
         p.s.position.y += p.rise * dt;
+      }
+      for (const [j, m] of c.mats.entries()) {
+        m.opacity = 0.97 * Math.min(1, age * 3) * fade;
+        m.rotation += (j - 1) * 0.05 * dt;
       }
       // how deep the camera is in this cloud
       const r = this.radius(c);
       if (r > 0.5) {
         const d = Math.hypot(v.x - c.x, (v.y - c.y - 1.1) * 1.4, v.z - c.z);
-        inside = Math.max(inside, Math.min(1, (1 - d / r) * 2.2) * fade);
+        const deep = Math.min(1, (1 - d / r) * 2.2) * fade;
+        inside = Math.max(inside, deep);
+        // from deep inside the grey veil covers the screen: the puffs need not be drawn (they cost a lot)
+        c.group.visible = deep < 0.6;
       }
     }
     if (this.veil) {
@@ -124,7 +133,7 @@ export class Smokes {
 
   remove(c) {
     this.g.scene.remove(c.group);
-    for (const p of c.puffs) p.s.material.dispose();
+    for (const m of c.mats) m.dispose();
   }
 
   clear() {

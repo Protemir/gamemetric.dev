@@ -18,7 +18,7 @@ export const BUY_ITEMS = [
   { key: '9', item: 'mg', group: 'primaries' },
   { key: 'Z', item: 'armor', group: 'gear' },
   { key: 'X', item: 'helmet', group: 'gear' },
-  { key: 'C', item: 'he', group: 'gear' },
+  { key: 'G', item: 'he', group: 'gear' },
   { key: 'V', item: 'flash', group: 'gear' },
   { key: 'N', item: 'smoke', group: 'gear' },
 ];
@@ -113,8 +113,7 @@ export class Hud {
     $('buy-time').textContent = free ? '' : left > 0 ? `${Math.ceil(left)} ${lang === 'ru' ? 'с' : 's'}` : t('buyClosed');
     for (const btn of document.querySelectorAll('.buy-item')) {
       const item = btn.dataset.item;
-      let price = WEAPONS[item]?.price ?? GEAR[item]?.price;
-      if (item === 'helmet' && p.armor >= 100 && !p.helmet) price = 350;
+      const price = g.priceOf(p, item);
       btn.querySelector('.bi-price').textContent = free ? '' : `$${price}`;
       btn.classList.toggle('poor', !free && p.money < price);
       const have = (WEAPONS[item] && (p.slots[1] === item || p.slots[2] === item)) || (item === 'helmet' && p.helmet && p.armor >= 100) || (item === 'armor' && p.armor >= 100) || (item === 'he' && p.he > 0) || (item === 'flash' && p.flash >= 2) || (item === 'smoke' && p.smoke > 0);
@@ -262,7 +261,11 @@ export class Hud {
     const a = src.ammoOf(src.kind);
     const wk = WEAPONS[src.kind];
     $('wname').textContent = wk?.name[lang] || '';
-    if (wk && wk.mag) {
+    if (wk && wk.mag && src !== p && game.role === 'client') {
+      $('ammo').textContent = '';
+      $('reserve').textContent = '';
+      $('ammo-box').classList.remove('low');
+    } else if (wk && wk.mag) {
       $('ammo').textContent = a.mag;
       $('reserve').textContent = `/ ${a.res}`;
       $('ammo-box').classList.toggle('low', a.mag <= Math.ceil(wk.mag * 0.2));

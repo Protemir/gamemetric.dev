@@ -297,7 +297,7 @@ body.touch #prompt { top: auto; bottom: 34%; }
 #buy-close { margin-left: auto; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 30px; color: var(--text); font-size: 15px; }
 
 /* kill announcements */
-#announce { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%); font: 900 44px/1 var(--mono); letter-spacing: 0.04em; color: #fff; text-shadow: 0 0 2px #000, 0 3px 0 rgba(0, 0, 0, 0.6), 0 0 24px rgba(255, 120, 40, 0.6); white-space: nowrap; pointer-events: none; opacity: 0; }
+#announce { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); font: 900 44px/1 var(--mono); letter-spacing: 0.04em; color: #fff; text-shadow: 0 0 2px #000, 0 3px 0 rgba(0, 0, 0, 0.6), 0 0 24px rgba(255, 120, 40, 0.6); white-space: nowrap; pointer-events: none; opacity: 0; }
 #announce.go { animation: ann 1.6s ease-out forwards; }
 #announce.l2 { color: #ffe08a; }
 #announce.l3 { color: #ffb347; font-size: 52px; }
@@ -307,8 +307,9 @@ body.touch #prompt { top: auto; bottom: 34%; }
 @media (max-height: 520px) { #announce { font-size: 30px; top: 26%; } #announce.l3, #announce.l4, #announce.l5 { font-size: 38px; } }
 
 #lowhp { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.4s; }
-#lowhp.low { opacity: 1; box-shadow: inset 0 0 140px 30px rgba(170, 0, 0, 0.55); animation: lowhp 1s ease-in-out infinite; }
-@keyframes lowhp { 50% { box-shadow: inset 0 0 110px 18px rgba(170, 0, 0, 0.3); } }
+#lowhp.low { opacity: 1; animation: lowhp 1s ease-in-out infinite; }
+#lowhp { background: radial-gradient(ellipse at center, rgba(170, 0, 0, 0) 55%, rgba(170, 0, 0, 0.55) 100%); will-change: opacity; }
+@keyframes lowhp { 50% { opacity: 0.55; } }
 #feed .feed-row.note { color: #bfe8c9; font-style: italic; }
 
 .seg.modes { flex-wrap: wrap; }
@@ -316,7 +317,7 @@ body.touch #prompt { top: auto; bottom: 34%; }
 #variant { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); padding: 3px 12px; border-radius: 8px; background: var(--hud); font: 700 15px/1.3 var(--mono); color: var(--accent); white-space: nowrap; }
 
 /* 7 narrow screens: the kill feed goes under the score bar */
-@media (max-width: 860px) { #feed { top: 64px; max-width: 46vw; font-size: 12px; } }
+@media (max-width: 1180px) { #feed { top: 64px; max-width: 46vw; font-size: 12px; } }
 /* no double-tap zoom on the buy menu and the buttons */
 html { touch-action: manipulation; }
 @media (max-height: 520px) { .panel { padding: 16px 18px; } .lb-team { min-height: 104px; } }
@@ -353,3 +354,6 @@ body.touch #wname { display: none; }
 @media (max-height: 420px) {
   #touch .tb, #touch .stick, #radar { zoom: min(var(--ui), 0.95); }
 }
+/* the round banner on short screens: smaller, and scaled with the interface */
+#banner { zoom: var(--ui); }
+@media (max-height: 520px) { #banner { top: 12%; padding: 6px 16px; } #banner b { font-size: 20px; } #banner span { font-size: 12px; } }

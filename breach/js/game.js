@@ -7,6 +7,7 @@ import { Chickens } from './chickens.js';
 import { Rain } from './weather.js';
 import { Smokes } from './smoke.js';
 import { Fireplace } from './fireplace.js';
+import { PoolToys } from './pool.js';
 import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
@@ -120,6 +121,9 @@ class Soldier {
     this.x = x;
     this.z = z;
     this.feet = 0;
+    this.swimming = false;
+    this.underT = 0;
+    this.onBoard = false;
     this.vx = this.vz = this.vy = 0;
     this.yaw = yaw;
     this.pitch = 0;
@@ -272,6 +276,7 @@ export class Game {
     this.chickens = new Chickens(this);
     this.smokes = new Smokes(this);
     this.fireplace = new Fireplace(this);
+    this.toys = new PoolToys(this);
     if (this.rainPending) this.rain = new Rain(this);
     this.vm = new ViewModel();
     this.vm.flash.material.map = this.fx.flashes[0].s.material.map;
@@ -617,9 +622,7 @@ export class Game {
     if (!s.alive) return 'dead';
     if (!this.canBuy(s)) return this.mode !== 'dm' && this.buyTimeLeft() <= 0 ? 'time' : 'zone';
     const free = this.mode === 'dm';
-    let price = WEAPONS[item]?.price ?? GEAR[item]?.price ?? 0;
-    if (item === 'helmet' && s.armor >= 100 && !s.helmet) price = 350;
-    else if (item === 'helmet' && s.helmet) price = GEAR.armor.price;
+    const price = this.priceOf(s, item);
     if (!free && s.money < price) return 'money';
     if (item === 'armor') {
       if (s.armor >= 100) return 'have';
@@ -979,8 +982,23 @@ export class Game {
       this.chickens.kill(ch.c, s);
       return;
     }
+    const duck = s.isPlayer ? this.toys.hit(ox, oy, oz, dx, dy, dz, hit ? hit.t : maxT) : null;
+    if (duck) {
+      if (tracer && muzzle && (!s.isPlayer || Math.random() < 0.5)) this.fx.tracer(muzzle[0], muzzle[1], muzzle[2], ox + dx * duck.t, oy + dy * duck.t, oz + dz * duck.t, s.isPlayer ? 0.5 : 1);
+      this._ends?.push([ox + dx * duck.t, oy + dy * duck.t, oz + dz * duck.t]);
+      this.toys.shoot(duck.d, dx, dz);
+      return;
+    }
     const end = hit ? hit.t : maxT;
     const ex = ox + dx * end, ey = oy + dy * end, ez = oz + dz * end;
+    if (dy < 0 && oy > WATER_Y && ey < WATER_Y) {
+      const ts = (WATER_Y - oy) / dy, sx = ox + dx * ts, sz = oz + dz * ts;
+      if (this.map.inWater(sx, sz)) {
+        this.fx.puff(sx, WATER_Y + 0.1, sz, [0.85, 0.95, 1], 0.5, 0.5, 1.6, 0.8);
+        this.fx.spark(sx, WATER_Y + 0.02, sz, 0, 1, 0, [0.8, 0.92, 1], 6, 2.5);
+        if (Math.random() < 0.5) sfx('drip', [sx, WATER_Y, sz]);
+      }
+    }
     if (this._ends) this._ends.push([ex, ey, ez]);
     if (tracer && muzzle) {
       if (!s.isPlayer || Math.random() < 0.5) this.fx.tracer(muzzle[0], muzzle[1], muzzle[2], ex, ey, ez, s.isPlayer ? 0.5 : 1);
@@ -1005,13 +1023,14 @@ export class Game {
       const metal = SURF.metal.includes(k);
       const soft = SURF.soft.includes(k) || (c >= 0 && this.map.h[c] === 0 && this.map.floor[c] === 1);
       if (k !== K.WATER && !soft) this.fx.decal(ex, ey, ez, wall.nx, wall.ny, wall.nz);
-      if (k === K.WATER) this.fx.puff(ex, ey + 0.1, ez, [0.85, 0.95, 1], 0.5, 0.5, 0.8, 0.7);
-      else if (metal) this.fx.spark(ex, ey, ez, wall.nx, wall.ny, wall.nz, [1, 0.8, 0.4], 6, 3);
+      if (k === K.WATER) {
+        /* the pool bottom: the splash was at the surface */
+      } else if (metal) this.fx.spark(ex, ey, ez, wall.nx, wall.ny, wall.nz, [1, 0.8, 0.4], 6, 3);
       else {
         this.fx.spark(ex, ey, ez, wall.nx, wall.ny, wall.nz, soft ? [0.3, 0.4, 0.2] : [0.6, 0.55, 0.45], 4, 2);
         if (Math.random() < 0.5) this.fx.puff(ex + wall.nx * 0.05, ey + wall.ny * 0.05, ez + wall.nz * 0.05, soft ? [0.45, 0.5, 0.35] : [0.75, 0.72, 0.66], 0.3, 0.45, 0.25, 0.5);
       }
-      if (Math.random() < 0.4) sfx('impact', [ex, ey, ez], { metal });
+      if (k !== K.WATER && Math.random() < 0.4) sfx('impact', [ex, ey, ez], { metal });
     }
   }
 
@@ -1028,7 +1047,9 @@ export class Game {
       this.vm.kick = heavy ? 1.6 : 1;
       this.vm.stab = heavy ? 1 : 0;
     }
-    const range = heavy ? w.range * 0.85 : w.range;
+    // somebody in the pool can be reached from the side
+    const swimmerNear = this.soldiers.some((o) => o.alive && o.swimming && o.team !== s.team && Math.hypot(o.x - s.x, o.z - s.z) < 3);
+    const range = (heavy ? w.range * 0.85 : w.range) * (swimmerNear ? 1.6 : 1);
     const eye = s.feet + s.eyeH();
     const dx = -Math.sin(s.yaw) * Math.cos(s.pitch), dy = Math.sin(s.pitch), dz = -Math.cos(s.yaw) * Math.cos(s.pitch);
     let best = null, bt = range;
@@ -1124,6 +1145,7 @@ export class Game {
     o.vy = 0;
     o.killer = by;
     o.deadAt = this.time;
+    o.deathFeet = o.feet;
     o.scoped = 0;
     // fall away from the shot
     const fromBehind = Math.abs(angDiff(o.yaw, Math.atan2(-dx, -dz))) < Math.PI / 2;
@@ -1648,6 +1670,10 @@ export class Game {
     }
     if (s.in.jump && s.onGround && !frozen && !swim) {
       s.vy = JUMP;
+      if (s.onBoard) {
+        s.vy = JUMP * 1.85;
+        this.toys.bounce(1);
+      }
       s.onGround = false;
     }
     // average of the speeds before and after the step: the jump is just as high at 20 fps as at 144
@@ -1656,7 +1682,9 @@ export class Game {
       // float with the head out of the water; crouch to dive to the bottom; jump kicks up (and over the side)
       const float = s.in.crouch ? POOL_BOTTOM + 0.02 : WATER_Y + 0.28 - s.eyeH();
       s.vy += ((float - s.feet) * 9 - s.vy * 4) * dt;
-      if (s.in.jump && !frozen && s.feet > float - 0.35 && s.vy < 2) s.vy = 4.2;
+      const m = this.map;
+      const edge = !m.inWater(s.x + 0.8, s.z) || !m.inWater(s.x - 0.8, s.z) || !m.inWater(s.x, s.z + 0.8) || !m.inWater(s.x, s.z - 0.8);
+      if (s.in.jump && !frozen && edge && s.feet > float - 0.35 && s.vy < 2) s.vy = 4.2;
       s.onGround = false;
     } else s.vy -= this.grav * dt;
     const px = s.x + s.vx * dt, pz = s.z + s.vz * dt;
@@ -1692,7 +1720,19 @@ export class Game {
         if (s.vy > 0) s.vy = 0;
       }
     }
-    const ground = swim ? this.map.groundAt(s.x, s.z, s.radius * 0.9, s.feet, s.step) : this.map.groundAt(s.x, s.z, s.radius * 0.9, Math.max(s.feet, 0), s.onGround ? 0.45 : 0.22);
+    let ground = swim ? this.map.groundAt(s.x, s.z, s.radius * 0.9, s.feet, s.step) : this.map.groundAt(s.x, s.z, s.radius * 0.9, Math.max(s.feet, 0), s.onGround ? 0.45 : 0.22);
+    const bt = this.toys.boardTop(s.x, s.z);
+    s.onBoard = bt != null && s.feet >= bt - (s.onGround ? 0.46 : 0.15);
+    if (s.onBoard) {
+      // a hard landing on the board throws you back up
+      if (!s.onGround && s.vy < -5 && s.feet <= bt) {
+        const hard = -s.vy;
+        s.feet = bt + 0.01;
+        s.vy = Math.min(13, hard * 0.8);
+        this.toys.bounce(Math.min(2, hard / 8));
+        ground = -99;
+      } else ground = Math.max(ground, bt);
+    }
     if (s.feet <= ground) {
       if (!s.onGround && s.vy < -5.5) {
         sfx('land', s.isPlayer ? null : [s.x, s.feet, s.z]);
@@ -1709,6 +1749,37 @@ export class Game {
     } else s.onGround = false;
     if (swim) this.strokes(s, dt);
     else this.steps(s, dt, s.onGround, s.in.walk);
+  }
+
+  drown(dt) {
+    for (const s of this.soldiers) {
+      if (!s.alive) continue;
+      const under = s.feet + s.eyeH() < WATER_Y - 0.05 && this.map.inWater(s.x, s.z);
+      s.underT = under ? (s.underT || 0) + dt : 0;
+      if (s.underT > 8) {
+        if (s.isPlayer && this.time > (s.gaspAt || 0)) {
+          s.gaspAt = this.time + 1;
+          sfx('bubbles');
+        }
+        this.damage(s, 14 * dt, 'body', null, 'water', 0, 0, 1);
+      }
+    }
+  }
+
+  // things that are only looked at: updated once a frame by the main loop
+  visual(dt) {
+    this.rain?.update(dt);
+    this.smokes.update(dt);
+    this.fireplace.update(dt);
+    this.toys.update(dt);
+  }
+
+  // what the shop charges (the menu shows the same)
+  priceOf(s, item) {
+    let price = WEAPONS[item]?.price ?? GEAR[item]?.price ?? 0;
+    if (item === 'helmet' && s.armor >= 100 && !s.helmet) price = 350;
+    else if (item === 'helmet' && s.helmet) price = GEAR.armor.price;
+    return price;
   }
 
   // into or out of the water: a splash everyone near hears and sees
@@ -1831,7 +1902,7 @@ export class Game {
         // where the legs go relative to where the gun points (for strafing), and whether we are off the ground
         const rel = Math.hypot(s.vx, s.vz) > 0.6 ? Math.atan2(side, Math.abs(fwd)) : 0;
         const air = s.onGround === false;
-        b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back, rel, air });
+        if (!b.culled) b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back, rel, air });
         b.setLight(this.charLight(s.x, s.z));
         continue;
       }
@@ -1919,17 +1990,22 @@ export class Game {
         // where the legs go relative to where the gun points (for strafing), and whether we are off the ground
         const rel = Math.hypot(s.vx, s.vz) > 0.6 ? Math.atan2(side, Math.abs(fwd)) : 0;
         const air = s.onGround === false;
-      b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back, rel, air });
+      if (!b.culled) b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back, rel, air });
       b.setLight(this.charLight(s.x, s.z));
     }
     for (const s of this.soldiers) {
       if (s.alive) continue;
+      if (s.flyVy) {
+        if (!s.body.culled) s.body.animate({ dt, y: s.feet, speed: 0 });
+        continue;
+      }
       // a body slid off something drops to the floor under it
       const r = s.body.root.position;
       const gy = this.map.groundAt(r.x, r.z, 0.2, s.feet + 0.05);
       if (gy < s.feet) s.feet = Math.max(gy, s.feet - dt * 6);
-      s.body.animate({ dt, y: s.feet, speed: 0 });
+      if (!s.body.culled) s.body.animate({ dt, y: s.feet, speed: 0 });
     }
+    if (this.role !== 'client') this.drown(dt);
     this.updateHostages(dt);
     this.updateDrops();
     if (!this.over) this.chickens.update(dt);
@@ -1937,9 +2013,7 @@ export class Game {
       this.flockAt = this.time + 45;
       if (this.chickens.list.length < 5) this.chickens.spawn();
     }
-    this.rain?.update(dt);
-    this.smokes.update(dt);
-    this.fireplace.update(dt);
+
     if (this.variant === 'zombie' && !this.over) for (const s of this.soldiers) if (s.team === 'B' && s.alive && Math.random() < dt * 0.12) sfx('groan', [s.x, s.feet + 1.6, s.z]);
     this.updateNades(dt);
     this.fx.update(dt);
@@ -2173,7 +2247,7 @@ export class Game {
       if (!p.alive) {
         // death cam: sink to the floor, then turn to the one who killed you
         const k = Math.min(1, (this.time - p.deadAt) * 1.5);
-        eyeY = p.feet + 1.6 - k * 1.2;
+        eyeY = (p.flyVy ? p.deathFeet ?? p.feet : p.feet) + 1.6 - k * 1.2;
         v.roll = k * 0.3;
         const by = p.killer;
         if (by && by !== p && this.time - p.deadAt > 0.35 && this.time - p.deadAt < 4) {
@@ -2298,7 +2372,30 @@ export class Game {
     const r = this.renderer;
     r.autoClear = false;
     r.clear();
+    // people behind the camera are not drawn (skinned bodies have no bounds of their own, so three cannot tell)
+    cam.updateMatrixWorld();
+    this._pv ||= new THREE.Matrix4();
+    this._fr ||= new THREE.Frustum();
+    this._sph ||= new THREE.Sphere(new THREE.Vector3(), 1.4);
+    this._pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    this._fr.setFromProjectionMatrix(this._pv);
+    const hidden = this._hidden || (this._hidden = []);
+    hidden.length = 0;
+    const cull = (o) => {
+      const root = o.body?.root;
+      if (!root) return;
+      this._sph.center.set(o.x, (o.feet || 0) + 0.9, o.z);
+      const out = !this._fr.intersectsSphere(this._sph);
+      o.body.culled = out;
+      if (out && root.visible) {
+        root.visible = false;
+        hidden.push(root);
+      }
+    };
+    for (const o of this.soldiers) cull(o);
+    for (const o of this.hostages) cull(o);
     r.render(this.scene, cam);
+    for (const root of hidden) root.visible = true;
     if (showVm) {
       r.clearDepth();
       r.render(vm.scene, vm.cam);
@@ -2363,6 +2460,7 @@ export class Game {
     }
     this.smokes?.clear();
     this.fireplace?.dispose();
+    this.toys?.dispose();
     this.rain?.dispose();
     this.chickens?.dispose();
     this.envRT?.dispose();

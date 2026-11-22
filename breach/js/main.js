@@ -2,7 +2,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { Game } from './game.js';
 import { Hud, BUY_ITEMS } from './hud.js';
-import { initAudio, setVolume, sfx, rainSound } from './audio.js';
+import { initAudio, setVolume, sfx, rainSound, setHiddenAudio } from './audio.js';
 import { t, lang, setLang } from './i18n.js';
 import { loadPeople } from './people.js';
 import { loadProps } from './props.js';
@@ -443,6 +443,7 @@ else if (!q.has('mouse') && (mobileUA || !matchMedia('(any-pointer: fine)').matc
   );
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) rainSound(false);
+  setHiddenAudio(document.hidden);
   if (!document.hidden || !touchCtl) return;
   touchCtl.show(false);
   touchCtl.visible = false;
@@ -649,6 +650,7 @@ function frame(now) {
     // two smaller steps when the frame is long keeps collisions honest
     const steps = dt > 1 / 40 ? 2 : 1;
     for (let i = 0; i < steps; i++) game.update(dt / steps, input);
+    game.visual(dt);
     game.render(dt, look, settings);
     hud.update(game, now, settings, fps);
   } else if (state === 'pause' && game) {
@@ -656,11 +658,18 @@ function frame(now) {
     // online the match goes on behind the menu
     if (game.role !== 'solo') {
       game.update(dt, { keys: new Set(), fire: false, menuOpen: true });
+      game.visual(dt);
       hud.update(game, now, settings, fps);
     }
-    game.render(game.role !== 'solo' ? dt : 0, { dx: 0, dy: 0 }, settings);
+    // a paused solo game stands still: a few frames a second are enough (settings changes still show)
+    if (game.role !== 'solo' || now - (frame.pausedAt || 0) > 200) {
+      frame.pausedAt = now;
+      game.render(game.role !== 'solo' ? dt : 0, { dx: 0, dy: 0 }, settings);
+    }
   } else if (preview) {
-    renderPreview(preview, now / 1000);
+    // the menu fly-around at half the frame rate: it is only a backdrop
+    frame.odd = !frame.odd;
+    if (frame.odd) renderPreview(preview, now / 1000);
   }
   look.dx = look.dy = 0;
 }
@@ -981,6 +990,10 @@ function onNetMessage(from, m) {
   }
   if (m.k === 'lobby') {
     lobby = m;
+    if (!m.started && game && game.role === 'client' && !game.over && game.time > 5) {
+      backToLobby(false);
+      return;
+    }
     renderLobby();
     if (m.started && !game) askSync();
   } else if (m.k === 'start') {

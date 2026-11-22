@@ -107,6 +107,7 @@ function out(p) {
 function noise(dest, t, dur, type, freq, q, vol, attack = 0.002, decayPow = 1) {
   const src = ctx.createBufferSource();
   src.buffer = noiseBuf;
+  src.loop = true;
   src.playbackRate.value = 0.8 + Math.random() * 0.4;
   const f = ctx.createBiquadFilter();
   f.type = type;
@@ -150,6 +151,13 @@ const GUN = {
 
 // "duck guns": every shot is a quack, big guns quack deeper
 let quack = false;
+let shotWindow = 0, shotCount = 0;
+// a hidden tab: the whole mix pauses
+export function setHiddenAudio(hidden) {
+  if (!ctx) return;
+  if (hidden) ctx.suspend?.();
+  else ctx.resume?.();
+}
 export function setQuack(on) {
   quack = !!on;
 }
@@ -160,6 +168,12 @@ export function sfx(name, pos = null, opt = {}) {
   if (GUN[name]) {
     const P = place(pos, 90);
     if (!P) return;
+    const nowT = ctx.currentTime;
+    if (nowT - shotWindow > 0.1) {
+      shotWindow = nowT;
+      shotCount = 0;
+    }
+    if (++shotCount > 12 && pos) return;
     const G = GUN[name];
     const d = out(P);
     if (quack) {
@@ -183,7 +197,9 @@ export function sfx(name, pos = null, opt = {}) {
   }
   switch (name) {
     case 'knife': {
-      const d = out(place(pos, 15) || { gain: 0, pan: 0 });
+      const P_ = place(pos, 15);
+      if (!P_) return;
+      const d = out(P_);
       noise(d, t, 0.18, 'bandpass', 3200, 1.5, 0.25, 0.05);
       break;
     }
@@ -198,12 +214,16 @@ export function sfx(name, pos = null, opt = {}) {
       break;
     }
     case 'land': {
-      const d = out(place(pos, 18) || { gain: 0, pan: 0 });
+      const P_ = place(pos, 18);
+      if (!P_) return;
+      const d = out(P_);
       noise(d, t, 0.14, 'lowpass', 600, 1, 0.3);
       break;
     }
     case 'reload': {
-      const d = out(place(pos, 12) || { gain: 0, pan: 0 });
+      const P_ = place(pos, 12);
+      if (!P_) return;
+      const d = out(P_);
       noise(d, t, 0.05, 'bandpass', 2500, 4, 0.2);
       noise(d, t + 0.45, 0.06, 'bandpass', 1800, 4, 0.25);
       noise(d, t + (opt.dur || 2) - 0.35, 0.05, 'bandpass', 3000, 5, 0.3);
@@ -357,7 +377,9 @@ export function sfx(name, pos = null, opt = {}) {
       break;
     }
     case 'splash': {
-      const d = out(place(pos, 30) || { gain: 0, pan: 0 });
+      const P_ = place(pos, 30);
+      if (!P_) return;
+      const d = out(P_);
       const big = opt?.big;
       noise(d, t, big ? 0.9 : 0.5, 'lowpass', big ? 1400 : 2200, 0.7, big ? 0.55 : 0.32, 0.005, 1.5);
       noise(d, t + 0.05, big ? 0.6 : 0.35, 'highpass', 2500, 0.6, 0.18, 0.01, 1.2);
@@ -365,12 +387,16 @@ export function sfx(name, pos = null, opt = {}) {
       break;
     }
     case 'drip': {
-      const d = out(place(pos, 18) || { gain: 0, pan: 0 });
+      const P_ = place(pos, 18);
+      if (!P_) return;
+      const d = out(P_);
       noise(d, t, 0.35, 'bandpass', 1800, 1.2, 0.14, 0.01, 1.3);
       break;
     }
     case 'stroke': {
-      const d = out(place(pos, 18) || { gain: 0, pan: 0 });
+      const P_ = place(pos, 18);
+      if (!P_) return;
+      const d = out(P_);
       noise(d, t, 0.32, 'bandpass', 1100, 0.9, 0.12, 0.04, 1.2);
       break;
     }
@@ -381,7 +407,9 @@ export function sfx(name, pos = null, opt = {}) {
     }
     case 'party': {
       // a party horn and a couple of pops
-      const d = out(place(pos, 30) || { gain: 0, pan: 0 });
+      const P_ = place(pos, 30);
+      if (!P_) return;
+      const d = out(P_);
       const o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
       o.type = 'sawtooth';
       o.frequency.setValueAtTime(380, t);
@@ -404,15 +432,50 @@ export function sfx(name, pos = null, opt = {}) {
     }
     case 'whee': {
       // off into the sky: a rising whistle
-      const d = out(place(pos, 40) || { gain: 0, pan: 0 });
+      const P_ = place(pos, 40);
+      if (!P_) return;
+      const d = out(P_);
       tone(d, t, 1.3, 'sine', 500, 2400, 0.22, 0.02);
       tone(d, t, 1.3, 'triangle', 1000, 4800, 0.06, 0.02);
       break;
     }
     case 'ding': {
-      const d = out(place(pos, 60) || { gain: 0, pan: 0 });
+      const P_ = place(pos, 60);
+      if (!P_) return;
+      const d = out(P_);
       tone(d, t, 0.6, 'sine', 2637, 2637, 0.18, 0.003);
       tone(d, t, 0.6, 'sine', 3951, 3951, 0.08, 0.003);
+      break;
+    }
+    case 'boing': {
+      // the springboard: a twangy spring
+      const P_ = place(pos, 30);
+      if (!P_) return;
+      const d = out(P_);
+      const o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(120, t);
+      o.frequency.exponentialRampToValueAtTime(260, t + 0.35);
+      lfo.frequency.setValueAtTime(30, t);
+      lfo.frequency.linearRampToValueAtTime(8, t + 0.45);
+      lg.gain.value = 40;
+      lfo.connect(lg).connect(o.frequency);
+      g.gain.setValueAtTime(0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      o.connect(g).connect(d);
+      o.start(t);
+      lfo.start(t);
+      o.stop(t + 0.52);
+      lfo.stop(t + 0.52);
+      break;
+    }
+    case 'squeak': {
+      // a rubber duck
+      const P_ = place(pos, 30);
+      if (!P_) return;
+      const d = out(P_);
+      tone(d, t, 0.09, 'square', 1700, 2300, 0.1, 0.004);
+      tone(d, t + 0.1, 0.12, 'square', 2200, 1500, 0.09, 0.004);
       break;
     }
     case 'crackle': {

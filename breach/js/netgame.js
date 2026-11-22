@@ -334,7 +334,11 @@ export class NetGame {
               s.netKind = k;
               s.body.setGun(k);
             }
-            if (!a[8] && s.alive && !s.deadAt) s.alive = false;
+            if (!a[8] && s.alive && !s.deadAt) {
+              s.alive = false;
+              s.deadAt = g.time;
+              s.body.die(false, 0.5, 0, 0, false);
+            }
             if (a[8] && !s.alive && (!s.deadAt || g.time - s.deadAt > 1.5)) {
               s.alive = true;
               s.deadAt = 0;

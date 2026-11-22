@@ -31,7 +31,8 @@ export class Room extends DurableObject {
     if (!peer) return new Response('no peer', { status: 400 });
     const socks = this.ctx.getWebSockets();
     // ten players at most (five a side)
-    if (socks.filter((s) => s.deserializeAttachment()?.peer !== peer && !s.deserializeAttachment()?.replaced).length >= 10) return new Response('full', { status: 409 });
+    const away = [...(await this.ctx.storage.list({ prefix: 'gone:' })).keys()].filter((k) => k !== 'gone:' + peer).length;
+    if (socks.filter((s) => s.deserializeAttachment()?.peer !== peer && !s.deserializeAttachment()?.replaced).length + away >= 10) return new Response('full', { status: 409 });
     // a reconnect with the same id replaces the old socket, keeps its place in the queue (who is host)
     // and must not announce a "leave" when the old socket finally closes
     let joined = Date.now();
@@ -41,6 +42,9 @@ export class Room extends DurableObject {
       joined = Math.min(joined, gone.joined);
       await this.ctx.storage.delete('gone:' + peer);
     }
+    const kept = await this.ctx.storage.get('j:' + peer);
+    if (kept) joined = Math.min(joined, kept);
+    else await this.ctx.storage.put('j:' + peer, joined);
     for (const s of this.ctx.getWebSockets(peer)) {
       const old = s.deserializeAttachment();
       if (old?.joined) joined = Math.min(joined, old.joined);
@@ -112,6 +116,12 @@ export class Room extends DurableObject {
     } catch {}
     // still here on another socket (a reconnect raced the close): not a leave
     if (this.ctx.getWebSockets(me.peer).some((s) => s !== ws && !s.deserializeAttachment()?.replaced)) return;
+    // pressed "leave": everyone hears it now
+    if (code === 4001) {
+      await this.ctx.storage.delete('j:' + me.peer);
+      this.send({ t: 'leave', peer: me.peer }, me.peer);
+      return;
+    }
     // the leave is announced only if they do not come back in time
     await this.ctx.storage.put('gone:' + me.peer, { peer: me.peer, name: me.name, joined: me.joined, at: Date.now() });
     const when = Date.now() + GRACE;
@@ -128,7 +138,10 @@ export class Room extends DurableObject {
         continue;
       }
       await this.ctx.storage.delete(key);
-      if (!this.ctx.getWebSockets(g.peer).some((s) => !s.deserializeAttachment()?.replaced)) this.send({ t: 'leave', peer: g.peer }, g.peer);
+      if (!this.ctx.getWebSockets(g.peer).some((s) => !s.deserializeAttachment()?.replaced)) {
+        await this.ctx.storage.delete('j:' + g.peer);
+        this.send({ t: 'leave', peer: g.peer }, g.peer);
+      }
     }
     if (next) await this.ctx.storage.setAlarm(next);
   }

@@ -71,7 +71,7 @@ export class Net {
   close() {
     this.closed = true;
     try {
-      this.ws?.close();
+      this.ws?.close(4001, 'bye');
     } catch {}
     for (const l of this.links.values()) {
       try {
@@ -99,6 +99,15 @@ export class Net {
       // the host links to everyone already waiting
       if (this.isHost) for (const p of this.peers) if (p.peer !== this.id) this.linkTo(p.peer);
       this.h.onPeers?.(this.peers);
+      if (again && !this.isHost) {
+        const old = this.links.get(this.hostId);
+        if (old) {
+          try {
+            old.pc?.close();
+          } catch {}
+          this.links.delete(this.hostId);
+        }
+      }
       if (again) this.h.onReconnected?.();
     } else if (m.t === 'join') {
       const known = this.peers.some((p) => p.peer === m.peer);

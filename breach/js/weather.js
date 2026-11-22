@@ -68,7 +68,11 @@ export class Rain {
     }
     this.lines.geometry.setDrawRange(0, n * 2);
     this.lines.geometry.attributes.position.needsUpdate = true;
-    rainSound(true, m.isIndoor(v.x, v.z) ? 0.35 : 1);
+    const lvl = m.isIndoor(v.x, v.z) ? 0.35 : 1;
+    if (lvl !== this.lvl && !document.hidden) {
+      this.lvl = lvl;
+      rainSound(true, lvl);
+    }
     // lightning: the whole picture flashes white, the thunder follows a moment later
     if (g.time > this.nextBolt) {
       this.nextBolt = g.time + 14 + Math.random() * 20;

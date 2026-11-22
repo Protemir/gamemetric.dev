@@ -342,7 +342,7 @@ export class Brain {
       if (a.res > 0) g.reload(s);
       return;
     }
-    if (s.kind === 'knife' && d > 1.8) return;
+    if (s.kind === 'knife' && d > (T.swimming ? 2.8 : 1.8)) return;
     if (!g.clearShot(s, T)) return;
     if (w && w.scope && !s.scoped && d > 6) {
       s.scoped = 1;

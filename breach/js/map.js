@@ -434,7 +434,10 @@ export class GameMap {
       const t1 = Math.min(tmx, tmz, maxT);
       const ya = oy + dy * t0, yb = oy + dy * t1;
       const lo = Math.min(ya, yb), hi = Math.max(ya, yb);
-      const hh = this.h[c];
+      const water = this.kind[c] === K.WATER;
+      const hh = water ? 0 : this.h[c];
+      // from under the water into the deck: the pool's side
+      if (!water && ya < -0.01 && axis >= 0) return { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c };
       // solid block from the floor
       if (hh > 0 && lo < hh) {
         if (ya < hh && axis >= 0) return { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c };
@@ -442,9 +445,10 @@ export class GameMap {
         const t = (hh - oy) / dy;
         return { t, nx: 0, ny: 1, nz: 0, c };
       }
-      // floor
-      if (dy < 0 && lo <= 0) {
-        const t = -oy / dy;
+      // floor (the pool's is deeper)
+      const fl = water ? POOL_BOTTOM : 0;
+      if (dy < 0 && lo <= fl) {
+        const t = (fl - oy) / dy;
         if (t >= t0 && t <= t1) return { t, nx: 0, ny: 1, nz: 0, c };
       }
       // lintel / ceiling
