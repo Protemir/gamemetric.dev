@@ -116,8 +116,11 @@ for (const b of document.querySelectorAll('.side'))
   });
 sides();
 
-// phones and tablets play with on-screen controls (?touch forces them on a computer)
-const touchOnly = q.has('touch') || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
+// phones and tablets play with on-screen controls (?touch forces them on a computer, ?mouse turns them off).
+// Some phones (with a stylus, for one) say they have a fine pointer like a mouse, so the phone itself counts too;
+// and whatever we guessed, the first real touch on the screen switches the game to touch controls.
+const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+let touchOnly = !q.has('mouse') && (q.has('touch') || (navigator.maxTouchPoints > 0 && mobileUA) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches));
 
 function slider(id, key, fmt) {
   const el = $('s-' + id), out = $('o-' + id);
@@ -306,7 +309,9 @@ const input = { keys: new Set(), fire: false, menuOpen: false };
 const look = { dx: 0, dy: 0 };
 let buyOpen = false;
 let touchCtl = null;
-if (touchOnly) {
+function enableTouch() {
+  if (touchCtl) return;
+  touchOnly = true;
   touchCtl = setupTouch({
     input,
     look,
@@ -336,7 +341,23 @@ if (touchOnly) {
     },
   });
   touchCtl.show(false);
+  touchCtl.visible = false;
+  applyTexts();
+  // a game already running carries on with the new controls
+  if (game && state !== 'menu') {
+    document.exitPointerLock?.();
+    lockPointer();
+  }
 }
+if (touchOnly) enableTouch();
+else if (!q.has('mouse'))
+  window.addEventListener(
+    'touchstart',
+    () => {
+      if (!touchCtl) enableTouch();
+    },
+    { once: true, capture: true },
+  );
 
 function openBuy() {
   if (!game || !game.player.alive) return;
@@ -425,7 +446,7 @@ window.addEventListener('keydown', (e) => {
   input.keys.add(e.code);
   // keep Ctrl+R, Ctrl+1.. and friends from reloading or switching tabs while crouching
   if (e.ctrlKey || e.metaKey || ['Space', 'ArrowUp', 'ArrowDown', 'ControlLeft', 'ControlRight', 'KeyS', 'KeyW', 'KeyR', 'KeyD', 'KeyB', 'KeyE', 'KeyF'].includes(e.code)) e.preventDefault();
-  const map = { Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', KeyQ: 'last', KeyR: 'reload', KeyE: 'use', KeyF: 'use' };
+  const map = { Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', KeyQ: 'last', KeyR: 'reload', KeyE: 'use', KeyF: 'inspect' };
   if (map[e.code]) game.playerAction(map[e.code]);
   if (e.code === 'KeyB') openBuy();
 });
@@ -587,6 +608,7 @@ function myName() {
 function openLobby(code) {
   initAudio();
   if (net) net.close();
+  knownPeers = null;
   lobby = { mode: settings.mode, diff: settings.diff, teams: {}, names: {}, started: false };
   const name = myName();
   $('lb-name').value = name;
@@ -605,6 +627,7 @@ function openLobby(code) {
     onPeers: () => {
       if (net.isHost) hostSync();
       renderLobby();
+      announcePeers();
     },
     onLeave: (peer) => {
       if (!net.isHost) return;
@@ -630,6 +653,23 @@ function openLobby(code) {
     },
     onMessage: (from, m) => onNetMessage(from, m),
   });
+}
+
+// "Ann joined" / "Ann left", in the lobby status line and in the game's feed
+let knownPeers = null;
+function announcePeers() {
+  if (!net) return;
+  const now = new Map(net.peers.map((p) => [p.peer, (lobby && lobby.names[p.peer]) || p.name]));
+  if (knownPeers) {
+    const say = (text) => {
+      if (game) hud.notice?.(text);
+      $('lb-status').textContent = text;
+      sfx('use');
+    };
+    for (const [id, name] of now) if (id !== net.id && !knownPeers.has(id)) say(`🟢 ${name} ${t('joined')}`);
+    for (const [id, name] of knownPeers) if (id !== net.id && !now.has(id)) say(`⚪ ${name} ${t('left')}`);
+  }
+  knownPeers = now;
 }
 
 function alertBox(text) {
@@ -666,7 +706,7 @@ function hostSync() {
       const s = game.addHuman(p.peer, lobby.names[p.peer] || p.name);
       if (!s) continue;
       lobby.teams[p.peer] = s.team;
-      net.send(p.peer, { k: 'start', roster: game.roster(), mode: game.mode, diff: game.opts.diff, fun: game.fun });
+      net.send(p.peer, { k: 'start', roster: game.roster(), mode: game.opts.mode, diff: game.opts.diff, fun: game.fun });
       net.broadcast({ k: 'roster', roster: game.roster() }, true, p.peer);
     }
   }

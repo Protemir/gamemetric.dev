@@ -119,6 +119,22 @@ export class Hud {
     }
   }
 
+  variantInfo(game) {
+    const el = document.getElementById('variant');
+    if (!el) return;
+    const v = game.variant, p = game.player;
+    if (v === 'gun') el.textContent = `${t('level')} ${(p.gunLevel || 0) + 1}/10`;
+    else if (v === 'zombie') el.textContent = `${t('peopleLeft')}: ${game.soldiers.filter((s) => s.team === 'A' && s.alive).length}`;
+    else if (v === 'knife') el.textContent = t('modeKnife');
+    el.hidden = !v;
+  }
+
+  // low health shows as red pulsing edges
+  lowHealth(hp) {
+    const el = document.getElementById('lowhp');
+    if (el) el.classList.toggle('low', hp > 0 && hp <= 30);
+  }
+
   // a big word in the middle of the screen with a punch
   announce(text, level = 1) {
     const el = document.getElementById('announce');
@@ -155,6 +171,16 @@ export class Hud {
     setTimeout(() => row.remove(), 6000);
   }
 
+  notice(text) {
+    if (!this.feedEl) return;
+    const row = document.createElement('div');
+    row.className = 'feed-row note';
+    row.textContent = text;
+    this.feedEl.prepend(row);
+    while (this.feedEl.children.length > 6) this.feedEl.lastChild.remove();
+    setTimeout(() => row.remove(), 7000);
+  }
+
   hit(head, kill) {
     const el = $('hitmark');
     el.className = 'hitmark show' + (head ? ' head' : '') + (kill ? ' kill' : '');
@@ -188,6 +214,8 @@ export class Hud {
 
   // ---------- per frame ----------
   update(game, now, settings, fps) {
+    this.lowHealth(game.player.alive ? game.player.hp : 0);
+    this.variantInfo(game);
     const p = game.player;
     this.drawRadar(game);
     // crosshair gap follows the real spread

@@ -661,6 +661,11 @@ export class SkinnedBody {
     });
   }
 
+  zombify() {
+    this.tint = new THREE.Color(0.55, 0.85, 0.5);
+    this.zombie = true;
+  }
+
   // the "big heads" option
   bigHead() {
     if (this.b.Head) this.b.Head.scale.setScalar(2.1);

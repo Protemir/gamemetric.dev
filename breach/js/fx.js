@@ -2,7 +2,32 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { spriteTexture } from './textures.js';
 
-const MAX_DECALS = 160, MAX_SPARKS = 400, MAX_TRACERS = 48, MAX_PUFFS = 40;
+const MAX_DECALS = 160, MAX_SPARKS = 400, MAX_TRACERS = 48, MAX_PUFFS = 40, MAX_SHELLS = 60, MAX_BLOOD = 70;
+
+// a blood splat: a dark red blot with drops round it
+function bloodTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const blot = (x, y, r, a) => {
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, 'rgba(92,6,8,' + a + ')');
+    gr.addColorStop(0.7, 'rgba(110,10,12,' + a * 0.9 + ')');
+    gr.addColorStop(1, 'rgba(110,10,12,0)');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(x, y, r, 0, 7);
+    g.fill();
+  };
+  blot(64, 64, 30, 0.95);
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * 6.28, d = 20 + Math.random() * 38;
+    blot(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 3 + Math.random() * 8, 0.85);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 
 export class FX {
   constructor(scene) {
@@ -51,6 +76,20 @@ export class FX {
       scene.add(s);
       this.flashes.push({ s, life: 0 });
     }
+    // spent brass: little cylinders that fly out, bounce and lie on the floor for a while
+    const shg = new THREE.CylinderGeometry(0.006, 0.006, 0.026, 6).rotateZ(Math.PI / 2);
+    this.shells = new THREE.InstancedMesh(shg, new THREE.MeshBasicMaterial({ color: 0xc9a14a }), MAX_SHELLS);
+    this.shells.count = 0;
+    this.shells.frustumCulled = false;
+    this.sh = [];
+    scene.add(this.shells);
+    // blood on walls and floors
+    const bm = new THREE.MeshBasicMaterial({ map: bloodTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+    this.blood = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), bm, MAX_BLOOD);
+    this.blood.count = 0;
+    this.blood.frustumCulled = false;
+    this.bloodI = 0;
+    scene.add(this.blood);
     this.m = new THREE.Matrix4();
     this.q = new THREE.Quaternion();
     this.v = new THREE.Vector3();
@@ -58,6 +97,10 @@ export class FX {
   }
 
   clear() {
+    this.shells.count = 0;
+    this.sh.length = 0;
+    this.blood.count = 0;
+    this.bloodI = 0;
     this.decals.count = 0;
     this.decalI = 0;
     this.sp.length = 0;
@@ -75,6 +118,26 @@ export class FX {
     this.decalI = (this.decalI + 1) % MAX_DECALS;
     this.decals.count = Math.max(this.decals.count, this.decalI === 0 ? MAX_DECALS : this.decalI);
     this.decals.instanceMatrix.needsUpdate = true;
+  }
+
+  // a splash of blood on a surface (size in metres)
+  bloodDecal(x, y, z, nx, ny, nz, size = 0.5) {
+    this.v.set(nx, ny, nz);
+    this.q.setFromUnitVectors(this.zAxis, this.v);
+    const turn = new THREE.Quaternion().setFromAxisAngle(this.v, Math.random() * 6.28);
+    this.q.premultiply(turn);
+    const s = size * (0.7 + Math.random() * 0.6);
+    this.m.compose(new THREE.Vector3(x + nx * 0.006, y + ny * 0.006, z + nz * 0.006), this.q, new THREE.Vector3(s, s, s));
+    this.blood.setMatrixAt(this.bloodI, this.m);
+    this.bloodI = (this.bloodI + 1) % MAX_BLOOD;
+    this.blood.count = Math.max(this.blood.count, this.bloodI === 0 ? MAX_BLOOD : this.bloodI);
+    this.blood.instanceMatrix.needsUpdate = true;
+  }
+
+  // a spent case thrown out to the right of a gun; floor(x, z) gives the height it lands on
+  shell(x, y, z, vx, vy, vz, floor, onTink) {
+    if (this.sh.length >= MAX_SHELLS) this.sh.shift();
+    this.sh.push({ x, y, z, vx, vy, vz, rx: Math.random() * 6, ry: Math.random() * 6, sx: (Math.random() - 0.5) * 30, sy: (Math.random() - 0.5) * 30, life: 9, floor, onTink, bounces: 0 });
   }
 
   spark(x, y, z, nx, ny, nz, color, n = 6, speed = 3) {
@@ -119,6 +182,43 @@ export class FX {
   }
 
   update(dt) {
+    // shells
+    let ns = 0;
+    for (let i = this.sh.length - 1; i >= 0; i--) {
+      const p = this.sh[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        this.sh.splice(i, 1);
+        continue;
+      }
+      if (p.bounces < 3) {
+        p.vy -= 9.8 * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.z += p.vz * dt;
+        p.rx += p.sx * dt;
+        p.ry += p.sy * dt;
+        const fy = (p.floor ? p.floor(p.x, p.z) : 0) + 0.006;
+        if (p.y < fy && p.vy < 0) {
+          p.y = fy;
+          p.vy = -p.vy * 0.35;
+          p.vx *= 0.5;
+          p.vz *= 0.5;
+          p.sx *= 0.5;
+          p.sy *= 0.5;
+          p.bounces++;
+          if (p.bounces === 1) p.onTink?.(p.x, p.y, p.z);
+          if (p.bounces >= 3) p.rx = Math.PI / 2;
+        }
+      }
+    }
+    for (const p of this.sh) {
+      this.q.setFromEuler(new THREE.Euler(p.rx, p.ry, 0));
+      this.m.compose(this.v.set(p.x, p.y, p.z), this.q, new THREE.Vector3(1, 1, 1));
+      this.shells.setMatrixAt(ns++, this.m);
+    }
+    this.shells.count = ns;
+    if (ns) this.shells.instanceMatrix.needsUpdate = true;
     // sparks
     let n = 0;
     for (let i = this.sp.length - 1; i >= 0; i--) {

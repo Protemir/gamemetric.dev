@@ -34,9 +34,9 @@
  "isAccessibleForFree": true
 }
 </script>
-<link rel="stylesheet" href="style.css?v=5bb46370">
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=007c5015","./js/audio.js":"./js/audio.js?v=6c729c2a","./js/bots.js":"./js/bots.js?v=e2e339c3","./js/chickens.js":"./js/chickens.js?v=bd5a3f99","./js/decor.js":"./js/decor.js?v=1a1a6d82","./js/fx.js":"./js/fx.js?v=c6005b38","./js/game.js":"./js/game.js?v=3389615a","./js/guns.js":"./js/guns.js?v=abccc5d7","./js/hud.js":"./js/hud.js?v=90e582c8","./js/i18n.js":"./js/i18n.js?v=c870e5f2","./js/main.js":"./js/main.js?v=a67ee611","./js/map.js":"./js/map.js?v=24e929d0","./js/net.js":"./js/net.js?v=1a02b247","./js/netgame.js":"./js/netgame.js?v=d74dbde2","./js/people.js":"./js/people.js?v=9b256a29","./js/props.js":"./js/props.js?v=27e10034","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=7b03bcc4","./js/weapons.js":"./js/weapons.js?v=cfb05660"}}</script>
-<script type="module" src="./js/main.js?v=a67ee611"></script>
+<link rel="stylesheet" href="style.css?v=a8e1f484">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=007c5015","./js/audio.js":"./js/audio.js?v=4104c3ea","./js/bots.js":"./js/bots.js?v=3e545c25","./js/chickens.js":"./js/chickens.js?v=bd5a3f99","./js/decor.js":"./js/decor.js?v=1a1a6d82","./js/fx.js":"./js/fx.js?v=bda236a5","./js/game.js":"./js/game.js?v=bcffb22e","./js/guns.js":"./js/guns.js?v=abccc5d7","./js/hud.js":"./js/hud.js?v=b7855427","./js/i18n.js":"./js/i18n.js?v=e4ad39e7","./js/main.js":"./js/main.js?v=960dae96","./js/map.js":"./js/map.js?v=24e929d0","./js/net.js":"./js/net.js?v=1a02b247","./js/netgame.js":"./js/netgame.js?v=85bd5b6b","./js/people.js":"./js/people.js?v=8926c533","./js/props.js":"./js/props.js?v=27e10034","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=7b03bcc4","./js/weapons.js":"./js/weapons.js?v=cfb05660"}}</script>
+<script type="module" src="./js/main.js?v=960dae96"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -53,9 +53,11 @@
   <div id="hitmark" class="hitmark"><i></i><i></i><i></i><i></i></div>
   <div id="hurt-layer"></div>
   <div id="vignette"></div>
+  <div id="lowhp"></div>
   <div id="scope" hidden><div class="hole"></div><i class="sh"></i><i class="sv"></i></div>
   <div id="center-msg"></div>
   <div id="announce"></div>
+  <div id="variant" hidden></div>
   <div id="banner" class="banner" hidden><b></b><span></span></div>
   <div id="prompt" hidden></div>
   <div id="spec" hidden></div>
@@ -113,7 +115,7 @@
     </div>
     <div class="opts">
       <div class="opt"><label data-t="mode"></label>
-        <div class="seg" id="seg-mode"><button data-v="hostage"><b data-t="modeHostage"></b><small data-t="modeHostageDesc"></small></button><button data-v="dm"><b data-t="modeDM"></b><small data-t="modeDMDesc"></small></button></div>
+        <div class="seg modes" id="seg-mode"><button data-v="hostage"><b data-t="modeHostage"></b><small data-t="modeHostageDesc"></small></button><button data-v="dm"><b data-t="modeDM"></b><small data-t="modeDMDesc"></small></button><button data-v="gun"><b data-t="modeGun"></b><small data-t="modeGunDesc"></small></button><button data-v="knife"><b data-t="modeKnife"></b><small data-t="modeKnifeDesc"></small></button><button data-v="zombie"><b data-t="modeZombie"></b><small data-t="modeZombieDesc"></small></button></div>
       </div>
       <div class="opt"><label data-t="fun"></label>
         <div class="seg small fun" id="seg-fun"><button data-f="heads" data-t="funHeads"></button><button data-f="lowgrav" data-t="funGrav"></button><button data-f="boom" data-t="funBoom"></button></div>
@@ -162,7 +164,7 @@
       <button class="lb-team tb" data-team="B"><b data-t="sideB"></b><ul id="lb-b"></ul></button>
     </div>
     <div id="lb-opts">
-      <div class="seg" id="lb-mode"><button data-v="hostage"><b data-t="modeHostage"></b></button><button data-v="dm"><b data-t="modeDM"></b></button></div>
+      <div class="seg modes" id="lb-mode"><button data-v="hostage"><b data-t="modeHostage"></b></button><button data-v="dm"><b data-t="modeDM"></b></button><button data-v="gun"><b data-t="modeGun"></b></button><button data-v="knife"><b data-t="modeKnife"></b></button><button data-v="zombie"><b data-t="modeZombie"></b></button></div>
       <div class="seg small" id="lb-diff"><button data-v="easy" data-t="easy"></button><button data-v="normal" data-t="normal"></button><button data-v="hard" data-t="hard"></button></div>
     </div>
     <p id="lb-status" class="muted"></p>

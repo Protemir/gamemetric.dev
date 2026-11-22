@@ -52,7 +52,7 @@ function pushSample(s, sample) {
 }
 
 export function loadoutOf(s) {
-  return { s: [s.slots[1], s.slots[2]], a: Math.round(s.armor), hm: s.helmet ? 1 : 0, he: s.he, fl: s.flash, m: s.money };
+  return { s: [s.slots[1], s.slots[2]], a: Math.round(s.armor), hm: s.helmet ? 1 : 0, he: s.he, fl: s.flash, m: s.money, gl: s.gunLevel || 0 };
 }
 
 export class NetGame {
@@ -450,8 +450,9 @@ export class NetGame {
     p.he = L.he;
     p.flash = L.fl;
     p.money = L.m;
+    p.gunLevel = L.gl || 0;
     if (bought && WEAPONS[bought] && (WEAPONS[bought].slot === 1 || WEAPONS[bought].slot === 2)) p.switchSlot(WEAPONS[bought].slot);
-    else if (!p.hasSlot(p.cur)) p.switchSlot(p.slots[1] ? 1 : 2, true);
-    else if (fresh) p.switchSlot(p.slots[1] ? 1 : 2, true);
+    else if (!p.hasSlot(p.cur)) p.switchSlot(p.bestSlot(), true);
+    else if (fresh) p.switchSlot(p.bestSlot(), true);
   }
 }

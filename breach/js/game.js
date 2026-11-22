@@ -14,6 +14,13 @@ import { FX } from './fx.js';
 import { t, lang, BOT_NAMES } from './i18n.js';
 
 const GRAV = 16, JUMP = 5.45, FREEZE = 5, ROUND = 115, BUYTIME = 22, WIN_ROUNDS = 8, DM_KILLS = 60, DM_TIME = 600;
+// the extra modes all run on the deathmatch machinery (respawns, no rounds) with their own rules
+export const GUN_LADDER = ['smg', 'm4', 'rifle', 'shotgun', 'scout', 'mg', 'sniper', 'deagle', 'pistol', 'knife'];
+const VARIANT = {
+  gun: { time: 600, kills: Infinity },
+  knife: { time: 300, kills: 30 },
+  zombie: { time: 180, kills: Infinity },
+};
 const angDiff = (a, b) => {
   let d = b - a;
   while (d > Math.PI) d -= Math.PI * 2;
@@ -29,6 +36,7 @@ class Soldier {
     this.name = name;
     this.isPlayer = isPlayer;
     this.body = makeBody(team, id);
+    if (game.variant === 'zombie' && team === 'B') this.body.zombify?.();
     if (game.fun?.heads) this.body.bigHead?.();
     game.scene.add(this.body.root);
     this.radius = 0.3;
@@ -72,6 +80,10 @@ class Soldier {
 
   eyeH() {
     return 1.62 - 0.5 * this.crouchK;
+  }
+
+  bestSlot() {
+    return this.slots[1] ? 1 : this.slots[2] ? 2 : 3;
   }
 
   hasSlot(n) {
@@ -218,7 +230,9 @@ export class Game {
   constructor(renderer, opts, hud) {
     this.renderer = renderer;
     this.opts = opts;
-    this.mode = opts.mode;
+    // gun game, knife fight and zombies are deathmatch underneath; this.variant says which
+    this.variant = VARIANT[opts.mode] ? opts.mode : null;
+    this.mode = this.variant ? 'dm' : opts.mode;
     this.hud = hud;
     this.time = 0;
     this.scene = new THREE.Scene();
@@ -315,6 +329,7 @@ export class Game {
     this.clearDrops();
     this.firstBlood = false;
     this.chickens.spawn();
+    for (const s of this.soldiers) s.roundKills = 0;
     for (const n of this.nades) this.dropNade(n);
     this.nades.length = 0;
     this.phase = this.mode === 'dm' ? 'live' : 'freeze';
@@ -334,7 +349,7 @@ export class Game {
       else for (const k of Object.keys(p.ammo)) p.ammo[k].res = WEAPONS[k].reserve;
       this.nh.applyLoadout(L, !L.keep || !!m.first);
     }
-    p.switchSlot(p.slots[1] ? 1 : 2, true);
+    p.switchSlot(p.bestSlot(), true);
     this.vm.mesh.visible = true;
     for (const h of this.hostages) h.reset();
     this.spec = null;
@@ -565,6 +580,7 @@ export class Game {
   }
 
   canBuy(s) {
+    if (this.variant) return false;
     if (this.mode === 'dm') return this.map.zone[this.map.cellAt(s.x, s.z)] === (s.team === 'A' ? 1 : 2) || this.time - s.spawnedAt < 10;
     if (!(this.phase === 'freeze' || (this.phase === 'live' && this.buyTimeLeft() > 0))) return false;
     const z = this.map.zone[this.map.cellAt(s.x, s.z)];
@@ -626,12 +642,13 @@ export class Game {
     this.spotted.clear();
     this.phase = this.mode === 'dm' ? 'live' : 'freeze';
     this.roundStart = this.time;
-    this.phaseEnd = this.time + (this.mode === 'dm' ? DM_TIME : FREEZE + (first ? 2 : 0));
+    this.phaseEnd = this.time + (this.mode === 'dm' ? (this.variant ? VARIANT[this.variant].time : DM_TIME) : FREEZE + (first ? 2 : 0));
     this.liveAt = this.mode === 'dm' ? this.time : this.phaseEnd;
     this.result = null;
     this.rescued = 0;
     this.firstBlood = false;
     this.chickens.spawn();
+    for (const s of this.soldiers) s.roundKills = 0;
     const order = { A: this.map.spawns.A.slice().sort(() => Math.random() - 0.5), B: this.map.spawns.B.slice().sort(() => Math.random() - 0.5) };
     const used = { A: 0, B: 0 };
     for (const s of this.soldiers) {
@@ -652,8 +669,12 @@ export class Game {
       const sp = order[s.team][used[s.team]++ % order[s.team].length];
       s.spawn(sp[0], sp[1], s.team === 'A' ? 0 : Math.PI);
       s.spawnedAt = this.time;
-      s.switchSlot(s.slots[1] ? 1 : 2, true);
-      if (s.brain) {
+      s.switchSlot(s.bestSlot(), true);
+      if (first) s.gunLevel = 0;
+      if (this.variant) {
+        this.variantLoadout(s);
+        s.brain?.planRound();
+      } else if (s.brain) {
         s.brain.buy();
         s.brain.planRound();
       }
@@ -663,7 +684,7 @@ export class Game {
     this.player.deadAt = 0;
     if (this.mode === 'dm') {
       this.dmKills = { A: 0, B: 0 };
-      this.hud.center(t('teamKills'), 3);
+      this.hud.center(t(this.variant ? 'intro_' + this.variant : 'teamKills'), 3.5);
     } else {
       this.hud.center(`${t('round')} ${this.round}`, 2);
     }
@@ -687,7 +708,7 @@ export class Game {
     }
     const mine = winner === this.player.team;
     this.result = { winner, why };
-    this.hud.banner(t(winner === 'A' ? 'roundWinA' : 'roundWinB'), t(why), mine);
+    this.hud.banner(t(winner === 'A' ? 'roundWinA' : 'roundWinB'), t(why) + this.mvpLine(), mine);
     sfx(mine ? 'win' : 'lose');
     this.nh?.onEnd(winner, why);
     if (this.score[winner] >= WIN_ROUNDS) {
@@ -719,11 +740,17 @@ export class Game {
           s.helmet = true;
           s.he = 1;
           s.flash = 1;
-          if (!s.brain && s.dmPick) this.giveWeapon(s, s.dmPick);
-          if (s.brain) {
-            s.brain.buy();
-            s.brain.planRound();
-          } else s.switchSlot(s.slots[1] ? 1 : 2, true);
+          if (this.variant) {
+            s.switchSlot(s.bestSlot(), true);
+            this.variantLoadout(s);
+            s.brain?.planRound();
+          } else {
+            if (!s.brain && s.dmPick) this.giveWeapon(s, s.dmPick);
+            if (s.brain) {
+              s.brain.buy();
+              s.brain.planRound();
+            } else s.switchSlot(s.bestSlot(), true);
+          }
           s.respawnAt = 0;
           if (s.isPlayer) {
             this.spec = null;
@@ -731,8 +758,17 @@ export class Game {
           }
           this.nh?.onSpawn(s);
         }
-      const done = this.dmKills.A >= DM_KILLS || this.dmKills.B >= DM_KILLS || this.time >= this.phaseEnd;
-      if (done && !this.over) {
+      if (this.variant === 'zombie') {
+        // the people win by lasting out the clock, the horde by leaving none of them standing
+        if (this.role !== 'client' && !this.over) {
+          if (!this.soldiers.some((s) => s.team === 'A' && s.alive) && this.time - this.roundStart > 3) this.finishMatch('B');
+          else if (this.time >= this.phaseEnd) this.finishMatch('A');
+        }
+        return;
+      }
+      const goal = this.variant ? VARIANT[this.variant].kills : DM_KILLS;
+      const done = this.dmKills.A >= goal || this.dmKills.B >= goal || this.time >= this.phaseEnd;
+      if (done && !this.over && this.role !== 'client') {
         const w = this.dmKills.A === this.dmKills.B ? 'draw' : this.dmKills.A > this.dmKills.B ? 'A' : 'B';
         this.finishMatch(w);
       }
@@ -865,6 +901,7 @@ export class Game {
       const dx = -Math.sin(yy) * Math.cos(py), dy = Math.sin(py), dz = -Math.cos(yy) * Math.cos(py);
       this.bullet(s, s.x, eye, s.z, dx, dy, dz, w, muzzle, i === 0 || i % 3 === 0);
     }
+    this.ejectShell(s, w, eye);
     // recoil
     const [up, side] = recoilKick(w, s.shots);
     s.punchP += up;
@@ -931,6 +968,7 @@ export class Game {
       this.damage(who, dmg, hit.part, s, s.kind, dx, dz, w.pen ?? 0.6);
       this.fx.puff(ex, ey, ez, [0.55, 0.06, 0.06], 0.35, 0.35, 0.2, 0.75);
       this.fx.spark(ex, ey, ez, -dx, -dy, -dz, [0.6, 0.05, 0.05], 4, 2);
+      this.splashBlood(ex, ey, ez, dx, dy, dz, hit.part === 'head');
     } else if (wall) {
       const c = wall.c;
       const k = c >= 0 ? this.map.kind[c] : 0;
@@ -1076,13 +1114,100 @@ export class Game {
       }
     }
     this.hud.feed(by, o, weapon, head);
+    this.fx.bloodDecal(o.x, this.map.groundAt(o.x, o.z, 0.05, o.feet + 0.1), o.z, 0, 1, 0, 1.3);
+    if (by && by !== o) by.roundKills = (by.roundKills || 0) + 1;
     this.announceKill(o, by, weapon, head);
     this.firstBlood = true;
     if (by && by.isPlayer) sfx('kill');
-    if (this.mode === 'dm') o.respawnAt = this.time + 3;
+    if (this.mode === 'dm') o.respawnAt = this.variant === 'zombie' && o.team === 'A' ? 0 : this.time + (this.variant === 'zombie' ? 2 : 3);
+    if (this.variant === 'gun' && by && by !== o && by.team !== o.team && this.role !== 'client') this.gunProgress(by, o, weapon);
     if (o.isPlayer) {
       this.hud.center(by && by !== o ? `${t('killedBy')} ${by.name}` : t('youDied'), 2.5);
       this.vm.mesh.visible = false;
+    }
+  }
+
+  // ---------- the extra modes ----------
+  // the kit for this mode, on spawn and after every step up the gun game ladder
+  variantLoadout(s) {
+    s.slots = { 1: null, 2: null, 3: 'knife' };
+    s.ammo = {};
+    s.he = 0;
+    s.flash = 0;
+    s.armor = 100;
+    s.helmet = true;
+    if (this.variant === 'gun') {
+      const k = GUN_LADDER[Math.min(GUN_LADDER.length - 1, s.gunLevel || 0)];
+      if (k !== 'knife') this.giveWeapon(s, k);
+      s.switchSlot(k === 'knife' ? 3 : WEAPONS[k].slot, true);
+    } else if (this.variant === 'knife') {
+      s.armor = 0;
+      s.helmet = false;
+      s.switchSlot(3, true);
+    } else if (this.variant === 'zombie') {
+      if (s.team === 'B') {
+        // the horde: claws only, tough and quick
+        s.armor = 0;
+        s.helmet = false;
+        s.hp = 250;
+        s.switchSlot(3, true);
+      } else {
+        this.giveWeapon(s, s.id % 2 ? 'mg' : 'm4');
+        this.giveWeapon(s, 'deagle');
+        s.he = 1;
+        s.switchSlot(1, true);
+      }
+    }
+    s.shown = null;
+    if (s.remote) this.nh?.onPicked(s, { kind: s.kind, mag: s.ammoOf(s.kind).mag ?? 0, res: s.ammoOf(s.kind).res ?? 0 });
+  }
+
+  // gun game: a kill moves the killer one gun on; a knife kill at the end wins; knifed victims step back
+  gunProgress(by, o, weapon) {
+    const last = GUN_LADDER.length - 1;
+    if (weapon === 'knife') {
+      if ((by.gunLevel || 0) >= last) {
+        this.finishMatch(by.team);
+        return;
+      }
+      o.gunLevel = Math.max(0, (o.gunLevel || 0) - 1);
+    }
+    if ((by.gunLevel || 0) < last) {
+      by.gunLevel = (by.gunLevel || 0) + 1;
+      if (by.alive) this.variantLoadout(by);
+      if (by.isPlayer) {
+        const k = GUN_LADDER[by.gunLevel];
+        this.hud.center(`${t('level')} ${by.gunLevel + 1}/${GUN_LADDER.length}: ${WEAPONS[k].name[lang]}`, 2);
+        sfx('streak', null, { n: Math.min(5, 1 + Math.floor(by.gunLevel / 2)) });
+      }
+    }
+  }
+
+  // "MVP: name, 3 kills" for the round banner
+  mvpLine() {
+    let best = null;
+    for (const s of this.soldiers) if ((s.roundKills || 0) > 0 && (!best || s.roundKills > best.roundKills)) best = s;
+    return best ? ` · MVP: ${best.name} (${best.roundKills})` : '';
+  }
+
+  // spent brass flies out to the right of the gun (only near the camera, it is just for the eye)
+  ejectShell(s, w, eye) {
+    if (w.melee || w.nade) return;
+    if (Math.hypot(s.x - this.view.x, s.z - this.view.z) > 22) return;
+    const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), rx = Math.cos(s.yaw), rz = -Math.sin(s.yaw);
+    const near = s.isPlayer ? 0.32 : 0.45, side = s.isPlayer ? 0.16 : 0.12, y = eye - (s.isPlayer ? 0.12 : 0.3);
+    const x = s.x + fx * near + rx * side, z = s.z + fz * near + rz * side;
+    const sp = 1.4 + Math.random() * 0.8;
+    this.fx.shell(x, y, z, rx * sp + s.vx * 0.8 + (Math.random() - 0.5) * 0.4, 1.6 + Math.random() * 0.8, rz * sp + s.vz * 0.8 + (Math.random() - 0.5) * 0.4, (px, pz) => this.map.groundAt(px, pz, 0.02, 3), (px, py, pz) => sfx('shell', [px, py, pz]));
+  }
+
+  // blood behind someone who was hit: on the wall within reach, or on the floor
+  splashBlood(ex, ey, ez, dx, dy, dz, big) {
+    const wall = this.map.raycast(ex, ey, ez, dx, dy, dz, 2.2);
+    if (wall) this.fx.bloodDecal(ex + dx * wall.t, ey + dy * wall.t, ez + dz * wall.t, wall.nx, wall.ny, wall.nz, big ? 0.7 : 0.45);
+    else if (big || Math.random() < 0.5) {
+      const fy = this.map.groundAt(ex + dx * 0.8, ez + dz * 0.8, 0.05, ey);
+      this.fx.bloodDecal(ex + dx * 0.8, fy, ez + dz * 0.8, 0, 1, 0, big ? 0.9 : 0.5);
     }
   }
 
@@ -1137,7 +1262,7 @@ export class Game {
     if (!s.isPlayer) sfx('pin', [s.x, 1, s.z]);
     if (s.isPlayer) this.vm.kick = 1;
     // back to a gun when this was the last one
-    if ((s.cur === 4 || s.cur === 5) && !s.hasSlot(s.cur)) s.switchSlot(s.prev && s.prev < 4 && s.hasSlot(s.prev) ? s.prev : s.slots[1] ? 1 : 2);
+    if ((s.cur === 4 || s.cur === 5) && !s.hasSlot(s.cur)) s.switchSlot(s.prev && s.prev < 4 && s.hasSlot(s.prev) ? s.prev : s.bestSlot());
     else if (s.isPlayer) this.vm.draw = 1;
   }
 
@@ -1363,6 +1488,7 @@ export class Game {
   move(s, dt, frozen) {
     const w = WEAPONS[s.kind] || WEAPONS.knife;
     let max = w.speed || 5.6;
+    if (this.variant === 'knife' || (this.variant === 'zombie' && s.team === 'B')) max *= 1.18;
     if (s.in.walk) max *= 0.52;
     if (s.crouchK > 0.5) max *= 0.36;
     if (s.scoped) max *= 0.55;
@@ -1637,6 +1763,7 @@ export class Game {
     this.updateHostages(dt);
     this.updateDrops();
     this.chickens.update(dt);
+    if (this.variant === 'zombie') for (const s of this.soldiers) if (s.team === 'B' && s.alive && Math.random() < dt * 0.12) sfx('groan', [s.x, s.feet + 1.6, s.z]);
     this.updateNades(dt);
     this.fx.update(dt);
     this.tex.water.offset.x = this.time * 0.02;
@@ -1658,6 +1785,9 @@ export class Game {
     } else if (a === 'last') {
       if (p.hasSlot(p.prev)) p.switchSlot(p.prev);
     } else if (a === 'reload') this.reload(p);
+    else if (a === 'inspect') {
+      if (!p.reloadUntil && this.time >= p.switchUntil && !p.scoped) this.vm.inspect = 2.4;
+    }
     else if (a === 'alt') {
       const w = WEAPONS[p.kind];
       if (w.melee) {
@@ -1917,6 +2047,10 @@ export class Game {
       }
       const knife = p.kind === 'knife';
       const pull = p.pinAt ? Math.min(1, (this.time - p.pinAt) / 0.3) : 0;
+      // inspecting: tilt the gun up and turn it to show the side, then back
+      if (vm.inspect > 0 && (vm.kick > 0.05 || p.reloadUntil || vm.draw > 0.05 || p !== this.player)) vm.inspect = 0;
+      vm.inspect = Math.max(0, (vm.inspect || 0) - dt);
+      const ins = vm.inspect > 0 ? Math.sin(Math.min(1, (2.4 - vm.inspect) / 2.4) * Math.PI) : 0;
       const h = vm.holder;
       const o = VM_OFFSET[p.kind] || VM_OFFSET.rifle;
       h.position.set(
@@ -1925,8 +2059,18 @@ export class Game {
         o[2] + vm.kick * (knife ? (vm.stab ? -0.2 : -0.12) : 0.045) + pull * 0.09,
       );
       if (pull) h.position.y += pull * 0.05;
+      if (ins) {
+        h.position.x -= ins * 0.06;
+        h.position.y += ins * 0.04;
+        h.position.z += ins * 0.05;
+      }
       // turned a little towards the centre so the side of the gun shows
       h.rotation.set(vm.kick * (knife ? -0.6 : 0.09) + reloadK * 0.6 - vm.draw * 0.8 + (knife ? 0.25 : 0.03) + pull * 0.45, (knife ? vm.kick * (vm.stab ? 0.1 : 0.5) + 0.35 : o[3] ?? 0.085), reloadK * 0.35 + (knife ? -0.5 : -0.04));
+      if (ins) {
+        h.rotation.y += ins * 1.1;
+        h.rotation.z += ins * 0.5;
+        h.rotation.x += ins * 0.25;
+      }
       vm.mat.color.setScalar(this.charLight(p.x, p.z) * 1.08);
       vm.flashT -= dt;
       vm.flash.visible = vm.flashT > 0;
@@ -1983,7 +2127,7 @@ export class Game {
     if (name) s.name = name;
     s.brain = new Brain(s, this, this.opts.diff);
     s.brain.planRound();
-    s.switchSlot(s.slots[1] ? 1 : 2, true);
+    s.switchSlot(s.bestSlot(), true);
   }
 
   resize(w, h) {

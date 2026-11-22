@@ -259,6 +259,25 @@ export function sfx(name, pos = null, opt = {}) {
       tone(d, t, 0.12, 'triangle', 1500, 1700, 0.12);
       break;
     }
+    case 'shell': {
+      const P = place(pos, 10);
+      if (!P) return;
+      const d = out(P);
+      const f = 3200 + Math.random() * 1600;
+      tone(d, t, 0.05, 'sine', f, f * 0.97, 0.05);
+      tone(d, t + 0.07, 0.035, 'sine', f * 1.1, f, 0.03);
+      break;
+    }
+    case 'groan': {
+      const P = place(pos, 22);
+      if (!P) return;
+      const d = out(P);
+      const f = 70 + Math.random() * 40;
+      tone(d, t, 0.9, 'sawtooth', f * 1.6, f, 0.09);
+      tone(d, t + 0.05, 0.8, 'square', f * 1.2, f * 0.8, 0.04);
+      noise(d, t, 0.7, 'bandpass', 400, 2, 0.06);
+      break;
+    }
     case 'cluck': {
       const P = place(pos, 18);
       if (!P) return;

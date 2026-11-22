@@ -96,7 +96,7 @@ export class Brain {
     }
     if (s.money >= 500 && Math.random() < 0.6) spend('he', 300);
     if (s.money >= 400 && Math.random() < 0.4) spend('flash', 200);
-    s.switchSlot(s.slots[1] ? 1 : 2, true);
+    s.switchSlot(s.bestSlot(), true);
   }
 
   // ---------- plans ----------
@@ -309,7 +309,7 @@ export class Brain {
     const tol = 0.05 + Math.atan2(0.35, d);
     if (off > tol * 1.6) return;
     if (s.kind === 'he' || s.kind === 'flash') {
-      s.switchSlot(s.slots[1] ? 1 : 2);
+      s.switchSlot(s.bestSlot());
       return;
     }
     const a = s.ammoOf(s.kind);
