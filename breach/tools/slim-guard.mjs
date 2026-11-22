@@ -1,9 +1,11 @@
 // Slims the guard avatar for the game: drops the hat, the teeth and the normal / roughness maps
 // (the game lights characters with Lambert, which uses only the colour map), then repacks the binary.
-//   node breach/tools/slim-guard.mjs <readyplayer.me.glb> breach/assets/models/Guard.glb
+//   node breach/tools/slim-guard.mjs <readyplayer.me.glb> breach/assets/models/Guard.glb [--keep-maps]
+// --keep-maps keeps the normal and roughness maps (the characters are drawn with standard materials since 22.11)
 import fs from 'node:fs';
 
-const [src, dst] = process.argv.slice(2);
+const [src, dst, flag] = process.argv.slice(2);
+const keepMaps = flag === '--keep-maps';
 const buf = fs.readFileSync(src);
 const jsonLen = buf.readUInt32LE(12);
 const j = JSON.parse(buf.subarray(20, 20 + jsonLen).toString('utf8'));
@@ -13,12 +15,13 @@ const bin = buf.subarray(binStart, binStart + buf.readUInt32LE(20 + jsonLen));
 const DROP = new Set(['Wolf3D_Headwear', 'Wolf3D_Teeth']);
 for (const n of j.nodes) if (n.children) n.children = n.children.filter((c) => !DROP.has(j.nodes[c].name));
 for (const s of j.scenes) s.nodes = s.nodes.filter((c) => !DROP.has(j.nodes[c].name));
-for (const m of j.materials) {
-  delete m.normalTexture;
-  delete m.occlusionTexture;
-  delete m.emissiveTexture;
-  if (m.pbrMetallicRoughness) delete m.pbrMetallicRoughness.metallicRoughnessTexture;
-}
+if (!keepMaps)
+  for (const m of j.materials) {
+    delete m.normalTexture;
+    delete m.occlusionTexture;
+    delete m.emissiveTexture;
+    if (m.pbrMetallicRoughness) delete m.pbrMetallicRoughness.metallicRoughnessTexture;
+  }
 
 // what is still reachable from the scene
 const used = { nodes: new Set(), meshes: new Set(), skins: new Set(), materials: new Set(), accessors: new Set(), textures: new Set(), images: new Set(), views: new Set() };
@@ -45,8 +48,8 @@ for (const k of used.meshes) {
   }
 }
 for (const k of used.materials) {
-  const t = j.materials[k].pbrMetallicRoughness?.baseColorTexture;
-  if (t) used.textures.add(t.index);
+  const m = j.materials[k];
+  for (const t of [m.pbrMetallicRoughness?.baseColorTexture, m.pbrMetallicRoughness?.metallicRoughnessTexture, m.normalTexture, m.occlusionTexture, m.emissiveTexture]) if (t) used.textures.add(t.index);
 }
 for (const k of used.textures) used.images.add(j.textures[k].source);
 for (const k of used.accessors) if (j.accessors[k].bufferView !== undefined) used.views.add(j.accessors[k].bufferView);
@@ -83,10 +86,7 @@ for (const im of images) im.bufferView = vMap.get(im.bufferView);
 const [textures, tMap] = remap(j.textures, used.textures);
 for (const t of textures) t.source = iMap.get(t.source);
 const [materials, mMap] = remap(j.materials, used.materials);
-for (const m of materials) {
-  const t = m.pbrMetallicRoughness?.baseColorTexture;
-  if (t) t.index = tMap.get(t.index);
-}
+for (const m of materials) for (const t of [m.pbrMetallicRoughness?.baseColorTexture, m.pbrMetallicRoughness?.metallicRoughnessTexture, m.normalTexture, m.occlusionTexture, m.emissiveTexture]) if (t) t.index = tMap.get(t.index);
 const [meshes, meMap] = remap(j.meshes, used.meshes);
 for (const me of meshes) {
   for (const p of me.primitives) {

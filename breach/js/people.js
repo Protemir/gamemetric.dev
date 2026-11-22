@@ -12,6 +12,10 @@ const A = { ready: false };
 export async function loadPeople() {
   const loader = new GLTFLoader();
   const [s, m, gd] = await Promise.all(['Soldier', 'Michelle', 'Guard'].map((n) => loader.loadAsync(`assets/models/${n}.glb`)));
+  // the assault team's kit in olive-grey instead of the model's sand colour
+  s.scene.traverse((o) => {
+    if (o.isMesh && /VanguardBody/i.test(o.material.name) && o.material.map) o.material.map = recolor(o.material.map, (v) => [v * 0.6, v * 0.62, v * 0.53]);
+  });
   A.soldier = prep(s.scene);
   A.civil = prep(m.scene);
   A.clips = {};
@@ -44,7 +48,24 @@ function prep(scene) {
     if (!o.isMesh) return;
     const old = o.material;
     if (old.map) old.map.colorSpace = THREE.SRGBColorSpace;
-    o.material = new THREE.MeshLambertMaterial({ map: old.map || null, color: old.map ? 0xffffff : old.color });
+    // full materials: relief from the normal maps, highlights, and the sky in the reflections (scene.environment)
+    const m = new THREE.MeshStandardMaterial({
+      map: old.map || null,
+      color: old.map ? 0xffffff : old.color,
+      normalMap: old.normalMap || null,
+      roughnessMap: old.roughnessMap || null,
+      metalnessMap: old.metalnessMap || null,
+      roughness: old.roughness ?? 0.8,
+      metalness: Math.min(0.3, old.metalness ?? 0),
+    });
+    if (old.normalMap) m.normalScale.copy(old.normalScale);
+    // the soldier's kit: a glossy visor and armour with a soft sheen
+    if (/Visor/i.test(old.name)) Object.assign(m, { roughness: 0.2, metalness: 0.6 });
+    else if (/VanguardBody/i.test(old.name)) Object.assign(m, { roughness: 0.55, metalness: 0.12 });
+    else if (/Skin|Body$/i.test(old.name)) m.roughness = Math.max(0.55, m.roughness);
+    m.name = old.name;
+    m.userData.env = 0.6;
+    o.material = m;
     o.frustumCulled = false;
   });
   return scene;
@@ -72,7 +93,7 @@ function prepGuard(scene) {
   for (const sx of [-1, 1]) parts.push(lens.clone().translate(sx * half, 0, 0));
   parts.push(new THREE.BoxGeometry(half * 0.5, 0.006, 0.006).translate(0, 0.009, 0));
   for (const sx of [-1, 1]) parts.push(new THREE.BoxGeometry(0.004, 0.006, 0.09).translate(sx * half * 1.78, 0.008, -0.045));
-  const glasses = new THREE.Mesh(mergeBoxes(parts), new THREE.MeshLambertMaterial({ color: 0x0c0d10 }));
+  const glasses = new THREE.Mesh(mergeBoxes(parts), new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.15, metalness: 0.4 }));
   glasses.position.set(mid.x, mid.y + 0.004, mid.z + 0.03);
   glasses.frustumCulled = false;
   scene.add(glasses);
@@ -105,6 +126,37 @@ function mergeBoxes(list) {
   out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   out.setIndex(idx);
   return out;
+}
+
+// keep the shading of a colour map, give it a new colour: f(brightness) -> [r, g, b] in 0..1
+function recolor(map, f) {
+  const im = map.image;
+  const c = document.createElement('canvas');
+  c.width = im.width;
+  c.height = im.height;
+  const g = c.getContext('2d');
+  g.drawImage(im, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), a = d.data;
+  for (let i = 0; i < a.length; i += 4) {
+    const l = (0.3 * a[i] + 0.55 * a[i + 1] + 0.15 * a[i + 2]) / 255;
+    // strong reds (the stripes) stay a muted red; everything else takes the new colour
+    if (a[i] > a[i + 1] * 1.6 && a[i] > 90) {
+      a[i] = 120 * l + 40;
+      a[i + 1] = a[i + 2] = 40 * l + 20;
+      continue;
+    }
+    const [r, gg, b] = f(0.1 + l * 0.75);
+    a[i] = Math.min(255, r * 255);
+    a[i + 1] = Math.min(255, gg * 255);
+    a[i + 2] = Math.min(255, b * 255);
+  }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.flipY = map.flipY;
+  t.wrapS = map.wrapS;
+  t.wrapT = map.wrapT;
+  return t;
 }
 
 // repaint a wedding suit into a guard's black one: light, grey pixels (the shirt) stay white, the rest goes charcoal
@@ -185,7 +237,7 @@ function ik(up, fore, hand, T, pole) {
   turn(fore, _q.setFromUnitVectors(_u, _v));
 }
 
-const TINT = { A: new THREE.Color(0.8, 0.9, 1.08), B: new THREE.Color(1, 1, 1), H: new THREE.Color(1, 1, 1) };
+const TINT = { A: new THREE.Color(1, 1, 1), B: new THREE.Color(1, 1, 1), H: new THREE.Color(1, 1, 1) };
 
 export class SkinnedBody {
   constructor(look) {
@@ -381,7 +433,11 @@ export class SkinnedBody {
   }
 
   applyLight() {
-    for (const m of this.mats) m.color.copy(m.userData.base).multiply(this.tint).multiplyScalar(this.lightK);
+    for (const m of this.mats) {
+      m.color.copy(m.userData.base).multiply(this.tint).multiplyScalar(this.lightK);
+      // reflections fade in the dark rooms like the rest of the light
+      m.envMapIntensity = (m.userData.env ?? 0.6) * this.lightK * this.lightK;
+    }
     this.gunMat.color.setScalar(this.lightK);
   }
 

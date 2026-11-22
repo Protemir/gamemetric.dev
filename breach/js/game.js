@@ -338,7 +338,21 @@ export class Game {
     this.scene.add(ground);
     // sky: a photographed cloudy sky (Poly Haven, CC0) on a dome, turned so its sun sits where our light comes from
     const loader = new THREE.TextureLoader();
-    const skyTex = loader.load('assets/tex/sky.jpg');
+    // once the sky is in, it also becomes the light the characters reflect: a small copy of the dome over grey-green ground
+    const skyTex = loader.load('assets/tex/sky.jpg', (t) => {
+      if (this.disposed) return;
+      const env = new THREE.Scene();
+      const dome = new THREE.Mesh(sky, new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide }));
+      dome.scale.setScalar(0.1);
+      env.add(dome);
+      const floor = new THREE.Mesh(new THREE.CircleGeometry(40, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x55604a }));
+      floor.position.y = -1.5;
+      env.add(floor);
+      const pm = new THREE.PMREMGenerator(this.renderer);
+      this.envRT = pm.fromScene(env, 0.02, 0.1, 100);
+      pm.dispose();
+      this.scene.environment = this.envRT.texture;
+    });
     skyTex.colorSpace = THREE.SRGBColorSpace;
     skyTex.wrapS = THREE.RepeatWrapping;
     const SR = 380;
@@ -1875,6 +1889,8 @@ export class Game {
   }
 
   dispose() {
+    this.disposed = true;
+    this.envRT?.dispose();
     const all = [];
     this.scene.traverse((o) => all.push(o));
     this.vm.scene.traverse((o) => all.push(o));
