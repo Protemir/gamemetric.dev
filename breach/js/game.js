@@ -1,6 +1,6 @@
 // The match: soldiers, hostages, shooting, grenades, rounds, money, camera and view model.
 import * as THREE from '../vendor/three.module.min.js';
-import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos, WATER_Y, POOL_BOTTOM } from './map.js';
+import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos, WATER_Y, POOL_BOTTOM, DECK_T } from './map.js';
 import { buildDecor } from './decor.js';
 import { buildProps, propsReady } from './props.js';
 import { Chickens } from './chickens.js';
@@ -1672,7 +1672,8 @@ export class Game {
     if (frozen) max = 0;
     // under a lintel or on top of the library shelves there is no room to stand up
     const hc = this.map.cellAt(s.x, s.z);
-    const room = hc >= 0 && this.map.indoor[hc] ? (this.map.lint[hc] > 0 ? this.map.lint[hc] : this.map.ceilH[hc]) - Math.max(s.feet, this.map.h[hc]) : 99;
+    let room = hc >= 0 && this.map.indoor[hc] ? (this.map.lint[hc] > 0 ? this.map.lint[hc] : this.map.ceilH[hc]) - Math.max(s.feet, this.map.h[hc]) : 99;
+    if (hc >= 0 && this.map.deck[hc] && s.feet < this.map.deck[hc] - 0.01) room = Math.min(room, this.map.deck[hc] - DECK_T - s.feet);
     const tgt = s.in.crouch || room < 1.85 ? 1 : 0;
     const oldK = s.crouchK;
     s.crouchK += Math.max(-dt * 7, Math.min(dt * 7, tgt - s.crouchK));
@@ -1772,7 +1773,9 @@ export class Game {
     // head against the ceiling or a window lintel
     const cell = this.map.cellAt(s.x, s.z);
     if (cell >= 0 && this.map.indoor[cell]) {
-      const top = this.map.lint[cell] > 0 ? this.map.lint[cell] : this.map.ceilH[cell];
+      let top = this.map.lint[cell] > 0 ? this.map.lint[cell] : this.map.ceilH[cell];
+      const dk = this.map.deck[cell];
+      if (dk && s.feet < dk - 0.01) top = Math.min(top, dk - DECK_T);
       if (s.feet + s.height > top - 0.05) {
         s.feet = Math.max(this.map.h[cell], top - 0.05 - s.height);
         if (s.vy > 0) s.vy = 0;

@@ -22,6 +22,8 @@ export const K = {
 };
 // the hall is two storeys tall: galleries along its side walls, reached by stairs
 export const HALL_CEIL = 7.2, GALLERY_H = 3.2;
+// a floor slab in the air (the hall's bridge): you walk on its top at deck[c] and under it below deck[c] - DECK_T
+export const DECK_T = 0.25;
 const KIND_TEX = {
   2: 'stone', 3: 'crate', 4: 'shelf', 5: 'counter', 6: 'table', 7: 'sofa', 8: 'hedge', 9: 'car', 10: 'pillar', 11: 'fire',
   12: 'piano', 13: 'van', 14: 'fountain', 15: 'water', 16: 'metalshelf', 17: 'fridge', 18: 'plant', 19: 'lounger',
@@ -58,6 +60,7 @@ export class GameMap {
     this.lint = new Float32Array(n);
     // how high the ceiling is over each cell (indoors); the hall is taller than the rest
     this.ceilH = new Float32Array(n).fill(CEIL);
+    this.deck = new Float32Array(n);
     this.noWalk = new Uint8Array(n);
     this.zone = new Uint8Array(n); // 1 attackers spawn + rescue, 2 defenders spawn
     this.room = new Uint8Array(n);
@@ -231,6 +234,7 @@ export class GameMap {
       for (let z = 36; z <= 43; z++) solid(x0, z, x1, z, +(GALLERY_H * (44 - z) / 8).toFixed(2), K.STAIRS);
       solid(x0, 31, x1, 35, GALLERY_H, K.GALLERY);
     }
+    for (let z = 31; z <= 32; z++) for (let x = 30; x <= 42; x++) this.deck[z * W + x] = GALLERY_H;
     // a ceiling to match: the hall and its walls go up to the roof
     for (let z = 30; z <= 46; z++)
       for (let x = 27; x <= 45; x++) {
@@ -371,6 +375,8 @@ export class GameMap {
       if (x >= HOUSE.x0 && x <= HOUSE.x1 && z >= HOUSE.z0 && z <= HOUSE.z1) return true;
     }
     if (this.kind[c] === K.WATER && this.swimmer) return false;
+    const dk = this.deck[c];
+    if (dk > 0 && feet < dk - 0.01 && top > dk - DECK_T + 0.05 && feet + step < dk) return true;
     if (this.noWalk[c]) return true;
     if (this.h[c] > feet + step) return true;
     // the garden wall round the grounds cannot be climbed (low gravity could reach it from the shed)
@@ -441,6 +447,12 @@ export class GameMap {
           const px = Math.max(cx, Math.min(x, cx + 1)), pz = Math.max(cz, Math.min(z, cz + 1));
           if ((x - px) ** 2 + (z - pz) ** 2 < r * r * 0.8) g = hh;
         }
+        // standing on a slab in the air
+        const dk = this.deck[c];
+        if (dk > g && dk <= feet + step + 0.01 && feet > dk - DECK_T - 0.05) {
+          const px = Math.max(cx, Math.min(x, cx + 1)), pz = Math.max(cz, Math.min(z, cz + 1));
+          if ((x - px) ** 2 + (z - pz) ** 2 < r * r * 0.8) g = dk;
+        }
       }
     return g;
   }
@@ -469,6 +481,13 @@ export class GameMap {
         if (ya < hh) return { t: t0, nx: 0, ny: 1, nz: 0, c };
         const t = (hh - oy) / dy;
         return { t, nx: 0, ny: 1, nz: 0, c };
+      }
+      // a slab in the air
+      const dk = this.deck[c];
+      if (dk > 0 && hi > dk - DECK_T && lo < dk) {
+        if (ya <= dk && ya >= dk - DECK_T && axis >= 0) return { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c };
+        if (dy < 0 && ya > dk) return { t: Math.max(t0, (dk - oy) / dy), nx: 0, ny: 1, nz: 0, c };
+        if (dy > 0 && ya < dk - DECK_T) return { t: Math.max(t0, (dk - DECK_T - oy) / dy), nx: 0, ny: -1, nz: 0, c };
       }
       // floor (the pool's is deeper)
       const fl = water ? POOL_BOTTOM : 0;
@@ -968,9 +987,32 @@ export class GameMap {
       meshes.push(under);
     }
 
+    // the slabs: marble on top, ceiling underneath, trim on the open edges
+    for (let z = 0; z < H; z++)
+      for (let x = 0; x < W; x++) {
+        const c = z * W + x, dk = this.deck[c];
+        if (!dk) continue;
+        hface('pillar', x, z, x + 1, z + 1, dk, true, true, null);
+        hface('ceiling', x, z, x + 1, z + 1, dk - DECK_T, false, true, null);
+        for (let d = 0; d < 4; d++) {
+          const nx = x + DIRS[d][0], nz = z + DIRS[d][1];
+          if (!this.inb(nx, nz)) continue;
+          const nb = nz * W + nx;
+          if (this.deck[nb] || this.h[nb] >= dk) continue;
+          // the edge faces outward: drawn from the neighbour's side, so it is lit and turned the right way
+          vface('trim', x, z, d, dk - DECK_T, dk, true, false);
+        }
+      }
+
     // gallery and stair railings: posts and a handrail along the inner edge, white like the hall's trim
     {
       const parts = [];
+      // the same along x (the bridge's open side)
+      const railX = (z, x0, x1, y) => {
+        for (let x = x0 + 0.25; x < x1; x += 0.5) parts.push(new THREE.BoxGeometry(0.05, 0.92, 0.05).translate(x, y + 0.46, z));
+        parts.push(new THREE.BoxGeometry(x1 - x0, 0.06, 0.09).translate((x0 + x1) / 2, y + 0.94, z));
+      };
+      railX(32.97, 30, 43, GALLERY_H);
       const rail = (x, z0, z1, y0, y1) => {
         // posts every half metre, a handrail that follows the slope
         for (let z = z0 + 0.25; z < z1; z += 0.5) {
@@ -984,7 +1026,7 @@ export class GameMap {
         parts.push(hr);
       };
       for (const xe of [29.97, 43.03]) {
-        rail(xe, 31, 36, GALLERY_H, GALLERY_H);
+        rail(xe, 33, 36, GALLERY_H, GALLERY_H);
         // the rail runs from the top of the flight down to its foot
         rail(xe, 36, 44, GALLERY_H, 0);
       }
