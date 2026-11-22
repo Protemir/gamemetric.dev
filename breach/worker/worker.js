@@ -28,17 +28,23 @@ export class Room extends DurableObject {
     const name = clean(url.searchParams.get('name'), 18) || 'Игрок';
     if (!peer) return new Response('no peer', { status: 400 });
     const socks = this.ctx.getWebSockets();
-    // a reconnect with the same id replaces the old socket
+    // ten players at most (five a side)
+    if (socks.filter((s) => s.deserializeAttachment()?.peer !== peer && !s.deserializeAttachment()?.replaced).length >= 10) return new Response('full', { status: 409 });
+    // a reconnect with the same id replaces the old socket, keeps its place in the queue (who is host)
+    // and must not announce a "leave" when the old socket finally closes
+    let joined = Date.now();
     for (const s of this.ctx.getWebSockets(peer)) {
+      const old = s.deserializeAttachment();
+      if (old?.joined) joined = Math.min(joined, old.joined);
       try {
+        s.serializeAttachment({ ...old, replaced: true });
         s.close(4000, 'replaced');
       } catch {}
     }
-    if (socks.filter((s) => s.deserializeAttachment()?.peer !== peer).length >= 12) return new Response('full', { status: 409 });
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server, [peer]);
-    const me = { peer, name, joined: Date.now() };
+    const me = { peer, name, joined };
     server.serializeAttachment(me);
     const peers = this.list().filter((p) => p.peer !== peer);
     server.send(JSON.stringify({ t: 'hello', you: me, peers }));
@@ -50,7 +56,7 @@ export class Room extends DurableObject {
     return this.ctx
       .getWebSockets()
       .map((s) => s.deserializeAttachment())
-      .filter(Boolean)
+      .filter((a) => a && !a.replaced)
       .sort((a, b) => a.joined - b.joined);
   }
 
@@ -75,6 +81,8 @@ export class Room extends DurableObject {
     }
     const from = ws.deserializeAttachment()?.peer;
     if (!from) return;
+    // players only send offers/candidates and game messages; join/leave/hello come from the room alone
+    if (m.t !== 'sig' && m.t !== 'g') return;
     m.from = from;
     const to = m.to;
     delete m.to;
@@ -84,7 +92,10 @@ export class Room extends DurableObject {
 
   webSocketClose(ws) {
     const me = ws.deserializeAttachment();
-    if (me) this.send({ t: 'leave', peer: me.peer }, me.peer);
+    if (!me || me.replaced) return;
+    // still here on another socket (a reconnect raced the close): not a leave
+    if (this.ctx.getWebSockets(me.peer).some((s) => s !== ws && !s.deserializeAttachment()?.replaced)) return;
+    this.send({ t: 'leave', peer: me.peer }, me.peer);
   }
 
   webSocketError(ws) {

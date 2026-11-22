@@ -566,6 +566,7 @@ export class Game {
       if (h.state === 'dead' || h.state === 'rescued') continue;
       if (this.hitTest(h, s.x, eye, s.z, ux, uy, uz, d)) return false;
     }
+    if (this.fun.boom && this.chickens.hit(s.x, eye, s.z, ux, uy, uz, Math.min(d, 6))) return false;
     return true;
   }
 
@@ -603,6 +604,7 @@ export class Game {
     const free = this.mode === 'dm';
     let price = WEAPONS[item]?.price ?? GEAR[item]?.price ?? 0;
     if (item === 'helmet' && s.armor >= 100 && !s.helmet) price = 350;
+    else if (item === 'helmet' && s.helmet) price = GEAR.armor.price;
     if (!free && s.money < price) return 'money';
     if (item === 'armor') {
       if (s.armor >= 100) return 'have';
@@ -785,8 +787,8 @@ export class Game {
       const aliveB = this.soldiers.some((s) => s.alive && s.team === 'B');
       const left = this.hostages.filter((h) => h.state === 'idle' || h.state === 'follow').length;
       if (this.rescued > 0 && left === 0) this.endRound('A', 'rescued');
-      else if (!aliveB) this.endRound('A', 'elim');
       else if (!aliveA) this.endRound('B', 'elim');
+      else if (!aliveB) this.endRound('A', 'elim');
       else if (this.time >= this.phaseEnd) this.endRound('B', 'timeOut');
     } else if (this.phase === 'end' && this.time >= this.phaseEnd) {
       if (this.matchWinner) this.finishMatch(this.matchWinner);
@@ -808,11 +810,11 @@ export class Game {
     let best = null;
     // big heads are big targets too
     const big = this.fun.heads && o instanceof Soldier;
-    const hx = o.x - ox, hy = eye + (big ? 0.2 : 0.06) - oy, hz = o.z - oz;
+    const hx = o.x - ox, hy = eye + (big ? 0.15 : 0.06) - oy, hz = o.z - oz;
     const tc = hx * dx + hy * dy + hz * dz;
     if (tc > 0) {
       const d2 = hx * hx + hy * hy + hz * hz - tc * tc;
-      const r = big ? 0.32 : 0.17;
+      const r = big ? 0.25 : 0.17;
       if (d2 < r * r) {
         const tt = tc - Math.sqrt(r * r - d2);
         if (tt < maxT) best = { t: tt, part: 'head' };
@@ -1090,6 +1092,8 @@ export class Game {
     o.hp = 0;
     o.alive = false;
     o.deaths++;
+    o.feet = this.map.groundAt(o.x, o.z, o.radius * 0.9, Math.max(0, o.feet));
+    o.vy = 0;
     o.killer = by;
     o.deadAt = this.time;
     o.scoped = 0;
@@ -1119,7 +1123,7 @@ export class Game {
     this.announceKill(o, by, weapon, head);
     this.firstBlood = true;
     if (by && by.isPlayer) sfx('kill');
-    if (this.mode === 'dm') o.respawnAt = this.variant === 'zombie' && o.team === 'A' ? 0 : this.time + (this.variant === 'zombie' ? 2 : 3);
+    if (this.mode === 'dm') o.respawnAt = this.variant === 'zombie' && o.team === 'A' ? 0 : this.time + 3;
     if (this.variant === 'gun' && by && by !== o && by.team !== o.team && this.role !== 'client') this.gunProgress(by, o, weapon);
     if (o.isPlayer) {
       this.hud.center(by && by !== o ? `${t('killedBy')} ${by.name}` : t('youDied'), 2.5);
@@ -1149,7 +1153,7 @@ export class Game {
         // the horde: claws only, tough and quick
         s.armor = 0;
         s.helmet = false;
-        s.hp = 250;
+        s.hp = 180;
         s.switchSlot(3, true);
       } else {
         this.giveWeapon(s, s.id % 2 ? 'mg' : 'm4');
@@ -1348,7 +1352,7 @@ export class Game {
       for (let i = 0; i < 6; i++) this.fx.puff(n.x + (Math.random() - 0.5), n.y + 0.4 + Math.random() * 0.6, n.z + (Math.random() - 0.5), [0.35, 0.32, 0.3], 2.2, 1.6, 0.6, 0.8);
       this.fx.spark(n.x, n.y + 0.1, n.z, 0, 1, 0, [1, 0.7, 0.3], 30, 7);
       this.fx.decal(n.x, 0.01, n.z, 0, 1, 0);
-      if (this.role !== 'client') for (const o of [...this.soldiers, ...this.hostages]) {
+      if (this.role !== 'client' && !(n.chicken && this.role !== 'solo')) for (const o of [...this.soldiers, ...this.hostages]) {
         if (o instanceof Soldier ? !o.alive : o.state === 'dead' || o.state === 'rescued') continue;
         const cy = o.feet + 1.0;
         const d = Math.hypot(o.x - n.x, cy - n.y, o.z - n.z);
@@ -1463,7 +1467,7 @@ export class Game {
         h.feet = 0;
         this.map.collide(h);
         const cx = Math.floor(h.x), cz = Math.floor(h.z);
-        if (cx >= R.x0 && cx <= R.x1 && cz >= R.z0 && cz <= R.z1) {
+        if (this.phase === 'live' && cx >= R.x0 && cx <= R.x1 && cz >= R.z0 && cz <= R.z1) {
           h.state = 'rescued';
           h.body.root.visible = false;
           this.rescued++;
@@ -1493,7 +1497,10 @@ export class Game {
     if (s.crouchK > 0.5) max *= 0.36;
     if (s.scoped) max *= 0.55;
     if (frozen) max = 0;
-    const tgt = s.in.crouch ? 1 : 0;
+    // under a lintel or on top of the library shelves there is no room to stand up
+    const hc = this.map.cellAt(s.x, s.z);
+    const room = hc >= 0 && this.map.indoor[hc] ? (this.map.lint[hc] > 0 ? this.map.lint[hc] : CEIL) - this.map.h[hc] : 99;
+    const tgt = s.in.crouch || room < 1.85 ? 1 : 0;
     const oldK = s.crouchK;
     s.crouchK += Math.max(-dt * 7, Math.min(dt * 7, tgt - s.crouchK));
     s.height = 1.8 - 0.5 * s.crouchK;
@@ -1564,7 +1571,7 @@ export class Game {
     // head against the ceiling or a window lintel
     const cell = this.map.cellAt(s.x, s.z);
     if (cell >= 0 && this.map.indoor[cell]) {
-      const top = this.map.lint[cell] && this.map.h[cell] > 0 ? this.map.lint[cell] : CEIL;
+      const top = this.map.lint[cell] > 0 ? this.map.lint[cell] : CEIL;
       if (s.feet + s.height > top - 0.05) {
         s.feet = Math.max(this.map.h[cell], top - 0.05 - s.height);
         if (s.vy > 0) s.vy = 0;
@@ -1759,7 +1766,14 @@ export class Game {
       b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back, rel, air });
       b.setLight(this.charLight(s.x, s.z));
     }
-    for (const s of this.soldiers) if (!s.alive) s.body.animate({ dt, y: s.feet, speed: 0 });
+    for (const s of this.soldiers) {
+      if (s.alive) continue;
+      // a body slid off something drops to the floor under it
+      const r = s.body.root.position;
+      const gy = this.map.groundAt(r.x, r.z, 0.2, s.feet + 0.05);
+      if (gy < s.feet) s.feet = Math.max(gy, s.feet - dt * 6);
+      s.body.animate({ dt, y: s.feet, speed: 0 });
+    }
     this.updateHostages(dt);
     this.updateDrops();
     this.chickens.update(dt);
@@ -1880,8 +1894,13 @@ export class Game {
     this.nh?.onUndrop(d.id);
     if (old) {
       const a = s.ammo[old] || { mag: WEAPONS[old].mag, res: WEAPONS[old].reserve };
-      const nd = this.makeDrop(old, s.x - Math.sin(s.yaw) * 0.4, s.z - Math.cos(s.yaw) * 0.4, a.mag, a.res, null, s.yaw + 1.3, s.feet);
-      this.nh?.onDrop(nd);
+      let px = s.x - Math.sin(s.yaw) * 0.4, pz = s.z - Math.cos(s.yaw) * 0.4;
+      const pc = this.map.cellAt(px, pz);
+      if (pc < 0 || this.map.h[pc] > s.feet + 0.45) (px = s.x), (pz = s.z);
+      if (a.mag + a.res > 0) {
+        const nd = this.makeDrop(old, px, pz, a.mag, a.res, null, s.yaw + 1.3, s.feet);
+        this.nh?.onDrop(nd);
+      }
     }
     s.slots[slot] = d.kind;
     s.ammo[d.kind] = { mag: d.mag, res: d.res };
@@ -2106,12 +2125,9 @@ export class Game {
       s.peer = peer;
       s.remote = true;
       s.name = name;
+      s.netKind = null;
       s.nb = null;
-      if (s.alive) {
-        s.alive = false;
-        s.body.root.visible = false;
-        s.deadAt = this.time;
-      }
+      if (s.alive) this.kill(s, null, 'knife', false, 0, 0);
       if (this.mode === 'dm') s.respawnAt = this.time + 2;
       return s;
     }
@@ -2156,5 +2172,14 @@ export class Game {
       }
     }
     for (const k of Object.values(this.tex)) k.dispose();
+    for (const o of all) {
+      const u = o.material?.uniforms;
+      if (u) for (const v of Object.values(u)) if (v?.value?.isTexture) v.value.dispose();
+    }
+    for (const v of Object.values(this.vm.cache || {})) v.geo?.dispose?.();
+    this._heGeo?.dispose();
+    this._flGeo?.dispose();
+    for (const m of Object.values(this._nadeMat || {})) m.dispose();
+    this.skyMesh?.material.map?.dispose();
   }
 }

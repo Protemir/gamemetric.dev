@@ -203,6 +203,10 @@ export class Hud {
   matchOver(win, game) {
     const el = $('match-over');
     el.hidden = false;
+    $('pause').hidden = true;
+    $('settings').hidden = true;
+    $('click-to-play').hidden = true;
+    document.exitPointerLock?.();
     $('mo-title').textContent = t(win === null ? 'draw' : win ? 'matchWin' : 'matchLose');
     $('mo-title').className = win === null ? '' : win ? 'good' : 'bad';
     $('mo-again').hidden = game.role !== 'solo';

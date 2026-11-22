@@ -23,7 +23,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- HUD ---------- */
 #hud { position: fixed; inset: 0; pointer-events: none; font-family: var(--mono); }
-#radar { position: absolute; left: 16px; top: 16px; width: 190px; height: 190px; border-radius: 50%; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); }
+#radar { position: absolute; left: calc(16px + env(safe-area-inset-left)); top: 16px; width: 190px; height: 190px; border-radius: 50%; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); }
 #topbar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; }
 #topbar .team { display: flex; align-items: center; gap: 10px; background: var(--hud); padding: 6px 12px; border-radius: 8px; }
 #topbar .team b { font-size: 28px; line-height: 1; min-width: 26px; text-align: center; }
@@ -41,7 +41,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #hostages i.h-follow { background: #fff; box-shadow: 0 0 6px #ffd23f; }
 #hostages i.h-rescued { background: var(--good); }
 #hostages i.h-dead { background: #555; }
-#feed { position: absolute; top: 14px; right: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 14px; }
+#feed { position: absolute; top: 14px; right: calc(16px + env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 14px; }
 .feed-row { background: var(--hud); padding: 4px 10px; border-radius: 6px; white-space: nowrap; animation: pop 0.2s ease-out; }
 .feed-row.mine { outline: 1px solid rgba(255, 80, 70, 0.8); }
 .feed-row i { color: var(--muted); font-style: normal; margin: 0 6px; font-size: 12px; }
@@ -86,13 +86,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #spec { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); background: var(--hud); padding: 8px 18px; border-radius: 6px; font-size: 17px; }
 #reloading { position: absolute; left: 50%; top: calc(50% + 34px); transform: translateX(-50%); width: 46px; height: 3px; background: var(--accent); border-radius: 2px; animation: rl 0.6s linear infinite alternate; }
 @keyframes rl { from { opacity: 0.3; } }
-#vitals { position: absolute; left: 16px; bottom: 16px; display: flex; align-items: flex-end; gap: 10px; }
+#vitals { position: absolute; left: calc(16px + env(safe-area-inset-left)); bottom: 16px; display: flex; align-items: flex-end; gap: 10px; }
 .vbox { display: flex; align-items: center; gap: 8px; background: var(--hud); padding: 6px 14px; border-radius: 8px; }
 .vbox svg { width: 20px; height: 20px; fill: var(--text); opacity: 0.85; }
 .vbox b { font-size: 34px; line-height: 1; min-width: 56px; }
 .vbox.low b, .vbox.low svg { color: var(--bad); fill: var(--bad); }
 #money { background: var(--hud); padding: 8px 14px; border-radius: 8px; font-size: 22px; color: var(--good); }
-#weapon { position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+#weapon { position: absolute; right: calc(16px + env(safe-area-inset-right)); bottom: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 #slots { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 13px; }
 #slots span { color: rgba(255, 255, 255, 0.45); background: rgba(10, 13, 17, 0.35); padding: 1px 8px; border-radius: 4px; }
 #slots span.on { color: var(--accent); }
@@ -144,7 +144,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .buy-hint { color: var(--muted); font-size: 12px; margin-top: 10px; text-align: center; }
 
 /* ---------- overlays ---------- */
-.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5, 7, 10, 0.55); z-index: 10; }
+.overlay { position: fixed; inset: 0; display: flex; align-items: safe center; justify-content: center; background: rgba(5, 7, 10, 0.55); z-index: 10; overflow-y: auto; padding: 10px 0; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 26px 30px; min-width: 300px; display: flex; flex-direction: column; gap: 12px; align-items: stretch; text-align: center; backdrop-filter: blur(6px); }
 .panel.wide { width: min(520px, 94vw); text-align: left; }
 .panel h2 { margin: 0 0 6px; font-size: 26px; text-align: center; }
@@ -257,10 +257,10 @@ body.touch #slots { display: none; }
 #touch .tb-buy { left: calc(106px + env(safe-area-inset-left)); top: 170px; width: 40px; height: 40px; font-size: 17px; color: var(--good); }
 @media (min-height: 521px) { #touch .tb-pause, #touch .tb-score, #touch .tb-buy { top: 214px; } }
 body.touch #view { touch-action: none; }
-body.touch #prompt { bottom: 34%; }
+body.touch #prompt { top: auto; bottom: 34%; }
 /* small landscape screens: a tighter HUD */
 @media (max-height: 520px) {
-  #radar { width: 150px !important; height: 150px !important; left: 10px; top: 10px; }
+  #radar { width: 150px !important; height: 150px !important; left: calc(10px + env(safe-area-inset-left)); top: 10px; }
   #board { padding: 10px; }
   #board table { font-size: 12px; }
   #board td { padding: 3px 6px; }
@@ -311,3 +311,9 @@ body.touch #prompt { bottom: 34%; }
 .seg.modes { flex-wrap: wrap; }
 .seg.modes button { flex: 1 1 30%; min-width: 0; }
 #variant { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); padding: 3px 12px; border-radius: 8px; background: var(--hud); font: 700 15px/1.3 var(--mono); color: var(--accent); white-space: nowrap; }
+
+/* 7 narrow screens: the kill feed goes under the score bar */
+@media (max-width: 860px) { #feed { top: 64px; max-width: 46vw; font-size: 12px; } }
+/* no double-tap zoom on the buy menu and the buttons */
+html { touch-action: manipulation; }
+@media (max-height: 520px) { .panel { padding: 16px 18px; } .lb-team { min-height: 104px; } }

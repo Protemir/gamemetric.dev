@@ -12,7 +12,7 @@ export function setupTouch({ input, look, getGame, actions }) {
     <div class="tz tz-move"></div>
     <div class="tz tz-look"></div>
     <div class="stick" hidden><div class="knob"></div></div>
-    <button class="tb tb-pause" data-a="pause" aria-label="pause">II</button>
+    <button class="tb tb-pause" data-a="pause">II</button>
     <button class="tb tb-score" data-a="score">☰</button>
     <button class="tb tb-buy" data-a="buy">$</button>
     <button class="tb tb-fire" data-a="fire"></button>
@@ -122,6 +122,11 @@ export function setupTouch({ input, look, getGame, actions }) {
     show(on) {
       root.hidden = !on;
       if (!on) {
+        for (const o of owners.values()) {
+          if (o.kind !== 'btn') continue;
+          o.el.classList.remove('on');
+          if (o.a === 'score') actions.board(false);
+        }
         input.fire = false;
         input.stick.x = input.stick.y = 0;
         input.touch.jump = false;
@@ -140,7 +145,8 @@ export function setupTouch({ input, look, getGame, actions }) {
       $('.tb-alt').hidden = !(p.alive && (p.kind === 'knife' || p.kind === 'sniper' || p.kind === 'scout'));
     },
     label() {
-      $('.tb-fire').setAttribute('aria-label', t('fire'));
+      for (const [cls, key] of Object.entries({ fire: 'fire', alt: 'aLabelAlt', jump: 'aLabelJump', crouch: 'aLabelCrouch', reload: 'aLabelReload', use: 'aLabelUse', next: 'aLabelNext', nade: 'aLabelNade', buy: 'buy', score: 'aLabelScore', pause: 'aLabelPause' }))
+        $('.tb-' + cls)?.setAttribute('aria-label', t(key));
     },
   };
 }

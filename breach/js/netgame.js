@@ -83,7 +83,9 @@ export class NetGame {
         this.net.broadcast(this.snapshot(), false);
       }
     } else {
-      for (const s of g.soldiers) if (s.remote) interp(s, 0.11);
+      // over the relay snapshots come in bursts: look a little further back
+      const delay = this.net.linkState(this.net.hostId) === 'p2p' ? 0.11 : 0.2;
+      for (const s of g.soldiers) if (s.remote) interp(s, delay);
       for (const h of g.hostages) {
         if (h.tx === undefined) continue;
         h.x += (h.tx - h.x) * 0.25;
@@ -171,6 +173,7 @@ export class NetGame {
         break;
       }
       case 'buy': {
+        if (!WEAPONS[m.item] && !['armor', 'helmet', 'he', 'flash'].includes(m.item)) return;
         const r = g.buy(s, m.item);
         this.net.send(from, { k: 'L', r, item: m.item, L: loadoutOf(s) });
         break;
@@ -189,6 +192,12 @@ export class NetGame {
   }
   onDrop(d) {
     if (this.host) this.net.broadcast({ k: 'D', id: d.id, w: KINDS.indexOf(d.kind), x: r2(d.x), z: r2(d.z), f: r2(d.y), y: r3(d.mesh.rotation.y), o: d.owner ?? -1 });
+  }
+
+  // a friend joining mid-match gets the guns already lying about
+  sendDropsTo(peer) {
+    if (!this.host) return;
+    for (const d of this.g.drops) this.net.send(peer, { k: 'D', id: d.id, w: KINDS.indexOf(d.kind), x: r2(d.x), z: r2(d.z), f: r2(d.y), y: r3(d.mesh.rotation.y), o: -1 });
   }
 
   onUndrop(id) {

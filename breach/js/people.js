@@ -474,7 +474,7 @@ export class SkinnedBody {
         }
         const drop = 0.44 * (1 - Math.cos(0.9 * knee)) + 0.44 * (1 - Math.cos(0.9 * knee - 1.5 * knee));
         this.model.position.y = this.baseY - drop * 0.8;
-      } else this.model.position.y = this.baseY - Math.min(1, k * 2) * 0.25;
+      } else this.model.position.y = Math.min(this.deadY ?? this.baseY, this.baseY - Math.min(1, k * 2) * 0.25);
       // the knocked-off helmet flies, bounces once and lies there
       if (this.hat && this.hat.v) {
         const h = this.hat, m = h.mesh;
@@ -635,6 +635,7 @@ export class SkinnedBody {
   // push: how hard the killing hit throws the body (m/s), along the shot dx, dz
   die(fromBehind, push = 0.7, dx = 0, dz = 0, head = false) {
     this.dead = 0.001;
+    this.deadY = this.model.position.y;
     this.fallDir = fromBehind ? -1 : 1;
     const l = Math.hypot(dx, dz) || 1;
     this.fly = { vx: (dx / l) * push, vz: (dz / l) * push };

@@ -34,9 +34,9 @@
  "isAccessibleForFree": true
 }
 </script>
-<link rel="stylesheet" href="style.css?v=a8e1f484">
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=007c5015","./js/audio.js":"./js/audio.js?v=4104c3ea","./js/bots.js":"./js/bots.js?v=3e545c25","./js/chickens.js":"./js/chickens.js?v=bd5a3f99","./js/decor.js":"./js/decor.js?v=1a1a6d82","./js/fx.js":"./js/fx.js?v=bda236a5","./js/game.js":"./js/game.js?v=bcffb22e","./js/guns.js":"./js/guns.js?v=abccc5d7","./js/hud.js":"./js/hud.js?v=b7855427","./js/i18n.js":"./js/i18n.js?v=e4ad39e7","./js/main.js":"./js/main.js?v=960dae96","./js/map.js":"./js/map.js?v=24e929d0","./js/net.js":"./js/net.js?v=1a02b247","./js/netgame.js":"./js/netgame.js?v=85bd5b6b","./js/people.js":"./js/people.js?v=8926c533","./js/props.js":"./js/props.js?v=27e10034","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=7b03bcc4","./js/weapons.js":"./js/weapons.js?v=cfb05660"}}</script>
-<script type="module" src="./js/main.js?v=960dae96"></script>
+<link rel="stylesheet" href="style.css?v=5ac2c6e6">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=007c5015","./js/audio.js":"./js/audio.js?v=4104c3ea","./js/bots.js":"./js/bots.js?v=5fb7ee7a","./js/chickens.js":"./js/chickens.js?v=bd5a3f99","./js/decor.js":"./js/decor.js?v=1a1a6d82","./js/fx.js":"./js/fx.js?v=bda236a5","./js/game.js":"./js/game.js?v=47d16b46","./js/guns.js":"./js/guns.js?v=abccc5d7","./js/hud.js":"./js/hud.js?v=e3a3215c","./js/i18n.js":"./js/i18n.js?v=47f035f0","./js/main.js":"./js/main.js?v=b0c7329f","./js/map.js":"./js/map.js?v=f53a0acb","./js/net.js":"./js/net.js?v=43be3192","./js/netgame.js":"./js/netgame.js?v=73a5b8a3","./js/people.js":"./js/people.js?v=e26b1ede","./js/props.js":"./js/props.js?v=27e10034","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=646e4b58","./js/weapons.js":"./js/weapons.js?v=cfb05660"}}</script>
+<script type="module" src="./js/main.js?v=b0c7329f"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -75,7 +75,7 @@
   <div id="fps" hidden></div>
   <div id="board" hidden><div id="board-head"></div><div class="bd-teams"><table id="board-a" class="bd-a"></table><table id="board-b" class="bd-b"></table></div></div>
   <div id="buy" hidden>
-    <div class="buy-head"><b data-t="buy"></b><span id="buy-money"></span><span id="buy-time"></span><button id="buy-close" type="button" aria-label="close">✕</button></div>
+    <div class="buy-head"><b data-t="buy"></b><span id="buy-money"></span><span id="buy-time"></span><button id="buy-close" type="button" data-t-aria="close">✕</button></div>
     <div id="buy-grid"></div>
     <div class="buy-hint" data-t="buyHint"></div>
   </div>
@@ -139,7 +139,7 @@
     <label class="field"><span data-t="fov"></span><input type="range" id="s-fov" min="60" max="90" step="1"><output id="o-fov"></output></label>
     <label class="field"><span data-t="volume"></span><input type="range" id="s-vol" min="0" max="1" step="0.05"><output id="o-vol"></output></label>
     <label class="field"><span data-t="brightness"></span><input type="range" id="s-bright" min="0.8" max="1.8" step="0.05"><output id="o-bright"></output></label>
-    <div class="field"><span data-t="quality"></span><div class="seg small" id="seg-q"><button data-v="auto">Auto</button><button data-v="1">100%</button><button data-v="0.75">75%</button><button data-v="0.5">50%</button></div></div>
+    <div class="field"><span data-t="quality"></span><div class="seg small" id="seg-q"><button data-v="auto" data-t="auto"></button><button data-v="1">100%</button><button data-v="0.75">75%</button><button data-v="0.5">50%</button></div></div>
     <label class="field check"><input type="checkbox" id="s-fps"><span data-t="showFps"></span></label>
     <button id="s-back" class="btn primary" data-t="back"></button>
   </div>
@@ -157,7 +157,7 @@
   <div class="panel wide lobby">
     <h2><span data-t="lobby"></span> <b id="lb-code"></b></h2>
     <p class="muted small" data-t="shareHint"></p>
-    <div class="lb-link"><input id="lb-link" readonly><button id="lb-copy" class="btn" data-t="copyLink"></button></div>
+    <div class="lb-link"><input id="lb-link" readonly data-t-aria="roomLink"><button id="lb-copy" class="btn" data-t="copyLink"></button></div>
     <label class="lb-name"><span data-t="yourName"></span><input id="lb-name" maxlength="16" autocomplete="nickname"></label>
     <div class="lb-teams">
       <button class="lb-team ta" data-team="A"><b data-t="sideA"></b><ul id="lb-a"></ul></button>

@@ -53,6 +53,8 @@ window.addEventListener('resize', applySize);
 function applyTexts() {
   document.documentElement.lang = lang;
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
+  for (const el of document.querySelectorAll('[data-t-aria]')) el.setAttribute('aria-label', t(el.dataset.tAria));
+  if (touchOnly) document.querySelectorAll('.buy-hint').forEach((el) => (el.textContent = t('buyHintTouch')));
   for (const b of document.querySelectorAll('.langs button')) b.classList.toggle('on', b.dataset.lang === lang);
   document.title = lang === 'ru' ? 'Штурм особняка — тактический шутер 5 на 5 в браузере | GameMetric' : 'Mansion Breach — 5v5 tactical shooter in your browser | GameMetric';
   $('ctrl-list').innerHTML = t(touchOnly ? 'ctrlTouch' : 'ctrl').map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
@@ -60,7 +62,7 @@ function applyTexts() {
 for (const b of document.querySelectorAll('.langs button'))
   b.addEventListener('click', () => {
     setLang(b.dataset.lang);
-    location.search = `?lang=${b.dataset.lang}`;
+    location.search = `?lang=${b.dataset.lang}${q.has('touch') ? '&touch' : ''}${q.has('mouse') ? '&mouse' : ''}`;
   });
 
 // ---------- menu ----------
@@ -164,7 +166,10 @@ $('p-resume').onclick = () => resume();
 $('p-quit').onclick = () => toMenu();
 $('mo-menu').onclick = () => (net ? backToLobby(true) : toMenu());
 $('mo-again').onclick = () => startGame();
-$('play').onclick = () => startGame();
+$('play').onclick = () => {
+  if (touchOnly) goFullscreen();
+  startGame();
+};
 $('online').onclick = () => openLobby(newCode());
 $('click-to-play').onclick = () => resume();
 
@@ -270,6 +275,11 @@ function lockPointer() {
 // the game only goes on once the browser has really given us the mouse
 let wantResume = false;
 function resume() {
+  // after the final whistle there is nothing to go back to
+  if (game?.over) {
+    $('pause').hidden = true;
+    return;
+  }
   if (touchOnly) {
     lockPointer();
     goFullscreen();
@@ -342,6 +352,7 @@ function enableTouch() {
   });
   touchCtl.show(false);
   touchCtl.visible = false;
+  touchCtl.label();
   applyTexts();
   // a game already running carries on with the new controls
   if (game && state !== 'menu') {
@@ -358,6 +369,12 @@ else if (!q.has('mouse'))
     },
     { once: true, capture: true },
   );
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden || !touchCtl) return;
+  touchCtl.show(false);
+  touchCtl.visible = false;
+  if (game && game.role === 'solo') touchPause();
+});
 
 function openBuy() {
   if (!game || !game.player.alive) return;
@@ -382,7 +399,10 @@ function closeBuy(relock = true) {
   $('buy').hidden = true;
   if (relock && state === 'play') lockPointer();
 }
-hud.onBuyClosed = () => closeBuy();
+hud.onBuyClosed = () => {
+  closeBuy(false);
+  if (!touchOnly && state === 'play' && document.pointerLockElement !== canvas) $('click-to-play').hidden = false;
+};
 function doBuy(item) {
   if (!game) return;
   // a gun is the whole purchase: the menu goes away once it is in hand (armour and grenades keep it open)
@@ -422,6 +442,10 @@ $('buy').addEventListener('mousedown', (e) => e.stopPropagation());
 $('buy-close').addEventListener('click', () => closeBuy(!touchOnly));
 
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape') {
+    if (!$('controls').hidden) $('controls').hidden = true;
+    else if (!$('settings').hidden) $('s-back').click();
+  }
   if (state !== 'play' || !game) return;
   if (e.code === 'Tab') {
     e.preventDefault();
@@ -438,7 +462,8 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     if (e.code === 'KeyB' || e.code === 'Escape') {
-      closeBuy();
+      closeBuy(e.code === 'KeyB');
+      if (e.code === 'Escape' && !touchOnly) $('click-to-play').hidden = false;
       e.preventDefault();
       return;
     }
@@ -482,13 +507,32 @@ window.addEventListener('mousemove', (e) => {
   look.dy += e.movementY;
 });
 canvas.addEventListener('wheel', (e) => {
-  if (state !== 'play' || !game || !game.player.alive) return;
+  if (state !== 'play' || !game || !game.player.alive || buyOpen) return;
   const p = game.player;
   const order = [1, 2, 3, 4, 5].filter((n) => p.hasSlot(n));
   const i = order.indexOf(p.cur);
   const n = order[(i + (e.deltaY > 0 ? 1 : -1) + order.length) % order.length];
   game.playerAction('slot' + n);
 });
+
+// ---------- the host in a background tab ----------
+// requestAnimationFrame stops in a hidden tab, and plain timers are slowed to a crawl; a worker's timer is not.
+let bgLast = performance.now();
+try {
+  const ticker = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 50)'], { type: 'text/javascript' })));
+  ticker.onmessage = () => {
+    const now = performance.now();
+    if (!document.hidden || !game || game.role === 'solo' || state === 'menu') {
+      bgLast = now;
+      return;
+    }
+    const dt = Math.min(0.1, (now - bgLast) / 1000);
+    bgLast = now;
+    game.update(dt, { keys: new Set(), fire: false, menuOpen: true });
+  };
+} catch {
+  /* no workers: the match pauses with the tab, as before */
+}
 
 // ---------- loop ----------
 let last = performance.now();
@@ -621,7 +665,7 @@ function openLobby(code) {
   $('lb-status').textContent = t('connecting');
   net = new Net(code, name, {
     onStatus: (s) => {
-      if (s === 'lost') $('lb-status').textContent = t('lostConn');
+      if (s === 'lost') lobbyNote(t('lostConn'));
       renderLobby();
     },
     onPeers: () => {
@@ -663,13 +707,19 @@ function announcePeers() {
   if (knownPeers) {
     const say = (text) => {
       if (game) hud.notice?.(text);
-      $('lb-status').textContent = text;
+      lobbyNote(text);
       sfx('use');
     };
     for (const [id, name] of now) if (id !== net.id && !knownPeers.has(id)) say(`🟢 ${name} ${t('joined')}`);
     for (const [id, name] of knownPeers) if (id !== net.id && !now.has(id)) say(`⚪ ${name} ${t('left')}`);
   }
   knownPeers = now;
+}
+
+let lobbyNoteUntil = 0;
+function lobbyNote(text) {
+  $('lb-status').textContent = text;
+  lobbyNoteUntil = performance.now() + 4000;
 }
 
 function alertBox(text) {
@@ -707,6 +757,7 @@ function hostSync() {
       if (!s) continue;
       lobby.teams[p.peer] = s.team;
       net.send(p.peer, { k: 'start', roster: game.roster(), mode: game.opts.mode, diff: game.opts.diff, fun: game.fun });
+      game.nh?.sendDropsTo(p.peer);
       net.broadcast({ k: 'roster', roster: game.roster() }, true, p.peer);
     }
   }
@@ -732,6 +783,7 @@ function renderLobby() {
   for (const [id, key] of [['lb-mode', 'mode'], ['lb-diff', 'diff']]) for (const b of $(id).querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === lobby[key]);
   $('lb-opts').classList.toggle('locked', !net.isHost);
   $('lb-start').hidden = !net.isHost;
+  if (performance.now() < (lobbyNoteUntil || 0)) return;
   $('lb-status').textContent = net.isHost ? '' : lobby.started ? t('inMatch') : t('waitHost');
 }
 
@@ -758,7 +810,7 @@ for (const el of document.querySelectorAll('.lb-team'))
     const team = el.dataset.team;
     const count = Object.entries(lobby.teams).filter(([p, x]) => x === team && p !== net.id).length;
     if (count >= 5) {
-      $('lb-status').textContent = t('teamFull');
+      lobbyNote(t('teamFull'));
       return;
     }
     sfx('click');
@@ -785,7 +837,7 @@ $('lb-copy').onclick = async () => {
     $('lb-link').select();
     document.execCommand('copy');
   }
-  $('lb-status').textContent = t('copied');
+  lobbyNote(t('copied'));
 };
 $('lb-leave').onclick = () => toMenu();
 $('lb-start').onclick = () => {
@@ -810,6 +862,7 @@ function onNetMessage(from, m) {
   if (!net) return;
   if (net.isHost) {
     if (m.k === 'team') {
+      if (m.team !== 'A' && m.team !== 'B') return;
       const count = Object.entries(lobby.teams).filter(([p, x]) => x === m.team && p !== from).length;
       if (count < 5 && !(game && game.role === 'host' && !game.over)) lobby.teams[from] = m.team;
       hostSync();

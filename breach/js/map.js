@@ -343,9 +343,11 @@ export class GameMap {
     if (c < 0) return true;
     if (this.noWalk[c]) return true;
     if (this.h[c] > feet + step) return true;
-    // window lintels stop you standing up in the frame; door lintels are out of reach anyway
+    // the garden wall round the grounds cannot be climbed (low gravity could reach it from the shed)
+    if (this.kind[c] === K.STONE) return true;
+    // the wall above a window or a door blocks; a body mostly below the lintel slips in and the head is pushed down
     const l = this.lint[c];
-    return l > 0 && this.h[c] > 0 && l < top;
+    return l > 0 && l < top && feet + 0.5 > l;
   }
 
   // circle vs grid; returns true if something was hit

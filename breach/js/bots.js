@@ -301,8 +301,8 @@ export class Brain {
       inp.s = this.strafe;
       if (d > 14 && s.kind === 'shotgun') inp.f = 1;
     }
-    if (this.k.react < 0.3 && d < 12 && Math.random() < 0.004) inp.crouch = true;
-    if (s.crouchK > 0.2 && d < 20 && this.k.react < 0.3) inp.crouch = Math.random() < 0.98;
+    if (this.k.react < 0.3 && d < 12 && Math.random() < dt * 0.25) this.crouchUntil = g.time + 0.8 + Math.random() * 1.6;
+    if (d < 20 && g.time < (this.crouchUntil || 0)) inp.crouch = true;
 
     // shooting
     if (g.time < this.reactAt || g.time < this.pauseUntil) return;
@@ -464,7 +464,8 @@ export class Brain {
         }
         const ly = yawTo(sp.lx - s.x, sp.lz - s.z) + (this.glance || 0) * 0.5;
         this.applyLook(dt, ly, 0);
-        if (this.k.react < 0.3 && Math.random() < 0.002) s.in.crouch = true;
+        if (this.k.react < 0.3 && Math.random() < dt * 0.12) this.crouchUntil = g.time + 1.5 + Math.random() * 3;
+        if (g.time < (this.crouchUntil || 0)) s.in.crouch = true;
       }
       return;
     }
@@ -500,10 +501,10 @@ export class Brain {
     s.in.s = -Math.sin(rel);
     // keep apart from teammates
     for (const o of g.soldiers) {
-      if (o === s || !o.alive) continue;
+      if (o === s || !o.alive || o.team !== s.team) continue;
       const ox = s.x - o.x, oz = s.z - o.z, od = Math.hypot(ox, oz);
       if (od < 0.9 && od > 0.01) {
-        const ry = angDiff(s.yaw, yawTo(-ox, -oz));
+        const ry = angDiff(s.yaw, yawTo(ox, oz));
         s.in.f += Math.cos(ry) * 0.6;
         s.in.s -= Math.sin(ry) * 0.6;
       }

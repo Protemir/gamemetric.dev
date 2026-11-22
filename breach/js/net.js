@@ -35,6 +35,7 @@ export class Net {
     this.links = new Map(); // peer -> { pc, r, u, open, relay }
     this.hostId = null;
     this.closed = false;
+    this.queue = [];
     this.connect();
   }
 
@@ -47,10 +48,18 @@ export class Net {
     const ws = new WebSocket(url);
     this.ws = ws;
     ws.onmessage = (e) => this.onWs(JSON.parse(e.data));
-    ws.onclose = () => {
+    ws.onopen = () => {
+      // what we said while the socket was down goes out now
+      for (const q of this.queue.splice(0)) ws.send(q);
+    };
+    ws.onclose = (e) => {
       if (this.closed) return;
+      // replaced by this same player in another tab: stop fighting over the seat
+      if (e.code === 4000) return;
       this.h.onStatus?.('lost');
-      // try once more after a short pause (a phone switching networks, a sleepy tab)
+      // try again after a short pause (a phone switching networks, a sleepy tab); a full room gives up
+      this.fails = (this.fails || 0) + 1;
+      if (this.fails > 6) return;
       setTimeout(() => !this.closed && this.connect(), 1500);
     };
     ws.onerror = () => {};
@@ -70,11 +79,15 @@ export class Net {
   }
 
   wsSend(m) {
-    if (this.ws?.readyState === 1) this.ws.send(JSON.stringify(m));
+    const text = JSON.stringify(m);
+    if (this.ws?.readyState === 1) this.ws.send(text);
+    // keep reliable game messages for the reconnect (moves and snapshots go stale anyway)
+    else if (m.t === 'g' && m.r && this.queue.length < 300) this.queue.push(text);
   }
 
   onWs(m) {
     if (m.t === 'hello') {
+      this.fails = 0;
       this.peers = [m.you, ...m.peers].sort((a, b) => a.joined - b.joined);
       this.updateHost();
       this.h.onStatus?.('ok');
@@ -104,7 +117,8 @@ export class Net {
       if (hostLeft) this.h.onHostLeft?.();
       this.h.onPeers?.(this.peers);
     } else if (m.t === 'sig') this.onSignal(m.from, m);
-    else if (m.t === 'g') this.h.onMessage?.(m.from, m.d);
+    // a player only takes game messages from the host (the host from everyone)
+    else if (m.t === 'g' && (this.isHost || m.from === this.hostId)) this.h.onMessage?.(m.from, m.d);
   }
 
   updateHost() {
@@ -120,7 +134,11 @@ export class Net {
       if (e.candidate) this.wsSend({ t: 'sig', to: peer, ice: e.candidate });
     };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') l.relay = true;
+      // a dead direct link goes back to the relay at once instead of swallowing messages
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        l.open = false;
+        l.relay = true;
+      } else if (pc.connectionState === 'connected' && l.r?.readyState === 'open' && l.u?.readyState === 'open') l.open = true;
     };
     // no direct link in 7 s: fall back to the relay
     l.timer = setTimeout(() => {
@@ -198,12 +216,12 @@ export class Net {
         return;
       }
     }
-    // relay: unreliable traffic is thinned to save the room's budget
-    if (!reliable) {
+    // relay: moves are thinned to save the room's budget, snapshots go out whole
+    if (!reliable && d.k !== 's') {
       l && (l.skip = (l.skip || 0) + 1);
       if (l && l.skip % 2) return;
     }
-    this.wsSend({ t: 'g', to: peer, d });
+    this.wsSend({ t: 'g', to: peer, d, r: reliable ? 1 : 0 });
   }
 
   // host -> everyone else
