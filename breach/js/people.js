@@ -6,6 +6,7 @@ import * as THREE from '../vendor/three.module.min.js';
 import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
 import { clone as cloneSkinned, retargetClip } from '../vendor/utils/SkeletonUtils.js';
 import { Body, thirdPersonGun } from './actors.js';
+import { chickenGeo } from './chickens.js';
 
 const A = { ready: false };
 
@@ -37,6 +38,27 @@ export async function loadPeople() {
 export const peopleReady = () => A.ready;
 // the level tells the bodies where they cannot slide: (x, z, feet) -> true when blocked
 let blocker = null;
+// the "chicken hats" madness: a hen sitting on the head, hidden until the option is on
+function addChickenHat(scene, front, guard) {
+  let head = null;
+  scene.traverse((o) => {
+    if (o.isBone && /Head$/.test(o.name) && !head) head = o;
+  });
+  if (!head) return;
+  const m = new THREE.Mesh(chickenGeo(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
+  m.name = 'gear-chicken';
+  m.scale.setScalar(1.15);
+  m.position.set(0, guard ? 1.8 : 1.81, front < 0 ? 0.02 : -0.02);
+  // the hen looks where the man looks
+  m.rotation.y = front < 0 ? 0 : Math.PI;
+  m.frustumCulled = false;
+  m.visible = false;
+  m.material.userData.env = 0.3;
+  scene.add(m);
+  m.updateMatrixWorld(true);
+  head.attach(m);
+}
+
 export function setBlocker(fn) {
   blocker = fn;
 }
@@ -50,6 +72,7 @@ export function makeBody(look, variant = 0) {
 // the guards' version is a black vest worn over the suit (only some of them put it on).
 function addGear(scene, front, guard) {
   scene.updateMatrixWorld(true);
+  addChickenHat(scene, front, guard);
   const bones = {};
   scene.traverse((o) => {
     if (o.isBone) bones[o.name.replace(/^mixamorig:?/, '')] = o;
@@ -645,7 +668,7 @@ export class SkinnedBody {
     if (head && this.root.parent) {
       let hat = null;
       this.model.traverse((o) => {
-        if (!hat && o.visible && /gear-(helmet|cap|glasses)/.test(o.name)) hat = o;
+        if (o.visible && (o.name === 'gear-chicken' || (!hat && /gear-(helmet|cap|glasses)/.test(o.name)))) hat = o;
       });
       if (hat) {
         this.hat = { mesh: hat, bone: hat.parent, pos: hat.position.clone(), quat: hat.quaternion.clone(), scale: hat.scale.clone() };
@@ -665,6 +688,12 @@ export class SkinnedBody {
   zombify() {
     this.tint = new THREE.Color(0.55, 0.85, 0.5);
     this.zombie = true;
+  }
+
+  chickenHat() {
+    this.model.traverse((o) => {
+      if (o.name === 'gear-chicken') o.visible = true;
+    });
   }
 
   // the "big heads" option

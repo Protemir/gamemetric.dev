@@ -7,7 +7,7 @@ import { mergeGeos } from './map.js';
 import { sfx } from './audio.js';
 
 let GEO = null;
-function chickenGeo() {
+export function chickenGeo() {
   if (GEO) return GEO;
   const part = (g, color) => {
     g = g.toNonIndexed();

@@ -304,7 +304,7 @@ body.touch #prompt { top: auto; bottom: 34%; }
 #announce.l4 { color: #ff6a3d; font-size: 58px; }
 #announce.l5 { color: #ff3b3b; font-size: 66px; }
 @keyframes ann { 0% { opacity: 0; transform: translate(-50%, -50%) scale(2.2) rotate(-4deg); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(0.92) rotate(1deg); } 20% { transform: translate(-50%, -50%) scale(1.05); } 75% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -62%) scale(1); } }
-@media (max-height: 520px) { #announce { font-size: 30px; top: 26%; } #announce.l3, #announce.l4, #announce.l5 { font-size: 38px; } }
+@media (max-height: 520px) { #announce { font-size: 30px; top: 38%; } #announce.l3, #announce.l4, #announce.l5 { font-size: 38px; } }
 
 #lowhp { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.4s; }
 #lowhp.low { opacity: 1; animation: lowhp 1s ease-in-out infinite; }

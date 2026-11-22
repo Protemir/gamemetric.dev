@@ -119,11 +119,11 @@ export class Smokes {
         const deep = Math.min(1, (1 - d / r) * 2.2) * fade;
         inside = Math.max(inside, deep);
         // from deep inside the grey veil covers the screen: the puffs need not be drawn (they cost a lot)
-        c.group.visible = deep < 0.6;
+        c.group.visible = deep < 0.9;
       }
     }
     if (this.veil) {
-      const o = Math.max(0, inside) * 0.9;
+      const o = Math.min(0.95, Math.max(0, inside) * 1.05);
       if (Math.abs((this.veilO || 0) - o) > 0.01) {
         this.veilO = o;
         this.veil.style.opacity = o.toFixed(2);

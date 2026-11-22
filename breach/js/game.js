@@ -12,7 +12,7 @@ import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
 import { WEAPONS, GEAR, recoilKick, viewModel } from './weapons.js';
-import { sfx, setListener, setUnderwater, setQuack } from './audio.js';
+import { sfx, setListener, setUnderwater, setQuack, getVolume } from './audio.js';
 import { Brain } from './bots.js';
 import { FX } from './fx.js';
 import { t, lang, BOT_NAMES } from './i18n.js';
@@ -42,6 +42,7 @@ class Soldier {
     this.body = makeBody(team, id);
     if (game.variant === 'zombie' && team === 'B') this.body.zombify?.();
     if (game.fun?.heads) this.body.bigHead?.();
+    if (game.fun?.hats) this.body.chickenHat?.();
     game.scene.add(this.body.root);
     this.radius = 0.3;
     this.height = 1.8;
@@ -123,7 +124,10 @@ class Soldier {
     this.feet = 0;
     this.swimming = false;
     this.underT = 0;
+    this.drownAcc = 0;
     this.onBoard = false;
+    this.deadBySnap = false;
+    this.airCap = 0;
     this.vx = this.vz = this.vy = 0;
     this.yaw = yaw;
     this.pitch = 0;
@@ -236,6 +240,31 @@ class ViewModel {
     this.kind = kind;
     this.team = team;
   }
+}
+
+const LINES = {
+  ru: {
+    die: ['Ой!', 'Мама!', 'Это лаг!', 'Нечестно!', 'Я просто стоял!', 'Ну ёлки!', 'Ай-ай-ай!', 'За что?!', 'Я в домике!', 'Позовите админа!', 'У меня мышка сломалась!', 'Я ещё вернусь!', 'Это читер!', 'Мне солнце в глаза!', 'Я не готов был!'],
+    win: ['Изи!', 'Лови!', 'Бум!', 'Учись, салага!', 'Это было красиво!', 'Ха-ха!', 'Следующий!', 'Ещё хочешь?', 'Я легенда!', 'Минус один!'],
+  },
+  en: {
+    die: ['Ouch!', 'Mommy!', 'That was lag!', 'Not fair!', 'I was just standing here!', 'Oh come on!', 'Why me?!', 'Call the admin!', 'My mouse broke!', 'I will be back!', 'Hacker!', 'The sun was in my eyes!'],
+    win: ['Easy!', 'Boom!', 'Get good!', 'That was beautiful!', 'Ha ha!', 'Next!', 'Want some more?', 'I am a legend!'],
+  },
+};
+
+let dotTex = null;
+function dotTexture() {
+  if (dotTex) return dotTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.beginPath();
+  g.arc(16, 16, 13, 0, Math.PI * 2);
+  g.fill();
+  dotTex = new THREE.CanvasTexture(c);
+  return dotTex;
 }
 
 export class Game {
@@ -372,7 +401,7 @@ export class Game {
     this.vm.mesh.visible = true;
     for (const h of this.hostages) h.reset();
     this.spec = null;
-    this.hud.center(this.mode === 'dm' ? t('teamKills') : t('round') + ' ' + this.round, 2);
+    this.hud.center(this.mode === 'dm' ? t(this.variant ? 'intro_' + this.variant : 'teamKills') : t('round') + ' ' + this.round, 2);
     this.hud.onRound?.();
     sfx('start');
   }
@@ -602,7 +631,7 @@ export class Game {
 
   canBuy(s) {
     if (this.variant || this.over) return false;
-    if (this.mode === 'dm') return this.map.zone[this.map.cellAt(s.x, s.z)] === (s.team === 'A' ? 1 : 2) || this.time - s.spawnedAt < 10;
+    if (this.mode === 'dm') return this.time - s.spawnedAt < 12;
     if (!(this.phase === 'freeze' || (this.phase === 'live' && this.buyTimeLeft() > 0))) return false;
     const z = this.map.zone[this.map.cellAt(s.x, s.z)];
     return z === (s.team === 'A' ? 1 : 2);
@@ -721,6 +750,7 @@ export class Game {
   endRound(winner, why) {
     if (this.phase === 'end') return;
     this.phase = 'end';
+    if (why === 'elim') this.slowMo();
     this.phaseEnd = this.time + 5;
     this.score[winner]++;
     const loser = winner === 'A' ? 'B' : 'A';
@@ -823,6 +853,7 @@ export class Game {
   finishMatch(winner) {
     if (this.over) return;
     this.over = true;
+    if (this.time - (this.lastAnyKill ?? -9) < 0.3 && this.phase !== 'end') this.slowMo();
     for (const n of this.nades) this.dropNade(n);
     this.nades.length = 0;
     this.nh?.onOver(winner);
@@ -840,7 +871,7 @@ export class Game {
     const tc = hx * dx + hy * dy + hz * dz;
     if (tc > 0) {
       const d2 = hx * hx + hy * hy + hz * hz - tc * tc;
-      const r = big ? 0.25 : 0.17;
+      const r = big ? 0.25 : 0.145;
       if (d2 < r * r) {
         const tt = tc - Math.sqrt(r * r - d2);
         if (tt < maxT) best = { t: tt, part: 'head' };
@@ -905,7 +936,7 @@ export class Game {
     const eye = s.feet + s.eyeH();
     // spread
     const hs = Math.hypot(s.vx, s.vz);
-    let sp = w.scope ? (s.scoped ? w.scopedSpread : w.spread) : w.spread;
+    let sp = w.scope ? (s.scoped ? w.spread + (w.scopedSpread - w.spread) * Math.min(1, (this.time - (s.scopedAt || 0)) / 0.22) : w.spread) : w.spread;
     sp += w.moveSpread * Math.max(0, Math.min(1, (hs - 1.4) / Math.max(1, w.speed - 1.4)));
     if (!s.onGround) sp += w.steady ? 0.004 : 0.1;
     if (s.crouchK > 0.5) sp *= 0.72;
@@ -1005,7 +1036,7 @@ export class Game {
     }
     if (hit) {
       const isHostage = who instanceof Hostage;
-      if (!isHostage && who.team === s.team) {
+      if ((!isHostage && who.team === s.team) || (isHostage && s.team === 'B')) {
         // friendly fire is off: the bullet just stops
         return;
       }
@@ -1145,6 +1176,7 @@ export class Game {
     o.vy = 0;
     o.killer = by;
     o.deadAt = this.time;
+    this.lastAnyKill = this.time;
     o.deathFeet = o.feet;
     o.scoped = 0;
     // fall away from the shot
@@ -1168,6 +1200,10 @@ export class Game {
       }
     }
     this.hud.feed(by, o, weapon, head);
+    if (this.fun.talk && o instanceof Soldier) {
+      this.say(o, 'die');
+      if (by && by !== o && Math.random() < 0.45) setTimeout(() => !this.disposed && by.alive && this.say(by, 'win'), 900);
+    }
     if (this.fun.confetti) {
       this.confetti(o.x, o.feet + 1.2, o.z, 40);
       sfx('party', [o.x, o.feet + 1.2, o.z]);
@@ -1185,6 +1221,10 @@ export class Game {
     if (by && by.isPlayer) sfx('kill');
     if (this.mode === 'dm') o.respawnAt = this.variant === 'zombie' && o.team === 'A' ? 0 : this.time + 3;
     if (this.variant === 'gun' && by && by !== o && by.team !== o.team && this.role !== 'client') this.gunProgress(by, o, weapon);
+    if (this.variant === 'zombie' && by && by.team === 'A' && o.team === 'B') {
+      const k = by.slots[1] || by.slots[2];
+      if (k && by.ammo[k]) by.ammo[k].res = Math.min(WEAPONS[k].reserve * 2, by.ammo[k].res + WEAPONS[k].mag);
+    }
     if (o.isPlayer) {
       this.streak = 0;
       this.hud.center(by && by !== o ? `${t('killedBy')} ${by.name}${by.alive ? ` · ${Math.max(1, Math.ceil(by.hp))} HP` : ''}` : t('youDied'), 2.5);
@@ -1344,7 +1384,7 @@ export class Game {
     this.lastKillAt = this.time;
     const enemiesLeft = this.soldiers.filter((s) => s.team !== by.team && s.alive).length;
     let key = null, level = 1;
-    if (enemiesLeft === 0 && this.mode !== 'dm' && this.streak >= 3) (key = 'annAce'), (level = 5);
+    if (enemiesLeft === 0 && this.mode !== 'dm' && (by.roundKills || 0) >= this.soldiers.filter((s) => s.team !== by.team).length) (key = 'annAce'), (level = 5);
     else if (this.streak >= 4) (key = 'annGrinder'), (level = 4);
     else if (this.streak === 3) (key = 'annTriple'), (level = 3);
     else if (this.streak === 2) (key = 'annDouble'), (level = 2);
@@ -1443,7 +1483,7 @@ export class Game {
         n.x += n.vx * h;
         n.y += n.vy * h;
         n.z += n.vz * h;
-        if (n.y < 0.07) {
+        if (n.y < 0.07 && !this.map.inWater(n.x, n.z)) {
           n.y = 0.07;
           n.vy = Math.abs(n.vy) * 0.35;
           n.vx *= 0.7;
@@ -1479,7 +1519,7 @@ export class Game {
       for (let i = 0; i < 6; i++) this.fx.puff(n.x + (Math.random() - 0.5), n.y + 0.4 + Math.random() * 0.6, n.z + (Math.random() - 0.5), [0.35, 0.32, 0.3], 2.2, 1.6, 0.6, 0.8);
       this.fx.spark(n.x, n.y + 0.1, n.z, 0, 1, 0, [1, 0.7, 0.3], 30, 7);
       this.fx.decal(n.x, 0.01, n.z, 0, 1, 0);
-      if (this.role !== 'client' && !(n.chicken && this.role !== 'solo')) for (const o of [...this.soldiers, ...this.hostages]) {
+      if (this.role !== 'client' && !(n.chicken && this.role !== 'solo')) for (const o of [...this.soldiers, ...(n.owner?.team === 'B' ? [] : this.hostages)]) {
         if (o instanceof Soldier ? !o.alive : o.state === 'dead' || o.state === 'rescued') continue;
         const cy = o.feet + 1.0;
         const d = Math.hypot(o.x - n.x, cy - n.y, o.z - n.z);
@@ -1619,6 +1659,7 @@ export class Game {
   move(s, dt, frozen) {
     const w = WEAPONS[s.kind] || WEAPONS.knife;
     let max = w.speed || 5.6;
+    const runMax = max;
     const swim = s.feet < -0.05 && this.map.inWater(s.x, s.z);
     if (swim !== !!s.swimming) this.splash(s, swim);
     s.swimming = swim;
@@ -1668,9 +1709,25 @@ export class Game {
         s.vz += acc * wz;
       }
     }
-    if (s.in.jump && s.onGround && !frozen && !swim) {
+    // in the air you can steer, not speed up (strafing used to add speed with every hop)
+    if (!s.onGround && !swim) {
+      const hs = Math.hypot(s.vx, s.vz), cap = Math.max(runMax, s.airCap || 0);
+      if (hs > cap) {
+        s.vx *= cap / hs;
+        s.vz *= cap / hs;
+      }
+    }
+    // (bots keep the button down while they stand at a sill: they may jump again)
+    const jumpPress = s.in.jump && (!s.jumpHeld || !!s.brain);
+    s.jumpHeld = !!s.in.jump;
+    if (jumpPress && s.onGround && !frozen && !swim) {
+      s.airCap = Math.hypot(s.vx, s.vz);
       s.vy = JUMP;
       if (s.onBoard) {
+        // the board throws you far as well as high
+        s.airCap *= 1.35;
+        s.vx *= 1.35;
+        s.vz *= 1.35;
         s.vy = JUMP * 1.85;
         this.toys.bounce(1);
       }
@@ -1742,6 +1799,7 @@ export class Game {
       s.feet = ground;
       s.vy = 0;
       s.onGround = true;
+      s.airCap = 0;
     } else if (s.onGround && s.vy <= 0 && s.feet - ground < 0.5) {
       if (s.isPlayer) this.view.stepUp = (this.view.stepUp || 0) - (s.feet - ground);
       s.feet = ground;
@@ -1756,18 +1814,128 @@ export class Game {
       if (!s.alive) continue;
       const under = s.feet + s.eyeH() < WATER_Y - 0.05 && this.map.inWater(s.x, s.z);
       s.underT = under ? (s.underT || 0) + dt : 0;
+      if (!under) s.drownAcc = 0;
       if (s.underT > 8) {
         if (s.isPlayer && this.time > (s.gaspAt || 0)) {
           s.gaspAt = this.time + 1;
           sfx('bubbles');
         }
-        this.damage(s, 14 * dt, 'body', null, 'water', 0, 0, 1);
+        s.drownAcc = (s.drownAcc || 0) + 14 * dt;
+        if (s.drownAcc >= 10) {
+          s.drownAcc -= 10;
+          this.damage(s, 10, 'body', null, 'water', 0, 0, 1);
+        }
       }
     }
   }
 
+  // a squeaky voice from the browser's speech engine, quieter further away
+  say(s, what) {
+    const ss = window.speechSynthesis;
+    if (!ss || typeof SpeechSynthesisUtterance === 'undefined' || document.hidden) return;
+    const now = performance.now();
+    if (now < (this.sayAt || 0) || ss.pending) return;
+    const d = s.isPlayer ? 0 : Math.hypot(s.x - this.view.x, s.z - this.view.z);
+    if (d > 30) return;
+    this.sayAt = now + 700;
+    const L = LINES[lang]?.[what] || LINES.en[what];
+    const u = new SpeechSynthesisUtterance(L[Math.floor(Math.random() * L.length)]);
+    u.lang = lang === 'ru' ? 'ru-RU' : 'en-US';
+    const voice = ss.getVoices().find((v) => v.lang.startsWith(lang === 'ru' ? 'ru' : 'en'));
+    if (voice) u.voice = voice;
+    s.voicePitch ??= 1.5 + Math.random() * 0.5;
+    u.pitch = s.voicePitch;
+    u.rate = 1.2 + Math.random() * 0.25;
+    u.volume = Math.max(0.15, 1 - d / 30) * (getVolume?.() ?? 0.8);
+    try {
+      ss.speak(u);
+    } catch {}
+  }
+
+  // the last kill in slow motion (solo only: online everyone's clock must stay the same)
+  slowMo() {
+    if (this.role !== 'solo' || this.opts.preview) return;
+    this.slow = 1.3;
+    sfx('slowmo');
+  }
+
+  // where a grenade thrown now would go: the same physics as the real one, drawn as a dotted arc
+  nadeArc(s) {
+    const kind = s.kind;
+    const pitch = s.pitch + 0.08, yaw = s.yaw, speed = 15;
+    const eye = s.feet + s.eyeH();
+    const dx = -Math.sin(yaw) * Math.cos(pitch), dy = Math.sin(pitch), dz = -Math.cos(yaw) * Math.cos(pitch);
+    let reach = 0.45;
+    const wall = this.map.raycast(s.x, eye, s.z, dx, dy, dz, 0.6);
+    if (wall) reach = Math.max(0, wall.t - 0.12);
+    let x = s.x + dx * reach, y = eye - 0.08, z = s.z + dz * reach;
+    let vx = dx * speed + s.vx * 0.6, vy = dy * speed + 1.5, vz = dz * speed + s.vz * 0.6;
+    const fuse = kind === 'he' ? 1.7 : kind === 'smoke' ? 1.9 : 1.5;
+    const pts = this._arcPts || (this._arcPts = new Float32Array(3 * 96));
+    let n = 0;
+    const h = 1 / 60;
+    for (let t = 0; t < fuse && n < 96; t += h) {
+      vy -= 14 * h;
+      const sp = Math.hypot(vx, vy, vz);
+      if (sp > 0.01) {
+        const ux = vx / sp, uy = vy / sp, uz = vz / sp;
+        const hit = this.map.raycast(x, y, z, ux, uy, uz, sp * h + 0.07);
+        if (hit) {
+          const dot = vx * hit.nx + vy * hit.ny + vz * hit.nz;
+          vx = (vx - 2 * dot * hit.nx) * 0.45;
+          vy = (vy - 2 * dot * hit.ny) * 0.4;
+          vz = (vz - 2 * dot * hit.nz) * 0.45;
+          x += hit.nx * 0.02;
+          y += hit.ny * 0.02;
+          z += hit.nz * 0.02;
+        }
+      }
+      x += vx * h;
+      y += vy * h;
+      z += vz * h;
+      if (y < 0.07 && !this.map.inWater(x, z)) {
+        y = 0.07;
+        vy = Math.abs(vy) * 0.35;
+        vx *= 0.7;
+        vz *= 0.7;
+      }
+      // dots every other step, starting a little way out (close to the eye they would be huge)
+      if (Math.round(t / h) % 2 === 0 && Math.hypot(x - s.x, z - s.z) > 1.6) {
+        pts[n * 3] = x;
+        pts[n * 3 + 1] = y;
+        pts[n * 3 + 2] = z;
+        n++;
+      }
+    }
+    return { pts, n, end: [x, y, z] };
+  }
+
+  drawArc(p) {
+    const show = p.alive && p.pinAt && WEAPONS[p.kind]?.nade && !this.over;
+    if (!this.arc) {
+      if (!show) return;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 96), 3));
+      this.arc = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffe27a, size: 0.15, map: dotTexture(), alphaTest: 0.4, transparent: true, opacity: 0.95, depthWrite: false }));
+      this.arc.frustumCulled = false;
+      this.arcEnd = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.34, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.8, depthWrite: false }));
+      this.scene.add(this.arc, this.arcEnd);
+    }
+    this.arc.visible = this.arcEnd.visible = !!show;
+    if (!show) return;
+    const a = this.nadeArc(p);
+    const attr = this.arc.geometry.attributes.position;
+    attr.array.set(a.pts.subarray(0, a.n * 3));
+    attr.needsUpdate = true;
+    this.arc.geometry.setDrawRange(0, a.n);
+    const color = p.kind === 'he' ? 0xff7a3a : p.kind === 'smoke' ? 0xbfc6cf : 0xfff2a0;
+    this.arcEnd.material.color.setHex(color);
+    this.arcEnd.position.set(a.end[0], Math.max(this.map.inWater(a.end[0], a.end[2]) ? WATER_Y : 0, a.end[1] - 0.05) + 0.03, a.end[2]);
+  }
+
   // things that are only looked at: updated once a frame by the main loop
   visual(dt) {
+    this.drawArc(this.player);
     this.rain?.update(dt);
     this.smokes.update(dt);
     this.fireplace.update(dt);
@@ -1837,6 +2005,10 @@ export class Game {
 
   // ---------- frame ----------
   update(dt, input) {
+    if (this.slow > 0) {
+      this.slow -= dt;
+      dt *= 0.3;
+    }
     this.time += dt;
     const p = this.player;
     const frozen = this.phase === 'freeze' || this.over;
@@ -1891,6 +2063,7 @@ export class Game {
     for (const s of this.soldiers) {
       if (!s.alive) continue;
       if (s.remote) {
+        s.swimming = s.feet < -0.05 && this.map.inWater(s.x, s.z);
         // position comes from the network
         this.steps(s, dt, Math.abs(s.feet - this.map.groundAt(s.x, s.z, 0.27, s.feet)) < 0.05, false);
         const b = s.body;
@@ -1969,10 +2142,16 @@ export class Game {
         // wait for the button to come up instead of forgetting the scope
         if (s.isPlayer && input.fire === true) s.rescopeAt = this.time + 0.05;
         else {
-          if (WEAPONS[s.kind].scope && !s.reloadUntil) s.scoped = s.rescopeTo;
+          if (WEAPONS[s.kind].scope && !s.reloadUntil) {
+            s.scoped = s.rescopeTo;
+            s.scopedAt = this.time - 0.22;
+            s.wasScoped = true;
+          }
           s.rescopeAt = 0;
         }
       }
+      if (s.scoped && !s.wasScoped) s.scopedAt = this.time;
+      s.wasScoped = !!s.scoped;
       // recoil recovery
       const w = WEAPONS[s.kind];
       if (this.time > (s.recoverAt || 0)) {
@@ -2003,7 +2182,7 @@ export class Game {
       const r = s.body.root.position;
       const gy = this.map.groundAt(r.x, r.z, 0.2, s.feet + 0.05);
       if (gy < s.feet) s.feet = Math.max(gy, s.feet - dt * 6);
-      if (!s.body.culled) s.body.animate({ dt, y: s.feet, speed: 0 });
+      if (!s.body.culled || s.body.dead < 1 || s.body.hat?.v) s.body.animate({ dt, y: s.feet, speed: 0 });
     }
     if (this.role !== 'client') this.drown(dt);
     this.updateHostages(dt);
@@ -2049,7 +2228,9 @@ export class Game {
         return;
       }
       if (w.scope && this.time >= p.switchUntil && !p.reloadUntil) {
+        if (!p.scoped) p.scopedAt = this.time;
         p.scoped = (p.scoped + 1) % 3;
+        p.wasScoped = !!p.scoped;
         sfx('click');
       }
     } else if (a === 'use') {
@@ -2384,7 +2565,10 @@ export class Game {
     const cull = (o) => {
       const root = o.body?.root;
       if (!root) return;
-      this._sph.center.set(o.x, (o.feet || 0) + 0.9, o.z);
+      const dead = o.alive === false || o.state === 'dead';
+      if (dead) this._sph.center.set(root.position.x, root.position.y + 0.5, root.position.z);
+      else this._sph.center.set(o.x, (o.feet || 0) + 0.9, o.z);
+      this._sph.radius = dead ? 2.3 : 1.4;
       const out = !this._fr.intersectsSphere(this._sph);
       o.body.culled = out;
       if (out && root.visible) {
@@ -2452,6 +2636,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    if (this.fun.talk) window.speechSynthesis?.cancel();
     if (!this.opts.preview) setQuack(false);
     if (this.underwater) {
       setUnderwater(false);
@@ -2461,6 +2646,12 @@ export class Game {
     this.smokes?.clear();
     this.fireplace?.dispose();
     this.toys?.dispose();
+    if (this.arc) {
+      this.arc.geometry.dispose();
+      this.arc.material.dispose();
+      this.arcEnd.geometry.dispose();
+      this.arcEnd.material.dispose();
+    }
     this.rain?.dispose();
     this.chickens?.dispose();
     this.envRT?.dispose();

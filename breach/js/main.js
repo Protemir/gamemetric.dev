@@ -442,7 +442,10 @@ else if (!q.has('mouse') && (mobileUA || !matchMedia('(any-pointer: fine)').matc
     { once: true, capture: true },
   );
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) rainSound(false);
+  if (document.hidden) {
+    rainSound(false);
+    window.speechSynthesis?.cancel();
+  }
   setHiddenAudio(document.hidden);
   if (!document.hidden || !touchCtl) return;
   touchCtl.show(false);
@@ -453,7 +456,7 @@ document.addEventListener('visibilitychange', () => {
 function openBuy() {
   if (!game || !game.player.alive || game.over) return;
   if (!game.canBuy(game.player)) {
-    hud.center(game.mode !== 'dm' && game.buyTimeLeft() <= 0 ? t('buyClosed') : t('buyZone'), 1.5);
+    hud.center(game.mode === 'dm' || game.buyTimeLeft() <= 0 ? t('buyClosed') : t('buyZone'), 1.5);
     sfx('deny');
     return;
   }
@@ -991,8 +994,10 @@ function onNetMessage(from, m) {
   if (m.k === 'lobby') {
     lobby = m;
     if (!m.started && game && game.role === 'client' && !game.over && game.time > 5) {
-      backToLobby(false);
-      return;
+      const gNow = game;
+      setTimeout(() => {
+        if (game === gNow && !game.over && lobby && !lobby.started) backToLobby(false);
+      }, 1500);
     }
     renderLobby();
     if (m.started && !game) askSync();

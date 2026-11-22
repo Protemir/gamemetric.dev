@@ -159,6 +159,8 @@ export class PoolToys {
     this.g.scene.remove(this.group);
     this.board.geometry.dispose();
     this.group.children[1].geometry.dispose();
-    for (const d of this.ducks) d.m.material.dispose();
+    this.board.material.dispose();
+    this.group.children[1].material.dispose();
+    this.ducks[0]?.m.material.dispose();
   }
 }

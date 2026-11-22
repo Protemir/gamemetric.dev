@@ -1,7 +1,7 @@
 // Rain with thunder: drops falling round the camera (not indoors), a darker sky and fog,
 // a steady hiss that softens inside the house, and now and then a lightning flash with a rumble.
 import * as THREE from '../vendor/three.module.min.js';
-import { rainSound, sfx } from './audio.js';
+import { rainSound, rainOn, sfx } from './audio.js';
 
 const N = 1400, BOX = 18, TOP = 14;
 
@@ -69,7 +69,7 @@ export class Rain {
     this.lines.geometry.setDrawRange(0, n * 2);
     this.lines.geometry.attributes.position.needsUpdate = true;
     const lvl = m.isIndoor(v.x, v.z) ? 0.35 : 1;
-    if (lvl !== this.lvl && !document.hidden) {
+    if ((lvl !== this.lvl || !rainOn()) && !document.hidden) {
       this.lvl = lvl;
       rainSound(true, lvl);
     }

@@ -24,6 +24,9 @@ export function initAudio() {
 
 // the steady sound of rain; on = false stops it; level 0..1 (softer indoors)
 let rain = null;
+export function rainOn() {
+  return !!rain;
+}
 export function rainSound(on, level = 1) {
   if (!ctx) return;
   if (!on) {
@@ -65,6 +68,10 @@ export function setUnderwater(on) {
   }
   underF.frequency.setTargetAtTime(on ? 450 : 20000, ctx.currentTime, 0.08);
   if (on) sfx('bubbles');
+}
+
+export function getVolume() {
+  return volume;
 }
 
 export function setVolume(v) {
@@ -476,6 +483,15 @@ export function sfx(name, pos = null, opt = {}) {
       const d = out(P_);
       tone(d, t, 0.09, 'square', 1700, 2300, 0.1, 0.004);
       tone(d, t + 0.1, 0.12, 'square', 2200, 1500, 0.09, 0.004);
+      break;
+    }
+    case 'slowmo': {
+      // the world slows: a deep falling whoosh and a heartbeat
+      const d = out({ gain: 1, pan: 0 });
+      noise(d, t, 1.3, 'lowpass', 500, 0.8, 0.28, 0.05, 1.2);
+      tone(d, t, 1.2, 'sine', 160, 45, 0.3, 0.04);
+      tone(d, t + 0.35, 0.18, 'sine', 70, 40, 0.35, 0.005);
+      tone(d, t + 0.65, 0.18, 'sine', 70, 40, 0.28, 0.005);
       break;
     }
     case 'crackle': {

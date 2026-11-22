@@ -93,7 +93,7 @@ export class Brain {
       else if (m >= 900 && s.slots[2] === 'pistol' && Math.random() < 0.4) spend('deagle', 700);
     }
     if (s.armor < 50) {
-      if (s.money >= 1000 + 300 && Math.random() < 0.8) spend('helmet', 1000);
+      if (s.money >= 1000 + 300 && Math.random() < 0.8) spend('helmet', g.priceOf(s, 'helmet'));
       else if (s.money >= 650) spend('armor', 650);
     }
     // the storming side wants a smoke to cover the push; the defenders rarely bother

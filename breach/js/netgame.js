@@ -85,7 +85,7 @@ export class NetGame {
     } else {
       if (this.lastSnapT && T - this.lastSnapT > 4 && !this.quietShown) {
         this.quietShown = true;
-        g.hud.notice?.('📶 ' + t('waitHost'));
+        g.hud.notice?.('📶 ' + t('hostQuiet'));
       }
       // over the relay snapshots come in bursts: look a little further back
       const delay = this.net.linkState(this.net.hostId) === 'p2p' ? 0.11 : 0.2;
@@ -336,6 +336,7 @@ export class NetGame {
             }
             if (!a[8] && s.alive && !s.deadAt) {
               s.alive = false;
+              s.deadBySnap = true;
               s.deadAt = g.time;
               s.body.die(false, 0.5, 0, 0, false);
             }
@@ -382,7 +383,9 @@ export class NetGame {
       }
       case 'K': {
         const v = g.soldiers[m.v];
-        if (!v || (!v.alive && v.deadAt && g.time - v.deadAt < 3)) break;
+        if (!v || (!v.alive && v.deadAt && g.time - v.deadAt < 3 && !v.deadBySnap)) break;
+        if (v.deadBySnap) v.body.revive();
+        v.deadBySnap = false;
         v.alive = true;
         g.kill(v, m.by >= 0 ? g.soldiers[m.by] : null, KINDS[m.w] || 'pistol', !!m.hd, m.dx / 100, m.dz / 100);
         break;
