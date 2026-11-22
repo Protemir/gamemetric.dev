@@ -5,6 +5,9 @@ import * as THREE from '../vendor/three.module.min.js';
 import { TEX_SIZE } from './textures.js';
 
 export const W = 72, H = 64, CEIL = 4, STEP = 0.45;
+// the outside walls rise to a second storey (only seen from outside; the rooms keep their 4 m ceiling)
+export const FACADE = 7.4;
+export const HOUSE = { x0: 10, z0: 8, x1: 62, z1: 46 };
 
 export const FL = { GRASS: 1, PAVE: 2, TERRACE: 3, WOOD: 4, MARBLE: 5, CARPET: 6, TILE: 7, CONCRETE: 8, PARQUET: 9, DARKWOOD: 10, GRAVEL: 11 };
 const FLOOR_TEX = { 1: 'grass', 2: 'pave', 3: 'terrace', 4: 'wood', 5: 'marble', 6: 'carpet', 7: 'tile', 8: 'concrete', 9: 'parquet', 10: 'darkwood', 11: 'gravel' };
@@ -20,6 +23,8 @@ const KIND_TEX = {
   12: 'piano', 13: 'van', 14: 'fountain', 15: 'water', 16: 'metalshelf', 17: 'fridge', 18: 'plant', 19: 'lounger',
   20: 'shed', 21: 'cabinet', 23: 'fountain',
 };
+// drawn as real models (props.js) when those have loaded; the grid boxes stay for collisions
+export const MODELLED = new Set([7, 6, 21, 9, 16]); // SOFA, TABLE, CABINET, CAR, METALSHELF
 // surface sound / impact colour
 export const SURF = { soft: [7, 8, 18, 19], wood: [3, 4, 6, 12, 20, 21], metal: [9, 13, 16, 17] };
 
@@ -238,7 +243,7 @@ export class GameMap {
     solid(52, 9, 54, 9, 1.8, K.FIRE);
     solid(58, 19, 60, 21, 1.1, K.PIANO);
     solid(43, 22, 46, 22, 1.1, K.COUNTER);
-    solid(54, 16, 55, 17, 1.0, K.CRATE);
+    solid(54, 16, 55, 17, 1.0, K.SOFA);
 
     // front courtyard
     solid(33, 50, 38, 53, 0.8, K.FOUNTAIN);
@@ -280,6 +285,12 @@ export class GameMap {
     solid(58, 3, 60, 3, 1.1, K.HEDGE);
     solid(12, 6, 12, 6, 1.0, K.CRATE);
     solid(66, 4, 67, 5, 1.0, K.CRATE);
+
+    // the outer walls of the house go up to the roof of the second storey
+    each(HOUSE.x0, HOUSE.z0, HOUSE.x1, HOUSE.z1, (c, x, z) => {
+      const edge = x === HOUSE.x0 || x === HOUSE.x1 || z === HOUSE.z0 || z === HOUSE.z1;
+      if (edge && kind[c] === K.WALL) h[c] = FACADE;
+    });
 
     // zones
     each(26, 57, 46, 62, (c) => (zone[c] = 1));
@@ -625,8 +636,11 @@ export class GameMap {
     return [1, 0.8, 0.66, 0.56, 0.5][n];
   }
 
-  buildMeshes(tex) {
+  buildMeshes(tex, modelled = false) {
     const groups = {};
+    // with the furniture models in, their cells show only floor
+    const isModel = (c) => modelled && MODELLED.has(this.kind[c]) && this.h[c] > 0;
+    const drawH = (c) => (isModel(c) ? 0 : this.h[c]);
     const grp = (k) => (groups[k] ||= { p: [], n: [], u: [], c: [] });
     const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpN = new THREE.Vector3();
     const quad = (key, v, n, uv, col) => {
@@ -691,7 +705,7 @@ export class GameMap {
         const hh = this.h[c], ind = this.indoor[c] === 1;
         if (this.kind[c] === K.STATUE) {
           // drawn as a proper fountain / plinth below
-        } else if (hh === 0) {
+        } else if (hh === 0 || isModel(c)) {
           hface(FLOOR_TEX[this.floor[c]] || 'grass', x, z, x + 1, z + 1, 0, true, ind, (px, pz) => this.cornerAO(px, pz));
         } else {
           const k = this.kind[c];
@@ -701,7 +715,7 @@ export class GameMap {
             const nx = x + DIRS[d][0], nz = z + DIRS[d][1];
             if (!this.inb(nx, nz)) continue;
             const nb = nz * W + nx;
-            const nh = this.h[nb];
+            const nh = drawH(nb);
             if (nh >= hh) continue;
             const nIndoor = this.indoor[nb] === 1;
             vface(wallTex(c, nb), x, z, d, nh, hh, nIndoor, nh === 0);
@@ -716,6 +730,7 @@ export class GameMap {
             if (!this.inb(nx, nz)) continue;
             const nb = nz * W + nx;
             if (this.h[nb] >= CEIL) continue;
+            // the next cell along the facade carries on the same lintel
             if (this.lint[nb] > 0 && Math.abs(this.lint[nb] - l) < 0.01) continue;
             vfaceLintel(this, x, z, d, l, nb);
           }
@@ -726,11 +741,11 @@ export class GameMap {
     function vfaceLintel(map, x, z, d, l, nb) {
       const nIndoor = map.indoor[nb] === 1;
       const key = nIndoor ? WALL_TEX[map.floor[nb]] || 'w_corr' : 'plaster';
-      vface(key, x, z, d, l, CEIL, nIndoor, false);
+      vface(key, x, z, d, l, nIndoor ? CEIL : FACADE, nIndoor, false);
     }
 
     // roof over the mansion
-    const X0 = 9.5, X1 = 63.5, Z0 = 7.5, Z1 = 47.5, E = 4.02, half = (Z1 - Z0) / 2, R = E + half * Math.tan((17 * Math.PI) / 180), Zm = (Z0 + Z1) / 2;
+    const X0 = 9.5, X1 = 63.5, Z0 = 7.5, Z1 = 47.5, E = FACADE + 0.02, half = (Z1 - Z0) / 2, R = E + half * Math.tan((17 * Math.PI) / 180), Zm = (Z0 + Z1) / 2;
     const roofQuad = (pts) => {
       const a = new THREE.Vector3(...pts[0]), b = new THREE.Vector3(...pts[1]), cc = new THREE.Vector3(...pts[2]);
       const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(cc, a)).normalize();
@@ -748,7 +763,7 @@ export class GameMap {
     roofQuad([[X0, E, Z0], [X0, E, Z1], [X0 + half, R, Zm]]);
     roofQuad([[X1, E, Z1], [X1, E, Z0], [X1 - half, R, Zm]]);
     // soffits under the overhang
-    const soff = (x0, z0, x1, z1) => hface('trim', x0, z0, x1, z1, 4.0, false, false, () => 0.75);
+    const soff = (x0, z0, x1, z1) => hface('trim', x0, z0, x1, z1, FACADE, false, false, () => 0.75);
     soff(X0, Z0, X1, 8);
     soff(X0, 47, X1, Z1);
     soff(X0, 8, 10, 47);
@@ -770,9 +785,8 @@ export class GameMap {
       }
       hface(key, x0, z0, x1, z1, y1, true, false, null);
     };
-    boxSolid('fire', 21, 6, 13, 22.4, 11.5, 14.4);
-    boxSolid('fire', 53, 6, 12, 54.4, 11.2, 13.4);
-    boxSolid('fire', 47, 6, 40, 48.4, 10.5, 41.4);
+    const roofY = (x, z) => Math.min(R, E + Math.min(x - X0, X1 - x, z - Z0, Z1 - z) * Math.tan((17 * Math.PI) / 180));
+    for (const [x, z] of [[21, 13], [53, 12], [47, 40]]) boxSolid('fire', x, roofY(x, z) - 1, z, x + 1.4, roofY(x + 0.7, z + 0.7) + 2.3, z + 1.4);
 
     const meshes = [];
     for (const [key, G] of Object.entries(groups)) {
@@ -782,6 +796,8 @@ export class GameMap {
       geo.setAttribute('color', new THREE.Float32BufferAttribute(G.c, 3));
       geo.computeBoundingSphere();
       const mat = new THREE.MeshBasicMaterial({ map: tex[key], vertexColors: true });
+      // the photo tiles are a very bright orange: weather them a little
+      if (key === 'roof') mat.color.setRGB(0.84, 0.78, 0.76);
       if (key === 'water') {
         mat.transparent = true;
         mat.opacity = 0.88;

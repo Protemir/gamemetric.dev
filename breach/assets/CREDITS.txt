@@ -5,3 +5,8 @@ animations made with Adobe Mixamo; used inside the game only.
 Guard.glb: the readyplayer.me.glb avatar from the same three.js examples (Ready Player Me),
 slimmed by tools/slim-guard.mjs (no hat, no normal maps); the suit is repainted black in the game.
 Three.js r170 (vendor/) — MIT, see vendor/LICENSE.
+Sky (assets/tex/sky.jpg): kloofendal_48d_partly_cloudy_puresky by Poly Haven — CC0.
+Trees and bushes (assets/tex/tree.png, bush.png): pictures rendered from the Poly Haven models jacaranda_tree and searsia_lucida — CC0 (tools/bake-trees.mjs).
+Furniture and cars (assets/props): Poly Haven models — CC0: covered_car, Sofa_01, coffee_table_round_01, dining_table, painted_wooden_chair_02,
+GothicCommode_01, steel_frame_shelves_01, Chandelier_02, ArmChair_01, side_table_01, vintage_grandfather_clock_01, fancy_picture_frame_01,
+hanging_picture_frame_01, hanging_picture_frame_02, marble_bust_01 (colour maps only, 512 px; tools/pack-model.mjs).

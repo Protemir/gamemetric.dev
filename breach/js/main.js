@@ -5,6 +5,7 @@ import { Hud, BUY_ITEMS } from './hud.js';
 import { initAudio, setVolume, sfx } from './audio.js';
 import { t, lang, setLang } from './i18n.js';
 import { loadPeople } from './people.js';
+import { loadProps } from './props.js';
 import { Net, newCode } from './net.js';
 import { NetGame } from './netgame.js';
 import { BOT_NAMES } from './i18n.js';
@@ -464,8 +465,10 @@ applyTexts();
 applySize();
 // the rigged people load first (a few MB); the procedural bodies stand in if that fails
 $('loading').hidden = false;
-const assetsReady = loadPeople()
-  .catch((e) => console.warn('people models failed, using simple bodies', e))
+const assetsReady = Promise.all([
+  loadPeople().catch((e) => console.warn('people models failed, using simple bodies', e)),
+  loadProps().catch((e) => console.warn('furniture models failed, keeping the boxes', e)),
+])
   .finally(() => {
     $('loading').hidden = true;
     if (!q.has('shot')) makePreview();

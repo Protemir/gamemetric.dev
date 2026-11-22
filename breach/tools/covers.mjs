@@ -13,7 +13,7 @@ for (const [w, h, file] of [
   [1200, 630, 'breach/og.jpg'],
 ]) {
   await B.open(`${S.url}/breach/?shot=out&nopulse&lang=ru`, w, h);
-  await B.js(`new Promise((r) => { const t = setInterval(() => { if (document.body.dataset.ready) { clearInterval(t); setTimeout(r, 400); } }, 50); })`);
+  await B.js(`new Promise((r) => { const t = setInterval(() => { if (document.body.dataset.ready) { clearInterval(t); setTimeout(r, 3500); } }, 50); })`);
   await B.shot(path.join(repo, file), 'jpeg');
   console.log('wrote', file);
 }

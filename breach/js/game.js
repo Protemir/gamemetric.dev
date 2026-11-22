@@ -1,6 +1,8 @@
 // The match: soldiers, hostages, shooting, grenades, rounds, money, camera and view model.
 import * as THREE from '../vendor/three.module.min.js';
 import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos } from './map.js';
+import { buildDecor } from './decor.js';
+import { buildProps, propsReady } from './props.js';
 import { makeTextures } from './textures.js';
 import { makeBody } from './people.js';
 import { thirdPersonGun } from './actors.js';
@@ -227,12 +229,14 @@ export class Game {
     this.scene.add(sun);
     this.tex = makeTextures(renderer);
     this.map = new GameMap();
-    for (const m of this.map.buildMeshes(this.tex)) this.scene.add(m);
+    for (const m of this.map.buildMeshes(this.tex, propsReady())) this.scene.add(m);
+    for (const m of buildDecor(this.map, this.tex)) this.scene.add(m);
     this.buildSurroundings();
     this.fx = new FX(this.scene);
     this.vm = new ViewModel();
     this.vm.flash.material.map = this.fx.flashes[0].s.material.map;
     this.lightCache = new Float32Array(W * H).fill(-1);
+    for (const m of buildProps(this)) this.scene.add(m);
 
     this.role = opts.role || 'solo';
     this.preview = !!opts.preview;
@@ -332,59 +336,123 @@ export class Game {
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(W / 2, -0.03, H / 2);
     this.scene.add(ground);
-    // sky dome
-    const sky = new THREE.SphereGeometry(400, 24, 12);
-    const col = [];
-    const top = new THREE.Color(0x5e93c8), hor = new THREE.Color(0xc9dbe6);
-    const p = sky.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const k = Math.max(0, p.getY(i) / 400) ** 0.6;
-      const c = hor.clone().lerp(top, k);
-      col.push(c.r, c.g, c.b);
+    // sky: a photographed cloudy sky (Poly Haven, CC0) on a dome, turned so its sun sits where our light comes from
+    const loader = new THREE.TextureLoader();
+    const skyTex = loader.load('assets/tex/sky.jpg');
+    skyTex.colorSpace = THREE.SRGBColorSpace;
+    skyTex.wrapS = THREE.RepeatWrapping;
+    const SR = 380;
+    const sky = new THREE.SphereGeometry(SR, 64, 28, 0, Math.PI * 2, 0, Math.PI * 0.6);
+    {
+      const p = sky.attributes.position, uv = sky.attributes.uv;
+      // three's sphere: x = -cos(phi) sin(theta), z = sin(phi) sin(theta), phi = u * 2pi
+      const sunU = Math.atan2(SUN.z, -SUN.x) / (Math.PI * 2);
+      const off = 0.59 - sunU; // the sun is 59% across the picture
+      for (let i = 0; i < p.count; i++) {
+        const elev = (Math.asin(Math.max(-1, Math.min(1, p.getY(i) / SR))) * 180) / Math.PI;
+        // the picture spans from the zenith down to 9 degrees below the horizon
+        const v = Math.min(1, (90 - elev) / 99);
+        uv.setXY(i, uv.getX(i) + off, 1 - v);
+      }
     }
-    sky.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    const skyM = new THREE.Mesh(sky, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
-    skyM.position.set(W / 2, 0, H / 2);
+    const skyM = new THREE.Mesh(sky, new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false, depthWrite: false, toneMapped: false }));
+    skyM.position.set(W / 2, -4, H / 2);
     skyM.renderOrder = -1;
     this.scene.add(skyM);
-    // trees: one instanced mesh
-    const parts = [];
-    const shade = (g, color) => {
-      g = g.toNonIndexed();
-      const n = g.attributes.normal, c = new THREE.Color(color), a = new Float32Array(n.count * 3);
-      for (let i = 0; i < n.count; i++) {
-        const d = Math.max(0, n.getX(i) * SUN.x + n.getY(i) * SUN.y + n.getZ(i) * SUN.z);
-        const k = 0.55 + d * 0.55;
-        a[i * 3] = c.r * k;
-        a[i * 3 + 1] = c.g * k;
-        a[i * 3 + 2] = c.b * k;
-      }
-      g.setAttribute('color', new THREE.BufferAttribute(a, 3));
-      return g;
+    this.skyMesh = skyM;
+    // trees and bushes: pictures of real ones (baked from Poly Haven models) turned to face the camera
+    const board = (file, views, list, w) => {
+      const tex = loader.load(file);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      const geo = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
+      const ig = new THREE.InstancedBufferGeometry().copy(geo);
+      ig.instanceCount = list.length;
+      const view = new Float32Array(list.length), tint = new Float32Array(list.length * 3);
+      const m = new THREE.InstancedMesh(ig, null, list.length);
+      const mx = new THREE.Matrix4(), q0 = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3();
+      list.forEach((t, i) => {
+        m.setMatrixAt(i, mx.compose(pv.set(t.x, t.y || 0, t.z), q0, sv.set(w * t.s, w * t.s, w * t.s)));
+        view[i] = Math.floor(Math.random() * views);
+        const k = t.k ?? 0.9 + Math.random() * 0.2;
+        tint[i * 3] = k * (0.95 + Math.random() * 0.1);
+        tint[i * 3 + 1] = k;
+        tint[i * 3 + 2] = k * (0.9 + Math.random() * 0.1);
+      });
+      ig.setAttribute('aView', new THREE.InstancedBufferAttribute(view, 1));
+      ig.setAttribute('aTint', new THREE.InstancedBufferAttribute(tint, 3));
+      m.material = new THREE.ShaderMaterial({
+        uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { map: { value: null }, views: { value: views } }]),
+        vertexShader: `
+          #include <common>
+          #include <fog_pars_vertex>
+          attribute float aView;
+          attribute vec3 aTint;
+          uniform float views;
+          varying vec2 vUv;
+          varying vec3 vTint;
+          void main() {
+            vec3 center = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+            float sc = length(instanceMatrix[0].xyz);
+            vec3 toCam = cameraPosition - center;
+            toCam.y = 0.0;
+            toCam = normalize(toCam + vec3(1e-4, 0.0, 0.0));
+            vec3 right = vec3(toCam.z, 0.0, -toCam.x);
+            vec3 wp = center + right * position.x * sc + vec3(0.0, position.y * sc, 0.0);
+            vUv = vec2((uv.x + aView) / views, uv.y);
+            vTint = aTint;
+            vec4 mvPosition = viewMatrix * vec4(wp, 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            #include <fog_vertex>
+          }`,
+        fragmentShader: `
+          #include <common>
+          #include <fog_pars_fragment>
+          uniform sampler2D map;
+          varying vec2 vUv;
+          varying vec3 vTint;
+          void main() {
+            vec4 c = texture2D(map, vUv);
+            if (c.a < 0.45) discard;
+            gl_FragColor = vec4(c.rgb * vTint, 1.0);
+            #include <colorspace_fragment>
+            #include <fog_fragment>
+          }`,
+        fog: true,
+      });
+      m.material.uniforms.map.value = tex;
+      m.frustumCulled = false;
+      this.scene.add(m);
+      return m;
     };
-    const trunk = new THREE.CylinderGeometry(0.18, 0.25, 2.2, 6);
-    trunk.translate(0, 1.1, 0);
-    parts.push(shade(trunk, 0x5a4030));
-    for (const [r, y, h] of [[2.2, 3.2, 3.2], [1.7, 4.8, 2.8], [1.1, 6.2, 2.2]]) {
-      const c = new THREE.ConeGeometry(r, h, 8);
-      c.translate(0, y, 0);
-      parts.push(shade(c, 0x3c5e2c));
+    // a ring of big trees outside the walls, thicker further out
+    const trees = [];
+    let guard = 0;
+    while (trees.length < 150 && guard++ < 5000) {
+      const x = -45 + Math.random() * (W + 90), z = -45 + Math.random() * (H + 90);
+      if (x > -4 && x < W + 4 && z > -4 && z < H + 4) continue;
+      // keep the gate side a little more open
+      const out = Math.max(-x, x - W, -z, z - H);
+      if (out < 12 && Math.random() < 0.35) continue;
+      trees.push({ x, z, s: 0.38 + Math.random() * 0.3 });
     }
-    const treeGeo = mergeGeos(parts);
-    const N = 190;
-    const trees = new THREE.InstancedMesh(treeGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), N);
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3(), c = new THREE.Color();
-    let n = 0;
-    while (n < N) {
-      const x = -40 + Math.random() * (W + 80), z = -40 + Math.random() * (H + 80);
-      if (x > -3 && x < W + 3 && z > -3 && z < H + 3) continue;
-      const sc = 0.9 + Math.random() * 1.1;
-      m.compose(v.set(x, 0, z), q.setFromAxisAngle(s.set(0, 1, 0), Math.random() * 6), s.set(sc, sc * (0.9 + Math.random() * 0.5), sc));
-      trees.setMatrixAt(n, m);
-      trees.setColorAt(n, c.setHSL(0.27 + Math.random() * 0.06, 0.4, 0.4 + Math.random() * 0.2).multiplyScalar(2.2));
-      n++;
+    board('assets/tex/tree.png', 4, trees, 24.9);
+    // bushes along the inside of the garden wall, where nobody fights
+    const bushes = [];
+    const tryBush = (x, z) => {
+      const c = this.map.cellAt(x, z);
+      if (c < 0 || this.map.h[c] > 0 || this.map.indoor[c] || this.map.zone[c] || this.map.floor[c] !== 1) return;
+      bushes.push({ x, z, s: 0.26 + Math.random() * 0.12 });
+    };
+    for (let x = 1.5; x < W - 1; x += 1.6 + Math.random() * 1.6) {
+      tryBush(x, 1.3);
+      tryBush(x, H - 1.3);
     }
-    this.scene.add(trees);
+    for (let z = 1.5; z < H - 1; z += 1.6 + Math.random() * 1.6) {
+      tryBush(1.3, z);
+      tryBush(W - 1.3, z);
+    }
+    board('assets/tex/bush.png', 4, bushes, 4.87);
     // pool water shimmer
     this.tex.water.offset.set(0, 0);
   }

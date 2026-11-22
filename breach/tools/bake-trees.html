@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}</style>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script></head>
+<body><script type="module">
+// Renders a heavy Poly Haven model into a strip of billboard pictures (one per viewing angle)
+// with a transparent background: ?m=folder/name.gltf&n=4&s=512
+import * as THREE from 'three';
+import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search);
+const N = +(q.get('n') || 4), S = +(q.get('s') || 512);
+const R = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+R.setPixelRatio(1);
+R.toneMapping = THREE.ACESFilmicToneMapping;
+R.toneMappingExposure = +(q.get('exp') || 1.0);
+R.setClearColor(0x000000, 0);
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xdfeaff, 0x4a4030, 1.4));
+const sun = new THREE.DirectionalLight(0xfff2de, 2.6);
+scene.add(sun);
+const gltf = await new GLTFLoader().loadAsync(q.get('m'));
+const model = gltf.scene;
+model.traverse((o) => {
+  if (o.isMesh) {
+    const m = o.material;
+    if (m.map) m.map.anisotropy = 8;
+    // leaves with cut-outs keep their alpha test
+    if (m.alphaTest === 0 && m.transparent) { m.alphaTest = 0.5; m.transparent = false; }
+    m.side = THREE.DoubleSide;
+  }
+});
+scene.add(model);
+model.updateMatrixWorld(true);
+const box = new THREE.Box3().setFromObject(model);
+const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+const half = Math.max(size.x, size.z, size.y) / 2 * 1.02;
+const cam = new THREE.OrthographicCamera(-half, half, half, -half, 0.01, half * 10);
+const out = document.createElement('canvas');
+out.width = S * N;
+out.height = S;
+const g = out.getContext('2d');
+R.setSize(S, S);
+for (let i = 0; i < N; i++) {
+  const a = (i / N) * Math.PI * 2;
+  const dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+  // the ground line sits at the bottom of each picture
+  const ty = box.min.y + half;
+  cam.position.set(c.x + dir.x * half * 4, ty, c.z + dir.z * half * 4);
+  cam.lookAt(c.x, ty, c.z);
+  // sun from the upper left of the viewer, a little in front
+  const right = new THREE.Vector3(dir.z, 0, -dir.x);
+  sun.position.copy(dir).multiplyScalar(0.6).addScaledVector(right, -0.7).add(new THREE.Vector3(0, 1.1, 0)).multiplyScalar(50).add(c);
+  sun.target.position.copy(c);
+  sun.target.updateMatrixWorld();
+  R.render(scene, cam);
+  g.drawImage(R.domElement, i * S, 0);
+}
+window.result = { png: out.toDataURL('image/png'), aspect: size.y / (half * 2), width: half * 2, height: size.y, n: N };
+</script></body></html>

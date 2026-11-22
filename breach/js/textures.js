@@ -315,10 +315,8 @@ const DRAW = {
   ceiling(g, w, h) {
     g.fillStyle = '#e9e3d6';
     g.fillRect(0, 0, w, h);
-    grain(g, w, h, 8, 3000);
-    g.fillStyle = 'rgba(0,0,0,.08)';
-    g.fillRect(0, 0, w, 3);
-    g.fillRect(0, 0, 3, h);
+    // smooth plaster, no tile seams
+    grain(g, w, h, 5, 2500);
   },
   crate(g, w, h) {
     g.fillStyle = '#a07a45';
@@ -560,25 +558,110 @@ const DRAW = {
       g.stroke();
     }
   },
+  // a worn Persian rug: madder field, navy border with rosettes, a central medallion and corner pieces
   rug(g, w, h) {
-    g.fillStyle = '#6a1a1c';
+    const field = '#7c2723', navy = '#1f2540', gold = '#b98e4c', ivory = '#d9c9a6', teal = '#2f5654', rose = '#a3443a';
+    g.fillStyle = navy;
     g.fillRect(0, 0, w, h);
-    g.strokeStyle = '#c99a4a';
-    g.lineWidth = 8;
-    g.strokeRect(14, 14, w - 28, h - 28);
+    const B = h * 0.15;
+    g.fillStyle = field;
+    g.fillRect(B, B, w - 2 * B, h - 2 * B);
+    // guard stripes
+    g.strokeStyle = gold;
     g.lineWidth = 3;
-    g.strokeRect(30, 30, w - 60, h - 60);
-    g.fillStyle = '#1f2a4a';
-    g.beginPath();
-    g.moveTo(w / 2, h * 0.22);
-    g.lineTo(w * 0.78, h / 2);
-    g.lineTo(w / 2, h * 0.78);
-    g.lineTo(w * 0.22, h / 2);
-    g.closePath();
-    g.fill();
-    g.strokeStyle = '#c99a4a';
-    g.stroke();
-    grain(g, w, h, 18, 5000);
+    g.strokeRect(6, 6, w - 12, h - 12);
+    g.strokeRect(B - 6, B - 6, w - 2 * B + 12, h - 2 * B + 12);
+    g.strokeStyle = ivory;
+    g.lineWidth = 2;
+    g.strokeRect(B - 12, B - 12, w - 2 * B + 24, h - 2 * B + 24);
+    // rosettes along the border
+    const rosette = (x, y, r) => {
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        g.fillStyle = k % 2 ? rose : ivory;
+        g.beginPath();
+        g.ellipse(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55, r * 0.42, r * 0.2, a, 0, 7);
+        g.fill();
+      }
+      g.fillStyle = gold;
+      g.beginPath();
+      g.arc(x, y, r * 0.28, 0, 7);
+      g.fill();
+    };
+    const step = B * 1.1;
+    for (let x = B * 0.5 + step / 2; x < w - B * 0.5; x += step) {
+      rosette(x, B * 0.46, B * 0.3);
+      rosette(x, h - B * 0.46, B * 0.3);
+    }
+    for (let y = B * 1.5; y < h - B * 1.2; y += step) {
+      rosette(B * 0.46, y, B * 0.3);
+      rosette(w - B * 0.46, y, B * 0.3);
+    }
+    // small repeating flowers over the field
+    for (let y = B + 14; y < h - B - 8; y += 22)
+      for (let x = B + 14 + ((y / 22) % 2) * 11; x < w - B - 8; x += 22) {
+        g.fillStyle = 'rgba(217,201,166,0.35)';
+        g.beginPath();
+        g.moveTo(x, y - 5);
+        g.lineTo(x + 4, y);
+        g.lineTo(x, y + 5);
+        g.lineTo(x - 4, y);
+        g.fill();
+        g.fillStyle = 'rgba(31,37,64,0.5)';
+        g.fillRect(x - 1, y - 1, 2, 2);
+      }
+    // corner pieces
+    for (const [cx, cy, sx, sy] of [[B, B, 1, 1], [w - B, B, -1, 1], [B, h - B, 1, -1], [w - B, h - B, -1, -1]]) {
+      g.fillStyle = navy;
+      g.beginPath();
+      g.moveTo(cx, cy);
+      g.quadraticCurveTo(cx + sx * h * 0.32, cy, cx + sx * h * 0.38, cy + sy * h * 0.05);
+      g.quadraticCurveTo(cx + sx * h * 0.12, cy + sy * h * 0.1, cx, cy + sy * h * 0.26);
+      g.fill();
+      g.strokeStyle = gold;
+      g.lineWidth = 2;
+      g.stroke();
+    }
+    // the medallion
+    const mx = w / 2, my = h / 2;
+    const lozenge = (rx, ry, col) => {
+      g.fillStyle = col;
+      g.beginPath();
+      for (let k = 0; k <= 32; k++) {
+        const a = (k / 32) * Math.PI * 2;
+        const wob = 1 + 0.08 * Math.cos(a * 8);
+        const px = mx + Math.cos(a) * rx * wob * (0.55 + 0.45 * Math.abs(Math.cos(a)));
+        const py = my + Math.sin(a) * ry * wob;
+        k ? g.lineTo(px, py) : g.moveTo(px, py);
+      }
+      g.fill();
+    };
+    lozenge(h * 0.62, h * 0.34, gold);
+    lozenge(h * 0.57, h * 0.3, navy);
+    lozenge(h * 0.44, h * 0.22, teal);
+    lozenge(h * 0.3, h * 0.15, ivory);
+    rosette(mx, my, h * 0.11);
+    // pendants on the long axis
+    for (const s2 of [-1, 1]) {
+      g.fillStyle = navy;
+      g.beginPath();
+      g.arc(mx + s2 * h * 0.72, my, h * 0.07, 0, 7);
+      g.fill();
+      rosette(mx + s2 * h * 0.72, my, h * 0.05);
+    }
+    // wear: lighter patches where people walk, then wool grain
+    for (let i = 0; i < 18; i++) {
+      const x = rnd() * w, y = rnd() * h, r = rr(20, 70);
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, 'rgba(230,210,180,0.10)');
+      gr.addColorStop(1, 'rgba(230,210,180,0)');
+      g.fillStyle = gr;
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    // age the dyes
+    g.fillStyle = 'rgba(70,52,40,0.22)';
+    g.fillRect(0, 0, w, h);
+    grain(g, w, h, 22, 14000);
   },
   rescue(g, w, h) {
     g.clearRect(0, 0, w, h);
@@ -643,7 +726,7 @@ export const TEX_SIZE = {
   cabinet: [1, 1.1], sill: [1, 1], roof: [2, 2], trim: [1, 1], metal: [1, 1], rug: [1, 1], rescue: [4, 4],
 };
 
-const PIX = { plaster: [256, 512], w_hall: [256, 512], w_lib: [256, 512], w_garage: [256, 512], w_kitchen: [128, 512], w_dining: [256, 512], w_lounge: [256, 512], w_corr: [256, 512], rug: [512, 512] };
+const PIX = { plaster: [256, 512], w_hall: [256, 512], w_lib: [256, 512], w_garage: [256, 512], w_kitchen: [128, 512], w_dining: [256, 512], w_lounge: [256, 512], w_corr: [256, 512], rug: [1024, 400] };
 
 // CC0 photo textures from Poly Haven (assets/tex), 512 px; the rest stays hand-drawn
 const PHOTO = {
@@ -657,7 +740,7 @@ const PHOTO = {
 const PHOTO_SIZE = {
   grass: [3, 3], pave: [2.5, 2.5], terrace: [2, 2], gravel: [2.5, 2.5], wood: [2, 2], parquet: [1.6, 1.6], darkwood: [2.2, 2.2],
   marble: [2, 2], tile: [1.5, 1.5], concrete: [3, 3], stone: [3, 3], plaster: [3, 3], w_garage: [2.5, 2.5], w_kitchen: [1.5, 1.5],
-  ceiling: [3, 3], roof: [2.5, 2.5], fire: [1.6, 1.6], w_lib: [2, 2], table: [1.5, 1.5], shed: [2, 2], fountain: [1.6, 1.6],
+  ceiling: [3, 3], roof: [1.8, 1.8], fire: [1.6, 1.6], w_lib: [2, 2], table: [1.5, 1.5], shed: [2, 2], fountain: [1.6, 1.6],
   pillar: [1.2, 2.4], trim: [1.5, 1.5], sill: [1, 1], counter: [1, 1], cabinet: [1.2, 1.2],
 };
 export const PHOTO_ON = !new URLSearchParams(location.search).has('nophoto');
