@@ -98,6 +98,9 @@ const GUN = {
   shotgun: { f: 900, body: 70, dur: 0.45, vol: 0.95 },
   rifle: { f: 1400, body: 110, dur: 0.22, vol: 0.7 },
   sniper: { f: 800, body: 60, dur: 0.7, vol: 1.0 },
+  m4: { f: 1700, body: 120, dur: 0.17, vol: 0.62 },
+  scout: { f: 1000, body: 75, dur: 0.5, vol: 0.85 },
+  mg: { f: 1250, body: 95, dur: 0.24, vol: 0.78 },
 };
 
 export function sfx(name, pos = null, opt = {}) {

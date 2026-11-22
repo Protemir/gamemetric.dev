@@ -53,7 +53,7 @@ export class Brain {
   buy() {
     const s = this.s, g = this.g;
     if (g.mode === 'dm') {
-      const pool = ['rifle', 'rifle', 'smg', 'shotgun', 'sniper', 'rifle', 'deagle'];
+      const pool = ['rifle', 'm4', 'smg', 'shotgun', 'sniper', 'rifle', 'deagle', 'scout', 'mg', 'm4'];
       const k = pool[Math.floor(Math.random() * pool.length)];
       g.giveWeapon(s, k);
       s.armor = 100;
@@ -76,8 +76,13 @@ export class Brain {
     const m = s.money;
     const sniperOk = !g.soldiers.some((o) => o !== s && o.team === s.team && o.slots[1] === 'sniper');
     if (!s.slots[1]) {
-      if (m >= 6000 && sniperOk && Math.random() < 0.35) spend('sniper', 4750);
-      else if (m >= 3700) spend('rifle', 2700);
+      const r = Math.random();
+      if (m >= 6000 && sniperOk && r < 0.3) spend('sniper', 4750);
+      else if (m >= 6500 && r < 0.42) spend('mg', 5200);
+      else if (m >= 3700) {
+        const k = s.team === 'A' ? (Math.random() < 0.7 ? 'm4' : 'rifle') : Math.random() < 0.8 ? 'rifle' : 'm4';
+        spend(k, WEAPONS[k].price);
+      } else if (m >= 2400 && sniperOk && r < 0.2) spend('scout', 1700);
       else if (m >= 2300) {
         const k = Math.random() < 0.3 ? 'shotgun' : 'smg';
         spend(k, WEAPONS[k].price);
@@ -266,7 +271,10 @@ export class Brain {
     // aim point with a little lead
     const lead = Math.min(0.25, d / 120);
     const tx = T.x + T.vx * lead, tz = T.z + T.vz * lead;
-    const ty = this.aimHead ? T.feet + T.eyeH() + 0.02 : T.feet + T.eyeH() - 0.45;
+    // chest shots, unless the chest is behind cover (a window sill, a crate): then the head
+    const chest = T.feet + T.eyeH() - 0.45;
+    const chestOpen = !this.aimHead && g.map.los(s.x, eyeY, s.z, T.x, chest, T.z);
+    const ty = this.aimHead || !chestOpen ? T.feet + T.eyeH() + 0.02 : chest;
     const wantY = yawTo(tx - s.x, tz - s.z);
     const wantP = Math.atan2(ty - eyeY, Math.hypot(tx - s.x, tz - s.z));
     // error shrinks while tracking
@@ -279,7 +287,7 @@ export class Brain {
     const off = Math.abs(angDiff(s.yaw, ay)) + Math.abs(ap - s.pitch);
 
     // movement while fighting
-    const rifleish = s.kind === 'rifle' || s.kind === 'sniper' || s.kind === 'deagle';
+    const rifleish = ['rifle', 'm4', 'mg', 'sniper', 'scout', 'deagle'].includes(s.kind);
     if (s.kind === 'knife') {
       inp.f = 1;
     } else if (rifleish && d > 7) {
