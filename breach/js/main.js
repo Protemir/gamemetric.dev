@@ -2,7 +2,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { Game } from './game.js';
 import { Hud, BUY_ITEMS } from './hud.js';
-import { initAudio, setVolume, sfx } from './audio.js';
+import { initAudio, setVolume, sfx, rainSound } from './audio.js';
 import { t, lang, setLang } from './i18n.js';
 import { loadPeople } from './people.js';
 import { loadProps } from './props.js';
@@ -17,12 +17,33 @@ const canvas = $('view');
 const q = new URLSearchParams(location.search);
 
 // ---------- settings ----------
-const DEF = { sens: 1.2, tsens: 1, ui: 1, fov: 74, vol: 0.8, bright: 1.2, fun: {}, quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
+const DEF = { sens: 1.2, tsens: 1, ui: 1, fov: 74, vol: 0.8, bright: 1.2, fun: {}, skin: 'none', quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
 let settings = { ...DEF };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem('breach.settings') || '{}'));
 } catch {
   /* ignore */
+}
+{
+  const num = (k, lo, hi) => {
+    const v = +settings[k];
+    settings[k] = Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : DEF[k];
+  };
+  num('sens', 0.2, 4);
+  num('tsens', 0.3, 3);
+  num('ui', 0.6, 1.3);
+  num('fov', 60, 90);
+  num('vol', 0, 1);
+  num('bright', 0.8, 1.8);
+  const one = (k, list) => {
+    if (!list.includes(settings[k])) settings[k] = DEF[k];
+  };
+  one('quality', ['auto', '1', '0.75', '0.5']);
+  one('team', ['A', 'B']);
+  one('mode', ['hostage', 'dm', 'gun', 'knife', 'zombie']);
+  one('diff', ['easy', 'normal', 'hard']);
+  one('skin', ['none', 'gold', 'red', 'arctic', 'neon']);
+  if (!settings.fun || typeof settings.fun !== 'object') settings.fun = {};
 }
 const save = () => {
   try {
@@ -105,6 +126,7 @@ for (const b of document.querySelectorAll('#seg-fun button')) {
   });
 }
 seg('seg-q', 'quality');
+seg('seg-skin', 'skin');
 function sides() {
   for (const b of document.querySelectorAll('.side')) b.classList.toggle('on', b.dataset.side === settings.team);
 }
@@ -203,7 +225,9 @@ $('play').onclick = () => {
 $('online').onclick = () => openLobby(newCode());
 $('click-to-play').onclick = () => resume();
 
+let startGen = 0;
 function startGame(online) {
+  const gen = ++startGen;
   initAudio();
   closeBuy(false);
   input.menuOpen = false;
@@ -215,6 +239,10 @@ function startGame(online) {
   $('loading').hidden = false;
   // let the loading text paint before the heavy build
   setTimeout(() => {
+    if (gen !== startGen || (online && !net)) {
+      $('loading').hidden = true;
+      return;
+    }
     if (game) game.dispose();
     if (preview) {
       preview.dispose();
@@ -255,6 +283,8 @@ function touchPause() {
 }
 
 function toMenu() {
+  wantResume = false;
+  startGen++;
   if (net) {
     net.close();
     net = null;
@@ -318,7 +348,7 @@ function resume() {
   wantResume = true;
   lockPointer();
   setTimeout(() => {
-    if (wantResume && document.pointerLockElement !== canvas) $('click-to-play').hidden = false;
+    if (wantResume && state !== 'menu' && game && document.pointerLockElement !== canvas) $('click-to-play').hidden = false;
   }, 400);
 }
 document.addEventListener('pointerlockchange', () => {
@@ -370,9 +400,9 @@ function enableTouch() {
           game.playerAction('slot' + order[(i + 1) % order.length]);
         } else if (a === 'nade') {
           const p = game.player;
-          // he grenade first, then the flashes; another tap swaps between them
-          const want = p.cur === 4 ? (p.flash > 0 ? 5 : 4) : p.cur === 5 ? (p.he > 0 ? 4 : 5) : p.he > 0 ? 4 : 5;
-          game.playerAction('slot' + want);
+          // he grenade first, then the flashes, then the smoke; another tap moves along
+          const have = [4, 5, 6].filter((n) => p.hasSlot(n));
+          if (have.length) game.playerAction('slot' + have[(have.indexOf(p.cur) + 1) % have.length]);
         } else game.playerAction(a);
       },
       board(on) {
@@ -386,6 +416,10 @@ function enableTouch() {
   touchCtl.visible = false;
   touchCtl.label();
   applyTexts();
+  // (on a phone this runs while the page is still loading, before net exists)
+  try {
+    if (net) $('mo-menu').textContent = t('backToLobby');
+  } catch {}
   // a game already running carries on with the new controls
   if (game && state === 'pause' && !$('pause').hidden) {
     /* a menu was up: leave it to the player */
@@ -401,6 +435,7 @@ else if (!q.has('mouse') && (mobileUA || !matchMedia('(any-pointer: fine)').matc
     { once: true, capture: true },
   );
 document.addEventListener('visibilitychange', () => {
+  if (document.hidden) rainSound(false);
   if (!document.hidden || !touchCtl) return;
   touchCtl.show(false);
   touchCtl.visible = false;
@@ -408,7 +443,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function openBuy() {
-  if (!game || !game.player.alive) return;
+  if (!game || !game.player.alive || game.over) return;
   if (!game.canBuy(game.player)) {
     hud.center(game.mode !== 'dm' && game.buyTimeLeft() <= 0 ? t('buyClosed') : t('buyZone'), 1.5);
     sfx('deny');
@@ -502,7 +537,7 @@ window.addEventListener('keydown', (e) => {
   input.keys.add(e.code);
   // keep Ctrl+R, Ctrl+1.. and friends from reloading or switching tabs while crouching
   if (e.ctrlKey || e.metaKey || ['Space', 'ArrowUp', 'ArrowDown', 'ControlLeft', 'ControlRight', 'KeyS', 'KeyW', 'KeyR', 'KeyD', 'KeyB', 'KeyE', 'KeyF'].includes(e.code)) e.preventDefault();
-  const map = { Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', KeyQ: 'last', KeyR: 'reload', KeyE: 'use', KeyF: 'inspect', KeyT: 'spray' };
+  const map = { Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', Digit6: 'slot6', KeyQ: 'last', KeyR: 'reload', KeyE: 'use', KeyF: 'inspect', KeyT: 'spray' };
   if (map[e.code]) game.playerAction(map[e.code]);
   if (e.code === 'KeyB') openBuy();
 });
@@ -511,6 +546,7 @@ window.addEventListener('keyup', (e) => {
   if (e.code === 'Tab') $('board').hidden = true;
 });
 window.addEventListener('blur', () => {
+  $('board').hidden = true;
   input.keys.clear();
   input.fire = false;
 });
@@ -609,6 +645,7 @@ function frame(now) {
     game.render(dt, look, settings);
     hud.update(game, now, settings, fps);
   } else if (state === 'pause' && game) {
+    if (game.role === 'solo' && game.rain) rainSound(false);
     // online the match goes on behind the menu
     if (game.role !== 'solo') {
       game.update(dt, { keys: new Set(), fire: false, menuOpen: true });
@@ -926,6 +963,8 @@ function onNetMessage(from, m) {
 const pending = [];
 
 function backToLobby(announce) {
+  wantResume = false;
+  startGen++;
   if (game) {
     game.dispose();
     game = null;

@@ -20,10 +20,11 @@ export const BUY_ITEMS = [
   { key: 'X', item: 'helmet', group: 'gear' },
   { key: 'C', item: 'he', group: 'gear' },
   { key: 'V', item: 'flash', group: 'gear' },
+  { key: 'N', item: 'smoke', group: 'gear' },
 ];
 
 const ICON = {
-  knife: '🗡', pistol: '🔫', deagle: '🔫', smg: '▬', shotgun: '▬', rifle: '▬', sniper: '▬', m4: '▬', scout: '▬', mg: '▬', he: '💥', flash: '✸',
+  knife: '🗡', pistol: '🔫', deagle: '🔫', smg: '▬', shotgun: '▬', rifle: '▬', sniper: '▬', m4: '▬', scout: '▬', mg: '▬', he: '💥', flash: '✸', smoke: '☁',
 };
 
 export class Hud {
@@ -44,6 +45,7 @@ export class Hud {
 
   attach(game) {
     this.game = game;
+    $('board').hidden = true;
     this.mapImg = this.drawMap(game.map);
     this.feedEl.innerHTML = '';
     this.buildBuy();
@@ -111,10 +113,11 @@ export class Hud {
     $('buy-time').textContent = free ? '' : left > 0 ? `${Math.ceil(left)} ${lang === 'ru' ? 'с' : 's'}` : t('buyClosed');
     for (const btn of document.querySelectorAll('.buy-item')) {
       const item = btn.dataset.item;
-      const price = WEAPONS[item]?.price ?? GEAR[item]?.price;
+      let price = WEAPONS[item]?.price ?? GEAR[item]?.price;
+      if (item === 'helmet' && p.armor >= 100 && !p.helmet) price = 350;
       btn.querySelector('.bi-price').textContent = free ? '' : `$${price}`;
       btn.classList.toggle('poor', !free && p.money < price);
-      const have = (WEAPONS[item] && (p.slots[1] === item || p.slots[2] === item)) || (item === 'helmet' && p.helmet && p.armor >= 100) || (item === 'armor' && p.armor >= 100) || (item === 'he' && p.he > 0) || (item === 'flash' && p.flash >= 2);
+      const have = (WEAPONS[item] && (p.slots[1] === item || p.slots[2] === item)) || (item === 'helmet' && p.helmet && p.armor >= 100) || (item === 'armor' && p.armor >= 100) || (item === 'he' && p.he > 0) || (item === 'flash' && p.flash >= 2) || (item === 'smoke' && p.smoke > 0);
       btn.classList.toggle('have', !!have);
     }
   }
@@ -264,7 +267,7 @@ export class Hud {
       $('reserve').textContent = `/ ${a.res}`;
       $('ammo-box').classList.toggle('low', a.mag <= Math.ceil(wk.mag * 0.2));
     } else if (wk && wk.nade) {
-      $('ammo').textContent = src.kind === 'he' ? src.he : src.flash;
+      $('ammo').textContent = src.kind === 'he' ? src.he : src.kind === 'smoke' ? src.smoke : src.flash;
       $('reserve').textContent = '';
       $('ammo-box').classList.remove('low');
     } else {
@@ -275,9 +278,9 @@ export class Hud {
     $('reloading').hidden = !(src === p && p.reloadUntil);
     // slots
     const slots = [];
-    for (const n of [1, 2, 3, 4, 5]) {
+    for (const n of [1, 2, 3, 4, 5, 6]) {
       if (!src.hasSlot(n)) continue;
-      const k = n === 4 ? 'he' : n === 5 ? 'flash' : src.slots[n];
+      const k = n === 4 ? 'he' : n === 5 ? 'flash' : n === 6 ? 'smoke' : src.slots[n];
       slots.push(`<span class="${src.cur === n ? 'on' : ''}">${n} ${WEAPONS[k].name[lang].replace(/«|»|"/g, '')}${n === 5 && src.flash > 1 ? ' ×2' : ''}</span>`);
     }
     $('slots').innerHTML = slots.join('');
@@ -287,6 +290,7 @@ export class Hud {
       $('sc-b').textContent = game.dmKills.B;
       const left = Math.max(0, game.phaseEnd - game.time);
       $('timer').textContent = fmt(left);
+      $('timer').classList.remove('freeze', 'low');
     } else {
       $('sc-a').textContent = game.score.A;
       $('sc-b').textContent = game.score.B;

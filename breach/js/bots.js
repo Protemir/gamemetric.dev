@@ -136,10 +136,10 @@ export class Brain {
     const facing = Math.abs(angDiff(s.yaw, yawTo(dx, dz)));
     const alerted = this.hurtBy === o && g.time - this.hurtAt < 2.5;
     if (d > 4 && facing > fov && !alerted) return false;
-    // dark interiors and smoke are not modelled; walls are
+    // walls and smoke clouds block the view; dark interiors do not
     const head = o.feet + o.eyeH();
-    if (g.map.los(s.x, eyeY, s.z, o.x, head, o.z)) return true;
-    if (g.map.los(s.x, eyeY, s.z, o.x, o.feet + 1.0, o.z)) return true;
+    if (g.map.los(s.x, eyeY, s.z, o.x, head, o.z) && !g.smokeBlocks(s.x, eyeY, s.z, o.x, head, o.z)) return true;
+    if (g.map.los(s.x, eyeY, s.z, o.x, o.feet + 1.0, o.z) && !g.smokeBlocks(s.x, eyeY, s.z, o.x, o.feet + 1.0, o.z)) return true;
     return false;
   }
 

@@ -5,6 +5,7 @@ import { buildDecor } from './decor.js';
 import { buildProps, propsReady } from './props.js';
 import { Chickens } from './chickens.js';
 import { Rain } from './weather.js';
+import { Smokes } from './smoke.js';
 import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
@@ -62,6 +63,7 @@ class Soldier {
     this.ammo = { pistol: { mag: 12, res: 48 } };
     this.he = 0;
     this.flash = 0;
+    this.smoke = 0;
     this.armor = 0;
     this.helmet = false;
     this.cur = 2;
@@ -72,6 +74,7 @@ class Soldier {
     if (this.remote && this.netKind) return this.netKind;
     if (this.cur === 4) return 'he';
     if (this.cur === 5) return 'flash';
+    if (this.cur === 6) return 'smoke';
     return this.slots[this.cur] || 'knife';
   }
 
@@ -90,6 +93,7 @@ class Soldier {
   hasSlot(n) {
     if (n === 4) return this.he > 0;
     if (n === 5) return this.flash > 0;
+    if (n === 6) return this.smoke > 0;
     return !!this.slots[n];
   }
 
@@ -190,6 +194,7 @@ const VM_OFFSET = {
   mg: [0.105, -0.13, -0.2, 0.04],
   he: [0.12, -0.11, -0.25],
   flash: [0.12, -0.11, -0.25],
+  smoke: [0.12, -0.11, -0.25],
 };
 const VM_SCALE = 0.62;
 
@@ -214,9 +219,10 @@ class ViewModel {
     this.draw = 0;
     this.flashT = 0;
   }
-  setKind(kind, team) {
-    const key = kind + team;
-    if (!this.cache[key]) this.cache[key] = viewModel(kind, team);
+  setKind(kind, team, skin = this.skin || 'none') {
+    this.skin = skin;
+    const key = kind + team + skin;
+    if (!this.cache[key]) this.cache[key] = viewModel(kind, team, skin);
     const v = this.cache[key];
     this.mesh.geometry = v.geo;
     this.muzzle = v.muzzle;
@@ -262,6 +268,7 @@ export class Game {
     this.fun = opts.fun || {};
     this.grav = this.fun.lowgrav ? 6 : GRAV;
     this.chickens = new Chickens(this);
+    this.smokes = new Smokes(this);
     if (this.rainPending) this.rain = new Rain(this);
     this.vm = new ViewModel();
     this.vm.flash.material.map = this.fx.flashes[0].s.material.map;
@@ -329,6 +336,7 @@ export class Game {
   applyRound(m) {
     this.round = m.r;
     this.fx.clear();
+    this.smokes?.clear();
     this.clearDrops();
     this.firstBlood = false;
     this.chickens.spawn();
@@ -584,7 +592,7 @@ export class Game {
   }
 
   canBuy(s) {
-    if (this.variant) return false;
+    if (this.variant || this.over) return false;
     if (this.mode === 'dm') return this.map.zone[this.map.cellAt(s.x, s.z)] === (s.team === 'A' ? 1 : 2) || this.time - s.spawnedAt < 10;
     if (!(this.phase === 'freeze' || (this.phase === 'live' && this.buyTimeLeft() > 0))) return false;
     const z = this.map.zone[this.map.cellAt(s.x, s.z)];
@@ -622,6 +630,9 @@ export class Game {
     } else if (item === 'flash') {
       if (s.flash >= 2) return 'have';
       s.flash++;
+    } else if (item === 'smoke') {
+      if (s.smoke >= 1) return 'have';
+      s.smoke = 1;
     } else {
       const w = WEAPONS[item];
       if (s.slots[w.slot] === item) {
@@ -638,6 +649,7 @@ export class Game {
   startRound(first = false) {
     this.round++;
     this.fx.clear();
+    this.smokes?.clear();
     this.flashWhite = 0;
     this.view.shake = 0;
     for (const n of this.nades) this.dropNade(n);
@@ -666,6 +678,7 @@ export class Game {
           s.helmet = true;
           s.he = 1;
           s.flash = 1;
+          s.smoke = 1;
         }
       } else {
         // survivors keep their guns; ammo is topped up
@@ -745,6 +758,7 @@ export class Game {
           s.helmet = true;
           s.he = 1;
           s.flash = 1;
+          s.smoke = 1;
           if (this.variant) {
             s.switchSlot(s.bestSlot(), true);
             this.variantLoadout(s);
@@ -802,6 +816,8 @@ export class Game {
   finishMatch(winner) {
     if (this.over) return;
     this.over = true;
+    for (const n of this.nades) this.dropNade(n);
+    this.nades.length = 0;
     this.nh?.onOver(winner);
     this.hud.matchOver(winner === 'draw' ? null : winner === this.player.team, this);
   }
@@ -1130,9 +1146,26 @@ export class Game {
     if (this.variant === 'gun' && by && by !== o && by.team !== o.team && this.role !== 'client') this.gunProgress(by, o, weapon);
     if (o.isPlayer) {
       this.streak = 0;
-      this.hud.center(by && by !== o ? `${t('killedBy')} ${by.name}` : t('youDied'), 2.5);
+      this.hud.center(by && by !== o ? `${t('killedBy')} ${by.name}${by.alive ? ` · ${Math.max(1, Math.ceil(by.hp))} HP` : ''}` : t('youDied'), 2.5);
       this.vm.mesh.visible = false;
     }
+  }
+
+  // a bot handed over to a friend leaves quietly: no corpse, no feed line, no score
+  vanish(s) {
+    s.hp = 0;
+    s.alive = false;
+    s.deadAt = this.time;
+    s.killer = null;
+    s.scoped = 0;
+    s.body.root.visible = false;
+    s.nb = null;
+    if (this.role !== 'client') this.dropFrom(s);
+    for (const h of this.hostages) if (h.leader === s) {
+      h.leader = null;
+      h.state = 'idle';
+    }
+    this.nh?.onVanish?.(s);
   }
 
   // a tag on the wall, like the old shooters: one every few seconds, within arm's reach
@@ -1157,12 +1190,16 @@ export class Game {
       if (d > 45 || d < 0.5) continue;
       const dyaw = angDiff(p.yaw, Math.atan2(-tx, -tz)), dp = Math.atan2(ty, d) - p.pitch;
       const a = Math.hypot(dyaw, dp);
-      if (a < bestA && this.map.los(p.x, eye, p.z, o.x, o.feet + o.eyeH() - 0.3, o.z)) (bestA = a), (best = { dyaw, dp });
+      if (a < bestA && this.map.los(p.x, eye, p.z, o.x, o.feet + o.eyeH() - 0.3, o.z) && !this.smokeBlocks(p.x, eye, p.z, o.x, o.feet + o.eyeH() - 0.3, o.z)) (bestA = a), (best = { dyaw, dp });
     }
     if (!best) return;
     const k = Math.min(1, dt * (this.vm.kick > 0.05 || p.justFired ? 5 : 2)) * 0.5;
     p.yaw += best.dyaw * k;
     p.pitch += best.dp * k;
+  }
+
+  smokeBlocks(ax, ay, az, bx, by, bz) {
+    return this.smokes.list.length > 0 && this.smokes.blocks(ax, ay, az, bx, by, bz);
   }
 
   // ---------- the extra modes ----------
@@ -1172,6 +1209,7 @@ export class Game {
     s.ammo = {};
     s.he = 0;
     s.flash = 0;
+    s.smoke = 0;
     s.armor = 100;
     s.helmet = true;
     if (this.variant === 'gun') {
@@ -1288,10 +1326,10 @@ export class Game {
 
   // ---------- grenades ----------
   throwNade(s, kind, yaw, pitch, speed) {
-    if (kind === 'he' ? s.he <= 0 : s.flash <= 0) return;
+    const cnt = kind === 'he' ? 'he' : kind === 'smoke' ? 'smoke' : 'flash';
+    if (s[cnt] <= 0) return;
     if (this.time < s.switchUntil || this.time < s.nextFire) return;
-    if (kind === 'he') s.he--;
-    else s.flash--;
+    s[cnt]--;
     s.nextFire = this.time + 0.6;
     const eye = s.feet + s.eyeH();
     const dx = -Math.sin(yaw) * Math.cos(pitch), dy = Math.sin(pitch), dz = -Math.cos(yaw) * Math.cos(pitch);
@@ -1304,17 +1342,17 @@ export class Game {
     if (!s.isPlayer) sfx('pin', [s.x, 1, s.z]);
     if (s.isPlayer) this.vm.kick = 1;
     // back to a gun when this was the last one
-    if ((s.cur === 4 || s.cur === 5) && !s.hasSlot(s.cur)) s.switchSlot(s.prev && s.prev < 4 && s.hasSlot(s.prev) ? s.prev : s.bestSlot());
+    if (s.cur >= 4 && !s.hasSlot(s.cur)) s.switchSlot(s.prev && s.prev < 4 && s.hasSlot(s.prev) ? s.prev : s.bestSlot());
     else if (s.isPlayer) this.vm.draw = 1;
   }
 
   spawnNade(s, kind, x, y, z, vx, vy, vz, nid) {
     const geo = kind === 'he' ? (this._heGeo ||= new THREE.SphereGeometry(0.06, 8, 6)) : (this._flGeo ||= new THREE.CylinderGeometry(0.035, 0.035, 0.12, 8));
     this._nadeMat ||= {};
-    const mat = this._nadeMat[kind] || (this._nadeMat[kind] = new THREE.MeshLambertMaterial({ color: kind === 'he' ? 0x3f5a2c : 0xb0b6be }));
+    const mat = this._nadeMat[kind] || (this._nadeMat[kind] = new THREE.MeshLambertMaterial({ color: kind === 'he' ? 0x3f5a2c : kind === 'smoke' ? 0x5a6470 : 0xb0b6be }));
     const mesh = new THREE.Mesh(geo, mat);
     this.scene.add(mesh);
-    const n = { kind, owner: s, x, y, z, vx, vy, vz, fuse: this.time + (kind === 'he' ? 1.7 : 1.5), mesh, nid };
+    const n = { kind, owner: s, x, y, z, vx, vy, vz, fuse: this.time + (kind === 'he' ? 1.7 : kind === 'smoke' ? 1.9 : 1.5), mesh, nid };
     this.nades.push(n);
     return n;
   }
@@ -1384,6 +1422,11 @@ export class Game {
   }
 
   detonate(n) {
+    if (n.kind === 'smoke') {
+      sfx('smoke', [n.x, n.y, n.z]);
+      this.smokes.add(n.x, n.y, n.z);
+      return;
+    }
     if (n.kind === 'he') {
       sfx('explode', [n.x, n.y, n.z]);
       this.fx.flash(n.x, n.y + 0.3, n.z, 4, 0.18);
@@ -1814,13 +1857,14 @@ export class Game {
     }
     this.updateHostages(dt);
     this.updateDrops();
-    this.chickens.update(dt);
+    if (!this.over) this.chickens.update(dt);
     if (this.mode === 'dm' && this.time > (this.flockAt || 0)) {
       this.flockAt = this.time + 45;
       if (this.chickens.list.length < 5) this.chickens.spawn();
     }
     this.rain?.update(dt);
-    if (this.variant === 'zombie') for (const s of this.soldiers) if (s.team === 'B' && s.alive && Math.random() < dt * 0.12) sfx('groan', [s.x, s.feet + 1.6, s.z]);
+    this.smokes.update(dt);
+    if (this.variant === 'zombie' && !this.over) for (const s of this.soldiers) if (s.team === 'B' && s.alive && Math.random() < dt * 0.12) sfx('groan', [s.x, s.feet + 1.6, s.z]);
     this.updateNades(dt);
     this.fx.update(dt);
     this.tex.water.offset.x = this.time * 0.02;
@@ -2051,10 +2095,23 @@ export class Game {
       v.z = p.z;
       let eyeY = p.feet + p.eyeH();
       if (!p.alive) {
-        // death cam: sink to the floor
+        // death cam: sink to the floor, then turn to the one who killed you
         const k = Math.min(1, (this.time - p.deadAt) * 1.5);
         eyeY = p.feet + 1.6 - k * 1.2;
-        v.roll = k * 0.5;
+        v.roll = k * 0.3;
+        const by = p.killer;
+        if (by && by !== p && this.time - p.deadAt > 0.35 && this.time - p.deadAt < 4) {
+          const dx = by.x - p.x, dz = by.z - p.z;
+          const d = Math.hypot(dx, dz);
+          if (d > 0.5) {
+            const e = Math.min(1, dt * 5);
+            p.yaw += angDiff(p.yaw, Math.atan2(-dx, -dz)) * e;
+            const want = Math.atan2(by.feet + 1.2 - eyeY, d);
+            p.pitch += (Math.max(-0.8, Math.min(0.8, want)) - p.pitch) * e;
+            v.yaw = p.yaw;
+            v.pitch = p.pitch;
+          }
+        }
       } else v.roll = 0;
       v.stepUp = (v.stepUp || 0) * Math.exp(-dt * 14);
       v.y = eyeY - v.stepUp;
@@ -2095,8 +2152,9 @@ export class Game {
     const vm = this.vm;
     const showVm = src.alive && !src.scoped;
     vm.mesh.visible = showVm;
-    if (showVm && (vm.kind !== src.kind || vm.team !== src.team)) {
-      vm.setKind(src.kind, src.team);
+    if (showVm && (vm.kind !== src.kind || vm.team !== src.team || vm.skin !== (settings.skin || 'none'))) {
+      vm.skin = settings.skin || 'none';
+      vm.setKind(src.kind, src.team, vm.skin);
       vm.draw = 0;
     }
     if (showVm) {
@@ -2182,11 +2240,10 @@ export class Game {
       s.netKind = null;
       s.nb = null;
       s.gunLevel = 0;
-      if (s.alive) {
-        const fb = this.firstBlood;
-        this.kill(s, null, 'knife', false, 0, 0);
-        this.firstBlood = fb;
-      }
+      s.kills = 0;
+      s.deaths = 0;
+      s.roundKills = 0;
+      if (s.alive) this.vanish(s);
       if (this.mode === 'dm' && !(this.variant === 'zombie' && s.team === 'A')) s.respawnAt = this.time + 2;
       return s;
     }
@@ -2214,6 +2271,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    this.smokes?.clear();
     this.rain?.dispose();
     this.chickens?.dispose();
     this.envRT?.dispose();
@@ -2221,6 +2279,7 @@ export class Game {
     this.scene.traverse((o) => all.push(o));
     this.vm.scene.traverse((o) => all.push(o));
     for (const o of all) if (o.isInstancedMesh) o.dispose();
+    for (const o of all) if (o.isSkinnedMesh) o.skeleton?.dispose();
     for (const o of all) {
       if (o.geometry) o.geometry.dispose();
       if (o.material) {

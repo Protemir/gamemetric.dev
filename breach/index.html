@@ -34,14 +34,15 @@
  "isAccessibleForFree": true
 }
 </script>
-<link rel="stylesheet" href="style.css?v=136baf94">
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=007c5015","./js/audio.js":"./js/audio.js?v=88f15f7b","./js/bots.js":"./js/bots.js?v=5fb7ee7a","./js/chickens.js":"./js/chickens.js?v=bd5a3f99","./js/decor.js":"./js/decor.js?v=1a1a6d82","./js/fx.js":"./js/fx.js?v=09bd5e9b","./js/game.js":"./js/game.js?v=84184ab5","./js/guns.js":"./js/guns.js?v=abccc5d7","./js/hud.js":"./js/hud.js?v=204efd9d","./js/i18n.js":"./js/i18n.js?v=32c4c175","./js/main.js":"./js/main.js?v=aab2b60d","./js/map.js":"./js/map.js?v=f53a0acb","./js/net.js":"./js/net.js?v=43be3192","./js/netgame.js":"./js/netgame.js?v=15a92cc8","./js/people.js":"./js/people.js?v=e26b1ede","./js/props.js":"./js/props.js?v=27e10034","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=d452c218","./js/weapons.js":"./js/weapons.js?v=cfb05660","./js/weather.js":"./js/weather.js?v=7516522a"}}</script>
-<script type="module" src="./js/main.js?v=aab2b60d"></script>
+<link rel="stylesheet" href="style.css?v=c388842a">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=4cc82a18","./js/audio.js":"./js/audio.js?v=a1df47d1","./js/bots.js":"./js/bots.js?v=4945180d","./js/chickens.js":"./js/chickens.js?v=bd5a3f99","./js/decor.js":"./js/decor.js?v=0ff6ecf3","./js/fx.js":"./js/fx.js?v=09bd5e9b","./js/game.js":"./js/game.js?v=a03f887b","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=2f920e1c","./js/i18n.js":"./js/i18n.js?v=1f49ea0a","./js/main.js":"./js/main.js?v=d0bc61f6","./js/map.js":"./js/map.js?v=66950947","./js/net.js":"./js/net.js?v=43be3192","./js/netgame.js":"./js/netgame.js?v=93ab5494","./js/people.js":"./js/people.js?v=e26b1ede","./js/props.js":"./js/props.js?v=b906d50c","./js/smoke.js":"./js/smoke.js?v=2a4dcc7b","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=ffa882c5","./js/weapons.js":"./js/weapons.js?v=b392b002","./js/weather.js":"./js/weather.js?v=d03dc656"}}</script>
+<script type="module" src="./js/main.js?v=d0bc61f6"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
 
 <div id="hud" hidden>
+  <div id="smoke-veil"></div>
   <canvas id="radar" width="190" height="190"></canvas>
   <div id="topbar">
     <div class="team ta"><div class="dots" id="alive-a"></div><b id="sc-a">0</b></div>
@@ -141,6 +142,7 @@
     <label class="field"><span data-t="uiSize"></span><input type="range" id="s-ui" min="0.6" max="1.3" step="0.02"><output id="o-ui"></output></label>
     <label class="field"><span data-t="tsens"></span><input type="range" id="s-tsens" min="0.3" max="3" step="0.05"><output id="o-tsens"></output></label>
     <label class="field"><span data-t="brightness"></span><input type="range" id="s-bright" min="0.8" max="1.8" step="0.05"><output id="o-bright"></output></label>
+    <div class="field"><span data-t="skin"></span><div class="seg small" id="seg-skin"><button data-v="none" data-t="skinNone"></button><button data-v="gold" data-t="skinGold"></button><button data-v="red" data-t="skinRed"></button><button data-v="arctic" data-t="skinArctic"></button><button data-v="neon" data-t="skinNeon"></button></div></div>
     <div class="field"><span data-t="quality"></span><div class="seg small" id="seg-q"><button data-v="auto" data-t="auto"></button><button data-v="1">100%</button><button data-v="0.75">75%</button><button data-v="0.5">50%</button></div></div>
     <label class="field check"><input type="checkbox" id="s-fps"><span data-t="showFps"></span></label>
     <button id="s-back" class="btn primary" data-t="back"></button>

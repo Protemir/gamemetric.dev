@@ -341,3 +341,7 @@ html { touch-action: manipulation; }
 .seg button.on { background: rgba(80, 60, 20, 0.85); }
 .link, .menu-foot { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
 .link { color: #c8d0d8; }
+/* the shade stays put when a short window scrolls the menu */
+.menu-bg { position: fixed; }
+#seg-skin { flex-wrap: wrap; } #seg-skin button { flex: 1 1 18%; min-width: 70px; }
+#smoke-veil { position: absolute; inset: 0; background: radial-gradient(ellipse at center, #9a9ea4 0%, #8a8e94 70%, #7c8086 100%); opacity: 0; pointer-events: none; }

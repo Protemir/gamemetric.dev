@@ -307,6 +307,9 @@ const BUILD = {
   he() {
     return [ball(0.034, 0x3e5236, 0, 0, 0, 1, 1.15, 1), tube(0.012, -0.01, 0.01, 0.045, C.steel, 0.012, 8), blk(-0.005, 0.005, 0.015, 0.06, 0.012, C.steel, 0.026, 0.15), ring(0.011, 0.0018, 0.0, 0.06, C.chrome, 0.012)];
   },
+  smoke() {
+    return [tube(0.028, -0.055, 0.055, 0.0, 0x56606a, 0.028, 12).rotateX(Math.PI / 2), tube(0.029, -0.035, -0.025, 0.0, 0xc9cfd6, 0.029, 12).rotateX(Math.PI / 2), tube(0.029, 0.02, 0.03, 0.0, 0xc9cfd6, 0.029, 12).rotateX(Math.PI / 2), tube(0.012, -0.01, 0.01, 0.065, C.steel, 0.012, 8), blk(-0.005, 0.005, 0.02, 0.07, 0.012, C.steel, 0.026, 0.15), ring(0.011, 0.0018, 0.0, 0.073, C.chrome, 0.012)];
+  },
   flash() {
     return [tube(0.026, -0.05, 0.05, 0.0, 0x9aa0a8, 0.026, 12).rotateX(Math.PI / 2), tube(0.027, -0.03, -0.02, 0.0, 0x3a3d42, 0.027, 12).rotateX(Math.PI / 2), tube(0.012, -0.01, 0.01, 0.06, C.steel, 0.012, 8), blk(-0.005, 0.005, 0.02, 0.065, 0.012, C.steel, 0.026, 0.15), ring(0.011, 0.0018, 0.0, 0.068, C.chrome, 0.012)];
   },
@@ -326,6 +329,7 @@ export const GUN_INFO = {
   knife: { l: null, muzzle: [0, 0.01, -0.22] },
   he: { l: null, muzzle: [0, 0.03, 0] },
   flash: { l: null, muzzle: [0, 0.03, 0] },
+  smoke: { l: null, muzzle: [0, 0.03, 0] },
 };
 
 const cache = {};

@@ -52,7 +52,8 @@ export class Rain {
         this.respawn(i, false);
         continue;
       }
-      if (m.isIndoor(x, z) && y < 9) {
+      // the house: drops stop on the roof (it rises 17° from the eaves at 7.4 m)
+      if (m.isIndoor(x, z) && y < 7.5 + Math.min(x - 9.5, 63.5 - x, z - 7.5, 47.5 - z) * 0.306) {
         this.respawn(i, false);
         continue;
       }
@@ -72,7 +73,8 @@ export class Rain {
     if (g.time > this.nextBolt) {
       this.nextBolt = g.time + 14 + Math.random() * 20;
       this.flash = 1;
-      setTimeout(() => sfx('thunder'), 500 + Math.random() * 1500);
+      clearTimeout(this.boltT);
+      this.boltT = setTimeout(() => !g.disposed && !g.over && sfx('thunder'), 500 + Math.random() * 1500);
     }
     if (this.flash > 0) {
       this.flash = Math.max(0, this.flash - dt * 3);
@@ -83,6 +85,7 @@ export class Rain {
   }
 
   dispose() {
+    clearTimeout(this.boltT);
     rainSound(false);
     this.skyMap?.dispose();
     this.g.scene.remove(this.lines);

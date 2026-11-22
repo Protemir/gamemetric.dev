@@ -109,19 +109,30 @@ export function buildDecor(map, tex) {
       fbox(S, 'fountain', -0.08, w, y + 0.02, y + 0.4, 0, 0.06);
       fbox(S, 'fountain', S.len - w, S.len + 0.08, y + 0.02, y + 0.4, 0, 0.06);
     }
+    let upWins = [];
+    const taken = [];
     const shutters = (u0, u1, y0, y1) => {
       const w = Math.min(0.62, (y1 - y0) * 0.36);
-      if (wallAt(u0 - 0.25 - w) && wallAt(u0 - 0.2)) fplate(S, 'shutter', u0 - 0.2 - w, u0 - 0.2, y0, y1, 0.025);
-      if (wallAt(u1 + 0.25 + w) && wallAt(u1 + 0.2)) fplate(S, 'shutter', u1 + 0.2, u1 + 0.2 + w, y0, y1, 0.025);
+      const up = y0 > 4;
+      const free = (a, b) => {
+        if (taken.some((t) => t.up === up && a < t.b + 0.05 && b > t.a - 0.05)) return false;
+        if (up) return a > 0.1 && b < S.len - 0.1 && !upWins.some((u) => a < u + 0.96 && b > u - 0.96);
+        return wallAt(a - 0.05) && wallAt(b + 0.05);
+      };
+      for (const [a, b] of [[u0 - 0.2 - w, u0 - 0.2], [u1 + 0.2, u1 + 0.2 + w]]) {
+        if (!free(a, b)) continue;
+        taken.push({ a, b, up });
+        fplate(S, 'shutter', a, b, y0, y1, 0.025);
+      }
     };
-    const upper = [];
+    const upper = [], noUp = [];
     for (const r of runs) {
       if (r.kind === 'wall') continue;
       const l = r.l || 2.9;
       const y0 = r.kind === 'win' ? 0.95 : 0;
       // frame round the opening
-      fbox(S, 'trim', r.a - 0.18, r.a, y0, l + 0.22, 0, 0.07);
-      fbox(S, 'trim', r.b, r.b + 0.18, y0, l + 0.22, 0, 0.07);
+      fbox(S, 'trim', r.a - 0.18, r.a, y0, l + 0.22, 0, 0.09);
+      fbox(S, 'trim', r.b, r.b + 0.18, y0, l + 0.22, 0, 0.09);
       fbox(S, 'trim', r.a - 0.24, r.b + 0.24, l, l + 0.26, 0, 0.1);
       // a thin frame set into the opening, halfway through the wall
       fbox(S, 'wframe', r.a, r.a + 0.07, y0 + (r.kind === 'win' ? 0.05 : 0), l, -0.55, -0.45);
@@ -131,14 +142,16 @@ export function buildDecor(map, tex) {
         fbox(S, 'fountain', r.a - 0.12, r.b + 0.12, 0.9, 1.02, -0.02, 0.13);
         shutters(r.a, r.b, 1.02, l);
       }
-      upper.push((r.a + r.b) / 2);
-      // the entrance: half columns, a beam and a pediment
-      if (r.kind === 'door' && r.b - r.a >= 4) {
+      const portico = r.kind === 'door' && r.b - r.a >= 4 && S.name === 'S';
+      if (portico) noUp.push([r.a - 1.4, r.b + 1.4]);
+      else upper.push((r.a + r.b) / 2);
+      // the entrance: half columns (set into the wall, so nobody walks through them), a beam and a pediment
+      if (portico) {
         for (const cu of [r.a - 0.55, r.b + 0.55]) {
-          const [cx, cz] = S.at(cu, 0.12);
+          const [cx, cz] = S.at(cu, 0.02);
           shaped('pillar', new THREE.CylinderGeometry(0.26, 0.3, 3.1, 14, 1, true).translate(cx, 0.35 + 1.55, cz));
-          fbox(S, 'fountain', cu - 0.42, cu + 0.42, 0, 0.35, -0.02, 0.5);
-          fbox(S, 'trim', cu - 0.38, cu + 0.38, 3.45, 3.62, -0.02, 0.46);
+          fbox(S, 'fountain', cu - 0.42, cu + 0.42, 0, 0.35, -0.02, 0.36);
+          fbox(S, 'trim', cu - 0.38, cu + 0.38, 3.45, 3.62, -0.02, 0.34);
         }
         fbox(S, 'trim', r.a - 1.05, r.b + 1.05, 3.62, 4.0, 0, 0.62);
         fbox(S, 'trim', r.a - 1.15, r.b + 1.15, 4.0, 4.14, 0, 0.7);
@@ -171,13 +184,14 @@ export function buildDecor(map, tex) {
       if (u < S.len) all.push(u);
       prev = u;
     }
-    for (const u of all) {
-      if (u < 1.4 || u > S.len - 1.4) continue;
+    const ok = all.filter((u) => u >= 1.4 && u <= S.len - 1.4 && !noUp.some(([a, b]) => u + 1.1 > a && u - 1.1 < b));
+    upWins = ok;
+    for (const u of ok) {
       const hw = 0.82;
       fplate(S, 'upwin', u - hw, u + hw, UP_Y0, UP_Y1, 0.015);
       fbox(S, 'trim', u - hw - 0.14, u - hw, UP_Y0 - 0.04, UP_Y1 + 0.1, 0, 0.07);
       fbox(S, 'trim', u + hw, u + hw + 0.14, UP_Y0 - 0.04, UP_Y1 + 0.1, 0, 0.07);
-      fbox(S, 'trim', u - hw - 0.22, u + hw + 0.22, UP_Y1 + 0.06, UP_Y1 + 0.28, 0, 0.11);
+      fbox(S, 'trim', u - hw - 0.22, u + hw + 0.22, UP_Y1 + 0.06, UP_Y1 + 0.2, 0, 0.11);
       fbox(S, 'fountain', u - hw - 0.14, u + hw + 0.14, UP_Y0 - 0.14, UP_Y0 - 0.03, 0, 0.14);
       shutters(u - hw, u + hw, UP_Y0, UP_Y1);
     }

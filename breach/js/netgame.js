@@ -5,7 +5,7 @@ import { WEAPONS } from './weapons.js';
 import { sfx } from './audio.js';
 import { t } from './i18n.js';
 
-export const KINDS = ['knife', 'pistol', 'deagle', 'smg', 'shotgun', 'rifle', 'sniper', 'he', 'flash', 'm4', 'scout', 'mg'];
+export const KINDS = ['knife', 'pistol', 'deagle', 'smg', 'shotgun', 'rifle', 'sniper', 'he', 'flash', 'm4', 'scout', 'mg', 'smoke'];
 const PARTS = ['head', 'body', 'legs'];
 const HSTATE = ['idle', 'follow', 'rescued', 'dead'];
 const PH = ['freeze', 'live', 'end', 'wait'];
@@ -52,7 +52,7 @@ function pushSample(s, sample) {
 }
 
 export function loadoutOf(s) {
-  return { s: [s.slots[1], s.slots[2]], a: Math.round(s.armor), hm: s.helmet ? 1 : 0, he: s.he, fl: s.flash, m: s.money, gl: s.gunLevel || 0 };
+  return { s: [s.slots[1], s.slots[2]], a: Math.round(s.armor), hm: s.helmet ? 1 : 0, he: s.he, fl: s.flash, sm: s.smoke, m: s.money, gl: s.gunLevel || 0 };
 }
 
 export class NetGame {
@@ -151,9 +151,9 @@ export class NetGame {
       case 'n':
         if (!s.alive) return;
         // the host keeps count: a thrown grenade is gone, and nobody throws one they do not have
-        if ((m.kind === 'he' ? s.he : s.flash) <= 0) return;
-        if (m.kind === 'he') s.he--;
-        else s.flash--;
+        const cnt = m.kind === 'he' ? 'he' : m.kind === 'smoke' ? 'smoke' : 'flash';
+        if (s[cnt] <= 0) return;
+        s[cnt]--;
         g.spawnNade(s, m.kind, m.x, m.y, m.z, m.vx, m.vy, m.vz, m.nid);
         this.net.broadcast({ ...m, id: s.id }, true, from);
         break;
@@ -173,7 +173,7 @@ export class NetGame {
         break;
       }
       case 'buy': {
-        if (!WEAPONS[m.item] && !['armor', 'helmet', 'he', 'flash'].includes(m.item)) return;
+        if (!WEAPONS[m.item] && !['armor', 'helmet', 'he', 'flash', 'smoke'].includes(m.item)) return;
         const r = g.buy(s, m.item);
         this.net.send(from, { k: 'L', r, item: m.item, L: loadoutOf(s) });
         break;
@@ -211,6 +211,9 @@ export class NetGame {
 
   onKill(o, by, weapon, head, dx, dz) {
     if (this.host) this.net.broadcast({ k: 'K', v: o.id, by: by ? by.id : -1, w: KINDS.indexOf(weapon), hd: head ? 1 : 0, dx: r2(dx), dz: r2(dz) });
+  }
+  onVanish(o) {
+    if (this.host) this.net.broadcast({ k: 'KV', v: o.id });
   }
   onHostageDown(h) {
     if (this.host) this.net.broadcast({ k: 'HK', i: this.g.hostages.indexOf(h) });
@@ -352,6 +355,11 @@ export class NetGame {
         g.kill(v, m.by >= 0 ? g.soldiers[m.by] : null, KINDS[m.w] || 'pistol', !!m.hd, m.dx / 100, m.dz / 100);
         break;
       }
+      case 'KV': {
+        const v = g.soldiers[m.v];
+        if (v && v.alive) g.vanish(v);
+        break;
+      }
       case 'HK': {
         const h = g.hostages[m.i];
         if (h && h.state !== 'dead') {
@@ -458,6 +466,7 @@ export class NetGame {
     p.helmet = !!L.hm;
     p.he = L.he;
     p.flash = L.fl;
+    p.smoke = L.sm || 0;
     p.money = L.m;
     p.gunLevel = L.gl || 0;
     // 11 the gun game level-up, told to the player on a friend's machine too

@@ -49,7 +49,7 @@ export function places() {
   for (let i = 0; i < 6; i++) put('steel_frame_shelves_01', 54.6 + i * 1.15, 31.5, 0, { h: 2.2 });
   // dining room: three tables in a row with chairs down both sides
   for (const tx of [30.4, 33.0, 35.6]) {
-    put('dining_table', tx, 16.5, 0, { s: 1.15 });
+    put('dining_table', tx, 16.5, 0, { s: 1.15, sy: 0.865 });
     for (const dx of [-0.62, 0.62]) {
       put('painted_wooden_chair_02', tx + dx, 15.4, 0);
       put('painted_wooden_chair_02', tx + dx, 17.6, R);
@@ -58,12 +58,12 @@ export function places() {
   for (const x of [35.8, 37.5, 39.2]) put('GothicCommode_01', x, 24.6, R);
   for (const z of [20.7, 22.2]) put('GothicCommode_01', 40.6, z, -R / 2);
   // library: a reading table and a chest of drawers in the corner
-  put('dining_table', 22.5, 42, 0, { s: 1.25 });
+  put('dining_table', 22.5, 42, 0, { s: 1.25, sy: 0.864 });
   put('GothicCommode_01', 11.4, 45, R / 2);
   put('marble_bust_01', 11.4, 45, R / 2, { y: 1.21, s: 1.3 });
   // corridor
-  put('GothicCommode_01', 41, 25.4 + 0.3, 0);
-  put('marble_bust_01', 41, 25.65, 0, { y: 1.21, s: 1.3 });
+  put('GothicCommode_01', 41, 26.3, 0);
+  put('marble_bust_01', 41, 26.35, 0, { y: 1.21, s: 1.3 });
   // lounge: sofas round a coffee table, armchairs by the fire
   for (const x of [47.2, 48.8]) put('Sofa_01', x, 16.62, R);
   for (const z of [13.2, 14.8]) put('Sofa_01', 44.38, z, R / 2);
@@ -72,7 +72,7 @@ export function places() {
   put('ArmChair_01', 55.6, 17.1, R);
   put('side_table_01', 55.05, 16.25, 0);
   // hall: two chandeliers and a clock in the corner
-  for (const z of [34.2, 41.6]) put('Chandelier_02', 36, z, 0, { s: 1.6, y: 4 - 0.91 * 1.6 });
+  for (const z of [34.2, 41.6]) put('Chandelier_02', 36, z, 0, { s: 1.6, y: 4 - 0.848 * 1.6 });
   put('vintage_grandfather_clock_01', 43.5, 31.25, 0);
   // pictures: hanging_01 portrait, hanging_02 / fancy_01 landscape
   const pic = (m, x, z, yaw, y, s) => put(m, x, z, yaw, { y, s });
@@ -80,12 +80,12 @@ export function places() {
   pic('hanging_picture_frame_02', 44.98, 34.0, -R / 2, 2.1, 2.1);
   pic('hanging_picture_frame_02', 44.98, 42.2, -R / 2, 2.1, 2.1);
   // pictures only on solid wall: not over the lounge doors (41,13-14) and (51-53,8)
-  pic('fancy_picture_frame_01', 55.5, 9.02, 0, 2.2, 2.3);
+  pic('fancy_picture_frame_01', 55.5, 9.02, 0, 2.45, 2.3);
   pic('hanging_picture_frame_02', 42.02, 18.0, R / 2, 2.15, 2.2);
   pic('fancy_picture_frame_01', 27.6, 9.02, 0, 2.15, 2.3);
   pic('hanging_picture_frame_01', 25.02, 20.5, R / 2, 2.1, 1.9);
   pic('hanging_picture_frame_01', 26.98, 36.0, -R / 2, 2.1, 1.9);
-  for (const x of [14.5, 24.5, 43.5, 56.5]) pic(x % 2 ? 'hanging_picture_frame_02' : 'fancy_picture_frame_01', x, 29.98, R, 2.1, 2.0);
+  for (const x of [14.5, 24.5, 43.5, 56.5]) pic(Math.floor(x / 10) % 2 ? 'hanging_picture_frame_02' : 'fancy_picture_frame_01', x, 29.98, R, 2.1, 2.0);
   return out;
 }
 
@@ -103,7 +103,7 @@ export function buildProps(game) {
       const im = new THREE.InstancedMesh(part.geo, part.mat, items.length);
       items.forEach((p, i) => {
         const k = p.s ?? (p.h ? p.h / M.size.y : 1);
-        im.setMatrixAt(i, mx.compose(v.set(p.x, p.y || 0, p.z), q.setFromAxisAngle(up, p.yaw), s.set(k, k, k)));
+        im.setMatrixAt(i, mx.compose(v.set(p.x, p.y || 0, p.z), q.setFromAxisAngle(up, p.yaw), s.set(k, p.sy ?? k, k)));
         im.setColorAt(i, col.setScalar(Math.min(1.05, game.charLight(p.x, p.z))));
       });
       im.computeBoundingSphere();

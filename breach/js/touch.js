@@ -146,7 +146,7 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
       slowAt = now + 120;
       const p = g.player;
       btnBuy.hidden = !(p.alive && g.canBuy(p) && g.mode !== 'dm' && g.phase !== 'end');
-      btnNade.hidden = !(p.alive && (p.he > 0 || p.flash > 0));
+      btnNade.hidden = !(p.alive && (p.he > 0 || p.flash > 0 || p.smoke > 0));
       btnUse.classList.toggle('lit', !!(g.nearHostage() || g.nearDrop(p)));
       btnAlt.hidden = !(p.alive && (p.kind === 'knife' || p.kind === 'sniper' || p.kind === 'scout'));
     },

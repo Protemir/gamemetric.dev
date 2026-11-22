@@ -208,7 +208,7 @@ export class GameMap {
     solid(13, 37, 19, 37, 2.6, K.SHELF);
     solid(21, 34, 25, 34, 2.6, K.SHELF);
     solid(21, 41, 23, 42, 0.8, K.TABLE);
-    solid(11, 44, 12, 45, 1.0, K.CABINET);
+    solid(11, 44, 11, 45, 1.0, K.CABINET);
     // hall
     solid(30, 33, 30, 33, CEIL, K.PILLAR);
     solid(41, 33, 41, 33, CEIL, K.PILLAR);
@@ -216,6 +216,7 @@ export class GameMap {
     solid(41, 42, 41, 42, CEIL, K.PILLAR);
     solid(35, 37, 36, 38, 2.3, K.STATUE);
     solid(28, 44, 28, 45, 1.2, K.PLANT);
+    solid(43, 31, 43, 31, 2.2, K.CABINET);
     solid(44, 44, 44, 45, 1.2, K.PLANT);
     // garage
     solid(52, 37, 53, 40, 1.4, K.CAR);
@@ -245,7 +246,7 @@ export class GameMap {
     solid(46, 16, 49, 16, 0.8, K.SOFA);
     solid(44, 12, 44, 15, 0.8, K.SOFA);
     solid(47, 13, 48, 14, 0.5, K.TABLE);
-    solid(52, 9, 54, 9, 1.8, K.FIRE);
+    solid(54, 9, 56, 9, 1.8, K.FIRE);
     solid(58, 19, 60, 21, 1.1, K.PIANO);
     solid(43, 22, 46, 22, 1.1, K.COUNTER);
     solid(54, 16, 55, 17, 1.0, K.SOFA);
@@ -745,6 +746,13 @@ export class GameMap {
     // vertical face on the side of cell (x,z): dir 0:-x 1:+x 2:-z 3:+z
     const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     const vface = (key, x, z, dir, y0, y1, indoor, aoMode) => {
+      for (const cut of [1.3, 3.6, CEIL]) {
+        if (cut > y0 + 0.01 && cut < y1 - 0.01) {
+          vface(key, x, z, dir, y0, cut, indoor, aoMode);
+          vface(key, x, z, dir, cut, y1, indoor, aoMode);
+          return;
+        }
+      }
       const [dx, dz] = DIRS[dir];
       const n = [dx, 0, dz];
       let a, b;
@@ -789,7 +797,9 @@ export class GameMap {
         const c = z * W + x;
         const hh = this.h[c], ind = this.indoor[c] === 1;
         if (this.kind[c] === K.STATUE) {
-          // drawn as a proper fountain / plinth below
+          // the plinth / fountain is modelled below; the cell still needs a floor (or the basin)
+          if (ind) hface(FLOOR_TEX[this.floor[c]] || 'grass', x, z, x + 1, z + 1, 0, true, ind, null, true);
+          else hface(KIND_TEX[K.FOUNTAIN] || 'fountain', x, z, x + 1, z + 1, 0.55, true, false, null);
         } else if (hh === 0 || isModel(c)) {
           hface(FLOOR_TEX[this.floor[c]] || 'grass', x, z, x + 1, z + 1, 0, true, ind, null, true);
         } else {
@@ -964,6 +974,7 @@ export class GameMap {
     // ceiling lamps
     const lampGeo = [];
     for (const L of this.lamps) {
+      if (ROOMS[L.room]?.name === 'hall') continue;
       const g = new THREE.CylinderGeometry(0.28, 0.36, 0.12, 10);
       g.translate(L.x, CEIL - 0.06, L.z);
       lampGeo.push(g);

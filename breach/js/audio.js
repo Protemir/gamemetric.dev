@@ -308,6 +308,15 @@ export function sfx(name, pos = null, opt = {}) {
       noise(d, t, 0.7, 'bandpass', 400, 2, 0.06);
       break;
     }
+    case 'smoke': {
+      // the long hiss of the can emptying
+      const P = place(pos, 30);
+      if (!P) return;
+      const d = out(P);
+      noise(d, t, 3.2, 'highpass', 1600, 0.5, 0.32, 0.08, 1.4);
+      noise(d, t, 0.25, 'bandpass', 900, 1.2, 0.3, 0.005);
+      break;
+    }
     case 'thunder': {
       const d = out({ gain: 1, pan: (Math.random() - 0.5) * 0.6 });
       noise(d, t, 2.6, 'lowpass', 220, 0.7, 0.55, 0.05, 1.6);

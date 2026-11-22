@@ -21,6 +21,7 @@ export const WEAPONS = {
   mg: { slot: 1, name: { ru: 'Пулемёт «Тайфун»', en: '"Typhoon" machine gun' }, price: 5200, dmg: 32, pen: 0.78, rate: 0.07, auto: true, mag: 100, reserve: 200, reload: 5.2, spread: 0.0085, moveSpread: 0.09, recoil: 0.0092, speed: 4.4, falloff: 0.95, reward: 300 },
   he: { slot: 4, name: { ru: 'Граната', en: 'HE grenade' }, price: 300, nade: true, speed: 5.8, reward: 300 },
   flash: { slot: 5, name: { ru: 'Светошумовая', en: 'Flashbang' }, price: 200, nade: true, speed: 5.8 },
+  smoke: { slot: 6, name: { ru: 'Дымовая', en: 'Smoke grenade' }, price: 300, nade: true, speed: 5.8 },
 };
 
 export const GEAR = {
@@ -31,7 +32,7 @@ export const GEAR = {
 export const BUY_LIST = [
   ['pistol', 'deagle'],
   ['smg', 'shotgun', 'rifle', 'm4', 'scout', 'sniper', 'mg'],
-  ['armor', 'helmet', 'he', 'flash'],
+  ['armor', 'helmet', 'he', 'flash', 'smoke'],
 ];
 
 // recoil climbs for the first shots, then wanders sideways like a real spray
@@ -41,8 +42,47 @@ export function recoilKick(w, shot) {
   return [up, side];
 }
 
+// weapon skins: the gun's own shading kept, its colours replaced (the hands stay as they are)
+export const SKINS = ['none', 'gold', 'red', 'arctic', 'neon'];
+function skinned(src, skin) {
+  if (!skin || skin === 'none') return src;
+  const g = src.clone();
+  const p = g.attributes.position, c = g.attributes.color, n = g.attributes.normal;
+  // light from the same side as the stock paint (guns.js), metals get a sharp sheen
+  const L = [0.45, 1, 0.35], ll = Math.hypot(...L);
+  const look = {
+    gold: { amb: 0.3, spec: 0.55, pow: 10 },
+    arctic: { amb: 0.5, spec: 0.12, pow: 8 },
+    red: { amb: 0.32, spec: 0.4, pow: 10 },
+    neon: { amb: 0.4, spec: 0.3, pow: 12 },
+  }[skin] || { amb: 0.5, spec: 0.2, pow: 8 };
+  for (let i = 0; i < c.count; i += 3) {
+    const cz = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3;
+    for (let j = i; j < i + 3 && j < c.count; j++) {
+      const lum = 0.3 * c.getX(j) + 0.59 * c.getY(j) + 0.11 * c.getZ(j);
+      // the darkest parts (grip tape, rubber, sights) stay darker so the gun keeps its shape
+      const m = 0.45 + 0.55 * Math.min(1, lum / 0.05);
+      const d = Math.max(0, (n.getX(j) * L[0] + n.getY(j) * L[1] + n.getZ(j) * L[2]) / ll);
+      const k = (look.amb + (1 - look.amb) * d) * m;
+      const sp = look.spec * d ** look.pow * m;
+      let base;
+      if (skin === 'gold') base = [0.26, 0.135, 0.02];
+      else if (skin === 'arctic') base = [0.2, 0.22, 0.24];
+      else if (skin === 'red') base = [0.2, 0.012, 0.014];
+      else {
+        // neon: magenta at the stock running into cyan at the muzzle
+        const t = Math.max(0, Math.min(1, (0.3 - cz) / 0.75));
+        base = [0.36 - 0.35 * t, 0.01 + 0.24 * t, 0.26 + 0.1 * t];
+      }
+      const sc = skin === 'gold' ? [1, 0.85, 0.55] : [1, 1, 1];
+      c.setXYZ(j, base[0] * k + sp * sc[0], base[1] * k + sp * sc[1], base[2] * k + sp * sc[2]);
+    }
+  }
+  return g;
+}
+
 // first-person model in camera space: barrel along -z, origin at the right hand; muzzle position returned
-export function viewModel(kind, team) {
-  const geo = mergeGeos([gunGeometry(kind), ...firstPersonArms(kind, team)]);
+export function viewModel(kind, team, skin = 'none') {
+  const geo = mergeGeos([skinned(gunGeometry(kind), skin), ...firstPersonArms(kind, team)]);
   return { geo, muzzle: GUN_INFO[kind].muzzle };
 }
