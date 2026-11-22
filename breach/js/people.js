@@ -35,6 +35,11 @@ export async function loadPeople() {
 }
 
 export const peopleReady = () => A.ready;
+// the level tells the bodies where they cannot slide: (x, z, feet) -> true when blocked
+let blocker = null;
+export function setBlocker(fn) {
+  blocker = fn;
+}
 
 export function makeBody(look, variant = 0) {
   return A.ready ? new SkinnedBody(look, variant) : new Body(look);
@@ -180,6 +185,7 @@ function prepGuard(scene) {
   parts.push(new THREE.BoxGeometry(half * 0.5, 0.006, 0.006).translate(0, 0.009, 0));
   for (const sx of [-1, 1]) parts.push(new THREE.BoxGeometry(0.004, 0.006, 0.09).translate(sx * half * 1.78, 0.008, -0.045));
   const glasses = new THREE.Mesh(mergeBoxes(parts), new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.15, metalness: 0.4 }));
+  glasses.name = 'gear-glasses';
   glasses.position.set(mid.x, mid.y + 0.004, mid.z + 0.03);
   glasses.frustumCulled = false;
   scene.add(glasses);
@@ -289,7 +295,7 @@ function blobTexture() {
 
 const _q = new THREE.Quaternion(), _wq = new THREE.Quaternion(), _pq = new THREE.Quaternion();
 const _S = new THREE.Vector3(), _E = new THREE.Vector3(), _H = new THREE.Vector3(), _E2 = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3(), _u = new THREE.Vector3(), _v = new THREE.Vector3();
-const _right = new THREE.Vector3(), _back = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _rootQ = new THREE.Quaternion();
+const _right = new THREE.Vector3(), _back = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _rootQ = new THREE.Quaternion(), _legR = new THREE.Vector3();
 const _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _pole = new THREE.Vector3();
 
 // rotate a bone by a world-space rotation, keeping the change in its local quaternion
@@ -331,6 +337,7 @@ export class SkinnedBody {
     this.look = look;
     this.lookKey = look;
     this.root = new THREE.Group();
+    this.root.rotation.order = 'YXZ';
     this.model = cloneSkinned(src);
     const sc = src.userData.scale;
     this.baseY = -src.userData.minY * sc;
@@ -429,15 +436,71 @@ export class SkinnedBody {
     const dt = p.dt;
     const b = this.b;
     if (this.dead > 0) {
-      this.dead = Math.min(1, this.dead + dt * 2.2);
-      const k = 1 - (1 - this.dead) ** 3;
-      this.root.rotation.x = Math.min(1, Math.max(0, (this.dead - 0.15) / 0.85)) ** 2 * 1.5 * this.fallDir;
+      this.dead = Math.min(1, this.dead + dt * 1.7);
+      const k = this.dead;
       this.root.position.y = p.y;
-      this.model.position.y = this.baseY - k * 0.25;
+      // slide away with the hit, slowing fast
+      if (this.fly) {
+        const f = Math.max(0, 1 - k * 1.5);
+        const nx = this.root.position.x + this.fly.vx * f * dt * 2.4, nz = this.root.position.z + this.fly.vz * f * dt * 2.4;
+        // walls, the fountain and furniture stop the slide (with room for the body)
+        const ox = this.fly.vx > 0 ? 0.35 : -0.35, oz = this.fly.vz > 0 ? 0.35 : -0.35;
+        if (!blocker || !blocker(nx + ox, nz + oz, p.y)) {
+          this.root.position.x = nx;
+          this.root.position.z = nz;
+        } else this.fly = null;
+      }
+      if (this.mixer && this.deathPose) {
+        // from the pose at the moment of death: the knees give, the body folds, the arms go limp, then it tips over
+        for (const [bone, q] of this.deathPose) bone.quaternion.copy(q);
+        const kn = Math.min(1, k / 0.45), knee = kn * kn * (3 - 2 * kn);
+        this.root.updateMatrixWorld(true);
+        this.root.getWorldQuaternion(_rootQ);
+        _right.set(1, 0, 0).applyQuaternion(_rootQ);
+        _back.set(0, 0, 1).applyQuaternion(_rootQ);
+        for (const side of ['Left', 'Right']) {
+          turn(this.b[side + 'UpLeg'], _q.setFromAxisAngle(_right, 0.9 * knee));
+          turn(this.b[side + 'Leg'], _q.setFromAxisAngle(_right, -1.5 * knee));
+        }
+        turn(this.b.Spine, _q.setFromAxisAngle(_right, 0.3 * knee * this.fallDir));
+        if (this.headSnap) turn(this.b.Neck, _q.setFromAxisAngle(_right, -0.7 * Math.min(1, k * 4)));
+        for (const [side, sx] of [['Left', -1], ['Right', 1]]) {
+          const arm = this.b[side + 'Arm'], fore = this.b[side + 'ForeArm'], hand = this.b[side + 'Hand'];
+          hand.getWorldPosition(_t1);
+          this.b.Spine.getWorldPosition(_t2);
+          _t2.addScaledVector(_right, sx * 0.32).addScaledVector(_up, -0.25);
+          _t1.lerp(_t2, knee * 0.85);
+          ik(arm, fore, hand, _t1, _pole.copy(_back).addScaledVector(_right, sx * 0.4));
+        }
+        const drop = 0.44 * (1 - Math.cos(0.9 * knee)) + 0.44 * (1 - Math.cos(0.9 * knee - 1.5 * knee));
+        this.model.position.y = this.baseY - drop * 0.8;
+      } else this.model.position.y = this.baseY - Math.min(1, k * 2) * 0.25;
+      // the knocked-off helmet flies, bounces once and lies there
+      if (this.hat && this.hat.v) {
+        const h = this.hat, m = h.mesh;
+        h.v.y -= 9.8 * dt;
+        m.position.addScaledVector(h.v, dt);
+        m.rotation.x += h.spin.x * dt;
+        m.rotation.y += h.spin.y * dt;
+        m.rotation.z += h.spin.z * dt;
+        if (m.position.y < h.floor + 0.08 && h.v.y < 0) {
+          m.position.y = h.floor + 0.08;
+          if (h.v.y < -2) {
+            h.v.multiplyScalar(0.35);
+            h.v.y = -h.v.y;
+            h.spin.multiplyScalar(0.4);
+          } else h.v = null;
+        }
+      }
+      const tip = Math.max(0, (k - 0.3) / 0.7);
+      const e = tip * tip;
+      this.root.rotation.x = e * 1.42 * this.fallDir;
+      this.root.rotation.z = e * (this.roll || 0);
       this.shadow.visible = false;
       return;
     }
     this.root.rotation.x = 0;
+    this.root.rotation.z = 0;
     this.shadow.visible = true;
     // locomotion blend
     const sp = p.speed;
@@ -462,7 +525,8 @@ export class SkinnedBody {
 
     let crouch = p.crouch || 0;
     if (p.kneel) crouch = 1.35;
-    const legA = crouch * 1.0, legB = crouch * 1.9;
+    // deep enough that the body sits as low as the hitbox does (0.5 m)
+    const legA = crouch * 1.15, legB = crouch * 2.2;
     const drop = 0.44 * (1 - Math.cos(legA)) + 0.44 * (1 - Math.cos(legA - legB));
     this.model.position.y = this.baseY - drop;
     this.aim.position.y = 1.45 - drop * 0.95;
@@ -471,13 +535,38 @@ export class SkinnedBody {
     _right.set(1, 0, 0).applyQuaternion(_rootQ);
     _back.set(0, 0, 1).applyQuaternion(_rootQ);
 
+    // strafing: the hips and legs turn towards where we move, the chest keeps facing the aim
+    const relT = Math.max(-1.05, Math.min(1.05, p.rel || 0));
+    this.relS = (this.relS || 0) + (relT - (this.relS || 0)) * Math.min(1, dt * 9);
+    const rs = this.mixer && !p.kneel ? this.relS : 0;
+    _legR.copy(_right);
+    if (Math.abs(rs) > 0.005) {
+      turn(b.Hips, _q.setFromAxisAngle(_up, -rs));
+      turn(b.Spine, _q.setFromAxisAngle(_up, rs * 0.5));
+      turn(b.Spine1, _q.setFromAxisAngle(_up, rs * 0.3));
+      turn(b.Spine2, _q.setFromAxisAngle(_up, rs * 0.2));
+      _legR.applyAxisAngle(_up, -rs);
+    }
+    // in the air the knees come up instead of running on nothing
+    this.airK = (this.airK || 0) + ((p.air ? 1 : 0) - (this.airK || 0)) * Math.min(1, dt * 10);
+    // leaning into a run
+    const runK = this.mixer ? Math.min(1, Math.max(0, (sp - 2.8) / 1.6)) : 0;
+    if (runK > 0.01 && crouch < 0.5) turn(b.Spine, _q.setFromAxisAngle(_right, runK * 0.14));
+    if (this.airK > 0.02 && this.mixer) {
+      const k = this.airK;
+      for (const [side, ph] of [['Left', 0.25], ['Right', -0.1]]) {
+        turn(b[side + 'UpLeg'], _q.setFromAxisAngle(_legR, (0.55 + ph) * k));
+        turn(b[side + 'Leg'], _q.setFromAxisAngle(_legR, -(1.0 + ph) * k));
+      }
+    }
+
     if (crouch > 0.01) {
       for (const side of ['Left', 'Right']) {
-        turn(b[side + 'UpLeg'], _q.setFromAxisAngle(_right, legA));
-        turn(b[side + 'Leg'], _q.setFromAxisAngle(_right, -legB));
-        turn(b[side + 'Foot'], _q.setFromAxisAngle(_right, legB - legA));
+        turn(b[side + 'UpLeg'], _q.setFromAxisAngle(_legR, legA));
+        turn(b[side + 'Leg'], _q.setFromAxisAngle(_legR, -legB));
+        turn(b[side + 'Foot'], _q.setFromAxisAngle(_legR, legB - legA));
       }
-      turn(b.Spine, _q.setFromAxisAngle(_right, crouch * 0.25));
+      turn(b.Spine, _q.setFromAxisAngle(_right, crouch * 0.12));
     }
     const pitch = Math.max(-1, Math.min(1, p.pitch || 0));
     if (!this.mixer && !p.kneel) {
@@ -514,6 +603,12 @@ export class SkinnedBody {
     turn(b.Spine1, _q.setFromAxisAngle(_right, -pitch * 0.2));
     turn(b.Spine2, _q.setFromAxisAngle(_right, -pitch * 0.2));
     turn(b.Neck, _q.setFromAxisAngle(_right, -pitch * 0.3));
+    if (this.flinch > 0) {
+      this.flinch = Math.max(0, this.flinch - dt * 6);
+      const f = Math.sin(this.flinch * Math.PI) * 0.22;
+      turn(b.Spine1, _q.setFromAxisAngle(_right, -f));
+      if (this.flinchHead) turn(b.Neck, _q.setFromAxisAngle(_right, -f * 1.8));
+    }
     const kick = p.kick || 0;
     this.aim.rotation.set(pitch + kick * 0.1, 0, 0);
     const at = this.hold.at;
@@ -537,13 +632,59 @@ export class SkinnedBody {
     this.gunMat.color.setScalar(this.lightK);
   }
 
-  die(fromBehind) {
+  // push: how hard the killing hit throws the body (m/s), along the shot dx, dz
+  die(fromBehind, push = 0.7, dx = 0, dz = 0, head = false) {
     this.dead = 0.001;
     this.fallDir = fromBehind ? -1 : 1;
+    const l = Math.hypot(dx, dz) || 1;
+    this.fly = { vx: (dx / l) * push, vz: (dz / l) * push };
+    this.roll = (Math.random() - 0.5) * 0.8;
+    this.headSnap = head;
+    // a head shot knocks the helmet, cap or glasses off
+    if (head && this.root.parent) {
+      let hat = null;
+      this.model.traverse((o) => {
+        if (!hat && o.visible && /gear-(helmet|cap|glasses)/.test(o.name)) hat = o;
+      });
+      if (hat) {
+        this.hat = { mesh: hat, bone: hat.parent, pos: hat.position.clone(), quat: hat.quaternion.clone(), scale: hat.scale.clone() };
+        this.root.parent.attach(hat);
+        this.hat.v = new THREE.Vector3((dx / l) * 2.2 + (Math.random() - 0.5), 3.2 + Math.random(), (dz / l) * 2.2 + (Math.random() - 0.5));
+        this.hat.spin = new THREE.Vector3(Math.random() * 12 - 6, Math.random() * 12 - 6, Math.random() * 12 - 6);
+        this.hat.floor = this.root.position.y;
+      }
+    }
+    // the clips stop here; the fall is laid over this pose
+    this.deathPose = [];
+    this.model.traverse((o) => {
+      if (o.isBone) this.deathPose.push([o, o.quaternion.clone()]);
+    });
+  }
+
+  // the "big heads" option
+  bigHead() {
+    if (this.b.Head) this.b.Head.scale.setScalar(2.1);
+  }
+
+  // a shot that does not kill: a short jolt of the upper body
+  hit(head) {
+    this.flinch = 1;
+    this.flinchHead = head;
   }
 
   revive() {
+    if (this.hat) {
+      const h = this.hat;
+      h.bone.add(h.mesh);
+      h.mesh.position.copy(h.pos);
+      h.mesh.quaternion.copy(h.quat);
+      h.mesh.scale.copy(h.scale);
+      this.hat = null;
+    }
     this.dead = 0;
+    this.deathPose = null;
+    this.fly = null;
+    this.flinch = 0;
     this.root.rotation.set(0, 0, 0);
     this.model.position.y = this.baseY;
   }

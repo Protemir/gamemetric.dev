@@ -5,7 +5,7 @@ import { WEAPONS } from './weapons.js';
 import { sfx } from './audio.js';
 import { t } from './i18n.js';
 
-export const KINDS = ['knife', 'pistol', 'deagle', 'smg', 'shotgun', 'rifle', 'sniper', 'he', 'flash'];
+export const KINDS = ['knife', 'pistol', 'deagle', 'smg', 'shotgun', 'rifle', 'sniper', 'he', 'flash', 'm4', 'scout', 'mg'];
 const PARTS = ['head', 'body', 'legs'];
 const HSTATE = ['idle', 'follow', 'rescued', 'dead'];
 const PH = ['freeze', 'live', 'end', 'wait'];
@@ -148,6 +148,10 @@ export class NetGame {
       }
       case 'n':
         if (!s.alive) return;
+        // the host keeps count: a thrown grenade is gone, and nobody throws one they do not have
+        if ((m.kind === 'he' ? s.he : s.flash) <= 0) return;
+        if (m.kind === 'he') s.he--;
+        else s.flash--;
         g.spawnNade(s, m.kind, m.x, m.y, m.z, m.vx, m.vy, m.vz, m.nid);
         this.net.broadcast({ ...m, id: s.id }, true, from);
         break;

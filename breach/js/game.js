@@ -3,8 +3,9 @@ import * as THREE from '../vendor/three.module.min.js';
 import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos } from './map.js';
 import { buildDecor } from './decor.js';
 import { buildProps, propsReady } from './props.js';
+import { Chickens } from './chickens.js';
 import { makeTextures } from './textures.js';
-import { makeBody } from './people.js';
+import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
 import { WEAPONS, GEAR, recoilKick, viewModel } from './weapons.js';
 import { sfx, setListener } from './audio.js';
@@ -28,6 +29,7 @@ class Soldier {
     this.name = name;
     this.isPlayer = isPlayer;
     this.body = makeBody(team, id);
+    if (game.fun?.heads) this.body.bigHead?.();
     game.scene.add(this.body.root);
     this.radius = 0.3;
     this.height = 1.8;
@@ -170,6 +172,9 @@ const VM_OFFSET = {
   shotgun: [0.1, -0.115, -0.22, 0.04],
   rifle: [0.1, -0.115, -0.22, 0.04],
   sniper: [0.1, -0.12, -0.2, 0.04],
+  m4: [0.1, -0.115, -0.22, 0.04],
+  scout: [0.1, -0.12, -0.2, 0.04],
+  mg: [0.105, -0.13, -0.2, 0.04],
   he: [0.12, -0.11, -0.25],
   flash: [0.12, -0.11, -0.25],
 };
@@ -229,10 +234,18 @@ export class Game {
     this.scene.add(sun);
     this.tex = makeTextures(renderer);
     this.map = new GameMap();
+    setBlocker((x, z, feet) => {
+      const c = this.map.cellAt(x, z);
+      return c < 0 || this.map.h[c] > feet + 0.45;
+    });
     for (const m of this.map.buildMeshes(this.tex, propsReady())) this.scene.add(m);
     for (const m of buildDecor(this.map, this.tex)) this.scene.add(m);
     this.buildSurroundings();
     this.fx = new FX(this.scene);
+    // the silly options: big heads, low gravity, exploding chickens
+    this.fun = opts.fun || {};
+    this.grav = this.fun.lowgrav ? 6 : GRAV;
+    this.chickens = new Chickens(this);
     this.vm = new ViewModel();
     this.vm.flash.material.map = this.fx.flashes[0].s.material.map;
     this.lightCache = new Float32Array(W * H).fill(-1);
@@ -300,6 +313,8 @@ export class Game {
     this.round = m.r;
     this.fx.clear();
     this.clearDrops();
+    this.firstBlood = false;
+    this.chickens.spawn();
     for (const n of this.nades) this.dropNade(n);
     this.nades.length = 0;
     this.phase = this.mode === 'dm' ? 'live' : 'freeze';
@@ -615,6 +630,8 @@ export class Game {
     this.liveAt = this.mode === 'dm' ? this.time : this.phaseEnd;
     this.result = null;
     this.rescued = 0;
+    this.firstBlood = false;
+    this.chickens.spawn();
     const order = { A: this.map.spawns.A.slice().sort(() => Math.random() - 0.5), B: this.map.spawns.B.slice().sort(() => Math.random() - 0.5) };
     const used = { A: 0, B: 0 };
     for (const s of this.soldiers) {
@@ -753,11 +770,13 @@ export class Game {
     const eye = o.feet + o.eyeH();
     // head sphere
     let best = null;
-    const hx = o.x - ox, hy = eye + 0.06 - oy, hz = o.z - oz;
+    // big heads are big targets too
+    const big = this.fun.heads && o instanceof Soldier;
+    const hx = o.x - ox, hy = eye + (big ? 0.2 : 0.06) - oy, hz = o.z - oz;
     const tc = hx * dx + hy * dy + hz * dz;
     if (tc > 0) {
       const d2 = hx * hx + hy * hy + hz * hz - tc * tc;
-      const r = 0.17;
+      const r = big ? 0.32 : 0.17;
       if (d2 < r * r) {
         const tt = tc - Math.sqrt(r * r - d2);
         if (tt < maxT) best = { t: tt, part: 'head' };
@@ -812,7 +831,9 @@ export class Game {
     }
     if (s.reloadUntil) s.reloadUntil = 0; // shotgun can interrupt its reload
     a.mag--;
-    s.nextFire = this.time + w.rate;
+    // keep the rhythm while the trigger stays down, so 45 fps fires as fast as 144
+    s.nextFire = (s.nextFire > this.time - 0.1 ? s.nextFire : this.time) + w.rate;
+    s.recoverAt = this.time + w.rate + 0.04;
     if (this.time - s.lastShot > w.rate * 2.2 + 0.12) s.shots = 0;
     s.lastShot = this.time;
     const eye = s.feet + s.eyeH();
@@ -820,7 +841,7 @@ export class Game {
     const hs = Math.hypot(s.vx, s.vz);
     let sp = w.scope ? (s.scoped ? w.scopedSpread : w.spread) : w.spread;
     sp += w.moveSpread * Math.max(0, Math.min(1, (hs - 1.4) / Math.max(1, w.speed - 1.4)));
-    if (!s.onGround) sp += 0.1;
+    if (!s.onGround) sp += w.steady ? 0.004 : 0.1;
     if (s.crouchK > 0.5) sp *= 0.72;
     if (w.auto) sp += Math.min(s.shots, 10) * w.spread * 0.12;
     const control = s.brain ? s.brain.k.control : 0;
@@ -828,9 +849,11 @@ export class Game {
     const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw);
     let muzzle;
     if (s.isPlayer && this.vm.muzzle) {
-      muzzle = [s.x + fx * 0.55 + Math.cos(s.yaw) * 0.13, eye - 0.13 + Math.sin(s.pitch) * 0.5, s.z + fz * 0.55 - Math.sin(s.yaw) * 0.13];
+      const cp = Math.cos(s.pitch);
+      muzzle = [s.x + fx * 0.55 * cp + Math.cos(s.yaw) * 0.13, eye - 0.13 + Math.sin(s.pitch) * 0.5, s.z + fz * 0.55 * cp - Math.sin(s.yaw) * 0.13];
     } else {
-      muzzle = [s.x + fx * 0.7 + Math.cos(s.yaw) * 0.12, eye - 0.28 + Math.sin(s.pitch) * 0.6, s.z + fz * 0.7 - Math.sin(s.yaw) * 0.12];
+      const cp = Math.cos(s.pitch);
+      muzzle = [s.x + fx * 0.7 * cp + Math.cos(s.yaw) * 0.12, eye - 0.28 + Math.sin(s.pitch) * 0.6, s.z + fz * 0.7 * cp - Math.sin(s.yaw) * 0.12];
     }
     const pellets = w.pellets || 1;
     this._ends = [];
@@ -852,6 +875,7 @@ export class Game {
     sfx(s.kind, s.isPlayer ? null : [s.x, eye, s.z], { indoor: this.map.isIndoor(s.x, s.z), mech: s.isPlayer });
     if (s.isPlayer) {
       this.vm.kick = Math.min(1.4, this.vm.kick + (w.pellets ? 1.2 : w.recoil * 30));
+      this.chickens.scare(s.x, s.z, 14);
       this.vm.flashT = 0.05;
     } else {
       this.fx.flash(muzzle[0], muzzle[1], muzzle[2], 0.45, 0.05);
@@ -882,6 +906,14 @@ export class Game {
         hit = h;
         who = o;
       }
+    }
+    // a chicken in the way takes the bullet
+    const ch = this.chickens.hit(ox, oy, oz, dx, dy, dz, hit ? hit.t : maxT);
+    if (ch) {
+      if (tracer && muzzle && (!s.isPlayer || Math.random() < 0.5)) this.fx.tracer(muzzle[0], muzzle[1], muzzle[2], ox + dx * ch.t, oy + dy * ch.t, oz + dz * ch.t, s.isPlayer ? 0.5 : 1);
+      this._ends?.push([ox + dx * ch.t, oy + dy * ch.t, oz + dz * ch.t]);
+      this.chickens.kill(ch.c, s);
+      return;
     }
     const end = hit ? hit.t : maxT;
     const ex = ox + dx * end, ey = oy + dy * end, ez = oz + dz * end;
@@ -937,7 +969,9 @@ export class Game {
       for (const off of [0, 0.15, -0.15]) {
         const yy = s.yaw + off;
         const ddx = -Math.sin(yy) * Math.cos(s.pitch), ddz = -Math.cos(yy) * Math.cos(s.pitch);
-        const h = this.hitTest(o, s.x, eye, s.z, ddx, dy, ddz, bt);
+        // the blade stops at a wall like everything else
+        const wall = this.map.raycast(s.x, eye, s.z, ddx, dy, ddz, range);
+        const h = this.hitTest(o, s.x, eye, s.z, ddx, dy, ddz, wall ? Math.min(bt, wall.t) : bt);
         if (h && h.t < bt) {
           bt = h.t;
           best = { o, part: h.part };
@@ -996,6 +1030,8 @@ export class Game {
     d = Math.round(d);
     o.hp -= d;
     if (o.brain) o.brain.hurt(by);
+    // the body flinches from the hit
+    if (o.hp > 0) o.body.hit?.(part === 'head');
     // aim punch
     o.punchP += Math.min(0.05, d * 0.0012);
     if (o.remote) this.nh?.onHurt(o, by, d);
@@ -1021,7 +1057,9 @@ export class Game {
     o.scoped = 0;
     // fall away from the shot
     const fromBehind = Math.abs(angDiff(o.yaw, Math.atan2(-dx, -dz))) < Math.PI / 2;
-    o.body.die(fromBehind);
+    // heavy hits throw the body back
+    const push = { shotgun: 2.6, he: 3.6, sniper: 1.8, deagle: 1.3, knife: 0.4 }[weapon] ?? 0.7;
+    o.body.die(fromBehind, push, dx, dz, head);
     o.body.root.visible = !o.isPlayer;
     o.nb = null;
     if (this.role !== 'client') this.dropFrom(o);
@@ -1038,6 +1076,8 @@ export class Game {
       }
     }
     this.hud.feed(by, o, weapon, head);
+    this.announceKill(o, by, weapon, head);
+    this.firstBlood = true;
     if (by && by.isPlayer) sfx('kill');
     if (this.mode === 'dm') o.respawnAt = this.time + 3;
     if (o.isPlayer) {
@@ -1046,15 +1086,36 @@ export class Game {
     }
   }
 
+  // big words for good kills, like the old shooters did
+  announceKill(o, by, weapon, head) {
+    if (!by || !by.isPlayer || by === o || o.team === by.team || this.preview) return;
+    this.streak = this.time - (this.lastKillAt ?? -99) < 4.5 ? (this.streak || 0) + 1 : 1;
+    this.lastKillAt = this.time;
+    const enemiesLeft = this.soldiers.filter((s) => s.team !== by.team && s.alive).length;
+    let key = null, level = 1;
+    if (enemiesLeft === 0 && this.mode !== 'dm' && this.streak >= 3) (key = 'annAce'), (level = 5);
+    else if (this.streak >= 4) (key = 'annGrinder'), (level = 4);
+    else if (this.streak === 3) (key = 'annTriple'), (level = 3);
+    else if (this.streak === 2) (key = 'annDouble'), (level = 2);
+    else if (weapon === 'knife') key = 'annKnife';
+    else if (weapon === 'he') key = 'annBoom';
+    else if (!this.firstBlood) key = 'annFirst';
+    else if (head) key = 'annHead';
+    if (key) {
+      this.hud.announce?.(t(key), level);
+      sfx('streak', null, { n: level });
+    }
+  }
+
   reload(s) {
     const w = WEAPONS[s.kind];
     if (!w || !w.mag || s.reloadUntil) return;
     const a = s.ammoOf(s.kind);
     if (a.mag >= w.mag || a.res <= 0) return;
-    s.reloadUntil = this.time + w.reload;
+    s.reloadUntil = this.time + (w.shells ? w.reload / w.mag : w.reload);
     s.scoped = 0;
     s.shots = 0;
-    sfx('reload', s.isPlayer ? null : [s.x, 1.2, s.z], { dur: w.reload });
+    sfx('reload', s.isPlayer ? null : [s.x, 1.2, s.z], { dur: w.shells ? 0.35 : w.reload });
     if (s.isPlayer) this.nh?.onSound('reload');
   }
 
@@ -1167,7 +1228,7 @@ export class Game {
         const cy = o.feet + 1.0;
         const d = Math.hypot(o.x - n.x, cy - n.y, o.z - n.z);
         if (d > 7.5) continue;
-        if (!this.map.los(n.x, n.y + 0.2, n.z, o.x, cy, o.z) && !this.map.los(n.x, n.y + 0.2, n.z, o.x, o.feet + 1.6, o.z)) continue;
+        if (!this.map.los(n.x, n.y + 0.2, n.z, o.x, cy, o.z) && !this.map.los(n.x, n.y + 0.2, n.z, o.x, o.feet + o.eyeH(), o.z)) continue;
         const dmg = 100 * (1 - d / 7.5) ** 1.3;
         if (o instanceof Soldier && n.owner && o.team === n.owner.team && o !== n.owner) continue;
         this.damage(o, dmg, 'body', n.owner, 'he', o.x - n.x, o.z - n.z, 0.6);
@@ -1349,7 +1410,7 @@ export class Game {
     }
     // average of the speeds before and after the step: the jump is just as high at 20 fps as at 144
     const vy0 = s.vy;
-    s.vy -= GRAV * dt;
+    s.vy -= this.grav * dt;
     const px = s.x + s.vx * dt, pz = s.z + s.vz * dt;
     s.x = px;
     s.z = pz;
@@ -1476,8 +1537,12 @@ export class Game {
         b.root.position.set(s.x, s.feet, s.z);
         b.root.rotation.y = s.yaw;
         s.kick = Math.max(0, (s.kick || 0) - dt * 8);
-        const back = s.vx * -Math.sin(s.yaw) + s.vz * -Math.cos(s.yaw) < -0.5;
-        b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back });
+        const fwd = s.vx * -Math.sin(s.yaw) + s.vz * -Math.cos(s.yaw), side = s.vx * Math.cos(s.yaw) - s.vz * Math.sin(s.yaw);
+        const back = fwd < -0.5;
+        // where the legs go relative to where the gun points (for strafing), and whether we are off the ground
+        const rel = Math.hypot(s.vx, s.vz) > 0.6 ? Math.atan2(side, Math.abs(fwd)) : 0;
+        const air = s.onGround === false;
+        b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back, rel, air });
         b.setLight(this.charLight(s.x, s.z));
         continue;
       }
@@ -1493,12 +1558,22 @@ export class Game {
       if (s.reloadUntil && this.time >= s.reloadUntil) {
         const w = WEAPONS[s.kind];
         const a = s.ammoOf(s.kind);
-        if (w && w.mag) {
+        s.reloadUntil = 0;
+        if (w && w.mag && w.shells) {
+          // the shotgun loads one shell at a time; a shot in between keeps what is in
+          if (a.res > 0 && a.mag < w.mag) {
+            a.mag++;
+            a.res--;
+          }
+          if (a.res > 0 && a.mag < w.mag) {
+            s.reloadUntil = this.time + w.reload / w.mag;
+            sfx('reload', s.isPlayer ? null : [s.x, 1.2, s.z], { dur: 0.35 });
+          }
+        } else if (w && w.mag) {
           const need = w.mag - a.mag, take = Math.min(need, a.res);
           a.mag += take;
           a.res -= take;
         }
-        s.reloadUntil = 0;
       }
       const wantFire = s.isPlayer ? input.fire && !input.menuOpen : s.in.fire;
       s.justFired = false;
@@ -1506,7 +1581,10 @@ export class Game {
         const w = WEAPONS[s.kind];
         const wasScoped = s.scoped;
         if (w.auto || w.melee || !s.triggerHeld || s.brain || (w.nade && !s.pinAt)) {
-          if (this.fire(s)) {
+          const fired = this.fire(s);
+          // a long frame may owe an automatic weapon one more shot
+          if (fired && w.auto) for (let k = 0; k < 2 && this.time >= s.nextFire; k++) this.fire(s);
+          if (fired) {
             // the brain reads this on its next update (bursts)
             s.justFired = true;
             if (w.scope && wasScoped && s.isPlayer) {
@@ -1528,12 +1606,16 @@ export class Game {
       }
       // the sniper scope comes back after the bolt
       if (s.rescopeAt && this.time >= s.rescopeAt) {
-        if (WEAPONS[s.kind].scope && !s.reloadUntil && input.fire !== true) s.scoped = s.rescopeTo;
-        s.rescopeAt = 0;
+        // wait for the button to come up instead of forgetting the scope
+        if (s.isPlayer && input.fire === true) s.rescopeAt = this.time + 0.05;
+        else {
+          if (WEAPONS[s.kind].scope && !s.reloadUntil) s.scoped = s.rescopeTo;
+          s.rescopeAt = 0;
+        }
       }
       // recoil recovery
       const w = WEAPONS[s.kind];
-      if (this.time - s.lastShot > (w?.rate || 0.1) + 0.04) {
+      if (this.time > (s.recoverAt || 0)) {
         const k = Math.exp(-dt * 7.5);
         s.punchP *= k;
         s.punchY *= k;
@@ -1543,13 +1625,18 @@ export class Game {
       b.root.position.set(s.x, s.feet, s.z);
       b.root.rotation.y = s.yaw;
       s.kick = Math.max(0, (s.kick || 0) - dt * 8);
-      const back = s.vx * -Math.sin(s.yaw) + s.vz * -Math.cos(s.yaw) < -0.5;
-      b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back });
+      const fwd = s.vx * -Math.sin(s.yaw) + s.vz * -Math.cos(s.yaw), side = s.vx * Math.cos(s.yaw) - s.vz * Math.sin(s.yaw);
+        const back = fwd < -0.5;
+        // where the legs go relative to where the gun points (for strafing), and whether we are off the ground
+        const rel = Math.hypot(s.vx, s.vz) > 0.6 ? Math.atan2(side, Math.abs(fwd)) : 0;
+        const air = s.onGround === false;
+      b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back, rel, air });
       b.setLight(this.charLight(s.x, s.z));
     }
     for (const s of this.soldiers) if (!s.alive) s.body.animate({ dt, y: s.feet, speed: 0 });
     this.updateHostages(dt);
     this.updateDrops();
+    this.chickens.update(dt);
     this.updateNades(dt);
     this.fx.update(dt);
     this.tex.water.offset.x = this.time * 0.02;
@@ -1908,6 +1995,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    this.chickens?.dispose();
     this.envRT?.dispose();
     const all = [];
     this.scene.traverse((o) => all.push(o));

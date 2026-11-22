@@ -98,6 +98,9 @@ const GUN = {
   shotgun: { f: 900, body: 70, dur: 0.45, vol: 0.95 },
   rifle: { f: 1400, body: 110, dur: 0.22, vol: 0.7 },
   sniper: { f: 800, body: 60, dur: 0.7, vol: 1.0 },
+  m4: { f: 1700, body: 120, dur: 0.17, vol: 0.62 },
+  scout: { f: 1000, body: 75, dur: 0.5, vol: 0.85 },
+  mg: { f: 1250, body: 95, dur: 0.24, vol: 0.78 },
 };
 
 export function sfx(name, pos = null, opt = {}) {
@@ -254,6 +257,32 @@ export function sfx(name, pos = null, opt = {}) {
     case 'kill': {
       const d = out({ gain: 1, pan: 0 });
       tone(d, t, 0.12, 'triangle', 1500, 1700, 0.12);
+      break;
+    }
+    case 'cluck': {
+      const P = place(pos, 18);
+      if (!P) return;
+      const d = out(P);
+      tone(d, t, 0.07, 'square', 760, 520, 0.05);
+      tone(d, t + 0.09, 0.06, 'square', 820, 560, 0.045);
+      if (Math.random() < 0.5) tone(d, t + 0.17, 0.12, 'square', 900, 480, 0.05);
+      break;
+    }
+    case 'squawk': {
+      const P = place(pos, 30);
+      if (!P) return;
+      const d = out(P);
+      tone(d, t, 0.25, 'sawtooth', 1200, 500, 0.12);
+      tone(d, t + 0.05, 0.2, 'square', 900, 1400, 0.07);
+      noise(d, t, 0.18, 'bandpass', 2500, 1.2, 0.18);
+      break;
+    }
+    case 'streak': {
+      const d = out({ gain: 1, pan: 0 });
+      const n = Math.max(1, Math.min(5, opt.n || 1));
+      const base = [520, 587, 659, 784, 880][n - 1];
+      for (let i = 0; i < Math.min(4, n + 1); i++) tone(d, t + i * 0.07, 0.14, 'square', base * [1, 1.25, 1.5, 2][i], base * [1, 1.25, 1.5, 2][i], 0.05);
+      tone(d, t, 0.35 + n * 0.06, 'sawtooth', base / 2, base / 2, 0.035);
       break;
     }
   }

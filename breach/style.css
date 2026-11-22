@@ -292,3 +292,13 @@ body.touch #prompt { bottom: 34%; }
   .menu-foot { display: none; }
 }
 #buy-close { margin-left: auto; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 30px; color: var(--text); font-size: 15px; }
+
+/* kill announcements */
+#announce { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%); font: 900 44px/1 var(--mono); letter-spacing: 0.04em; color: #fff; text-shadow: 0 0 2px #000, 0 3px 0 rgba(0, 0, 0, 0.6), 0 0 24px rgba(255, 120, 40, 0.6); white-space: nowrap; pointer-events: none; opacity: 0; }
+#announce.go { animation: ann 1.6s ease-out forwards; }
+#announce.l2 { color: #ffe08a; }
+#announce.l3 { color: #ffb347; font-size: 52px; }
+#announce.l4 { color: #ff6a3d; font-size: 58px; }
+#announce.l5 { color: #ff3b3b; font-size: 66px; }
+@keyframes ann { 0% { opacity: 0; transform: translate(-50%, -50%) scale(2.2) rotate(-4deg); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(0.92) rotate(1deg); } 20% { transform: translate(-50%, -50%) scale(1.05); } 75% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -62%) scale(1); } }
+@media (max-height: 520px) { #announce { font-size: 30px; top: 26%; } #announce.l3, #announce.l4, #announce.l5 { font-size: 38px; } }

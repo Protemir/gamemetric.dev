@@ -17,7 +17,7 @@ const canvas = $('view');
 const q = new URLSearchParams(location.search);
 
 // ---------- settings ----------
-const DEF = { sens: 1.2, fov: 74, vol: 0.8, bright: 1.2, quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
+const DEF = { sens: 1.2, fov: 74, vol: 0.8, bright: 1.2, fun: {}, quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
 let settings = { ...DEF };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem('breach.settings') || '{}'));
@@ -90,6 +90,18 @@ function seg(id, key) {
 }
 seg('seg-mode', 'mode');
 seg('seg-diff', 'diff');
+// the madness toggles: any number of them at once
+settings.fun = settings.fun && typeof settings.fun === 'object' ? settings.fun : {};
+for (const b of document.querySelectorAll('#seg-fun button')) {
+  b.classList.toggle('on', !!settings.fun[b.dataset.f]);
+  b.addEventListener('click', () => {
+    settings.fun = { ...settings.fun, [b.dataset.f]: !settings.fun[b.dataset.f] };
+    b.classList.toggle('on', !!settings.fun[b.dataset.f]);
+    save();
+    initAudio();
+    sfx('click');
+  });
+}
 seg('seg-q', 'quality');
 function sides() {
   for (const b of document.querySelectorAll('.side')) b.classList.toggle('on', b.dataset.side === settings.team);
@@ -176,7 +188,7 @@ function startGame(online) {
       // the host's first round goes out now; a client plays back what arrived while it was loading
       if (online.role === 'host') game.nh.onRound(true);
       else for (const m of pending.splice(0)) game.nh.onClientMessage(m);
-    } else game = new Game(renderer, { team: settings.team, mode: settings.mode, diff: settings.diff }, hud);
+    } else game = new Game(renderer, { team: settings.team, mode: settings.mode, diff: settings.diff, fun: settings.fun }, hud);
     hud.attach(game);
     $('mo-menu').textContent = t(online ? 'backToLobby' : 'menu');
     applySize();
@@ -398,7 +410,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.repeat) return;
   if (buyOpen) {
-    const it = BUY_ITEMS.find((b) => 'Digit' + b.key === e.code || 'Numpad' + b.key === e.code);
+    const it = BUY_ITEMS.find((b) => 'Digit' + b.key === e.code || 'Numpad' + b.key === e.code || 'Key' + b.key === e.code);
     if (it) {
       doBuy(it.item);
       e.preventDefault();
@@ -654,7 +666,7 @@ function hostSync() {
       const s = game.addHuman(p.peer, lobby.names[p.peer] || p.name);
       if (!s) continue;
       lobby.teams[p.peer] = s.team;
-      net.send(p.peer, { k: 'start', roster: game.roster(), mode: game.mode, diff: game.opts.diff });
+      net.send(p.peer, { k: 'start', roster: game.roster(), mode: game.mode, diff: game.opts.diff, fun: game.fun });
       net.broadcast({ k: 'roster', roster: game.roster() }, true, p.peer);
     }
   }
@@ -749,8 +761,8 @@ $('lb-start').onclick = () => {
     }
   }
   lobby.started = true;
-  net.broadcast({ k: 'start', roster, mode: lobby.mode, diff: lobby.diff });
-  startGame({ role: 'host', roster, myPeer: net.id, mode: lobby.mode, diff: lobby.diff, team: lobby.teams[net.id] });
+  net.broadcast({ k: 'start', roster, mode: lobby.mode, diff: lobby.diff, fun: settings.fun });
+  startGame({ role: 'host', roster, myPeer: net.id, mode: lobby.mode, diff: lobby.diff, team: lobby.teams[net.id], fun: settings.fun });
   setTimeout(hostSync, 100);
 };
 
@@ -779,7 +791,7 @@ function onNetMessage(from, m) {
     pending.length = 0;
     const me = m.roster.find((r) => r.peer === net.id);
     if (!me) return;
-    startGame({ role: 'client', roster: m.roster, myPeer: net.id, mode: m.mode, diff: m.diff, team: me.team });
+    startGame({ role: 'client', roster: m.roster, myPeer: net.id, mode: m.mode, diff: m.diff, team: me.team, fun: m.fun || {} });
   } else if (m.k === 'roster') {
     if (game) for (const r of m.roster) if (game.soldiers[r.id]) game.soldiers[r.id].name = r.name;
   } else if (m.k === 'toLobby') {

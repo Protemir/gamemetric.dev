@@ -8,6 +8,8 @@ export const W = 72, H = 64, CEIL = 4, STEP = 0.45;
 // the outside walls rise to a second storey (only seen from outside; the rooms keep their 4 m ceiling)
 export const FACADE = 7.4;
 export const HOUSE = { x0: 10, z0: 8, x1: 62, z1: 46 };
+const LM_RES = 6, LM_SCALE = 1.8;
+let LM_CACHE = null;
 
 export const FL = { GRASS: 1, PAVE: 2, TERRACE: 3, WOOD: 4, MARBLE: 5, CARPET: 6, TILE: 7, CONCRETE: 8, PARQUET: 9, DARKWOOD: 10, GRAVEL: 11 };
 const FLOOR_TEX = { 1: 'grass', 2: 'pave', 3: 'terrace', 4: 'wood', 5: 'marble', 6: 'carpet', 7: 'tile', 8: 'concrete', 9: 'parquet', 10: 'darkwood', 11: 'gravel' };
@@ -265,7 +267,7 @@ export class GameMap {
     // west garden
     solid(1, 14, 2, 19, 2.6, K.SHED);
     solid(1, 26, 2, 26, 2.2, K.HEDGE);
-    solid(7, 34, 9, 34, 2.2, K.HEDGE);
+    solid(7, 30, 9, 30, 2.2, K.HEDGE); // clear of the library window (10,33-35)
     solid(1, 42, 2, 42, 2.2, K.HEDGE);
     solid(7, 50, 9, 50, 2.2, K.HEDGE);
     solid(7, 22, 8, 22, 1.0, K.CRATE);
@@ -274,7 +276,7 @@ export class GameMap {
     solid(66, 46, 68, 51, 2.4, K.VAN);
     solid(64, 31, 65, 32, 1.0, K.CRATE);
     solid(64, 31, 64, 31, 2.0, K.CRATE);
-    solid(63, 20, 66, 20, 2.2, K.HEDGE);
+    solid(64, 17, 67, 17, 2.2, K.HEDGE); // between the lounge windows, not in front of them
     solid(68, 12, 70, 12, 2.2, K.HEDGE);
     solid(69, 38, 70, 39, 1.0, K.CRATE);
     solid(68, 57, 69, 58, 1.0, K.CRATE);
@@ -619,10 +621,10 @@ export class GameMap {
 
   light(x, y, z, nx, ny, nz, indoor, ao, noShadow = false) {
     if (!indoor) {
-      const amb = 0.5 + 0.16 * ny;
+      const amb = 0.45 + 0.15 * ny;
       const dot = nx * SUN.x + ny * SUN.y + nz * SUN.z;
       const sh = dot > 0 && noShadow ? 1 : dot > 0 ? this.sunShadow(x + nx * 0.06, y + 0.04 + ny * 0.06, z + nz * 0.06) : 0;
-      const s = Math.max(0, dot) * sh * 0.72;
+      const s = Math.max(0, dot) * sh * 0.82;
       return [(amb * 0.88 + s * 1.0) * ao, (amb * 0.92 + s * 0.93) * ao, (amb * 1.02 + s * 0.8) * ao];
     }
     const orient = ny > 0.5 ? 1 : ny < -0.5 ? 0.8 : Math.abs(nx) > 0.5 ? 0.92 : 0.84;
@@ -641,6 +643,70 @@ export class GameMap {
     return [k * 1.0, k * 0.9, k * 0.76];
   }
 
+  // ---------- the ground light map: 6 texels a metre, sun shadows, contact shadows, sun through the windows ----------
+  groundMap(modelled) {
+    // the level never changes: bake once for every game in this page
+    if (LM_CACHE) return LM_CACHE;
+    const R = LM_RES, w = W * R, h = H * R;
+    const data = new Uint8Array(w * h * 4);
+    const solid = (cx, cz, lim) => !this.inb(cx, cz) || (this.h[cz * W + cx] >= lim && !(this.kind[cz * W + cx] === K.WATER));
+    const tanE = SUN.y / Math.hypot(SUN.x, SUN.z), ux = SUN.x / Math.hypot(SUN.x, SUN.z), uz = SUN.z / Math.hypot(SUN.x, SUN.z);
+    for (let j = 0; j < h; j++)
+      for (let i = 0; i < w; i++) {
+        const px = (i + 0.5) / R, pz = (j + 0.5) / R;
+        const cx = Math.floor(px), cz = Math.floor(pz);
+        const c = cz * W + cx;
+        const ind = this.indoor[c] === 1;
+        // contact shadow: how close the nearest wall or object is (furniture models stand on their cells)
+        let d = 1;
+        for (let dz = -1; dz <= 1; dz++)
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = cx + dx, nz = cz + dz;
+            if (!(dx || dz) && !(this.h[c] > 0)) continue;
+            if (!solid(nx, nz, 0.45)) continue;
+            const qx = Math.max(nx, Math.min(px, nx + 1)), qz = Math.max(nz, Math.min(pz, nz + 1));
+            d = Math.min(d, Math.hypot(px - qx, pz - qz));
+          }
+        const ao = 0.58 + 0.42 * Math.min(1, d / 0.65) ** 0.7;
+        let col = this.light(px, 0.03, pz, 0, 1, 0, ind, ao);
+        if (ind) {
+          // sunlight falling in through a window or an open door
+          let lit = 0;
+          for (let t = 0.1; t < 4; t += 0.1) {
+            const y = t * tanE;
+            if (y > CEIL - 0.05) break;
+            const qx = px + ux * t, qz = pz + uz * t;
+            const qc = this.cellAt(qx, qz);
+            if (qc < 0) break;
+            if (!this.indoor[qc]) {
+              lit = this.sunShadow(qx, y, qz);
+              break;
+            }
+            const hh = this.h[qc], l = this.lint[qc];
+            if (hh > y) break;
+            if (l > 0 && y > l) break;
+            if (hh >= CEIL) break;
+          }
+          if (lit) col = col.map((v, k) => v + [0.62, 0.56, 0.44][k] * ao);
+        }
+        const o = (j * w + i) * 4;
+        data[o] = Math.min(255, (col[0] / LM_SCALE) * 255);
+        data[o + 1] = Math.min(255, (col[1] / LM_SCALE) * 255);
+        data[o + 2] = Math.min(255, (col[2] / LM_SCALE) * 255);
+        data[o + 3] = 255;
+      }
+    const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat);
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.flipY = false;
+    // the floors' second uv set maps the whole level onto this picture
+    t.channel = 1;
+    t.needsUpdate = true;
+    void modelled;
+    return (LM_CACHE = t);
+  }
+
   cornerAO(cx, cz) {
     let n = 0;
     for (const [dx, dz] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) {
@@ -655,10 +721,11 @@ export class GameMap {
     // with the furniture models in, their cells show only floor
     const isModel = (c) => modelled && MODELLED.has(this.kind[c]) && this.h[c] > 0;
     const drawH = (c) => (isModel(c) ? 0 : this.h[c]);
-    const grp = (k) => (groups[k] ||= { p: [], n: [], u: [], c: [] });
+    const grp = (k) => (groups[k] ||= { p: [], n: [], u: [], c: [], u1: [], lm: false });
     const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpN = new THREE.Vector3();
-    const quad = (key, v, n, uv, col) => {
+    const quad = (key, v, n, uv, col, uv1) => {
       const G = grp(key);
+      if (uv1) G.lm = true;
       tmpA.set(v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]);
       tmpB.set(v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]);
       tmpN.crossVectors(tmpA, tmpB);
@@ -668,6 +735,7 @@ export class GameMap {
         G.n.push(n[0], n[1], n[2]);
         G.u.push(uv[i][0], uv[i][1]);
         G.c.push(col[i][0], col[i][1], col[i][2]);
+        G.u1.push(uv1 ? v[i][0] / W : 0, uv1 ? v[i][2] / H : 0);
       }
     };
     const sz = (k) => TEX_SIZE[k] || [1, 1];
@@ -694,13 +762,14 @@ export class GameMap {
       });
       quad(key, v, n, uv, col);
     };
-    const hface = (key, x0, z0, x1, z1, y, up, indoor, aoFn) => {
+    const hface = (key, x0, z0, x1, z1, y, up, indoor, aoFn, lm = false) => {
       const [su, sv] = sz(key);
       const v = [[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]];
       const uv = v.map((p) => [p[0] / su, p[2] / sv]);
       const ny = up ? 1 : -1;
-      const col = v.map((p) => this.light(p[0], y + ny * 0.02, p[2], 0, ny, 0, indoor, aoFn ? aoFn(p[0], p[2]) : 1));
-      quad(key, v, [0, ny, 0], uv, col);
+      // floors take their light from the baked ground map (sharp shadows); everything else is lit per corner
+      const col = lm ? v.map(() => [1, 1, 1]) : v.map((p) => this.light(p[0], y + ny * 0.02, p[2], 0, ny, 0, indoor, aoFn ? aoFn(p[0], p[2]) : 1));
+      quad(key, v, [0, ny, 0], uv, col, lm);
     };
 
     const wallTex = (c, nb) => {
@@ -720,7 +789,7 @@ export class GameMap {
         if (this.kind[c] === K.STATUE) {
           // drawn as a proper fountain / plinth below
         } else if (hh === 0 || isModel(c)) {
-          hface(FLOOR_TEX[this.floor[c]] || 'grass', x, z, x + 1, z + 1, 0, true, ind, (px, pz) => this.cornerAO(px, pz));
+          hface(FLOOR_TEX[this.floor[c]] || 'grass', x, z, x + 1, z + 1, 0, true, ind, null, true);
         } else {
           const k = this.kind[c];
           const topKey = k === K.WINDOW ? 'sill' : k === K.WALL ? 'trim' : KIND_TEX[k] || 'crate';
@@ -808,8 +877,14 @@ export class GameMap {
       geo.setAttribute('position', new THREE.Float32BufferAttribute(G.p, 3));
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(G.u, 2));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(G.c, 3));
+      if (G.lm) geo.setAttribute('uv1', new THREE.Float32BufferAttribute(G.u1, 2));
       geo.computeBoundingSphere();
       const mat = new THREE.MeshBasicMaterial({ map: tex[key], vertexColors: true });
+      if (G.lm) {
+        mat.lightMap = this.groundMap(modelled);
+        // basic materials divide the light map by pi; the map stores light / LM_SCALE
+        mat.lightMapIntensity = Math.PI * LM_SCALE;
+      }
       // the photo tiles are a very bright orange: weather them a little
       if (key === 'roof') mat.color.setRGB(0.84, 0.78, 0.76);
       if (key === 'water') {
