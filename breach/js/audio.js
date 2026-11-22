@@ -324,6 +324,15 @@ export function sfx(name, pos = null, opt = {}) {
       tone(d, t, 1.8, 'sine', 55, 30, 0.25, 0.05);
       break;
     }
+    case 'crackle': {
+      // a dry snap from the fire: a short click of noise, sometimes two
+      const P = place(pos, 10);
+      if (!P) return;
+      const d = out(P);
+      noise(d, t, 0.03, 'bandpass', 2500 + Math.random() * 2500, 2, 0.12 + Math.random() * 0.1, 0.002);
+      if (Math.random() < 0.4) noise(d, t + 0.05 + Math.random() * 0.08, 0.02, 'bandpass', 3500, 2, 0.08, 0.002);
+      break;
+    }
     case 'spray': {
       const P = place(pos, 12);
       if (!P) return;

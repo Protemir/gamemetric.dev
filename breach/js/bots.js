@@ -70,6 +70,7 @@ export class Brain {
         s.helmet = true;
       } else if (kind === 'he') s.he = 1;
       else if (kind === 'flash') s.flash = Math.min(2, s.flash + 1);
+      else if (kind === 'smoke') s.smoke = 1;
       else g.giveWeapon(s, kind);
       return true;
     };
@@ -94,6 +95,8 @@ export class Brain {
       if (s.money >= 1000 + 300 && Math.random() < 0.8) spend('helmet', 1000);
       else if (s.money >= 650) spend('armor', 650);
     }
+    // the storming side wants a smoke to cover the push; the defenders rarely bother
+    if (!s.smoke && s.money >= 300 && Math.random() < (s.team === 'A' ? 0.65 : 0.15)) spend('smoke', 300);
     if (s.money >= 500 && Math.random() < 0.6) spend('he', 300);
     if (s.money >= 400 && Math.random() < 0.4) spend('flash', 200);
     s.switchSlot(s.bestSlot(), true);
@@ -240,6 +243,9 @@ export class Brain {
     // reload while nobody is around
     if (w && w.mag && s.ammoOf(s.kind).mag < w.mag * 0.5 && s.ammoOf(s.kind).res > 0) g.reload(s);
 
+    // the storming side smokes its way in: once a round, a cloud just outside the door or window it is heading for
+    if (g.mode === 'hostage' && s.team === 'A' && s.smoke > 0 && this.entrySmoke !== g.round && g.phase === 'live' && this.path && g.time >= s.switchUntil && !g.map.isIndoor(s.x, s.z)) this.entrySmokeTry();
+
     // last known enemy position
     if (this.lastKnown && g.time - this.lastKnown.t < (this.lastKnown.heard ? 4 : 6) && this.goal?.type !== 'escort') {
       const L = this.lastKnown;
@@ -308,7 +314,7 @@ export class Brain {
     if (g.time < this.reactAt || g.time < this.pauseUntil) return;
     const tol = 0.05 + Math.atan2(0.35, d);
     if (off > tol * 1.6) return;
-    if (s.kind === 'he' || s.kind === 'flash') {
+    if (s.kind === 'he' || s.kind === 'flash' || s.kind === 'smoke') {
       s.switchSlot(s.bestSlot());
       return;
     }
@@ -335,19 +341,53 @@ export class Brain {
     }
   }
 
+  entrySmokeTry() {
+    const s = this.s, g = this.g, P = this.path;
+    // walk along the path to the first point inside the house
+    let px = s.x, pz = s.z, run = 0, entry = null;
+    for (let i = this.pi; i < P.length && run < 26 && !entry; i++) {
+      const [qx, qz] = P[i];
+      const L = Math.hypot(qx - px, qz - pz);
+      for (let t = 0.5; t <= L; t += 0.5) {
+        const x = px + ((qx - px) * t) / L, z = pz + ((qz - pz) * t) / L;
+        if (g.map.isIndoor(x, z)) {
+          entry = [x, z, run + t];
+          break;
+        }
+      }
+      run += L;
+      px = qx;
+      pz = qz;
+    }
+    if (!entry || entry[2] < 9 || entry[2] > 19) return;
+    this.entrySmoke = g.round;
+    // land it a little short of the opening, unless a teammate's cloud is already there
+    const dx = entry[0] - s.x, dz = entry[1] - s.z, d = Math.hypot(dx, dz);
+    const tx = s.x + (dx * (d - 2.5)) / d, tz = s.z + (dz * (d - 2.5)) / d;
+    if (g.smokes.list.some((c) => Math.hypot(c.x - tx, c.z - tz) < 6)) return;
+    if (!g.map.los(s.x, s.feet + 1.5, s.z, tx, 1.2, tz)) return;
+    const dd = Math.hypot(tx - s.x, tz - s.z);
+    const yaw = yawTo(tx - s.x, tz - s.z);
+    s.yaw = yaw;
+    g.throwNade(s, 'smoke', yaw, 0.22 + Math.min(0.35, dd / 60), Math.min(15, 7 + dd * 0.45));
+  }
+
   maybeNade(L) {
     const s = this.s, g = this.g;
     if (g.time < this.nadeAt || g.mode === 'dm') return false;
     const d = Math.hypot(L.x - s.x, L.z - s.z);
     if (d < 7 || d > 22) return false;
-    const kind = s.he > 0 ? 'he' : s.flash > 0 ? 'flash' : null;
+    const smoke = s.smoke > 0 && s.team === 'A' && d > 10 && Math.random() < 0.6;
+    const kind = smoke ? 'smoke' : s.he > 0 ? 'he' : s.flash > 0 ? 'flash' : null;
     if (!kind) return false;
     this.nadeAt = g.time + 10 + Math.random() * 10;
-    if (Math.random() < 0.5) return false;
+    if (!smoke && Math.random() < 0.5) return false;
     const yaw = yawTo(L.x - s.x, L.z - s.z);
     s.yaw = yaw;
-    const pitch = 0.22 + Math.min(0.35, d / 60);
-    g.throwNade(s, kind, yaw, pitch, Math.min(15, 7 + d * 0.45));
+    // smoke lands about halfway, between the bot and the defenders
+    const dd = smoke ? d * 0.55 : d;
+    const pitch = 0.22 + Math.min(0.35, dd / 60);
+    g.throwNade(s, kind, yaw, pitch, Math.min(15, 7 + dd * 0.45));
     return true;
   }
 

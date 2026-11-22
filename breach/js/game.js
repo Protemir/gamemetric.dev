@@ -6,6 +6,7 @@ import { buildProps, propsReady } from './props.js';
 import { Chickens } from './chickens.js';
 import { Rain } from './weather.js';
 import { Smokes } from './smoke.js';
+import { Fireplace } from './fireplace.js';
 import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
@@ -269,6 +270,7 @@ export class Game {
     this.grav = this.fun.lowgrav ? 6 : GRAV;
     this.chickens = new Chickens(this);
     this.smokes = new Smokes(this);
+    this.fireplace = new Fireplace(this);
     if (this.rainPending) this.rain = new Rain(this);
     this.vm = new ViewModel();
     this.vm.flash.material.map = this.fx.flashes[0].s.material.map;
@@ -1864,6 +1866,7 @@ export class Game {
     }
     this.rain?.update(dt);
     this.smokes.update(dt);
+    this.fireplace.update(dt);
     if (this.variant === 'zombie' && !this.over) for (const s of this.soldiers) if (s.team === 'B' && s.alive && Math.random() < dt * 0.12) sfx('groan', [s.x, s.feet + 1.6, s.z]);
     this.updateNades(dt);
     this.fx.update(dt);
@@ -2272,6 +2275,7 @@ export class Game {
   dispose() {
     this.disposed = true;
     this.smokes?.clear();
+    this.fireplace?.dispose();
     this.rain?.dispose();
     this.chickens?.dispose();
     this.envRT?.dispose();
