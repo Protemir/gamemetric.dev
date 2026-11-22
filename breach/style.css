@@ -102,13 +102,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #ammo-box span { font-size: 18px; color: var(--muted); }
 #ammo-box.low b { color: var(--bad); }
 #fps { position: absolute; left: 216px; top: 16px; font-size: 12px; color: var(--muted); }
-#board { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 18px; background: var(--panel); padding: 18px; border-radius: 12px; font-family: var(--font); }
-#board table { border-collapse: collapse; min-width: 300px; font-size: 14px; }
-#board caption { font-size: 18px; font-weight: 700; text-align: left; padding-bottom: 8px; }
-#board th { color: var(--muted); font-weight: 500; text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
-#board td { padding: 5px 8px; }
+#board { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(760px, calc(100vw - 32px)); background: var(--panel); padding: 16px; border-radius: 12px; font-family: var(--font); }
+#board-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; padding: 2px 4px 14px; }
+#board-head .bh-team { font-size: 20px; font-weight: 700; }
+#board-head .bh-team.tb { text-align: right; }
+#board-head .bh-score { font-family: var(--mono); font-size: 34px; font-weight: 700; letter-spacing: 1px; white-space: nowrap; }
+#board-head .bh-score i { font-style: normal; color: var(--muted); padding: 0 8px; }
+#board-head .bh-sub { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 13px; margin-top: -4px; }
+#board .bd-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+#board table { width: 100%; border-collapse: collapse; font-size: 14px; border-radius: 8px; overflow: hidden; }
+#board table.bd-a { background: rgba(90, 169, 255, 0.08); border-top: 3px solid var(--a); }
+#board table.bd-b { background: rgba(255, 106, 90, 0.08); border-top: 3px solid var(--b); }
+#board caption { caption-side: top; font-size: 13px; font-weight: 600; text-align: left; padding: 0 2px 6px; color: var(--muted); }
+#board th { color: var(--muted); font-weight: 500; text-align: right; padding: 7px 8px 5px; border-bottom: 1px solid var(--line); font-size: 12px; }
+#board td { padding: 6px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+#board th:first-child, #board td:first-child { text-align: left; }
+#board td:first-child { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#board td:first-child::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; background: currentColor; vertical-align: 1px; }
+#board .bd-a td:first-child::before { color: var(--a); }
+#board .bd-b td:first-child::before { color: var(--b); }
 #board tr.dead td { opacity: 0.4; }
-#board tr.me td { color: var(--accent); }
+#board tr.dead td:first-child::before { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+#board tr.me td { color: var(--accent); font-weight: 600; }
+#board tr.me { background: rgba(242, 177, 58, 0.1); }
+@media (max-width: 620px) { #board .bd-teams { grid-template-columns: 1fr; } #board-head .bh-score { font-size: 26px; } }
 #buy { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(620px, 94vw); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; pointer-events: auto; font-family: var(--font); }
 .buy-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 10px; }
 .buy-head b { font-size: 22px; }

@@ -161,6 +161,11 @@ export class NetGame {
         if (best) g.useHostage(s, best);
         break;
       }
+      case 'pick': {
+        const d = g.drops.find((x) => x.id === m.id);
+        if (d && s.alive && Math.hypot(d.x - s.x, d.z - s.z) < 2.5) g.pickDrop(s, d, true);
+        break;
+      }
       case 'buy': {
         const r = g.buy(s, m.item);
         this.net.send(from, { k: 'L', r, item: m.item, L: loadoutOf(s) });
@@ -178,6 +183,19 @@ export class NetGame {
     if (this.host) this.net.broadcast({ k: 'f', id: s.id, w: KINDS.indexOf(kind), m: muzzle.map(r2), e: ends.map((e) => e.map(r2)) });
     else if (s === this.g.player) this.net.toHost({ k: 'f', w: KINDS.indexOf(kind), m: muzzle.map(r2), e: ends.map((e) => e.map(r2)), h: hits });
   }
+  onDrop(d) {
+    if (this.host) this.net.broadcast({ k: 'D', id: d.id, w: KINDS.indexOf(d.kind), x: r2(d.x), z: r2(d.z), f: r2(d.y), y: r3(d.mesh.rotation.y), o: d.owner ?? -1 });
+  }
+
+  onUndrop(id) {
+    if (this.host) this.net.broadcast({ k: 'Dx', id });
+  }
+
+  // a remote player walked over a gun or swapped for one: the host tells them what they hold now
+  onPicked(s, d) {
+    if (this.host && s.peer) this.net.send(s.peer, { k: 'L', r: 'ok', item: d.kind, pick: 1, am: [d.mag, d.res], L: loadoutOf(s) });
+  }
+
   onKill(o, by, weapon, head, dx, dz) {
     if (this.host) this.net.broadcast({ k: 'K', v: o.id, by: by ? by.id : -1, w: KINDS.indexOf(weapon), hd: head ? 1 : 0, dx: r2(dx), dz: r2(dz) });
   }
@@ -268,7 +286,7 @@ export class NetGame {
           if (s.remote) {
             pushSample(s, { t: T, x: a[0] / 100, z: a[1] / 100, f: a[2] / 100, y: a[3] / 1000, p: a[4] / 1000, c: a[5] / 100, vx: a[6] / 100, vz: a[7] / 100 });
             const k = KINDS[a[11]];
-            if (k && s.netKind !== k) {
+            if (k && a[8] && (s.netKind !== k || !s.body.gunKind)) {
               s.netKind = k;
               s.body.setGun(k);
             }
@@ -376,7 +394,11 @@ export class NetGame {
         if (!m.team || m.team === me.team) g.hud.center(t(m.key), 2);
         break;
       case 'L': {
-        if (m.r === 'ok') {
+        if (m.r === 'ok' && m.pick) {
+          sfx('click');
+          this.applyLoadout(m.L, false, m.item);
+          if (me.slots[WEAPONS[m.item].slot] === m.item) me.ammo[m.item] = { mag: m.am[0], res: m.am[1] };
+        } else if (m.r === 'ok') {
           sfx('buy');
           this.applyLoadout(m.L, false, m.item);
         } else {
@@ -385,6 +407,19 @@ export class NetGame {
           else if (m.r === 'time') g.hud.center(t('buyClosed'), 1.2);
           else if (m.r === 'zone') g.hud.center(t('buyZone'), 1.2);
         }
+        break;
+      }
+      case 'D': {
+        if (g.drops.some((d) => d.id === m.id) || !KINDS[m.w]) break;
+        g.makeDrop(KINDS[m.w], m.x / 100, m.z / 100, 0, 0, m.id, m.y / 1000, m.f / 100);
+        const o = g.soldiers[m.o];
+        // the drop comes just before the kill message: the body lets go of its gun either way
+        if (o) o.body.setGun(null);
+        break;
+      }
+      case 'Dx': {
+        const d = g.drops.find((x) => x.id === m.id);
+        if (d) g.removeDrop(d);
         break;
       }
       case 'snd': {

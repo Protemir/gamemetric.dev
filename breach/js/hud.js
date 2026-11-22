@@ -268,6 +268,9 @@ export class Hud {
       pr.hidden = false;
       pr.textContent = nh.leader === p ? t('pressEstop') : nh.state === 'idle' ? t('pressE') : '';
       if (!pr.textContent) pr.hidden = true;
+    } else if (game.nearDrop(p)) {
+      pr.hidden = false;
+      pr.textContent = `${t('pickUp')} ${WEAPONS[game.nearDrop(p).kind].name[lang]}`;
     } else if (p.alive && game.canBuy(p) && game.mode !== 'dm' && game.phase !== 'end') {
       pr.hidden = false;
       pr.textContent = `B — ${t('buy')}`;
@@ -284,15 +287,22 @@ export class Hud {
   }
 
   drawBoard(game) {
+    const dm = game.mode === 'dm';
+    const sc = dm ? game.dmKills : game.score;
+    const mine = game.player.team;
     const rows = (team) =>
       game.soldiers
         .filter((s) => s.team === team)
-        .sort((a, b) => b.kills - a.kills)
-        .map((s) => `<tr class="${s.alive ? '' : 'dead'}${s.isPlayer ? ' me' : ''}"><td>${esc(s.name)}</td><td>${s.kills}</td><td>${s.deaths}</td><td>${team === game.player.team && game.mode !== 'dm' ? '$' + s.money : ''}</td></tr>`)
+        .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
+        .map((s) => `<tr class="${s.alive ? '' : 'dead'}${s.isPlayer ? ' me' : ''}"><td>${esc(s.name)}</td><td>${s.kills}</td><td>${s.deaths}</td>${dm ? '' : `<td>${team === mine ? '$' + s.money : ''}</td>`}</tr>`)
         .join('');
-    const head = `<tr><th>${t('player')}</th><th>${t('kills')}</th><th>${t('deaths')}</th><th>${game.mode !== 'dm' ? t('money') : ''}</th></tr>`;
-    $('board-a').innerHTML = `<caption class="ta">${t('sideA')} — ${game.mode === 'dm' ? game.dmKills.A : game.score.A}</caption>${head}${rows('A')}`;
-    $('board-b').innerHTML = `<caption class="tb">${t('sideB')} — ${game.mode === 'dm' ? game.dmKills.B : game.score.B}</caption>${head}${rows('B')}`;
+    const head = `<tr><th>${t('player')}</th><th>${t('kills')}</th><th>${t('deaths')}</th>${dm ? '' : `<th>${t('money')}</th>`}</tr>`;
+    const alive = (team) => game.soldiers.filter((s) => s.team === team && s.alive).length;
+    const you = (team) => (team === mine ? ` · ${t('yourTeam')}` : '');
+    const sub = dm ? t('toKills').replace('{n}', 60) : `${t('round')} ${game.round} · ${t('toWins').replace('{n}', 8)}`;
+    $('board-head').innerHTML = `<div class="bh-team ta">${t('sideA')}</div><div class="bh-score"><span class="ta">${sc.A}</span><i>:</i><span class="tb">${sc.B}</span></div><div class="bh-team tb">${t('sideB')}</div><div class="bh-sub">${sub}</div>`;
+    $('board-a').innerHTML = `<caption>${t('aliveN')} ${alive('A')}/5${you('A')}</caption>${head}${rows('A')}`;
+    $('board-b').innerHTML = `<caption>${t('aliveN')} ${alive('B')}/5${you('B')}</caption>${head}${rows('B')}`;
   }
 
   drawRadar(game) {

@@ -3,6 +3,7 @@ import * as THREE from '../vendor/three.module.min.js';
 import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos } from './map.js';
 import { makeTextures } from './textures.js';
 import { makeBody } from './people.js';
+import { thirdPersonGun } from './actors.js';
 import { WEAPONS, GEAR, recoilKick, viewModel } from './weapons.js';
 import { sfx, setListener } from './audio.js';
 import { Brain } from './bots.js';
@@ -84,6 +85,7 @@ class Soldier {
     this.reloadUntil = 0;
     this.scoped = 0;
     this.shots = 0;
+    this.pinAt = this.throwAt = 0;
     this.switchUntil = instant ? 0 : this.g.time + (n === 3 ? 0.35 : 0.6);
     this.body.setGun(this.kind);
     if (this.isPlayer) {
@@ -201,6 +203,7 @@ class ViewModel {
     this.flash.position.set(v.muzzle[0], v.muzzle[1], v.muzzle[2] - 0.03);
     this.draw = 1;
     this.kind = kind;
+    this.team = team;
   }
 }
 
@@ -264,6 +267,8 @@ export class Game {
     this.hostages = this.mode === 'hostage' ? this.map.hostageSpots.map(([x, z]) => new Hostage(this, x, z)) : [];
     if (this.mode !== 'hostage') this.map.rescueMesh.visible = false;
     this.nades = [];
+    this.drops = [];
+    this.dropSeq = 0;
     this.nadeMeshes = [];
     this.score = { A: 0, B: 0 };
     this.lossStreak = { A: 0, B: 0 };
@@ -290,6 +295,7 @@ export class Game {
   applyRound(m) {
     this.round = m.r;
     this.fx.clear();
+    this.clearDrops();
     for (const n of this.nades) this.dropNade(n);
     this.nades.length = 0;
     this.phase = this.mode === 'dm' ? 'live' : 'freeze';
@@ -518,6 +524,7 @@ export class Game {
     this.view.shake = 0;
     for (const n of this.nades) this.dropNade(n);
     this.nades.length = 0;
+    this.clearDrops();
     this.holdsTaken = new Set();
     this.spotted.clear();
     this.phase = this.mode === 'dm' ? 'live' : 'freeze';
@@ -701,8 +708,11 @@ export class Game {
     if (this.time < s.nextFire || this.time < s.switchUntil) return false;
     if (s.reloadUntil && s.kind !== 'shotgun') return false;
     if (w.nade) {
-      if (s.isPlayer) {
-        this.throwNade(s, s.kind, s.yaw, s.pitch + 0.08, 15);
+      // like in CS: pressing pulls the pin, the grenade flies once the button is let go
+      if (s.isPlayer && !s.pinAt) {
+        s.pinAt = this.time;
+        s.throwAt = 0;
+        sfx('pin');
       }
       return false;
     }
@@ -926,6 +936,7 @@ export class Game {
     o.body.die(fromBehind);
     o.body.root.visible = !o.isPlayer;
     o.nb = null;
+    if (this.role !== 'client') this.dropFrom(o);
     this.nh?.onKill(o, by, weapon, head, dx, dz);
     for (const h of this.hostages) if (h.leader === o) {
       h.leader = null;
@@ -974,7 +985,7 @@ export class Game {
     if (wall) reach = Math.max(0, wall.t - 0.12);
     const n = this.spawnNade(s, kind, s.x + dx * reach, eye - 0.08, s.z + dz * reach, dx * speed + s.vx * 0.6, dy * speed + 1.5, dz * speed + s.vz * 0.6, this.nh ? this.nh.newNadeId() : null);
     this.nh?.onNade(n);
-    sfx('pin', s.isPlayer ? null : [s.x, 1, s.z]);
+    if (!s.isPlayer) sfx('pin', [s.x, 1, s.z]);
     if (s.isPlayer) this.vm.kick = 1;
     // back to a gun when this was the last one
     if ((s.cur === 4 || s.cur === 5) && !s.hasSlot(s.cur)) s.switchSlot(s.prev && s.prev < 4 && s.hasSlot(s.prev) ? s.prev : s.slots[1] ? 1 : 2);
@@ -1388,7 +1399,7 @@ export class Game {
       if (wantFire && !frozen) {
         const w = WEAPONS[s.kind];
         const wasScoped = s.scoped;
-        if (w.auto || w.melee || !s.triggerHeld || s.brain) {
+        if (w.auto || w.melee || !s.triggerHeld || s.brain || (w.nade && !s.pinAt)) {
           if (this.fire(s)) {
             // the brain reads this on its next update (bursts)
             s.justFired = true;
@@ -1400,6 +1411,15 @@ export class Game {
         }
         s.triggerHeld = true;
       } else s.triggerHeld = false;
+      if (s.isPlayer && s.pinAt) {
+        // the pin takes a moment, then a short swing before the hand lets go
+        if (!wantFire && !s.throwAt) s.throwAt = Math.max(this.time, s.pinAt + 0.35) + 0.1;
+        if (s.throwAt && this.time >= s.throwAt) {
+          const kind = s.kind;
+          s.pinAt = s.throwAt = 0;
+          if (WEAPONS[kind]?.nade) this.throwNade(s, kind, s.yaw, s.pitch + 0.08, 15);
+        }
+      }
       // the sniper scope comes back after the bolt
       if (s.rescopeAt && this.time >= s.rescopeAt) {
         if (WEAPONS[s.kind].scope && !s.reloadUntil && input.fire !== true) s.scoped = s.rescopeTo;
@@ -1423,6 +1443,7 @@ export class Game {
     }
     for (const s of this.soldiers) if (!s.alive) s.body.animate({ dt, y: s.feet, speed: 0 });
     this.updateHostages(dt);
+    this.updateDrops();
     this.updateNades(dt);
     this.fx.update(dt);
     this.tex.water.offset.x = this.time * 0.02;
@@ -1451,6 +1472,14 @@ export class Game {
         sfx('click');
       }
     } else if (a === 'use') {
+      // a gun on the floor nearer than any hostage: swap for it
+      const d = this.nearDrop(p);
+      const h = this.nearHostage();
+      if (d && (!h || Math.hypot(d.x - p.x, d.z - p.z) < Math.hypot(h.x - p.x, h.z - p.z))) {
+        if (this.role === 'client') this.nh.net.toHost({ k: 'pick', id: d.id });
+        else this.pickDrop(p, d, true);
+        return;
+      }
       if (p.team !== 'A') return;
       let best = null, bd = 2.3;
       for (const h of this.hostages) {
@@ -1464,6 +1493,116 @@ export class Game {
       if (!best) return;
       if (this.role === 'client') this.nh.net.toHost({ k: 'u' });
       else this.useHostage(p, best);
+    }
+  }
+
+  // ---------- guns on the floor ----------
+  makeDrop(kind, x, z, mag, res, id, yaw, feet = 0) {
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true });
+    const mesh = new THREE.Mesh(thirdPersonGun(kind).geo, mat);
+    const y = this.map.groundAt(x, z, 0.05, feet + 0.05);
+    // lying on its side
+    mesh.rotation.order = 'YXZ';
+    mesh.rotation.set(0, yaw, Math.PI / 2);
+    mesh.position.set(x, y + 0.035, z);
+    mat.color.setScalar(Math.min(1, this.charLight(x, z)));
+    this.scene.add(mesh);
+    const d = { id: id ?? ++this.dropSeq, kind, x, z, y, mag, res, mesh, born: this.time };
+    this.drops.push(d);
+    return d;
+  }
+
+  removeDrop(d) {
+    const i = this.drops.indexOf(d);
+    if (i >= 0) this.drops.splice(i, 1);
+    this.scene.remove(d.mesh);
+    d.mesh.material.dispose();
+  }
+
+  clearDrops() {
+    for (const d of [...this.drops]) this.removeDrop(d);
+  }
+
+  // the dead drop their main gun, or the pistol when there is none
+  dropFrom(s) {
+    const kind = s.slots[1] || s.slots[2];
+    if (!kind) return;
+    const w = WEAPONS[kind];
+    const a = s.ammo[kind] || { mag: w.mag, res: w.reserve };
+    s.slots[w.slot] = null;
+    s.body.setGun(null);
+    s.shown = null;
+    if (a.mag + a.res <= 0) return;
+    const d = this.makeDrop(kind, s.x, s.z, a.mag, a.res, null, s.yaw + (Math.random() - 0.5), s.feet);
+    d.owner = s.id;
+    this.nh?.onDrop(d);
+    // never let the floor fill up
+    while (this.drops.length > 24) {
+      const old = this.drops[0];
+      this.removeDrop(old);
+      this.nh?.onUndrop(old.id);
+    }
+  }
+
+  pickDrop(s, d, swap) {
+    const w = WEAPONS[d.kind], slot = w.slot, old = s.slots[slot];
+    if (old && !swap) return;
+    this.removeDrop(d);
+    this.nh?.onUndrop(d.id);
+    if (old) {
+      const a = s.ammo[old] || { mag: WEAPONS[old].mag, res: WEAPONS[old].reserve };
+      const nd = this.makeDrop(old, s.x - Math.sin(s.yaw) * 0.4, s.z - Math.cos(s.yaw) * 0.4, a.mag, a.res, null, s.yaw + 1.3, s.feet);
+      this.nh?.onDrop(nd);
+    }
+    s.slots[slot] = d.kind;
+    s.ammo[d.kind] = { mag: d.mag, res: d.res };
+    if (s.remote) {
+      this.nh?.onPicked(s, d);
+      return;
+    }
+    if (swap || s.brain || (slot === 1 && s.cur !== 1)) s.switchSlot(slot, false);
+    else if (s.cur === slot) s.switchSlot(slot, true);
+    if (s.isPlayer) sfx('click');
+  }
+
+  // a gun at the player's feet worth pressing E for
+  nearDrop(p) {
+    if (!p.alive || !this.drops.length) return null;
+    let best = null, bd = 1.5;
+    for (const d of this.drops) {
+      if (p.slots[WEAPONS[d.kind].slot] === d.kind) continue;
+      const dist = Math.hypot(d.x - p.x, d.z - p.z);
+      if (dist < bd && Math.abs(d.y - p.feet) < 1.2) {
+        bd = dist;
+        best = d;
+      }
+    }
+    return best;
+  }
+
+  // walking over a gun picks it up when that slot is empty; bots also swap up to a dearer gun
+  updateDrops() {
+    if (this.role === 'client' || !this.drops.length) return;
+    if (this.mode === 'dm') {
+      for (const d of [...this.drops]) if (this.time - d.born > 30) {
+        this.removeDrop(d);
+        this.nh?.onUndrop(d.id);
+      }
+    }
+    for (const s of this.soldiers) {
+      if (!s.alive) continue;
+      for (const d of this.drops) {
+        if (Math.hypot(d.x - s.x, d.z - s.z) > 0.8 || Math.abs(d.y - s.feet) > 1.2) continue;
+        const w = WEAPONS[d.kind], cur = s.slots[w.slot];
+        if (!cur) {
+          this.pickDrop(s, d, false);
+          break;
+        }
+        if (s.brain && WEAPONS[cur].price < w.price && this.time - d.born > 0.5) {
+          this.pickDrop(s, d, true);
+          break;
+        }
+      }
     }
   }
 
@@ -1522,10 +1661,11 @@ export class Game {
       v.stepUp = (v.stepUp || 0) * Math.exp(-dt * 14);
       v.y = eyeY - v.stepUp;
     } else {
-      // spectate a teammate through their eyes
+      // spectate a teammate through their eyes: the camera sits exactly in their head
+      // (a lagging camera ended up behind it and showed their own body twitching in front of the lens)
       const s = src;
-      v.x += (s.x - v.x) * Math.min(1, dt * 20);
-      v.z += (s.z - v.z) * Math.min(1, dt * 20);
+      v.x = s.x;
+      v.z = s.z;
       v.y = s.feet + s.eyeH();
       v.yaw = v.yaw + angDiff(v.yaw, s.yaw) * Math.min(1, dt * 12);
       v.pitch += (s.pitch - v.pitch) * Math.min(1, dt * 12);
@@ -1546,12 +1686,23 @@ export class Game {
     }
     setListener(v.x, v.y, v.z, v.yaw, this.map.isIndoor(v.x, v.z));
     this.specTarget = src === p ? null : src;
+    // the body we look out of is not drawn, just like the player's own
+    if (this.specHidden !== this.specTarget) {
+      if (this.specHidden) this.specHidden.body.root.visible = true;
+      this.specHidden = this.specTarget;
+      if (this.specTarget) this.specTarget.body.root.visible = false;
+    }
 
     // view model
     const vm = this.vm;
-    const showVm = src === p && p.alive && !p.scoped;
+    const showVm = src.alive && !src.scoped;
     vm.mesh.visible = showVm;
+    if (showVm && (vm.kind !== src.kind || vm.team !== src.team)) {
+      vm.setKind(src.kind, src.team);
+      vm.draw = 0;
+    }
     if (showVm) {
+      const p = src;
       const hs = Math.hypot(p.vx, p.vz);
       vm.bob += dt * hs * 1.9 * (p.onGround ? 1 : 0);
       const bobAmt = Math.min(1, hs / 5.5) * (p.onGround ? 1 : 0.3);
@@ -1566,15 +1717,17 @@ export class Game {
         reloadK = Math.sin(Math.min(1, Math.max(0, 1 - left)) * Math.PI);
       }
       const knife = p.kind === 'knife';
+      const pull = p.pinAt ? Math.min(1, (this.time - p.pinAt) / 0.3) : 0;
       const h = vm.holder;
       const o = VM_OFFSET[p.kind] || VM_OFFSET.rifle;
       h.position.set(
         o[0] + Math.sin(vm.bob) * 0.012 * bobAmt + vm.swayX,
         o[1] + Math.abs(Math.cos(vm.bob)) * 0.012 * bobAmt + vm.swayY - vm.draw * 0.25 - reloadK * 0.12 - p.crouchK * 0.01,
-        o[2] + vm.kick * (knife ? -0.12 : 0.045),
+        o[2] + vm.kick * (knife ? -0.12 : 0.045) + pull * 0.09,
       );
+      if (pull) h.position.y += pull * 0.05;
       // turned a little towards the centre so the side of the gun shows
-      h.rotation.set(vm.kick * (knife ? -0.6 : 0.09) + reloadK * 0.6 - vm.draw * 0.8 + (knife ? 0.25 : 0.03), (knife ? vm.kick * 0.5 + 0.35 : o[3] ?? 0.085), reloadK * 0.35 + (knife ? -0.5 : -0.04));
+      h.rotation.set(vm.kick * (knife ? -0.6 : 0.09) + reloadK * 0.6 - vm.draw * 0.8 + (knife ? 0.25 : 0.03) + pull * 0.45, (knife ? vm.kick * 0.5 + 0.35 : o[3] ?? 0.085), reloadK * 0.35 + (knife ? -0.5 : -0.04));
       vm.mat.color.setScalar(this.charLight(p.x, p.z) * 1.08);
       vm.flashT -= dt;
       vm.flash.visible = vm.flashT > 0;
