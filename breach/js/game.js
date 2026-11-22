@@ -76,9 +76,11 @@ class Soldier {
   }
 
   switchSlot(n, instant = false) {
-    if (!this.hasSlot(n) || (n === this.cur && !instant)) return;
+    // the same slot still has to be redrawn when a bought gun replaced the one that was in it
+    if (!this.hasSlot(n) || (n === this.cur && !instant && this.shown === this.kind)) return;
     if (n !== this.cur) this.prev = this.cur;
     this.cur = n;
+    this.shown = this.kind;
     this.reloadUntil = 0;
     this.scoped = 0;
     this.shots = 0;

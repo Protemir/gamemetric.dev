@@ -8,6 +8,7 @@ import { loadPeople } from './people.js';
 import { Net, newCode } from './net.js';
 import { NetGame } from './netgame.js';
 import { BOT_NAMES } from './i18n.js';
+import { WEAPONS } from './weapons.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -281,10 +282,26 @@ function closeBuy(relock = true) {
 hud.onBuyClosed = () => closeBuy();
 function doBuy(item) {
   if (!game) return;
+  // a gun is the whole purchase: the menu goes away once it is in hand (armour and grenades keep it open)
+  const gun = WEAPONS[item];
+  if (gun && game.role === 'client' && game.mode !== 'dm' && game.player.money < gun.price) {
+    sfx('deny');
+    hud.center(t('noMoney'), 1.2);
+    return;
+  }
   const r = game.buy(game.player, item);
-  if (r === 'sent') return; // the host answers
-  if (r === 'ok') sfx('buy');
-  else {
+  if (r === 'sent') {
+    // the host answers
+    if (gun) closeBuy();
+    return;
+  }
+  if (r === 'ok') {
+    sfx('buy');
+    if (gun) {
+      closeBuy();
+      return;
+    }
+  } else {
     sfx('deny');
     if (r === 'money') hud.center(t('noMoney'), 1.2);
     if (r === 'time') {
