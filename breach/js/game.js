@@ -833,18 +833,23 @@ export class Game {
     }
   }
 
-  knife(s, w) {
+  knife(s, w, heavy = false) {
     this._hits = [];
-    this.knifeHit(s, w);
+    this.knifeHit(s, w, heavy);
     if (this.nh) this.nh.onFire(s, 'knife', [s.x, s.feet + 1.2, s.z], [], this._hits);
   }
 
-  knifeHit(s, w) {
+  // left button: a quick slash; right button (heavy): a slow stab that kills from behind, like in CS
+  knifeHit(s, w, heavy = false) {
     sfx('knife', s.isPlayer ? null : [s.x, 1, s.z]);
-    if (s.isPlayer) this.vm.kick = 1;
+    if (s.isPlayer) {
+      this.vm.kick = heavy ? 1.6 : 1;
+      this.vm.stab = heavy ? 1 : 0;
+    }
+    const range = heavy ? w.range * 0.85 : w.range;
     const eye = s.feet + s.eyeH();
     const dx = -Math.sin(s.yaw) * Math.cos(s.pitch), dy = Math.sin(s.pitch), dz = -Math.cos(s.yaw) * Math.cos(s.pitch);
-    let best = null, bt = w.range;
+    let best = null, bt = range;
     for (const o of this.soldiers) {
       if (o === s || !o.alive || o.team === s.team) continue;
       for (const off of [0, 0.15, -0.15]) {
@@ -859,9 +864,10 @@ export class Game {
     }
     if (best) {
       const behind = Math.abs(angDiff(best.o.yaw, s.yaw)) < 0.8;
-      this.damage(best.o, behind ? 120 : w.dmg, best.part === 'head' ? 'body' : best.part, s, 'knife', dx, dz, 0.85);
+      const dmg = heavy ? (behind ? 180 : 65) : behind ? 90 : w.dmg;
+      this.damage(best.o, dmg, best.part === 'head' ? 'body' : best.part, s, 'knife', dx, dz, 0.85);
     } else {
-      const wall = this.map.raycast(s.x, eye, s.z, dx, dy, dz, w.range);
+      const wall = this.map.raycast(s.x, eye, s.z, dx, dy, dz, range);
       if (wall) {
         const ex = s.x + dx * wall.t, ey = eye + dy * wall.t, ez = s.z + dz * wall.t;
         this.fx.spark(ex, ey, ez, wall.nx, wall.ny, wall.nz, [0.8, 0.8, 0.7], 3, 2);
@@ -1467,6 +1473,12 @@ export class Game {
     } else if (a === 'reload') this.reload(p);
     else if (a === 'alt') {
       const w = WEAPONS[p.kind];
+      if (w.melee) {
+        if (this.phase === 'freeze' || this.time < p.nextFire || this.time < p.switchUntil) return;
+        p.nextFire = this.time + 1.0;
+        this.knife(p, w, true);
+        return;
+      }
       if (w.scope && this.time >= p.switchUntil && !p.reloadUntil) {
         p.scoped = (p.scoped + 1) % 3;
         sfx('click');
@@ -1723,11 +1735,11 @@ export class Game {
       h.position.set(
         o[0] + Math.sin(vm.bob) * 0.012 * bobAmt + vm.swayX,
         o[1] + Math.abs(Math.cos(vm.bob)) * 0.012 * bobAmt + vm.swayY - vm.draw * 0.25 - reloadK * 0.12 - p.crouchK * 0.01,
-        o[2] + vm.kick * (knife ? -0.12 : 0.045) + pull * 0.09,
+        o[2] + vm.kick * (knife ? (vm.stab ? -0.2 : -0.12) : 0.045) + pull * 0.09,
       );
       if (pull) h.position.y += pull * 0.05;
       // turned a little towards the centre so the side of the gun shows
-      h.rotation.set(vm.kick * (knife ? -0.6 : 0.09) + reloadK * 0.6 - vm.draw * 0.8 + (knife ? 0.25 : 0.03) + pull * 0.45, (knife ? vm.kick * 0.5 + 0.35 : o[3] ?? 0.085), reloadK * 0.35 + (knife ? -0.5 : -0.04));
+      h.rotation.set(vm.kick * (knife ? -0.6 : 0.09) + reloadK * 0.6 - vm.draw * 0.8 + (knife ? 0.25 : 0.03) + pull * 0.45, (knife ? vm.kick * (vm.stab ? 0.1 : 0.5) + 0.35 : o[3] ?? 0.085), reloadK * 0.35 + (knife ? -0.5 : -0.04));
       vm.mat.color.setScalar(this.charLight(p.x, p.z) * 1.08);
       vm.flashT -= dt;
       vm.flash.visible = vm.flashT > 0;
