@@ -274,6 +274,13 @@ function goFullscreen() {
       .then(() => screen.orientation?.lock?.('landscape').catch(() => {}))
       .catch(() => {});
 }
+document.addEventListener('touchend', () => {
+  if (touchOnly && (state === 'play' || !$('lobby').hidden) && !document.fullscreenElement) goFullscreen();
+});
+// a phone turned upright in a solo game: pause, the bots would carry on behind the "turn your phone" screen
+matchMedia('(orientation: portrait)').addEventListener?.('change', (e) => {
+  if (e.matches && touchOnly && game && game.role === 'solo' && state === 'play') touchPause();
+});
 function touchPause() {
   if (state !== 'play' || !game) return;
   if (buyOpen) closeBuy(false);
@@ -576,7 +583,7 @@ window.addEventListener('mousemove', (e) => {
 canvas.addEventListener('wheel', (e) => {
   if (state !== 'play' || !game || !game.player.alive || buyOpen) return;
   const p = game.player;
-  const order = [1, 2, 3, 4, 5].filter((n) => p.hasSlot(n));
+  const order = [1, 2, 3, 4, 5, 6].filter((n) => p.hasSlot(n));
   const i = order.indexOf(p.cur);
   const n = order[(i + (e.deltaY > 0 ? 1 : -1) + order.length) % order.length];
   game.playerAction('slot' + n);

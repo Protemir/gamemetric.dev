@@ -33,6 +33,9 @@ export const SURF = { soft: [7, 8, 18, 19], wood: [3, 4, 6, 12, 20, 21], metal: 
 // sun comes from the south-west, high in the sky
 const SUN = new THREE.Vector3(-0.5, 0.78, 0.38).normalize();
 
+// the pool: water surface (the top of the water cells) and the tiled bottom
+export const WATER_Y = 0.12, POOL_BOTTOM = -1.5;
+
 export const ROOMS = {
   1: { name: 'library', x0: 11, z0: 31, x1: 26, z1: 45 },
   2: { name: 'hall', x0: 28, z0: 31, x1: 44, z1: 45 },
@@ -342,6 +345,7 @@ export class GameMap {
   // ---------- physics ----------
   blocks(c, feet, top, step = STEP) {
     if (c < 0) return true;
+    if (this.kind[c] === K.WATER && this.swimmer) return false;
     if (this.noWalk[c]) return true;
     if (this.h[c] > feet + step) return true;
     // the garden wall round the grounds cannot be climbed (low gravity could reach it from the shed)
@@ -354,6 +358,7 @@ export class GameMap {
   // circle vs grid; returns true if something was hit
   collide(a) {
     const r = a.radius;
+    this.swimmer = !!(a.isPlayer || a.remote);
     let hit = false;
     for (let pass = 0; pass < 2; pass++) {
       const x0 = Math.floor(a.x - r), x1 = Math.floor(a.x + r), z0 = Math.floor(a.z - r), z1 = Math.floor(a.z + r);
@@ -391,13 +396,20 @@ export class GameMap {
     return hit;
   }
 
+  // is this point over the pool
+  inWater(x, z) {
+    const c = this.cellAt(x, z);
+    return c >= 0 && this.kind[c] === K.WATER;
+  }
+
   groundAt(x, z, r, feet, step = STEP) {
-    let g = 0;
+    let g = this.inWater(x, z) ? POOL_BOTTOM : 0;
     const x0 = Math.floor(x - r), x1 = Math.floor(x + r), z0 = Math.floor(z - r), z1 = Math.floor(z + r);
     for (let cz = z0; cz <= z1; cz++)
       for (let cx = x0; cx <= x1; cx++) {
         if (!this.inb(cx, cz)) continue;
         const c = cz * W + cx;
+        if (this.kind[c] === K.WATER) continue;
         const hh = this.h[c];
         if (hh > g && hh <= feet + step + 0.01) {
           // only cells that the circle really overlaps
@@ -907,6 +919,18 @@ export class GameMap {
       m.matrixAutoUpdate = false;
       m.name = key;
       meshes.push(m);
+    }
+
+    // the pool from the inside: a tiled box open at the top, and the water seen from below
+    {
+      const box = new THREE.BoxGeometry(22, WATER_Y - POOL_BOTTOM, 4);
+      box.translate(35, (WATER_Y + POOL_BOTTOM) / 2, 4);
+      const inside = new THREE.Mesh(box, new THREE.MeshBasicMaterial({ map: tex.tile || null, color: 0x8fd0e0, side: THREE.BackSide }));
+      inside.name = 'pool';
+      meshes.push(inside);
+      const under = new THREE.Mesh(new THREE.PlaneGeometry(22, 4).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x5fb4cc, transparent: true, opacity: 0.6 }));
+      under.position.set(35, WATER_Y - 0.01, 4);
+      meshes.push(under);
     }
 
     // decals: hall rug and the rescue zone

@@ -105,8 +105,10 @@ export class NetGame {
     const tl = Math.max(0, g.phaseEnd - g.time);
     const spotted = [[], []];
     for (const [o, v] of g.spotted) if (g.time - v.t < 1.5) spotted[v.by === 'A' ? 0 : 1].push(o.id);
+    this.snapN = (this.snapN || 0) + 1;
     return {
       k: 's',
+      n: this.snapN,
       ph: PH.indexOf(g.phase),
       tl: Math.round(tl * 10),
       bt: Math.round(Math.max(0, g.buyTimeLeft()) * 10),
@@ -127,7 +129,7 @@ export class NetGame {
     if (!s) return;
     switch (m.k) {
       case 'p':
-        if (!s.alive) return;
+        if (!s.alive || ![m.x, m.z, m.f, m.y, m.p].every(Number.isFinite)) return;
         pushSample(s, { t: now(), x: m.x / 100, z: m.z / 100, f: m.f / 100, y: m.y / 1000, p: m.p / 1000, c: m.c / 100, vx: m.vx / 100, vz: m.vz / 100 });
         if (KINDS[m.w] && s.netKind !== KINDS[m.w]) {
           s.netKind = KINDS[m.w];
@@ -138,24 +140,25 @@ export class NetGame {
         if (!s.alive) return;
         const kind = KINDS[m.w] || 'pistol';
         this.showShot(s, kind, m.m, m.e);
-        for (const [tid, dmg, part, dx, dz, pen] of m.h || []) {
+        for (const [tid, dmg, part, dx, dz, pen] of Array.isArray(m.h) ? m.h.slice(0, 12) : []) {
           const target = tid >= 100 ? g.hostages[tid - 100] : g.soldiers[tid];
-          if (!target) continue;
+          if (!target || !Number.isFinite(dmg) || dmg <= 0 || !Number.isFinite(dx) || !Number.isFinite(dz)) continue;
           if (target.alive === false || target.state === 'dead') continue;
-          g.damage(target, Math.min(500, dmg), PARTS[part] || 'body', s, kind, dx, dz, pen);
+          g.damage(target, Math.min(500, dmg), PARTS[part] || 'body', s, kind, dx, dz, Number.isFinite(pen) ? Math.max(0, Math.min(1, pen)) : 0.6);
         }
         for (const o of g.soldiers) if (o.brain && o.alive) o.brain.hearShot(s.x, s.z, s);
         this.net.broadcast({ k: 'f', id: s.id, w: m.w, m: m.m, e: m.e }, true, from);
         break;
       }
       case 'n':
-        if (!s.alive) return;
+        if (!s.alive || !['he', 'flash', 'smoke'].includes(m.kind) || ![m.x, m.y, m.z, m.vx, m.vy, m.vz].every(Number.isFinite)) return;
         // the host keeps count: a thrown grenade is gone, and nobody throws one they do not have
         const cnt = m.kind === 'he' ? 'he' : m.kind === 'smoke' ? 'smoke' : 'flash';
         if (s[cnt] <= 0) return;
         s[cnt]--;
         g.spawnNade(s, m.kind, m.x, m.y, m.z, m.vx, m.vy, m.vz, m.nid);
         this.net.broadcast({ ...m, id: s.id }, true, from);
+        this.net.send(from, { k: 'NC', he: s.he, fl: s.flash, sm: s.smoke });
         break;
       case 'u': {
         let best = null, bd = 2.4;
@@ -286,6 +289,10 @@ export class NetGame {
     const me = g.player;
     switch (m.k) {
       case 's': {
+        if (m.n != null) {
+          if (m.n <= (this.lastSnap || 0)) break;
+          this.lastSnap = m.n;
+        }
         const prevPhase = g.phase;
         g.phase = PH[m.ph] || 'live';
         g.phaseEnd = g.time + m.tl / 10;
@@ -299,6 +306,15 @@ export class NetGame {
         m.S.forEach((a, i) => {
           const s = g.soldiers[i];
           if (!s) return;
+          if (s === me) {
+            if (!a[8] && s.alive && (!s.spawnedAt || g.time - s.spawnedAt > 1.5)) {
+              this.deadSeen ??= T;
+              if (T - this.deadSeen > 0.6) {
+                this.deadSeen = null;
+                g.kill(s, null, 'pistol', false, 0, 0);
+              }
+            } else this.deadSeen = null;
+          }
           if (s.remote) {
             pushSample(s, { t: T, x: a[0] / 100, z: a[1] / 100, f: a[2] / 100, y: a[3] / 1000, p: a[4] / 1000, c: a[5] / 100, vx: a[6] / 100, vz: a[7] / 100 });
             const k = KINDS[a[11]];
@@ -413,6 +429,12 @@ export class NetGame {
         break;
       case 'M':
         if (!m.team || m.team === me.team) g.hud.center(t(m.key), 2);
+        break;
+      case 'NC':
+        me.he = m.he;
+        me.flash = m.fl;
+        me.smoke = m.sm;
+        if (me.cur >= 4 && !me.hasSlot(me.cur)) me.switchSlot(me.bestSlot(), true);
         break;
       case 'L': {
         if (m.r === 'ok' && m.pick) {

@@ -1,6 +1,6 @@
 // The match: soldiers, hostages, shooting, grenades, rounds, money, camera and view model.
 import * as THREE from '../vendor/three.module.min.js';
-import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos } from './map.js';
+import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos, WATER_Y, POOL_BOTTOM } from './map.js';
 import { buildDecor } from './decor.js';
 import { buildProps, propsReady } from './props.js';
 import { Chickens } from './chickens.js';
@@ -11,7 +11,7 @@ import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
 import { WEAPONS, GEAR, recoilKick, viewModel } from './weapons.js';
-import { sfx, setListener } from './audio.js';
+import { sfx, setListener, setUnderwater, setQuack } from './audio.js';
 import { Brain } from './bots.js';
 import { FX } from './fx.js';
 import { t, lang, BOT_NAMES } from './i18n.js';
@@ -267,6 +267,7 @@ export class Game {
     this.fx = new FX(this.scene);
     // the silly options: big heads, low gravity, exploding chickens
     this.fun = opts.fun || {};
+    if (!opts.preview) setQuack(this.fun.quack);
     this.grav = this.fun.lowgrav ? 6 : GRAV;
     this.chickens = new Chickens(this);
     this.smokes = new Smokes(this);
@@ -570,6 +571,7 @@ export class Game {
     const ty = target.feet + target.eyeH() - 0.3;
     const dx = target.x - s.x, dy = ty - eye, dz = target.z - s.z, d = Math.hypot(dx, dy, dz);
     const ux = dx / d, uy = dy / d, uz = dz / d;
+    if (!this.map.los(s.x, eye, s.z, target.x, ty, target.z) && !this.map.los(s.x, eye, s.z, target.x, target.feet + target.eyeH(), target.z)) return false;
     for (const o of this.soldiers) {
       if (o === s || o === target || !o.alive || o.team !== s.team) continue;
       const h = this.hitTest(o, s.x, eye, s.z, ux, uy, uz, d);
@@ -867,6 +869,8 @@ export class Game {
     if (!w || !s.alive) return false;
     if (this.time < s.nextFire || this.time < s.switchUntil) return false;
     if (s.reloadUntil && s.kind !== 'shotgun') return false;
+    // shooting ends the spawn protection
+    if (s.spawnProtect > this.time && !w.nade) s.spawnProtect = 0;
     if (w.nade) {
       // like in CS: pressing pulls the pin, the grenade flies once the button is let go
       if (s.isPlayer && !s.pinAt) {
@@ -989,9 +993,12 @@ export class Game {
       }
       const dmg = w.dmg * Math.pow(w.falloff ?? 0.9, end / 10);
       this.damage(who, dmg, hit.part, s, s.kind, dx, dz, w.pen ?? 0.6);
-      this.fx.puff(ex, ey, ez, [0.55, 0.06, 0.06], 0.35, 0.35, 0.2, 0.75);
-      this.fx.spark(ex, ey, ez, -dx, -dy, -dz, [0.6, 0.05, 0.05], 4, 2);
-      this.splashBlood(ex, ey, ez, dx, dy, dz, hit.part === 'head');
+      if (this.fun.confetti) this.confetti(ex, ey, ez, 6);
+      else {
+        this.fx.puff(ex, ey, ez, [0.55, 0.06, 0.06], 0.35, 0.35, 0.2, 0.75);
+        this.fx.spark(ex, ey, ez, -dx, -dy, -dz, [0.6, 0.05, 0.05], 4, 2);
+        this.splashBlood(ex, ey, ez, dx, dy, dz, hit.part === 'head');
+      }
     } else if (wall) {
       const c = wall.c;
       const k = c >= 0 ? this.map.kind[c] : 0;
@@ -1139,7 +1146,17 @@ export class Game {
       }
     }
     this.hud.feed(by, o, weapon, head);
-    this.fx.bloodDecal(o.x, this.map.groundAt(o.x, o.z, 0.05, o.feet + 0.1), o.z, 0, 1, 0, 1.3);
+    if (this.fun.confetti) {
+      this.confetti(o.x, o.feet + 1.2, o.z, 40);
+      sfx('party', [o.x, o.feet + 1.2, o.z]);
+    } else this.fx.bloodDecal(o.x, this.map.groundAt(o.x, o.z, 0.05, o.feet + 0.1), o.z, 0, 1, 0, 1.3);
+    // "to the moon": the body takes off spinning and vanishes with a twinkle
+    if (this.fun.fly) {
+      o.flyVy = 5 + Math.random() * 3;
+      o.flyAt = this.time;
+      o.flySpin = (Math.random() < 0.5 ? -1 : 1) * (4 + Math.random() * 4);
+      sfx('whee', [o.x, o.feet + 1, o.z]);
+    }
     if (by && by !== o) by.roundKills = (by.roundKills || 0) + 1;
     this.announceKill(o, by, weapon, head);
     this.firstBlood = true;
@@ -1168,6 +1185,11 @@ export class Game {
       h.state = 'idle';
     }
     this.nh?.onVanish?.(s);
+  }
+
+  confetti(x, y, z, n) {
+    const C = [[1, 0.25, 0.4], [1, 0.85, 0.2], [0.3, 0.9, 0.4], [0.3, 0.6, 1], [0.85, 0.4, 1], [1, 0.55, 0.15]];
+    for (let i = 0; i < C.length; i++) this.fx.spark(x, y, z, (Math.random() - 0.5) * 0.6, 1, (Math.random() - 0.5) * 0.6, C[i], Math.ceil(n / C.length), n > 10 ? 6 : 3);
   }
 
   // a tag on the wall, like the old shooters: one every few seconds, within arm's reach
@@ -1575,6 +1597,10 @@ export class Game {
   move(s, dt, frozen) {
     const w = WEAPONS[s.kind] || WEAPONS.knife;
     let max = w.speed || 5.6;
+    const swim = s.feet < -0.05 && this.map.inWater(s.x, s.z);
+    if (swim !== !!s.swimming) this.splash(s, swim);
+    s.swimming = swim;
+    if (swim) max = Math.min(max, 3.3);
     if (this.variant === 'knife' || (this.variant === 'zombie' && s.team === 'B')) max *= 1.18;
     if (s.in.walk) max *= 0.52;
     if (s.crouchK > 0.5) max *= 0.36;
@@ -1602,7 +1628,7 @@ export class Game {
         wz /= l;
       }
     }
-    if (s.onGround) {
+    if (s.onGround || swim) {
       const sp = Math.hypot(s.vx, s.vz);
       if (sp > 0) {
         const drop = Math.max(sp, 1.6) * 7 * dt;
@@ -1615,22 +1641,28 @@ export class Game {
       const cur = s.vx * wx + s.vz * wz;
       const add = max - cur;
       if (add > 0) {
-        const acc = Math.min(add, (s.onGround ? 11 : 1.8) * Math.max(max, 1) * dt);
+        const acc = Math.min(add, (s.onGround || swim ? (swim ? 6 : 11) : 1.8) * Math.max(max, 1) * dt);
         s.vx += acc * wx;
         s.vz += acc * wz;
       }
     }
-    if (s.in.jump && s.onGround && !frozen) {
+    if (s.in.jump && s.onGround && !frozen && !swim) {
       s.vy = JUMP;
       s.onGround = false;
     }
     // average of the speeds before and after the step: the jump is just as high at 20 fps as at 144
     const vy0 = s.vy;
-    s.vy -= this.grav * dt;
+    if (swim) {
+      // float with the head out of the water; crouch to dive to the bottom; jump kicks up (and over the side)
+      const float = s.in.crouch ? POOL_BOTTOM + 0.02 : WATER_Y + 0.28 - s.eyeH();
+      s.vy += ((float - s.feet) * 9 - s.vy * 4) * dt;
+      if (s.in.jump && !frozen && s.feet > float - 0.35 && s.vy < 2) s.vy = 4.2;
+      s.onGround = false;
+    } else s.vy -= this.grav * dt;
     const px = s.x + s.vx * dt, pz = s.z + s.vz * dt;
     s.x = px;
     s.z = pz;
-    s.step = s.onGround ? 0.45 : 0.22;
+    s.step = swim ? (s.in.jump ? 1.75 : 0.3) : s.onGround ? 0.45 : 0.22;
     this.map.collide(s);
     const cx = s.x - px, cz = s.z - pz, cl = Math.hypot(cx, cz);
     if (cl > 1e-5) {
@@ -1660,7 +1692,7 @@ export class Game {
         if (s.vy > 0) s.vy = 0;
       }
     }
-    const ground = this.map.groundAt(s.x, s.z, s.radius * 0.9, Math.max(s.feet, 0), s.onGround ? 0.45 : 0.22);
+    const ground = swim ? this.map.groundAt(s.x, s.z, s.radius * 0.9, s.feet, s.step) : this.map.groundAt(s.x, s.z, s.radius * 0.9, Math.max(s.feet, 0), s.onGround ? 0.45 : 0.22);
     if (s.feet <= ground) {
       if (!s.onGround && s.vy < -5.5) {
         sfx('land', s.isPlayer ? null : [s.x, s.feet, s.z]);
@@ -1675,7 +1707,28 @@ export class Game {
       s.feet = ground;
       s.vy = 0;
     } else s.onGround = false;
-    this.steps(s, dt, s.onGround, s.in.walk);
+    if (swim) this.strokes(s, dt);
+    else this.steps(s, dt, s.onGround, s.in.walk);
+  }
+
+  // into or out of the water: a splash everyone near hears and sees
+  splash(s, into) {
+    const big = into && s.vy < -3;
+    sfx(into ? 'splash' : 'drip', s.isPlayer ? null : [s.x, 0.2, s.z], { big });
+    for (let i = 0; i < (into ? (big ? 9 : 5) : 3); i++) this.fx.puff(s.x + (Math.random() - 0.5) * 0.8, WATER_Y + 0.1 + Math.random() * 0.4, s.z + (Math.random() - 0.5) * 0.8, [0.86, 0.94, 1], big ? 1.1 : 0.7, 0.6, 1.4, 0.75);
+    if (into && s.isPlayer && big) this.view.shake = Math.min(1, this.view.shake + 0.25);
+  }
+
+  // swimming strokes: a soft splash every couple of metres
+  strokes(s, dt) {
+    const hs = Math.hypot(s.vx, s.vz);
+    if (hs < 0.6) return;
+    s.stepDist += hs * dt;
+    if (s.stepDist > 1.7) {
+      s.stepDist = 0;
+      sfx('stroke', s.isPlayer ? null : [s.x, 0.2, s.z]);
+      if (s.feet > POOL_BOTTOM + 0.3) this.fx.puff(s.x, WATER_Y + 0.08, s.z, [0.86, 0.94, 1], 0.5, 0.45, 0.8, 0.6);
+    }
   }
 
   steps(s, dt, onGround, walking) {
@@ -1744,6 +1797,26 @@ export class Game {
       }
     }
     this.nh?.tick();
+    // "to the moon": the dead go up and up, spinning, until a twinkle
+    for (const s of this.soldiers) {
+      if (!s.flyVy) continue;
+      const b = s.body;
+      if (s.alive) {
+        s.flyVy = 0;
+        b.root.rotation.x = 0;
+        continue;
+      }
+      s.flyVy += 6 * dt;
+      s.feet = Math.min(60, s.feet + s.flyVy * dt);
+      s.yaw += s.flySpin * dt;
+      b.root.position.set(s.x, s.feet, s.z);
+      b.root.rotation.set((this.time - s.flyAt) * 3, s.yaw, 0);
+      if (s.feet > 28 && b.root.visible && !s.isPlayer) {
+        b.root.visible = false;
+        this.fx.flash(s.x, s.feet + 1, s.z, 3, 0.4);
+        sfx('ding', [s.x, s.feet, s.z]);
+      }
+    }
     for (const s of this.soldiers) {
       if (!s.alive) continue;
       if (s.remote) {
@@ -2088,7 +2161,7 @@ export class Game {
         const sens = settings.sens * 0.0022 * (p.scoped === 1 ? 0.45 : p.scoped === 2 ? 0.2 : 1);
         p.yaw -= look.dx * sens;
         p.pitch -= look.dy * sens;
-        if (settings.assist) this.aimAssist(p, dt);
+        if (settings.assist && !p.scoped) this.aimAssist(p, dt);
         p.pitch = Math.max(-1.5, Math.min(1.5, p.pitch));
       }
       v.yaw = p.yaw;
@@ -2131,6 +2204,14 @@ export class Game {
       v.roll = 0;
     }
     v.shake = Math.max(0, v.shake - dt * 1.5);
+    // the camera under the water surface
+    const under = v.y < WATER_Y - 0.02 && this.map.inWater(v.x, v.z);
+    if (under !== this.underwater) {
+      this.underwater = under;
+      const el = document.getElementById('water-veil');
+      if (el) el.style.opacity = under ? '1' : '0';
+      setUnderwater(under);
+    }
     const sh = v.shake * v.shake * 0.04;
     const cam = this.camera;
     cam.position.set(v.x, v.y, v.z);
@@ -2274,6 +2355,12 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    if (!this.opts.preview) setQuack(false);
+    if (this.underwater) {
+      setUnderwater(false);
+      const el = document.getElementById('water-veil');
+      if (el) el.style.opacity = '0';
+    }
     this.smokes?.clear();
     this.fireplace?.dispose();
     this.rain?.dispose();

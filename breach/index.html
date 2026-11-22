@@ -34,15 +34,16 @@
  "isAccessibleForFree": true
 }
 </script>
-<link rel="stylesheet" href="style.css?v=c388842a">
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=4cc82a18","./js/audio.js":"./js/audio.js?v=0c1d8177","./js/bots.js":"./js/bots.js?v=f0cd0f8d","./js/chickens.js":"./js/chickens.js?v=bd5a3f99","./js/decor.js":"./js/decor.js?v=0ff6ecf3","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=09bd5e9b","./js/game.js":"./js/game.js?v=f489421d","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=2f920e1c","./js/i18n.js":"./js/i18n.js?v=1f49ea0a","./js/main.js":"./js/main.js?v=d0bc61f6","./js/map.js":"./js/map.js?v=66950947","./js/net.js":"./js/net.js?v=43be3192","./js/netgame.js":"./js/netgame.js?v=93ab5494","./js/people.js":"./js/people.js?v=e26b1ede","./js/props.js":"./js/props.js?v=b906d50c","./js/smoke.js":"./js/smoke.js?v=2a4dcc7b","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=ffa882c5","./js/weapons.js":"./js/weapons.js?v=b392b002","./js/weather.js":"./js/weather.js?v=d03dc656"}}</script>
-<script type="module" src="./js/main.js?v=d0bc61f6"></script>
+<link rel="stylesheet" href="style.css?v=b0c8c4ac">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=4cc82a18","./js/audio.js":"./js/audio.js?v=e6d51415","./js/bots.js":"./js/bots.js?v=7e902a57","./js/chickens.js":"./js/chickens.js?v=693e9b33","./js/decor.js":"./js/decor.js?v=0ff6ecf3","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=09bd5e9b","./js/game.js":"./js/game.js?v=c72bd753","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=c0928e67","./js/i18n.js":"./js/i18n.js?v=21de039d","./js/main.js":"./js/main.js?v=b3789cb9","./js/map.js":"./js/map.js?v=1e391aab","./js/net.js":"./js/net.js?v=43be3192","./js/netgame.js":"./js/netgame.js?v=53e140b4","./js/people.js":"./js/people.js?v=e26b1ede","./js/props.js":"./js/props.js?v=b906d50c","./js/smoke.js":"./js/smoke.js?v=2b9a9f0b","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=a917351a","./js/weapons.js":"./js/weapons.js?v=b392b002","./js/weather.js":"./js/weather.js?v=d03dc656"}}</script>
+<script type="module" src="./js/main.js?v=b3789cb9"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
 
 <div id="hud" hidden>
   <div id="smoke-veil"></div>
+  <div id="water-veil"></div>
   <canvas id="radar" width="190" height="190"></canvas>
   <div id="topbar">
     <div class="team ta"><div class="dots" id="alive-a"></div><b id="sc-a">0</b></div>
@@ -119,7 +120,7 @@
         <div class="seg modes" id="seg-mode"><button data-v="hostage"><b data-t="modeHostage"></b><small data-t="modeHostageDesc"></small></button><button data-v="dm"><b data-t="modeDM"></b><small data-t="modeDMDesc"></small></button><button data-v="gun"><b data-t="modeGun"></b><small data-t="modeGunDesc"></small></button><button data-v="knife"><b data-t="modeKnife"></b><small data-t="modeKnifeDesc"></small></button><button data-v="zombie"><b data-t="modeZombie"></b><small data-t="modeZombieDesc"></small></button></div>
       </div>
       <div class="opt"><label data-t="fun"></label>
-        <div class="seg small fun" id="seg-fun"><button data-f="heads" data-t="funHeads"></button><button data-f="lowgrav" data-t="funGrav"></button><button data-f="boom" data-t="funBoom"></button><button data-f="rain" data-t="funRain"></button></div>
+        <div class="seg small fun" id="seg-fun"><button data-f="heads" data-t="funHeads"></button><button data-f="lowgrav" data-t="funGrav"></button><button data-f="boom" data-t="funBoom"></button><button data-f="rain" data-t="funRain"></button><button data-f="quack" data-t="funQuack"></button><button data-f="confetti" data-t="funConfetti"></button><button data-f="fly" data-t="funFly"></button></div>
       </div>
       <div class="opt"><label data-t="diff"></label>
         <div class="seg small" id="seg-diff"><button data-v="easy" data-t="easy"></button><button data-v="normal" data-t="normal"></button><button data-v="hard" data-t="hard"></button></div>

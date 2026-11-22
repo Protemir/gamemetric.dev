@@ -56,8 +56,9 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
         sx = tch.clientX;
         sy = tch.clientY;
         stick.hidden = false;
-        stick.style.left = `${sx - 70}px`;
-        stick.style.top = `${sy - 70}px`;
+        const ui = parseFloat(getComputedStyle(stick).zoom) || 1;
+        stick.style.left = `${sx / ui - 70}px`;
+        stick.style.top = `${sy / ui - 70}px`;
         setStick(sx, sy);
         owners.set(tch.identifier, { kind: 'stick' });
       } else if (el.classList.contains('tz-look')) {
@@ -140,12 +141,13 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
       }
     },
     update(g) {
+      if (!g.player.alive) input.touch.crouch = false;
       crouchBtn.classList.toggle('lit', !!input.touch.crouch);
       const now = performance.now();
       if (now < slowAt) return;
       slowAt = now + 120;
       const p = g.player;
-      btnBuy.hidden = !(p.alive && g.canBuy(p) && g.mode !== 'dm' && g.phase !== 'end');
+      btnBuy.hidden = !(p.alive && g.canBuy(p) && g.phase !== 'end');
       btnNade.hidden = !(p.alive && (p.he > 0 || p.flash > 0 || p.smoke > 0));
       btnUse.classList.toggle('lit', !!(g.nearHostage() || g.nearDrop(p)));
       btnAlt.hidden = !(p.alive && (p.kind === 'knife' || p.kind === 'sniper' || p.kind === 'scout'));

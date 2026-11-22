@@ -1,5 +1,5 @@
 // All sounds are synthesised with WebAudio: noise bursts and oscillators, panned by direction.
-let ctx = null, master = null, noiseBuf = null;
+let ctx = null, master = null, noiseBuf = null, compNode = null;
 let volume = 0.8;
 const listener = { x: 0, y: 0, z: 0, yaw: 0, indoor: false };
 
@@ -13,7 +13,7 @@ export function initAudio() {
   ctx = new AC();
   master = ctx.createGain();
   master.gain.value = volume;
-  const comp = ctx.createDynamicsCompressor();
+  const comp = (compNode = ctx.createDynamicsCompressor());
   comp.threshold.value = -14;
   comp.ratio.value = 6;
   master.connect(comp).connect(ctx.destination);
@@ -50,6 +50,21 @@ export function rainSound(on, level = 1) {
   }
   rain.g.gain.setTargetAtTime(0.11 * level, ctx.currentTime, 0.4);
   rain.f.frequency.setTargetAtTime(level < 1 ? 900 : 2400, ctx.currentTime, 0.4);
+}
+
+// under the water the whole mix goes dull
+let underF = null;
+export function setUnderwater(on) {
+  if (!ctx || !master) return;
+  if (!underF) {
+    underF = ctx.createBiquadFilter();
+    underF.type = 'lowpass';
+    underF.frequency.value = 20000;
+    master.disconnect();
+    master.connect(underF).connect(compNode);
+  }
+  underF.frequency.setTargetAtTime(on ? 450 : 20000, ctx.currentTime, 0.08);
+  if (on) sfx('bubbles');
 }
 
 export function setVolume(v) {
@@ -133,6 +148,12 @@ const GUN = {
   mg: { f: 1250, body: 95, dur: 0.24, vol: 0.78 },
 };
 
+// "duck guns": every shot is a quack, big guns quack deeper
+let quack = false;
+export function setQuack(on) {
+  quack = !!on;
+}
+
 export function sfx(name, pos = null, opt = {}) {
   if (!ctx || ctx.state !== 'running') return;
   const t = ctx.currentTime + 0.005;
@@ -141,6 +162,17 @@ export function sfx(name, pos = null, opt = {}) {
     if (!P) return;
     const G = GUN[name];
     const d = out(P);
+    if (quack) {
+      const f = 300 + G.f * 0.22 + Math.random() * 60;
+      const q = ctx.createBiquadFilter();
+      q.type = 'bandpass';
+      q.frequency.value = f * 2.2;
+      q.Q.value = 2.5;
+      q.connect(d);
+      tone(q, t, 0.16, 'sawtooth', f * 1.25, f * 0.8, Math.min(1, G.vol * 1.6), 0.008);
+      tone(q, t + 0.02, 0.12, 'square', f * 2.5, f * 1.6, G.vol * 0.4, 0.01);
+      return;
+    }
     const far = P.dist > 25;
     noise(d, t, G.dur * (far ? 1.6 : 1), 'lowpass', far ? G.f * 0.35 : G.f, 0.7, G.vol);
     noise(d, t, 0.05, 'highpass', 3000, 0.5, far ? 0.05 : G.vol * 0.6);
@@ -322,6 +354,65 @@ export function sfx(name, pos = null, opt = {}) {
       noise(d, t, 2.6, 'lowpass', 220, 0.7, 0.55, 0.05, 1.6);
       noise(d, t + 0.1, 1.2, 'lowpass', 600, 0.8, 0.25, 0.01, 2);
       tone(d, t, 1.8, 'sine', 55, 30, 0.25, 0.05);
+      break;
+    }
+    case 'splash': {
+      const d = out(place(pos, 30) || { gain: 0, pan: 0 });
+      const big = opt?.big;
+      noise(d, t, big ? 0.9 : 0.5, 'lowpass', big ? 1400 : 2200, 0.7, big ? 0.55 : 0.32, 0.005, 1.5);
+      noise(d, t + 0.05, big ? 0.6 : 0.35, 'highpass', 2500, 0.6, 0.18, 0.01, 1.2);
+      tone(d, t, 0.18, 'sine', big ? 180 : 260, 60, 0.18, 0.005);
+      break;
+    }
+    case 'drip': {
+      const d = out(place(pos, 18) || { gain: 0, pan: 0 });
+      noise(d, t, 0.35, 'bandpass', 1800, 1.2, 0.14, 0.01, 1.3);
+      break;
+    }
+    case 'stroke': {
+      const d = out(place(pos, 18) || { gain: 0, pan: 0 });
+      noise(d, t, 0.32, 'bandpass', 1100, 0.9, 0.12, 0.04, 1.2);
+      break;
+    }
+    case 'bubbles': {
+      const d = out({ gain: 1, pan: 0 });
+      for (let i = 0; i < 6; i++) tone(d, t + i * 0.06 + Math.random() * 0.04, 0.05, 'sine', 500 + Math.random() * 700, 1200, 0.08, 0.005);
+      break;
+    }
+    case 'party': {
+      // a party horn and a couple of pops
+      const d = out(place(pos, 30) || { gain: 0, pan: 0 });
+      const o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(380, t);
+      o.frequency.linearRampToValueAtTime(520, t + 0.35);
+      lfo.frequency.value = 18;
+      lg.gain.value = 25;
+      lfo.connect(lg).connect(o.frequency);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.16, t + 0.03);
+      g.gain.setValueAtTime(0.16, t + 0.38);
+      g.gain.linearRampToValueAtTime(0, t + 0.5);
+      o.connect(g).connect(d);
+      o.start(t);
+      lfo.start(t);
+      o.stop(t + 0.52);
+      lfo.stop(t + 0.52);
+      noise(d, t, 0.05, 'highpass', 2000, 0.7, 0.3, 0.002);
+      noise(d, t + 0.09, 0.04, 'highpass', 2600, 0.7, 0.2, 0.002);
+      break;
+    }
+    case 'whee': {
+      // off into the sky: a rising whistle
+      const d = out(place(pos, 40) || { gain: 0, pan: 0 });
+      tone(d, t, 1.3, 'sine', 500, 2400, 0.22, 0.02);
+      tone(d, t, 1.3, 'triangle', 1000, 4800, 0.06, 0.02);
+      break;
+    }
+    case 'ding': {
+      const d = out(place(pos, 60) || { gain: 0, pan: 0 });
+      tone(d, t, 0.6, 'sine', 2637, 2637, 0.18, 0.003);
+      tone(d, t, 0.6, 'sine', 3951, 3951, 0.08, 0.003);
       break;
     }
     case 'crackle': {

@@ -345,3 +345,11 @@ html { touch-action: manipulation; }
 .menu-bg { position: fixed; }
 #seg-skin { flex-wrap: wrap; } #seg-skin button { flex: 1 1 18%; min-width: 70px; }
 #smoke-veil { position: absolute; inset: 0; background: radial-gradient(ellipse at center, #9a9ea4 0%, #8a8e94 70%, #7c8086 100%); opacity: 0; pointer-events: none; }
+#water-veil { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(40,150,190,0.55) 0%, rgba(10,70,110,0.85) 100%); opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+/* phones: the gun name sat under the fire button; the buy menu header stays while scrolling */
+body.touch #wname { display: none; }
+.buy-head { position: sticky; top: -10px; z-index: 2; background: inherit; padding-top: 6px; }
+/* short screens: the buttons do not grow into each other, whatever the interface size */
+@media (max-height: 420px) {
+  #touch .tb, #touch .stick, #radar { zoom: min(var(--ui), 0.95); }
+}

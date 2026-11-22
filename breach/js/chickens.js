@@ -137,8 +137,13 @@ export class Chickens {
       else if (d > 0.15) {
         const sp = c.run > 0 ? 3.6 : 0.7;
         const nx = c.x + (dx / d) * sp * dt, nz = c.z + (dz / d) * sp * dt;
-        const cell = m.cellAt(nx, nz);
-        if (cell >= 0 && m.walk[cell]) {
+        // the whole bird must fit: its middle in a free cell let half of it walk into walls
+        const R = 0.24;
+        const free = (x, z) => {
+          const cell = m.cellAt(x, z);
+          return cell >= 0 && m.walk[cell];
+        };
+        if (free(nx - R, nz - R) && free(nx + R, nz - R) && free(nx - R, nz + R) && free(nx + R, nz + R)) {
           c.x = nx;
           c.z = nz;
           moving = true;

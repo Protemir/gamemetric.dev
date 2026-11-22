@@ -43,7 +43,12 @@ export class Smokes {
       const m = new THREE.SpriteMaterial({ map: puffTexture(), color: new THREE.Color(shade, shade, shade * 1.03), transparent: true, depthWrite: false, opacity: 0, fog: true });
       m.rotation = Math.random() * Math.PI * 2;
       const s = new THREE.Sprite(m);
-      const px = Math.cos(a) * r, pz = Math.sin(a) * r;
+      let px = Math.cos(a) * r, pz = Math.sin(a) * r;
+      // a puff behind a wall is pulled back towards the can
+      for (let k = 0; k < 4 && !g.map.los(x, y + 0.6, z, x + px, y + 0.6, z + pz); k++) {
+        px *= 0.5;
+        pz *= 0.5;
+      }
       const py = 0.5 + Math.random() * (2.2 - (r / R) * 1.2);
       s.position.set(px, py, pz);
       puffs.push({ s, size: 3 + Math.random() * 1.8, spin: (Math.random() - 0.5) * 0.12, rise: 0.02 + Math.random() * 0.05 });
@@ -75,7 +80,8 @@ export class Smokes {
       const L = dx * dx + dy * dy + dz * dz || 1;
       const t = Math.max(0, Math.min(1, ((cx - ax) * dx + (cy - ay) * dy + (cz - az) * dz) / L));
       const px = ax + dx * t - cx, py = (ay + dy * t - cy) * 1.4, pz = az + dz * t - cz;
-      if (px * px + py * py + pz * pz < r * r) return true;
+      // the closest point must be in the same space as the cloud, not behind a wall from it
+      if (px * px + py * py + pz * pz < r * r && this.g.map.los(cx, cy, cz, cx + px, cy + py / 1.4, cz + pz)) return true;
     }
     return false;
   }

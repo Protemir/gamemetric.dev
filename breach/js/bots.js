@@ -38,7 +38,7 @@ export class Brain {
     this.strafeAt = 0;
     this.burstLeft = 0;
     this.pauseUntil = 0;
-    this.stuckAt = 0;
+    this.stuckAt = this.g.time + 1;
     this.lastPos = [this.s.x, this.s.z];
     this.lookYaw = this.s.yaw;
     this.lookPitch = 0;
@@ -63,6 +63,7 @@ export class Brain {
     }
     const spend = (kind, price) => {
       if (s.money < price) return false;
+      if ((kind === 'he' && s.he >= 1) || (kind === 'flash' && s.flash >= 2) || (kind === 'smoke' && s.smoke >= 1)) return false;
       s.money -= price;
       if (kind === 'armor') s.armor = 100;
       else if (kind === 'helmet') {
@@ -150,7 +151,8 @@ export class Brain {
     const s = this.s, g = this.g;
     const eyeY = s.feet + s.eyeH();
     let best = null, bd = 1e9;
-    for (const o of g.soldiers) {
+    const blind = s.blind > g.time;
+    if (!blind) for (const o of g.soldiers) {
       if (!o.alive || o.team === s.team || o.spawnProtect > g.time) continue;
       const d = Math.hypot(o.x - s.x, o.z - s.z);
       // keep the current target if still visible, else the closest one
@@ -171,7 +173,7 @@ export class Brain {
         this.aimHead = Math.random() < this.k.head;
         this.burstLeft = this.k.burst + Math.floor(Math.random() * 3);
       }
-      this.lastKnown = { x: best.x, z: best.z, t: g.time };
+      this.setKnown({ x: best.x, z: best.z, t: g.time });
       this.targetLost = g.time;
       g.reportSpotted(s, best);
     } else if (this.target) {
@@ -185,10 +187,16 @@ export class Brain {
         const d = Math.hypot(o.x - s.x, o.z - s.z);
         const loud = o.stepLoud && g.time - o.stepLoud < 0.5;
         if (loud && d < 13) {
-          this.lastKnown = { x: o.x + (Math.random() - 0.5) * 2, z: o.z + (Math.random() - 0.5) * 2, t: g.time, heard: true };
+          this.setKnown({ x: o.x + (Math.random() - 0.5) * 2, z: o.z + (Math.random() - 0.5) * 2, t: g.time, heard: true });
         }
       }
     }
+  }
+
+  setKnown(k) {
+    const old = this.lastKnown;
+    if (old && old.stay !== undefined && this.g.time - old.t < 3) k.stay = old.stay;
+    this.lastKnown = k;
   }
 
   hearShot(x, z, shooter) {
@@ -196,13 +204,13 @@ export class Brain {
     const d = Math.hypot(x - this.s.x, z - this.s.z);
     if (d > 40) return;
     const noise = d * 0.12;
-    this.lastKnown = { x: x + (Math.random() - 0.5) * noise, z: z + (Math.random() - 0.5) * noise, t: this.g.time, heard: true };
+    this.setKnown({ x: x + (Math.random() - 0.5) * noise, z: z + (Math.random() - 0.5) * noise, t: this.g.time, heard: true });
   }
 
   hurt(by) {
     this.hurtBy = by;
     this.hurtAt = this.g.time;
-    if (!this.target && by) this.lastKnown = { x: by.x, z: by.z, t: this.g.time };
+    if (!this.target && by) this.setKnown({ x: by.x, z: by.z, t: this.g.time });
   }
 
   // ---------- main loop ----------
@@ -252,9 +260,10 @@ export class Brain {
       const d = Math.hypot(L.x - s.x, L.z - s.z);
       if (L.stay === undefined) L.stay = Math.random() < 0.75;
       const holding = this.goal && this.goal.type === 'hold' && d > 9 && L.stay;
+      const away = g.time < (this.lookAwayUntil || 0) ? Math.PI : 0;
       if (holding) {
         // defenders on a spot just turn to the noise
-        this.applyLook(dt, yawTo(L.x - s.x, L.z - s.z), 0);
+        this.applyLook(dt, yawTo(L.x - s.x, L.z - s.z) + away, 0);
         return;
       }
       if (this.maybeNade(L)) return;
@@ -263,9 +272,11 @@ export class Brain {
         this.setGoalPoint(L.x, L.z);
       }
       if (d < 1.5) this.lastKnown = null;
-      this.follow(dt, true, yawTo(L.x - s.x, L.z - s.z));
+      this.follow(dt, true, yawTo(L.x - s.x, L.z - s.z) + away);
       return;
     }
+    // 5 back to the route: the path to the old noise is dropped
+    if (this.huntPt) this.path = null;
     this.huntPt = null;
     this.objective(dt);
   }
@@ -294,8 +305,16 @@ export class Brain {
 
     // movement while fighting
     const rifleish = ['rifle', 'm4', 'mg', 'sniper', 'scout', 'deagle'].includes(s.kind);
+    const direct = d < 2 || g.map.clearWalk(s.x, s.z, T.x, T.z);
     if (s.kind === 'knife') {
-      inp.f = 1;
+      if (direct) inp.f = 1;
+      else {
+        if (!this.path || g.time > (this.rushAt || 0)) {
+          this.rushAt = g.time + 0.5;
+          this.setGoalPoint(T.x, T.z);
+        }
+        this.follow(dt, false, ay);
+      }
     } else if (rifleish && d > 7) {
       // stand still for accuracy, peek-strafe between bursts
       if (g.time < this.pauseUntil) inp.s = this.strafe;
@@ -305,7 +324,7 @@ export class Brain {
         this.strafeAt = g.time + 0.35 + Math.random() * 0.6;
       }
       inp.s = this.strafe;
-      if (d > 14 && s.kind === 'shotgun') inp.f = 1;
+      if (d > 14 && s.kind === 'shotgun' && direct) inp.f = 1;
     }
     if (this.k.react < 0.3 && d < 12 && Math.random() < dt * 0.25) this.crouchUntil = g.time + 0.8 + Math.random() * 1.6;
     if (d < 20 && g.time < (this.crouchUntil || 0)) inp.crouch = true;
@@ -388,6 +407,7 @@ export class Brain {
     const dd = smoke ? d * 0.55 : d;
     const pitch = 0.22 + Math.min(0.35, dd / 60);
     g.throwNade(s, kind, yaw, pitch, Math.min(15, 7 + dd * 0.45));
+    if (kind === 'flash') this.lookAwayUntil = g.time + 1.9;
     return true;
   }
 
@@ -514,6 +534,11 @@ export class Brain {
   // walk the path; look where we go (or at lookYaw)
   follow(dt, careful, lookYaw) {
     const s = this.s, g = this.g;
+    if (g.time - (this.followAt ?? -9) > 0.3) {
+      this.lastPos = [s.x, s.z];
+      this.stuckAt = g.time + 1;
+    }
+    this.followAt = g.time;
     if (!this.path || this.pi >= this.path.length) {
       this.applyLook(dt, lookYaw ?? s.yaw, 0);
       return;

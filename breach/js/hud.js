@@ -320,7 +320,7 @@ export class Hud {
     } else if (game.nearDrop(p)) {
       pr.hidden = false;
       pr.textContent = `${t('pickUp')} ${WEAPONS[game.nearDrop(p).kind].name[lang]}`;
-    } else if (p.alive && game.canBuy(p) && game.mode !== 'dm' && game.phase !== 'end') {
+    } else if (p.alive && game.canBuy(p) && game.phase !== 'end') {
       pr.hidden = false;
       pr.textContent = `${document.body.classList.contains('touch') ? '$' : 'B'} — ${t('buy')}`;
     } else pr.hidden = true;
