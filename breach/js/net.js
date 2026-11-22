@@ -59,7 +59,10 @@ export class Net {
       this.h.onStatus?.('lost');
       // try again after a short pause (a phone switching networks, a sleepy tab); a full room gives up
       this.fails = (this.fails || 0) + 1;
-      if (this.fails > 6) return;
+      if (this.fails > 40) {
+        this.h.onStatus?.('dead');
+        return;
+      }
       setTimeout(() => !this.closed && this.connect(), 1500);
     };
     ws.onerror = () => {};
@@ -88,14 +91,28 @@ export class Net {
   onWs(m) {
     if (m.t === 'hello') {
       this.fails = 0;
+      const again = this.hadHello;
+      this.hadHello = true;
       this.peers = [m.you, ...m.peers].sort((a, b) => a.joined - b.joined);
       this.updateHost();
       this.h.onStatus?.('ok');
       // the host links to everyone already waiting
       if (this.isHost) for (const p of this.peers) if (p.peer !== this.id) this.linkTo(p.peer);
       this.h.onPeers?.(this.peers);
+      if (again) this.h.onReconnected?.();
     } else if (m.t === 'join') {
-      if (!this.peers.some((p) => p.peer === m.peer)) this.peers.push({ peer: m.peer, name: m.name, joined: m.joined });
+      const known = this.peers.some((p) => p.peer === m.peer);
+      // somebody we already have came back (a new tab or a reconnect): the old direct link is dead, make a new one
+      if (known && this.isHost && m.peer !== this.id) {
+        const old = this.links.get(m.peer);
+        if (old) {
+          try {
+            old.pc?.close();
+          } catch {}
+          this.links.delete(m.peer);
+        }
+      }
+      if (!known) this.peers.push({ peer: m.peer, name: m.name, joined: m.joined });
       this.peers.sort((a, b) => a.joined - b.joined);
       const wasHost = this.hostId;
       this.updateHost();

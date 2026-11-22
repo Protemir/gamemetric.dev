@@ -740,8 +740,20 @@ function openLobby(code) {
   $('lb-status').textContent = t('connecting');
   net = new Net(code, name, {
     onStatus: (s) => {
-      if (s === 'lost') lobbyNote(t('lostConn'));
+      if (s === 'lost') {
+        lobbyNote(t('lostConn'));
+        if (game && !net.lostShown) {
+          net.lostShown = true;
+          hud.notice?.('📶 ' + t('lostConn'));
+        }
+      }
       renderLobby();
+    },
+    onReconnected: () => {
+      if (!net) return;
+      if (net.lostShown && game) hud.notice?.('✅ ' + t('backConn'));
+      net.lostShown = false;
+      askSync();
     },
     onPeers: () => {
       if (net.isHost) hostSync();
@@ -831,6 +843,7 @@ function hostSync() {
       const s = game.addHuman(p.peer, lobby.names[p.peer] || p.name);
       if (!s) continue;
       lobby.teams[p.peer] = s.team;
+      s.sentStartAt = performance.now();
       net.send(p.peer, { k: 'start', roster: game.roster(), mode: game.opts.mode, diff: game.opts.diff, fun: game.fun });
       game.nh?.sendDropsTo(p.peer);
       net.broadcast({ k: 'roster', roster: game.roster() }, true, p.peer);
@@ -949,12 +962,27 @@ function onNetMessage(from, m) {
         net.broadcast({ k: 'roster', roster: game.roster() });
       }
       hostSync();
+    } else if (m.k === 'sync') {
+      if (!game || game.role !== 'host' || game.over) return;
+      const s = game.soldiers.find((o) => o.peer === from);
+      // not in the match yet: hostSync gives them a bot's place and the start
+      if (!s) return hostSync();
+      // a new tab (page reloaded): it needs the whole match first
+      if (!m.has) {
+        // (a friend who has only just been given a place already has the start on its way)
+        if (performance.now() - (s.sentStartAt || 0) < 4000) return;
+        s.sentStartAt = performance.now();
+        net.send(from, { k: 'start', roster: game.roster(), mode: game.opts.mode, diff: game.opts.diff, fun: game.fun });
+        game.nh?.sendDropsTo(from);
+      }
+      game.nh?.sendState(from, s, m.has ? !!m.alive : true);
     } else if (game && game.nh && game.role === 'host') game.nh.onHostMessage(from, m);
     return;
   }
   if (m.k === 'lobby') {
     lobby = m;
     renderLobby();
+    if (m.started && !game) askSync();
   } else if (m.k === 'start') {
     pending.length = 0;
     const me = m.roster.find((r) => r.peer === net.id);
@@ -968,6 +996,13 @@ function onNetMessage(from, m) {
   else if (m.k !== 's') pending.push(m);
 }
 const pending = [];
+let syncAt = 0;
+function askSync() {
+  if (!net || net.isHost || performance.now() < syncAt) return;
+  syncAt = performance.now() + 2500;
+  const inMatch = !!(game && game.role === 'client');
+  net.toHost({ k: 'sync', has: inMatch ? 1 : 0, alive: inMatch && game.player.alive ? 1 : 0 });
+}
 
 function backToLobby(announce) {
   wantResume = false;

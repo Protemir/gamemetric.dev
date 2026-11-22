@@ -7,6 +7,8 @@
 import { DurableObject } from 'cloudflare:workers';
 
 const cors = { 'access-control-allow-origin': '*' };
+// a phone that switched apps or networks gets this long to come back before the others hear "left"
+const GRACE = 15000;
 const clean = (v, n) => String(v ?? '').replace(/[^\p{L}\p{N} _.\-]/gu, '').trim().slice(0, n);
 
 export default {
@@ -33,6 +35,12 @@ export class Room extends DurableObject {
     // a reconnect with the same id replaces the old socket, keeps its place in the queue (who is host)
     // and must not announce a "leave" when the old socket finally closes
     let joined = Date.now();
+    // back within the grace period: the same place in the queue (the host stays the host)
+    const gone = await this.ctx.storage.get('gone:' + peer);
+    if (gone) {
+      joined = Math.min(joined, gone.joined);
+      await this.ctx.storage.delete('gone:' + peer);
+    }
     for (const s of this.ctx.getWebSockets(peer)) {
       const old = s.deserializeAttachment();
       if (old?.joined) joined = Math.min(joined, old.joined);
@@ -46,18 +54,20 @@ export class Room extends DurableObject {
     this.ctx.acceptWebSocket(server, [peer]);
     const me = { peer, name, joined };
     server.serializeAttachment(me);
-    const peers = this.list().filter((p) => p.peer !== peer);
-    server.send(JSON.stringify({ t: 'hello', you: me, peers }));
-    this.send({ t: 'join', peer, name, joined: me.joined }, peer);
+    const peers = (await this.list()).filter((p) => p.peer !== peer);
+    server.send(JSON.stringify({ t: 'hello', you: me, peers, back: !!gone }));
+    this.send({ t: 'join', peer, name, joined: me.joined, back: !!gone }, peer);
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  list() {
-    return this.ctx
+  // everyone here, and those who dropped out a moment ago and may come back
+  async list() {
+    const live = this.ctx
       .getWebSockets()
       .map((s) => s.deserializeAttachment())
-      .filter((a) => a && !a.replaced)
-      .sort((a, b) => a.joined - b.joined);
+      .filter((a) => a && !a.replaced);
+    const away = [...(await this.ctx.storage.list({ prefix: 'gone:' })).values()].filter((g) => !live.some((a) => a.peer === g.peer));
+    return [...live, ...away.map(({ peer, name, joined }) => ({ peer, name, joined }))].sort((a, b) => a.joined - b.joined);
   }
 
   send(msg, except, to) {
@@ -90,12 +100,37 @@ export class Room extends DurableObject {
     else this.send(m, from);
   }
 
-  webSocketClose(ws) {
+  async webSocketClose(ws, code) {
+    // finish the closing handshake, or the player's browser waits a long time to notice and reconnect
+    try {
+      ws.close(code >= 3000 && code < 5000 ? code : 1000, 'bye');
+    } catch {}
     const me = ws.deserializeAttachment();
     if (!me || me.replaced) return;
+    try {
+      ws.serializeAttachment({ ...me, replaced: true });
+    } catch {}
     // still here on another socket (a reconnect raced the close): not a leave
     if (this.ctx.getWebSockets(me.peer).some((s) => s !== ws && !s.deserializeAttachment()?.replaced)) return;
-    this.send({ t: 'leave', peer: me.peer }, me.peer);
+    // the leave is announced only if they do not come back in time
+    await this.ctx.storage.put('gone:' + me.peer, { peer: me.peer, name: me.name, joined: me.joined, at: Date.now() });
+    const when = Date.now() + GRACE;
+    const cur = await this.ctx.storage.getAlarm();
+    if (!cur || cur > when) await this.ctx.storage.setAlarm(when);
+  }
+
+  async alarm() {
+    const now = Date.now();
+    let next = 0;
+    for (const [key, g] of await this.ctx.storage.list({ prefix: 'gone:' })) {
+      if (now - g.at < GRACE - 100) {
+        next = next ? Math.min(next, g.at + GRACE) : g.at + GRACE;
+        continue;
+      }
+      await this.ctx.storage.delete(key);
+      if (!this.ctx.getWebSockets(g.peer).some((s) => !s.deserializeAttachment()?.replaced)) this.send({ t: 'leave', peer: g.peer }, g.peer);
+    }
+    if (next) await this.ctx.storage.setAlarm(next);
   }
 
   webSocketError(ws) {

@@ -83,6 +83,10 @@ export class NetGame {
         this.net.broadcast(this.snapshot(), false);
       }
     } else {
+      if (this.lastSnapT && T - this.lastSnapT > 4 && !this.quietShown) {
+        this.quietShown = true;
+        g.hud.notice?.('📶 ' + t('waitHost'));
+      }
       // over the relay snapshots come in bursts: look a little further back
       const delay = this.net.linkState(this.net.hostId) === 'p2p' ? 0.11 : 0.2;
       for (const s of g.soldiers) if (s.remote) interp(s, delay);
@@ -198,6 +202,12 @@ export class NetGame {
   }
 
   // a friend joining mid-match gets the guns already lying about
+  // a player back after a dropout: their life and kit as the host has them
+  sendState(peer, s, theyThinkAlive) {
+    if (s.alive) this.net.send(peer, { k: 'P', id: s.id, x: r2(s.x), z: r2(s.z), y: r3(s.yaw), L: loadoutOf(s), keep: theyThinkAlive ? 1 : 0, f: r2(s.feet) });
+    else if (theyThinkAlive) this.net.send(peer, { k: 'K', v: s.id, by: -1, w: 0, hd: 0, dx: 0, dz: 0 });
+  }
+
   sendDropsTo(peer) {
     if (!this.host) return;
     for (const d of this.g.drops) this.net.send(peer, { k: 'D', id: d.id, w: KINDS.indexOf(d.kind), x: r2(d.x), z: r2(d.z), f: r2(d.y), y: r3(d.mesh.rotation.y), o: -1 });
@@ -293,6 +303,8 @@ export class NetGame {
           if (m.n <= (this.lastSnap || 0)) break;
           this.lastSnap = m.n;
         }
+        this.lastSnapT = now();
+        this.quietShown = false;
         const prevPhase = g.phase;
         g.phase = PH[m.ph] || 'live';
         g.phaseEnd = g.time + m.tl / 10;
@@ -398,8 +410,13 @@ export class NetGame {
       case 'P': {
         const s = g.soldiers[m.id];
         if (!s) break;
+        if (m.keep && s === me && me.alive) {
+          this.applyLoadout(m.L, false);
+          break;
+        }
         s.nb = [];
         s.spawn(m.x / 100, m.z / 100, m.y / 1000);
+        if (m.f != null && s === me) s.feet = m.f / 100;
         s.spawnedAt = g.time;
         if (s === me) {
           me.resetLoadout();
