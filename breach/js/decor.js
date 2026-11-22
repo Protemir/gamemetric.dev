@@ -203,8 +203,9 @@ export function buildDecor(map, tex) {
       if (map.kind[z * W + x] !== K.PILLAR) continue;
       box('pillar', x - 0.12, 0, z - 0.12, x + 1.12, 0.22, z + 1.12, '-y');
       box('pillar', x - 0.06, 0.22, z - 0.06, x + 1.06, 0.36, z + 1.06, '-y');
-      box('pillar', x - 0.06, 3.5, z - 0.06, x + 1.06, 3.66, z + 1.06, '+y');
-      box('pillar', x - 0.14, 3.66, z - 0.14, x + 1.14, 3.86, z + 1.14, '+y');
+      const top = map.ceilH[z * W + x];
+      box('pillar', x - 0.06, top - 0.5, z - 0.06, x + 1.06, top - 0.34, z + 1.06, '+y');
+      box('pillar', x - 0.14, top - 0.34, z - 0.14, x + 1.14, top - 0.14, z + 1.14, '+y');
     }
 
   // inside: a moulding where the walls meet the ceiling, lit by the room lamps
@@ -229,11 +230,12 @@ export function buildDecor(map, tex) {
     for (let z = HOUSE.z0; z <= HOUSE.z1; z++)
       for (let x = HOUSE.x0; x <= HOUSE.x1; x++) {
         const c = z * W + x;
-        if (!map.indoor[c] || map.h[c] >= 4 || map.lint[c] > 0) continue;
+        const top = map.ceilH[c];
+        if (!map.indoor[c] || map.h[c] >= top || map.lint[c] > 0) continue;
         for (let d = 0; d < 4; d++) {
           const [dx, dz] = DIRS[d];
           const nb = (z + dz) * W + (x + dx);
-          if (map.h[nb] < 4) continue;
+          if (map.h[nb] < top) continue;
           // the wall face lies on the shared edge; the moulding steps out from it into this cell
           const n = [-dx, 0, -dz];
           const fx = dx === 1 ? x + 1 : dx === -1 ? x : null, fz = dz === 1 ? z + 1 : dz === -1 ? z : null;
@@ -249,8 +251,8 @@ export function buildDecor(map, tex) {
               iquad([[x, y0, fz], [x + 1, y0, fz], [x + 1, y0, pz], [x, y0, pz]], [0, -1, 0]);
             }
           };
-          seg(3.86, 4.0, 0.12);
-          seg(3.76, 3.86, 0.06);
+          seg(top - 0.14, top, 0.12);
+          seg(top - 0.24, top - 0.14, 0.06);
         }
       }
   }

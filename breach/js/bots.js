@@ -248,6 +248,7 @@ export class Brain {
       return;
     }
     this.target = null;
+    s.scoped = 0;
     // reload while nobody is around
     if (w && w.mag && s.ammoOf(s.kind).mag < w.mag * 0.5 && s.ammoOf(s.kind).res > 0) g.reload(s);
 

@@ -18,12 +18,14 @@ const WALL_TEX = { 5: 'w_hall', 6: 'w_lib', 8: 'w_garage', 7: 'w_kitchen', 4: 'w
 export const K = {
   WALL: 1, STONE: 2, CRATE: 3, SHELF: 4, COUNTER: 5, TABLE: 6, SOFA: 7, HEDGE: 8, CAR: 9, PILLAR: 10, FIRE: 11,
   PIANO: 12, VAN: 13, FOUNTAIN: 14, WATER: 15, METALSHELF: 16, FRIDGE: 17, PLANT: 18, LOUNGER: 19, SHED: 20,
-  CABINET: 21, WINDOW: 22, STATUE: 23,
+  CABINET: 21, WINDOW: 22, STATUE: 23, STAIRS: 24, GALLERY: 25,
 };
+// the hall is two storeys tall: galleries along its side walls, reached by stairs
+export const HALL_CEIL = 7.2, GALLERY_H = 3.2;
 const KIND_TEX = {
   2: 'stone', 3: 'crate', 4: 'shelf', 5: 'counter', 6: 'table', 7: 'sofa', 8: 'hedge', 9: 'car', 10: 'pillar', 11: 'fire',
   12: 'piano', 13: 'van', 14: 'fountain', 15: 'water', 16: 'metalshelf', 17: 'fridge', 18: 'plant', 19: 'lounger',
-  20: 'shed', 21: 'cabinet', 23: 'fountain',
+  20: 'shed', 21: 'cabinet', 23: 'fountain', 24: 'pillar', 25: 'pillar',
 };
 // drawn as real models (props.js) when those have loaded; the grid boxes stay for collisions
 export const MODELLED = new Set([7, 6, 21, 9, 16]); // SOFA, TABLE, CABINET, CAR, METALSHELF
@@ -54,6 +56,8 @@ export class GameMap {
     this.floor = new Uint8Array(n);
     this.indoor = new Uint8Array(n);
     this.lint = new Float32Array(n);
+    // how high the ceiling is over each cell (indoors); the hall is taller than the rest
+    this.ceilH = new Float32Array(n).fill(CEIL);
     this.noWalk = new Uint8Array(n);
     this.zone = new Uint8Array(n); // 1 attackers spawn + rescue, 2 defenders spawn
     this.room = new Uint8Array(n);
@@ -61,7 +65,7 @@ export class GameMap {
     this.build();
     this.walk = new Uint8Array(n);
     this.cost = new Float32Array(n);
-    for (let i = 0; i < n; i++) this.walk[i] = this.h[i] === 0 && !this.noWalk[i] ? 1 : 0;
+    for (let i = 0; i < n; i++) this.walk[i] = (this.h[i] === 0 || this.kind[i] === K.STAIRS || this.kind[i] === K.GALLERY) && !this.noWalk[i] ? 1 : 0;
     // cells a soldier can jump onto and over: window sills and waist-high crates
     this.hop = new Uint8Array(n);
     for (let i = 0; i < n; i++) if ((this.kind[i] === K.WINDOW && this.h[i] <= 1.05) || (this.kind[i] === K.CRATE && this.h[i] <= 1.0)) this.hop[i] = this.kind[i] === K.WINDOW ? 1 : 2;
@@ -182,8 +186,8 @@ export class GameMap {
     door(32, 30, 39, 30, 3.2, FL.MARBLE);
     door(18, 30, 19, 30, 2.6, FL.CARPET);
     door(50, 30, 51, 30, 2.6, FL.CONCRETE);
-    door(27, 40, 27, 41, 2.6, FL.CARPET);
-    door(45, 37, 45, 38, 2.6, FL.MARBLE);
+    door(27, 44, 27, 45, 2.6, FL.CARPET);
+    door(45, 44, 45, 45, 2.6, FL.MARBLE);
     door(19, 25, 20, 25, 2.6, FL.TILE);
     door(30, 25, 32, 25, 2.8, FL.WOOD);
     door(47, 25, 48, 25, 2.6, FL.DARKWOOD);
@@ -218,9 +222,22 @@ export class GameMap {
     solid(30, 42, 30, 42, CEIL, K.PILLAR);
     solid(41, 42, 41, 42, CEIL, K.PILLAR);
     solid(35, 37, 36, 38, 2.3, K.STATUE);
-    solid(28, 44, 28, 45, 1.2, K.PLANT);
-    solid(43, 31, 43, 31, 2.2, K.CABINET);
-    solid(44, 44, 44, 45, 1.2, K.PLANT);
+    solid(31, 45, 31, 45, 1.2, K.PLANT);
+    solid(31, 31, 31, 31, 2.2, K.CABINET);
+    solid(40, 45, 40, 45, 1.2, K.PLANT);
+    // galleries: two cells wide along both side walls, 3.2 m up; stairs climb to them from the south
+    for (const [x0, x1] of [[28, 29], [43, 44]]) {
+      // (rows 44-45 stay clear: the doors to the library and the garage are there)
+      for (let z = 36; z <= 43; z++) solid(x0, z, x1, z, +(GALLERY_H * (44 - z) / 8).toFixed(2), K.STAIRS);
+      solid(x0, 31, x1, 35, GALLERY_H, K.GALLERY);
+    }
+    // a ceiling to match: the hall and its walls go up to the roof
+    for (let z = 30; z <= 46; z++)
+      for (let x = 27; x <= 45; x++) {
+        const c = z * W + x;
+        this.ceilH[c] = HALL_CEIL;
+        if ((this.kind[c] === K.WALL || this.kind[c] === K.PILLAR) && this.h[c] === CEIL) this.h[c] = HALL_CEIL;
+      }
     // garage
     solid(52, 37, 53, 40, 1.4, K.CAR);
     solid(47, 43, 48, 44, 1.0, K.CRATE);
@@ -321,8 +338,11 @@ export class GameMap {
       { x: 16.5, z: 23.5, lx: 11, lz: 19, h: 1 },
       { x: 36.5, z: 27.5, lx: 36, lz: 40, h: -1 },
       { x: 52.5, z: 28.5, lx: 61, lz: 28, h: -1 },
-      { x: 25.5, z: 32.5, lx: 27, lz: 40.5, h: -1 },
+      { x: 25.5, z: 32.5, lx: 27, lz: 44.5, h: -1 },
       { x: 38.5, z: 12.5, lx: 32.5, lz: 8, h: -1 },
+      // up on the hall galleries, watching the front door
+      { x: 28.5, z: 34.5, lx: 36, lz: 46, h: -1, up: true },
+      { x: 43.5, z: 33.5, lx: 36, lz: 46, h: -1, up: true },
     ];
     // ways in for attackers
     this.routes = [
@@ -345,14 +365,19 @@ export class GameMap {
   // ---------- physics ----------
   blocks(c, feet, top, step = STEP) {
     if (c < 0) return true;
+    // over the house is its roof: nobody stands on the walls or walks in through the top (low gravity + springboard)
+    if (feet > 6.4) {
+      const x = c % W, z = (c / W) | 0;
+      if (x >= HOUSE.x0 && x <= HOUSE.x1 && z >= HOUSE.z0 && z <= HOUSE.z1) return true;
+    }
     if (this.kind[c] === K.WATER && this.swimmer) return false;
     if (this.noWalk[c]) return true;
     if (this.h[c] > feet + step) return true;
     // the garden wall round the grounds cannot be climbed (low gravity could reach it from the shed)
-    if (this.kind[c] === K.STONE) return true;
+    if (this.kind[c] === K.STONE || this.kind[c] === K.WALL || this.kind[c] === K.PILLAR) return true;
     // the wall above a window or a door blocks; a body mostly below the lintel slips in and the head is pushed down
     const l = this.lint[c];
-    return l > 0 && l < top && feet + 0.5 > l;
+    return l > 0 && top > l + 0.35;
   }
 
   // circle vs grid; returns true if something was hit
@@ -452,7 +477,7 @@ export class GameMap {
         if (t >= t0 && t <= t1) return { t, nx: 0, ny: 1, nz: 0, c };
       }
       // lintel / ceiling
-      const ceil = this.indoor[c] ? CEIL : 60;
+      const ceil = this.indoor[c] ? this.ceilH[c] : 60;
       const l = this.lint[c] || ceil;
       if (hi > l) {
         if (ya > l && axis >= 0) return { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c };
@@ -552,9 +577,11 @@ export class GameMap {
           const nc = nz * W + nx;
           const hop = hops && this.inb(nx, nz) ? this.hop[nc] : 0;
           if (!hop && !this.walkable(nx, nz)) continue;
+          if (!hop && !this.hop[c] && Math.abs(this.h[nc] - this.h[c]) > 0.46) continue;
           // over a sill or a crate only straight across, never along it or round its corner
           if (hop && (dx && dz || this.hop[c])) continue;
           if (dx && dz && (!this.walkable(cx + dx, cz) || !this.walkable(cx, cz + dz))) continue;
+          if (dx && dz && (Math.abs(this.h[cz * W + cx + dx] - this.h[c]) > 0.46 || Math.abs(this.h[(cz + dz) * W + cx] - this.h[c]) > 0.46)) continue;
           if (closed[nc] === stamp) continue;
           const ng = g[c] + (hop ? (hop === 1 ? 2.6 : 3.6) : (dx && dz ? 1.414 : 1) * this.cost[nc]);
           if (seen[nc] !== stamp || ng < g[nc]) {
@@ -589,9 +616,13 @@ export class GameMap {
     if (d < 0.01) return true;
     const px = (-dz / d) * 0.32, pz = (dx / d) * 0.32;
     const n = Math.ceil(d / 0.25);
+    let prev = this.h[this.cellAt(ax, az)] || 0;
     for (let i = 0; i <= n; i++) {
       const x = ax + (dx * i) / n, z = az + (dz * i) / n;
       if (!this.walkable(Math.floor(x + px), Math.floor(z + pz)) || !this.walkable(Math.floor(x - px), Math.floor(z - pz))) return false;
+      const hc = this.h[this.cellAt(x, z)], hl = this.h[this.cellAt(x + px, z + pz)], hr = this.h[this.cellAt(x - px, z - pz)];
+      if (Math.abs(hc - prev) > 0.46 || Math.abs(hl - hc) > 0.46 || Math.abs(hr - hc) > 0.46) return false;
+      prev = hc;
     }
     return true;
   }
@@ -821,7 +852,7 @@ export class GameMap {
         } else {
           const k = this.kind[c];
           const topKey = k === K.WINDOW ? 'sill' : k === K.WALL ? 'trim' : KIND_TEX[k] || 'crate';
-          if (hh < CEIL || !ind) hface(topKey, x, z, x + 1, z + 1, hh, true, ind && hh < CEIL, null);
+          if (hh < this.ceilH[c] || !ind) hface(topKey, x, z, x + 1, z + 1, hh, true, ind && hh < this.ceilH[c], null);
           for (let d = 0; d < 4; d++) {
             const nx = x + DIRS[d][0], nz = z + DIRS[d][1];
             if (!this.inb(nx, nz)) continue;
@@ -840,19 +871,19 @@ export class GameMap {
             const nx = x + DIRS[d][0], nz = z + DIRS[d][1];
             if (!this.inb(nx, nz)) continue;
             const nb = nz * W + nx;
-            if (this.h[nb] >= CEIL) continue;
+            if (this.h[nb] >= this.ceilH[nb]) continue;
             // the next cell along the facade carries on the same lintel
             if (this.lint[nb] > 0 && Math.abs(this.lint[nb] - l) < 0.01) continue;
             vfaceLintel(this, x, z, d, l, nb);
           }
         }
-        if (ind && hh < CEIL && !(l > 0)) hface('ceiling', x, z, x + 1, z + 1, CEIL, false, true, null);
+        if (ind && hh < this.ceilH[c] && !(l > 0)) hface('ceiling', x, z, x + 1, z + 1, this.ceilH[c], false, true, null);
       }
 
     function vfaceLintel(map, x, z, d, l, nb) {
       const nIndoor = map.indoor[nb] === 1;
       const key = nIndoor ? WALL_TEX[map.floor[nb]] || 'w_corr' : 'plaster';
-      vface(key, x, z, d, l, nIndoor ? CEIL : FACADE, nIndoor, false);
+      vface(key, x, z, d, l, nIndoor ? map.ceilH[nb] : FACADE, nIndoor, false);
     }
 
     // roof over the mansion
@@ -935,6 +966,33 @@ export class GameMap {
       const under = new THREE.Mesh(new THREE.PlaneGeometry(22, 4).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x5fb4cc, transparent: true, opacity: 0.6 }));
       under.position.set(35, WATER_Y - 0.01, 4);
       meshes.push(under);
+    }
+
+    // gallery and stair railings: posts and a handrail along the inner edge, white like the hall's trim
+    {
+      const parts = [];
+      const rail = (x, z0, z1, y0, y1) => {
+        // posts every half metre, a handrail that follows the slope
+        for (let z = z0 + 0.25; z < z1; z += 0.5) {
+          const yb = y0 + ((y1 - y0) * (z - z0)) / (z1 - z0);
+          parts.push(new THREE.BoxGeometry(0.05, 0.92, 0.05).translate(x, yb + 0.46, z));
+        }
+        const len = Math.hypot(z1 - z0, y1 - y0), mid = [(z0 + z1) / 2, (y0 + y1) / 2 + 0.94];
+        const hr = new THREE.BoxGeometry(0.09, 0.06, len);
+        hr.rotateX(-Math.atan2(y1 - y0, z1 - z0));
+        hr.translate(x, mid[1], mid[0]);
+        parts.push(hr);
+      };
+      for (const xe of [29.97, 43.03]) {
+        rail(xe, 31, 36, GALLERY_H, GALLERY_H);
+        // the rail runs from the top of the flight down to its foot
+        rail(xe, 36, 44, GALLERY_H, 0);
+      }
+      const g = mergeGeos(parts.map((p) => p.toNonIndexed()));
+      const n = g.attributes.position.count, col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) col.set(this.light(g.attributes.position.getX(i), Math.min(3.9, g.attributes.position.getY(i)), g.attributes.position.getZ(i), 0, 1, 0, true, 1).map((v) => v * 0.95), i * 3);
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      meshes.push(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xf1ede4, vertexColors: true })));
     }
 
     // decals: hall rug and the rescue zone

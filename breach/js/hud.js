@@ -205,6 +205,7 @@ export class Hud {
   matchOver(win, game) {
     const el = $('match-over');
     el.hidden = false;
+    if (this.buyOpen) this.onBuyClosed?.();
     $('pause').hidden = true;
     $('settings').hidden = true;
     $('click-to-play').hidden = true;
@@ -316,7 +317,9 @@ export class Hud {
     // hostage prompt
     const nh = game.nearHostage();
     const pr = $('prompt');
-    if (nh) {
+    // a grenade with the pin out: nothing under the crosshair but the arc
+    if (p.pinAt) pr.hidden = true;
+    else if (nh) {
       pr.hidden = false;
       pr.textContent = nh.leader === p ? t('pressEstop') : nh.state === 'idle' ? t('pressE') : '';
       if (!pr.textContent) pr.hidden = true;

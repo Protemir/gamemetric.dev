@@ -357,3 +357,14 @@ body.touch #wname { display: none; }
 /* the round banner on short screens: smaller, and scaled with the interface */
 #banner { zoom: var(--ui); }
 @media (max-height: 520px) { #banner { top: 12%; padding: 6px 16px; } #banner b { font-size: 20px; } #banner span { font-size: 12px; } }
+/* the play buttons stay in view when the menu has to scroll */
+.play-row { position: sticky; bottom: -18px; z-index: 3; padding: 14px 0 28px; background: linear-gradient(to top, rgba(6, 8, 12, 0.96) 70%, rgba(6, 8, 12, 0)); }
+.lobby .row { position: sticky; bottom: 0; z-index: 3; background: inherit; }
+/* nine madness toggles: three to a row */
+#seg-fun { display: grid; grid-template-columns: repeat(3, 1fr); }
+#seg-fun button { flex: none; }
+/* the language switch readable over the bright sky */
+.langs { background: rgba(6, 8, 12, 0.55); }
+.langs button { color: #e8ecf0; }
+/* only the sensitivity that applies */
+body.touch label:has(#s-sens), body:not(.touch) label:has(#s-tsens) { display: none; }

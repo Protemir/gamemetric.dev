@@ -108,6 +108,7 @@ class Soldier {
     this.shown = this.kind;
     this.reloadUntil = 0;
     this.scoped = 0;
+    this.rescopeAt = 0;
     this.shots = 0;
     this.pinAt = this.throwAt = 0;
     this.switchUntil = instant ? 0 : this.g.time + (n === 3 ? 0.35 : 0.6);
@@ -252,20 +253,6 @@ const LINES = {
     win: ['Easy!', 'Boom!', 'Get good!', 'That was beautiful!', 'Ha ha!', 'Next!', 'Want some more?', 'I am a legend!'],
   },
 };
-
-let dotTex = null;
-function dotTexture() {
-  if (dotTex) return dotTex;
-  const c = document.createElement('canvas');
-  c.width = c.height = 32;
-  const g = c.getContext('2d');
-  g.fillStyle = '#fff';
-  g.beginPath();
-  g.arc(16, 16, 13, 0, Math.PI * 2);
-  g.fill();
-  dotTex = new THREE.CanvasTexture(c);
-  return dotTex;
-}
 
 export class Game {
   constructor(renderer, opts, hud) {
@@ -561,6 +548,11 @@ export class Game {
     const idx = mates.indexOf(s);
     const want = idx % 5 < 2 ? 0 : idx % 5 < 4 ? 1 : -1;
     let options = holds.filter((h) => h.h === want && !this.holdsTaken.has(h));
+    // the free defender often takes a gallery over the hall
+    if (want === -1 && Math.random() < 0.6) {
+      const up = options.filter((h) => h.up);
+      if (up.length) options = up;
+    }
     if (!options.length) options = holds.filter((h) => !this.holdsTaken.has(h));
     if (!options.length) options = holds;
     const h = options[Math.floor(Math.random() * options.length)];
@@ -775,7 +767,7 @@ export class Game {
   checkRound() {
     if (this.mode === 'dm') {
       for (const s of this.soldiers)
-        if (!s.alive && s.respawnAt && this.time >= s.respawnAt) {
+        if (!s.alive && s.respawnAt && this.time >= s.respawnAt && !this.over) {
           const list = this.map.spawns[s.team];
           let best = list[0], bd = -1;
           for (const sp of list) {
@@ -811,6 +803,7 @@ export class Game {
           if (s.isPlayer) {
             this.spec = null;
             this.vm.mesh.visible = true;
+            this.flashWhite = 0;
           }
           this.nh?.onSpawn(s);
         }
@@ -1155,6 +1148,10 @@ export class Game {
     // aim punch
     o.punchP += Math.min(0.05, d * 0.0012);
     if (o.remote) this.nh?.onHurt(o, by, d);
+    if (o.isPlayer && !by) {
+      sfx('hurt');
+      this.view.shake = Math.min(0.4, this.view.shake + d * 0.004);
+    }
     if (o.isPlayer && by) {
       this.hud.hurt(Math.atan2(-(by.x - o.x), -(by.z - o.z)) - o.yaw, d);
       sfx('hurt');
@@ -1219,7 +1216,7 @@ export class Game {
     this.announceKill(o, by, weapon, head);
     this.firstBlood = true;
     if (by && by.isPlayer) sfx('kill');
-    if (this.mode === 'dm') o.respawnAt = this.variant === 'zombie' && o.team === 'A' ? 0 : this.time + 3;
+    if (this.mode === 'dm') o.respawnAt = this.variant === 'zombie' ? (o.team === 'A' ? 0 : this.time + 5) : this.time + 3;
     if (this.variant === 'gun' && by && by !== o && by.team !== o.team && this.role !== 'client') this.gunProgress(by, o, weapon);
     if (this.variant === 'zombie' && by && by.team === 'A' && o.team === 'B') {
       const k = by.slots[1] || by.slots[2];
@@ -1234,6 +1231,7 @@ export class Game {
 
   // a bot handed over to a friend leaves quietly: no corpse, no feed line, no score
   vanish(s) {
+    if (this.specHidden === s) this.specHidden = null;
     s.hp = 0;
     s.alive = false;
     s.deadAt = this.time;
@@ -1311,7 +1309,7 @@ export class Game {
         // the horde: claws only, tough and quick
         s.armor = 0;
         s.helmet = false;
-        s.hp = 180;
+        s.hp = 120;
         s.switchSlot(3, true);
       } else {
         this.giveWeapon(s, s.id % 2 ? 'mg' : 'm4');
@@ -1417,6 +1415,7 @@ export class Game {
     if (this.time < s.switchUntil || this.time < s.nextFire) return;
     s[cnt]--;
     s.nextFire = this.time + 0.6;
+    s.spawnProtect = 0;
     const eye = s.feet + s.eyeH();
     const dx = -Math.sin(yaw) * Math.cos(pitch), dy = Math.sin(pitch), dz = -Math.cos(yaw) * Math.cos(pitch);
     // start in front of the eye, but never inside a wall
@@ -1518,7 +1517,7 @@ export class Game {
       this.fx.flash(n.x, n.y + 0.3, n.z, 4, 0.18);
       for (let i = 0; i < 6; i++) this.fx.puff(n.x + (Math.random() - 0.5), n.y + 0.4 + Math.random() * 0.6, n.z + (Math.random() - 0.5), [0.35, 0.32, 0.3], 2.2, 1.6, 0.6, 0.8);
       this.fx.spark(n.x, n.y + 0.1, n.z, 0, 1, 0, [1, 0.7, 0.3], 30, 7);
-      this.fx.decal(n.x, 0.01, n.z, 0, 1, 0);
+      if (!this.map.inWater(n.x, n.z)) this.fx.decal(n.x, this.map.groundAt(n.x, n.z, 0.05, n.y + 0.1) + 0.01, n.z, 0, 1, 0);
       if (this.role !== 'client' && !(n.chicken && this.role !== 'solo')) for (const o of [...this.soldiers, ...(n.owner?.team === 'B' ? [] : this.hostages)]) {
         if (o instanceof Soldier ? !o.alive : o.state === 'dead' || o.state === 'rescued') continue;
         const cy = o.feet + 1.0;
@@ -1659,19 +1658,21 @@ export class Game {
   move(s, dt, frozen) {
     const w = WEAPONS[s.kind] || WEAPONS.knife;
     let max = w.speed || 5.6;
-    const runMax = max;
     const swim = s.feet < -0.05 && this.map.inWater(s.x, s.z);
     if (swim !== !!s.swimming) this.splash(s, swim);
     s.swimming = swim;
     if (swim) max = Math.min(max, 3.3);
-    if (this.variant === 'knife' || (this.variant === 'zombie' && s.team === 'B')) max *= 1.18;
+    // knife fights are quick; the horde is a touch quicker than the people (it got deadly once bots learned to go round things)
+    if (this.variant === 'knife') max *= 1.18;
+    else if (this.variant === 'zombie' && s.team === 'B') max *= 1.06;
+    const runMax = max;
     if (s.in.walk) max *= 0.52;
     if (s.crouchK > 0.5) max *= 0.36;
     if (s.scoped) max *= 0.55;
     if (frozen) max = 0;
     // under a lintel or on top of the library shelves there is no room to stand up
     const hc = this.map.cellAt(s.x, s.z);
-    const room = hc >= 0 && this.map.indoor[hc] ? (this.map.lint[hc] > 0 ? this.map.lint[hc] : CEIL) - this.map.h[hc] : 99;
+    const room = hc >= 0 && this.map.indoor[hc] ? (this.map.lint[hc] > 0 ? this.map.lint[hc] : this.map.ceilH[hc]) - Math.max(s.feet, this.map.h[hc]) : 99;
     const tgt = s.in.crouch || room < 1.85 ? 1 : 0;
     const oldK = s.crouchK;
     s.crouchK += Math.max(-dt * 7, Math.min(dt * 7, tgt - s.crouchK));
@@ -1734,7 +1735,7 @@ export class Game {
       s.onGround = false;
     }
     // average of the speeds before and after the step: the jump is just as high at 20 fps as at 144
-    const vy0 = s.vy;
+    const vy0 = s.vy, feet0 = s.feet;
     if (swim) {
       // float with the head out of the water; crouch to dive to the bottom; jump kicks up (and over the side)
       const float = s.in.crouch ? POOL_BOTTOM + 0.02 : WATER_Y + 0.28 - s.eyeH();
@@ -1771,13 +1772,13 @@ export class Game {
     // head against the ceiling or a window lintel
     const cell = this.map.cellAt(s.x, s.z);
     if (cell >= 0 && this.map.indoor[cell]) {
-      const top = this.map.lint[cell] > 0 ? this.map.lint[cell] : CEIL;
+      const top = this.map.lint[cell] > 0 ? this.map.lint[cell] : this.map.ceilH[cell];
       if (s.feet + s.height > top - 0.05) {
         s.feet = Math.max(this.map.h[cell], top - 0.05 - s.height);
         if (s.vy > 0) s.vy = 0;
       }
     }
-    let ground = swim ? this.map.groundAt(s.x, s.z, s.radius * 0.9, s.feet, s.step) : this.map.groundAt(s.x, s.z, s.radius * 0.9, Math.max(s.feet, 0), s.onGround ? 0.45 : 0.22);
+    let ground = swim ? this.map.groundAt(s.x, s.z, s.radius * 0.9, s.feet, s.step) : this.map.groundAt(s.x, s.z, s.radius * 0.9, Math.max(s.feet, feet0, 0), s.onGround ? 0.45 : 0.22);
     const bt = this.toys.boardTop(s.x, s.z);
     s.onBoard = bt != null && s.feet >= bt - (s.onGround ? 0.46 : 0.15);
     if (s.onBoard) {
@@ -1791,7 +1792,8 @@ export class Game {
       } else ground = Math.max(ground, bt);
     }
     if (s.feet <= ground) {
-      if (!s.onGround && s.vy < -5.5) {
+      const impact = Math.sqrt(vy0 * vy0 + 2 * this.grav * Math.max(0, feet0 - ground));
+      if (!s.onGround && vy0 < 0 && impact > 6) {
         sfx('land', s.isPlayer ? null : [s.x, s.feet, s.z]);
         if (s.isPlayer) this.vm.kick = Math.max(this.vm.kick, 0.4);
       }
@@ -1860,6 +1862,7 @@ export class Game {
   }
 
   // where a grenade thrown now would go: the same physics as the real one, drawn as a dotted arc
+  // where a grenade thrown now would go: exactly the steps of updateNades (h = 1/180, a bounce ends the step)
   nadeArc(s) {
     const kind = s.kind;
     const pitch = s.pitch + 0.08, yaw = s.yaw, speed = 15;
@@ -1871,12 +1874,17 @@ export class Game {
     let x = s.x + dx * reach, y = eye - 0.08, z = s.z + dz * reach;
     let vx = dx * speed + s.vx * 0.6, vy = dy * speed + 1.5, vz = dz * speed + s.vz * 0.6;
     const fuse = kind === 'he' ? 1.7 : kind === 'smoke' ? 1.9 : 1.5;
-    const pts = this._arcPts || (this._arcPts = new Float32Array(3 * 96));
-    let n = 0;
-    const h = 1 / 60;
-    for (let t = 0; t < fuse && n < 96; t += h) {
+    const pts = this._arcPts || (this._arcPts = []);
+    pts.length = 0;
+    const bounces = this._arcBounce || (this._arcBounce = []);
+    bounces.length = 0;
+    const h = 1 / 180;
+    let next = 0;
+    pts.push([x, y, z]);
+    for (let t = 0; t < fuse; t += h) {
       vy -= 14 * h;
       const sp = Math.hypot(vx, vy, vz);
+      let bounced = false;
       if (sp > 0.01) {
         const ux = vx / sp, uy = vy / sp, uz = vz / sp;
         const hit = this.map.raycast(x, y, z, ux, uy, uz, sp * h + 0.07);
@@ -1888,49 +1896,106 @@ export class Game {
           x += hit.nx * 0.02;
           y += hit.ny * 0.02;
           z += hit.nz * 0.02;
+          bounced = true;
+          if (sp > 2 && bounces.length < 4) bounces.push([x, y, z]);
         }
       }
-      x += vx * h;
-      y += vy * h;
-      z += vz * h;
-      if (y < 0.07 && !this.map.inWater(x, z)) {
-        y = 0.07;
-        vy = Math.abs(vy) * 0.35;
-        vx *= 0.7;
-        vz *= 0.7;
+      if (!bounced) {
+        x += vx * h;
+        y += vy * h;
+        z += vz * h;
+        if (y < 0.07 && !this.map.inWater(x, z)) {
+          y = 0.07;
+          vy = Math.abs(vy) * 0.35;
+          vx *= 0.7;
+          vz *= 0.7;
+        }
       }
-      // dots every other step, starting a little way out (close to the eye they would be huge)
-      if (Math.round(t / h) % 2 === 0 && Math.hypot(x - s.x, z - s.z) > 1.6) {
-        pts[n * 3] = x;
-        pts[n * 3 + 1] = y;
-        pts[n * 3 + 2] = z;
-        n++;
+      if (t >= next) {
+        next = t + 0.025;
+        pts.push([x, y, z]);
       }
     }
-    return { pts, n, end: [x, y, z] };
+    pts.push([x, y, z]);
+    return { pts, end: [x, y, z], bounces };
   }
 
   drawArc(p) {
     const show = p.alive && p.pinAt && WEAPONS[p.kind]?.nade && !this.over;
+    const N = 96;
     if (!this.arc) {
       if (!show) return;
+      // a glowing ribbon turned to the camera, fading in from the hand
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 96), 3));
-      this.arc = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffe27a, size: 0.15, map: dotTexture(), alphaTest: 0.4, transparent: true, opacity: 0.95, depthWrite: false }));
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 2 * 3), 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(N * 2 * 4), 4));
+      const idx = [];
+      for (let i = 0; i < N - 1; i++) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+      geo.setIndex(idx);
+      this.arc = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false }));
       this.arc.frustumCulled = false;
-      this.arcEnd = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.34, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.8, depthWrite: false }));
+      this.arc.renderOrder = 5;
+      // the landing: a ring on the ground, a filled disc, and a short beam that shows over cover
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
+      this.arcEnd = new THREE.Group();
+      this.arcEnd.add(new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 32).rotateX(-Math.PI / 2), ringMat));
+      this.arcEnd.add(new THREE.Mesh(new THREE.CircleGeometry(0.32, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.25, depthWrite: false, depthTest: false })));
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.5, 8).translate(0, 0.75, 0), new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.55, depthWrite: false, depthTest: false }));
+      this.arcEnd.add(beam);
+      this.arcEnd.renderOrder = 6;
+      for (const m of this.arcEnd.children) m.renderOrder = 6;
       this.scene.add(this.arc, this.arcEnd);
     }
     this.arc.visible = this.arcEnd.visible = !!show;
     if (!show) return;
     const a = this.nadeArc(p);
-    const attr = this.arc.geometry.attributes.position;
-    attr.array.set(a.pts.subarray(0, a.n * 3));
-    attr.needsUpdate = true;
-    this.arc.geometry.setDrawRange(0, a.n);
-    const color = p.kind === 'he' ? 0xff7a3a : p.kind === 'smoke' ? 0xbfc6cf : 0xfff2a0;
-    this.arcEnd.material.color.setHex(color);
-    this.arcEnd.position.set(a.end[0], Math.max(this.map.inWater(a.end[0], a.end[2]) ? WATER_Y : 0, a.end[1] - 0.05) + 0.03, a.end[2]);
+    const color = new THREE.Color(p.kind === 'he' ? 0xff8a3d : p.kind === 'smoke' ? 0xcfd6de : 0xfff0a0);
+    for (const m of this.arcEnd.children) m.material.color.copy(color);
+    const pts = a.pts;
+    // the line leaves the hand (low right of the view), not the eye, so it reads as a curve
+    const cam = this.camera;
+    const hand = this._hand || (this._hand = new THREE.Vector3());
+    hand.set(0.16, -0.2, -0.45).applyQuaternion(cam.quaternion).add(cam.position);
+    const n = Math.min(N, pts.length);
+    const pos = this.arc.geometry.attributes.position, col = this.arc.geometry.attributes.color;
+    const cx = cam.position.x, cy = cam.position.y, cz = cam.position.z;
+    for (let i = 0; i < N; i++) {
+      const j = Math.min(i, n - 1);
+      let [x, y, z] = pts[j];
+      // blend from the hand into the real path over the first metre and a half
+      const dist = Math.hypot(pts[j][0] - pts[0][0], pts[j][2] - pts[0][2]);
+      const k = Math.min(1, dist / 1.5), e = k * k * (3 - 2 * k);
+      x = hand.x + (x - hand.x) * e;
+      y = hand.y + (y - hand.y) * e;
+      z = hand.z + (z - hand.z) * e;
+      // direction along the path and across it, turned to face the camera
+      const q = pts[Math.min(n - 1, j + 1)], o = pts[Math.max(0, j - 1)];
+      let tx = q[0] - o[0], ty = q[1] - o[1], tz = q[2] - o[2];
+      const vx = x - cx, vy = y - cy, vz = z - cz;
+      let sx = ty * vz - tz * vy, sy = tz * vx - tx * vz, sz = tx * vy - ty * vx;
+      const sl = Math.hypot(sx, sy, sz) || 1;
+      const d = Math.hypot(vx, vy, vz);
+      // a little wider far away so it stays visible, thin near the hand
+      const w = (0.005 + Math.min(0.045, d * 0.0045)) / sl;
+      sx *= w;
+      sy *= w;
+      sz *= w;
+      pos.setXYZ(i * 2, x - sx, y - sy, z - sz);
+      pos.setXYZ(i * 2 + 1, x + sx, y + sy, z + sz);
+      const alpha = i >= n - 1 ? 0 : Math.min(1, 0.08 + e) * 0.9;
+      col.setXYZW(i * 2, color.r, color.g, color.b, alpha);
+      col.setXYZW(i * 2 + 1, color.r, color.g, color.b, alpha);
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    const [ex, ey, ez] = a.end;
+    const fy = this.map.inWater(ex, ez) ? WATER_Y : this.map.groundAt(ex, ez, 0.05, ey + 0.1);
+    this.arcEnd.position.set(ex, fy + 0.03, ez);
+    // the marker keeps a readable size far away
+    const far = Math.max(1, Math.hypot(ex - this.camera.position.x, ez - this.camera.position.z) / 9);
+    const pulse = 1 + Math.sin(performance.now() / 160) * 0.08;
+    this.arcEnd.scale.set(far, Math.min(2, far), far);
+    this.arcEnd.children[0].scale.setScalar(pulse);
   }
 
   // things that are only looked at: updated once a frame by the main loop
@@ -2017,7 +2082,7 @@ export class Game {
       const k = input.keys;
       p.in.f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
       p.in.s = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
-      p.in.jump = k.has('Space');
+      p.in.jump = k.has('Space') || !!input.jumpTap;
       p.in.crouch = k.has('ControlLeft') || k.has('ControlRight') || k.has('KeyC');
       p.in.walk = k.has('ShiftLeft') || k.has('ShiftRight');
       // touch: the stick moves (a small push walks quietly), buttons jump and crouch
@@ -2128,6 +2193,7 @@ export class Game {
         }
         s.triggerHeld = true;
       } else s.triggerHeld = false;
+      if (s.isPlayer && s.pinAt && (input.menuOpen || this.over)) s.pinAt = s.throwAt = 0;
       if (s.isPlayer && s.pinAt) {
         // the pin takes a moment, then a short swing before the hand lets go
         if (!wantFire && !s.throwAt) s.throwAt = Math.max(this.time, s.pinAt + 0.35) + 0.1;
@@ -2224,6 +2290,7 @@ export class Game {
       if (w.melee) {
         if (this.phase === 'freeze' || this.time < p.nextFire || this.time < p.switchUntil) return;
         p.nextFire = this.time + 1.0;
+        p.spawnProtect = 0;
         this.knife(p, w, true);
         return;
       }
@@ -2508,7 +2575,7 @@ export class Game {
       let reloadK = 0;
       if (p.reloadUntil) {
         const w = WEAPONS[p.kind];
-        const left = (p.reloadUntil - this.time) / w.reload;
+        const left = (p.reloadUntil - this.time) / (w.shells ? w.reload / w.mag : w.reload);
         reloadK = Math.sin(Math.min(1, Math.max(0, 1 - left)) * Math.PI);
       }
       const knife = p.kind === 'knife';
@@ -2593,7 +2660,7 @@ export class Game {
   // a friend joins mid-match: they take a bot's place from the next round (deathmatch: in a moment)
   addHuman(peer, name) {
     const humans = (team) => this.soldiers.filter((s) => s.team === team && (s.peer || s.isPlayer)).length;
-    const order = humans('A') <= humans('B') ? ['A', 'B'] : ['B', 'A'];
+    const order = this.variant === 'zombie' ? ['B', 'A'] : humans('A') <= humans('B') ? ['A', 'B'] : ['B', 'A'];
     for (const team of order) {
       const bots = this.soldiers.filter((s) => s.team === team && s.brain);
       if (!bots.length) continue;
@@ -2622,6 +2689,15 @@ export class Game {
     s.netKind = null;
     s.nb = null;
     if (name) s.name = name;
+    if (s.alive && (s.swimming || s.feet < -0.05)) {
+      const c = this.map.nearestWalk(Math.floor(s.x), Math.floor(s.z));
+      if (c >= 0) {
+        s.x = (c % W) + 0.5;
+        s.z = Math.floor(c / W) + 0.5;
+        s.feet = this.map.h[c];
+        s.swimming = false;
+      }
+    }
     s.brain = new Brain(s, this, this.opts.diff);
     s.brain.planRound();
     s.switchSlot(s.bestSlot(), true);
@@ -2649,8 +2725,10 @@ export class Game {
     if (this.arc) {
       this.arc.geometry.dispose();
       this.arc.material.dispose();
-      this.arcEnd.geometry.dispose();
-      this.arcEnd.material.dispose();
+      for (const m of this.arcEnd.children) {
+        m.geometry.dispose();
+        m.material.dispose();
+      }
     }
     this.rain?.dispose();
     this.chickens?.dispose();

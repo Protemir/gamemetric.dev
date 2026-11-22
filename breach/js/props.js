@@ -72,13 +72,15 @@ export function places() {
   put('ArmChair_01', 55.6, 17.1, R);
   put('side_table_01', 55.05, 16.25, 0);
   // hall: two chandeliers and a clock in the corner
-  for (const z of [34.2, 41.6]) put('Chandelier_02', 36, z, 0, { s: 1.6, y: 4 - 0.848 * 1.6 });
-  put('vintage_grandfather_clock_01', 43.5, 31.25, 0);
+  for (const z of [34.2, 41.6]) put('Chandelier_02', 36, z, 0, { s: 1.6, y: 7.2 - 0.848 * 1.6 });
+  put('vintage_grandfather_clock_01', 31.5, 31.25, 0);
   // pictures: hanging_01 portrait, hanging_02 / fancy_01 landscape
   const pic = (m, x, z, yaw, y, s) => put(m, x, z, yaw, { y, s });
-  pic('hanging_picture_frame_01', 28.02, 35.0, R / 2, 2.1, 2.1);
-  pic('hanging_picture_frame_02', 44.98, 34.0, -R / 2, 2.1, 2.1);
-  pic('hanging_picture_frame_02', 44.98, 42.2, -R / 2, 2.1, 2.1);
+  // the hall's pictures hang upstairs, over the galleries
+  pic('hanging_picture_frame_01', 28.02, 34.0, R / 2, 5.0, 2.1);
+  pic('hanging_picture_frame_02', 44.98, 34.0, -R / 2, 5.0, 2.1);
+  pic('hanging_picture_frame_02', 44.98, 41.0, -R / 2, 4.6, 2.1);
+  pic('hanging_picture_frame_01', 28.02, 41.0, R / 2, 4.6, 2.1);
   // pictures only on solid wall: not over the lounge doors (41,13-14) and (51-53,8)
   pic('fancy_picture_frame_01', 55.5, 9.02, 0, 2.45, 2.3);
   pic('hanging_picture_frame_02', 42.02, 18.0, R / 2, 2.15, 2.2);

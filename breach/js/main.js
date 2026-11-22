@@ -215,7 +215,10 @@ $('p-settings').onclick = () => {
   $('settings').hidden = false;
 };
 $('p-resume').onclick = () => resume();
-$('p-quit').onclick = () => toMenu();
+$('p-quit').onclick = () => {
+  if (net?.isHost && game && !game.over && net.peers.length > 1 && !confirm(t('hostQuitAsk'))) return;
+  toMenu();
+};
 $('mo-menu').onclick = () => (net ? backToLobby(true) : toMenu());
 $('mo-again').onclick = () => startGame();
 $('play').onclick = () => {
@@ -289,9 +292,15 @@ function touchPause() {
   input.fire = false;
 }
 
+function closeSettings() {
+  $('settings').hidden = true;
+  $('controls').hidden = true;
+  settingsFrom = 'menu';
+}
 function toMenu() {
   wantResume = false;
   startGen++;
+  closeSettings();
   if (net) {
     net.close();
     net = null;
@@ -343,8 +352,10 @@ function lockPointer() {
 let wantResume = false;
 function resume() {
   // after the final whistle there is nothing to go back to
-  if (game?.over) {
+  if (!game) return;
+  if (game.over) {
     $('pause').hidden = true;
+    $('click-to-play').hidden = true;
     return;
   }
   if (touchOnly) {
@@ -478,7 +489,7 @@ function closeBuy(relock = true) {
 }
 hud.onBuyClosed = () => {
   closeBuy(false);
-  if (!touchOnly && state === 'play' && document.pointerLockElement !== canvas) $('click-to-play').hidden = false;
+  if (!touchOnly && state === 'play' && !game?.over && document.pointerLockElement !== canvas) $('click-to-play').hidden = false;
 };
 function doBuy(item) {
   if (!game) return;
@@ -522,6 +533,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
     if (!$('controls').hidden) $('controls').hidden = true;
     else if (!$('settings').hidden) $('s-back').click();
+    else if (state === 'pause' && game && !$('pause').hidden && !game.over) {
+      resume();
+      return;
+    }
   }
   if (state !== 'play' || !game) return;
   if (e.code === 'Tab') {
@@ -546,6 +561,7 @@ window.addEventListener('keydown', (e) => {
     }
   }
   input.keys.add(e.code);
+  if (e.code === 'Space') input.jumpTap = true;
   // keep Ctrl+R, Ctrl+1.. and friends from reloading or switching tabs while crouching
   if (e.ctrlKey || e.metaKey || ['Space', 'ArrowUp', 'ArrowDown', 'ControlLeft', 'ControlRight', 'KeyS', 'KeyW', 'KeyR', 'KeyD', 'KeyB', 'KeyE', 'KeyF'].includes(e.code)) e.preventDefault();
   const map = { Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', Digit6: 'slot6', KeyQ: 'last', KeyR: 'reload', KeyE: 'use', KeyF: 'inspect', KeyT: 'spray' };
@@ -653,6 +669,7 @@ function frame(now) {
     // two smaller steps when the frame is long keeps collisions honest
     const steps = dt > 1 / 40 ? 2 : 1;
     for (let i = 0; i < steps; i++) game.update(dt / steps, input);
+    input.jumpTap = false;
     game.visual(dt);
     game.render(dt, look, settings);
     hud.update(game, now, settings, fps);
@@ -847,6 +864,7 @@ function hostSync() {
   }
   for (const k of Object.keys(lobby.teams)) if (!net.peers.some((p) => p.peer === k)) delete lobby.teams[k];
   lobby.started = !!(game && game.role === 'host' && !game.over);
+  lobby.fun = settings.fun;
   net.broadcast({ k: 'lobby', ...lobby });
   // a friend arriving mid-match takes a bot's place
   if (game && game.role === 'host' && !game.over) {
@@ -883,6 +901,8 @@ function renderLobby() {
   for (const [id, key] of [['lb-mode', 'mode'], ['lb-diff', 'diff']]) for (const b of $(id).querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === lobby[key]);
   $('lb-opts').classList.toggle('locked', !net.isHost);
   $('lb-start').hidden = !net.isHost;
+  const fun = Object.entries((net.isHost ? settings.fun : lobby.fun) || {}).filter(([, on]) => on).map(([k]) => t('fun' + k[0].toUpperCase() + k.slice(1)));
+  $('lb-fun').textContent = fun.length ? `${t('fun')}: ${fun.join(', ')}` : '';
   if (performance.now() < (lobbyNoteUntil || 0)) return;
   $('lb-status').textContent = net.isHost ? '' : lobby.started ? t('inMatch') : t('waitHost');
 }
@@ -1025,6 +1045,7 @@ function askSync() {
 function backToLobby(announce) {
   wantResume = false;
   startGen++;
+  closeSettings();
   if (game) {
     game.dispose();
     game = null;
