@@ -17,10 +17,12 @@ export async function loadPeople() {
     if (o.isMesh && /VanguardBody/i.test(o.material.name) && o.material.map) o.material.map = recolor(o.material.map, (v) => [v * 0.6, v * 0.62, v * 0.53]);
   });
   A.soldier = prep(s.scene);
+  addGear(A.soldier, -1, false);
   A.civil = prep(m.scene);
   A.clips = {};
   for (const c of s.animations) A.clips[c.name] = c;
   A.guard = prepGuard(gd.scene);
+  addGear(A.guard, 1, true);
   // the civilian has other proportions: borrow only the rotations of the soldier's clips
   A.civilClips = {};
   for (const n of ['Idle', 'Walk', 'Run']) {
@@ -34,9 +36,93 @@ export async function loadPeople() {
 
 export const peopleReady = () => A.ready;
 
-export function makeBody(look) {
-  return A.ready ? new SkinnedBody(look) : new Body(look);
+export function makeBody(look, variant = 0) {
+  return A.ready ? new SkinnedBody(look, variant) : new Body(look);
 }
+
+// Kit on top of the models, built in their rest pose and carried by the bones:
+// the assault team gets a helmet with a night-vision mount, a plate carrier with magazine pouches and knee pads;
+// the guards' version is a black vest worn over the suit (only some of them put it on).
+function addGear(scene, front, guard) {
+  scene.updateMatrixWorld(true);
+  const bones = {};
+  scene.traverse((o) => {
+    if (o.isBone) bones[o.name.replace(/^mixamorig:?/, '')] = o;
+  });
+  const P = (x, y, z) => new THREE.Vector3(x, y, z);
+  const mesh = (name, geo, color, rough, bone) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.05 }));
+    m.name = name;
+    m.frustumCulled = false;
+    m.material.userData.env = 0.35;
+    scene.add(m);
+    bones[bone].attach(m);
+    return m;
+  };
+  const boxes = (list) => {
+    const out = list.map(([w, h, d, c]) => new THREE.BoxGeometry(w, h, d).translate(c.x, c.y, c.z));
+    return merge(out);
+  };
+  const cz = (z) => z * front;
+  if (!guard) {
+    // a high-cut helmet: rounded shell, side rails, a night-vision mount over the brow
+    const hc = P(0, 1.69, 0.03 + cz(0.035));
+    const shell = new THREE.SphereGeometry(0.142, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.58).scale(1.02, 1.0, 1.1).translate(hc.x, hc.y, hc.z);
+    const fittings = boxes([
+      [0.06, 0.045, 0.03, P(0, hc.y + 0.085, hc.z + cz(0.15))],
+      [0.014, 0.026, 0.13, P(0.142, hc.y + 0.02, hc.z)],
+      [0.014, 0.026, 0.13, P(-0.142, hc.y + 0.02, hc.z)],
+    ]);
+    mesh('gear-helmet', merge([shell, fittings]), 0x3b3f34, 0.65, 'Head');
+    const tz = 0.03;
+    mesh('gear-vest', boxes([
+      // the suit already has plates: only magazine pouches and a radio go on it
+      [0.075, 0.12, 0.05, P(-0.09, 1.25, tz + cz(0.2))],
+      [0.075, 0.12, 0.05, P(0, 1.25, tz + cz(0.2))],
+      [0.075, 0.12, 0.05, P(0.09, 1.25, tz + cz(0.2))],
+      [0.1, 0.07, 0.04, P(0.08, 1.45, tz + cz(0.195))],
+    ]), 0x4a4a3b, 0.85, 'Spine2');
+    for (const [side, bone] of [[-1, 'LeftLeg'], [1, 'RightLeg']]) {
+      const k = bones[bone].getWorldPosition(new THREE.Vector3());
+      mesh('gear-knee', boxes([[0.11, 0.13, 0.05, P(k.x, k.y + 0.01, k.z + cz(0.075))]]), 0x2e302a, 0.8, bone);
+      void side;
+    }
+  } else {
+    mesh('gear-vest', boxes([
+      [0.32, 0.3, 0.05, P(0, 1.33, 0.125)],
+      [0.31, 0.3, 0.05, P(0, 1.34, -0.125)],
+      [0.04, 0.18, 0.25, P(0.165, 1.25, 0)],
+      [0.04, 0.18, 0.25, P(-0.165, 1.25, 0)],
+      [0.06, 0.03, 0.27, P(0.095, 1.49, 0)],
+      [0.06, 0.03, 0.27, P(-0.095, 1.49, 0)],
+      [0.07, 0.11, 0.045, P(-0.08, 1.24, 0.165)],
+      [0.07, 0.11, 0.045, P(0.08, 1.24, 0.165)],
+    ]), 0x1c1d20, 0.8, 'Spine2');
+    // a knitted cap for some of them
+    mesh('gear-cap', new THREE.SphereGeometry(0.113, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.52).scale(1, 1.05, 1.06).translate(0, 1.755, -0.004), 0x232427, 0.95, 'Head');
+  }
+}
+
+function merge(list) {
+  const pos = [], nor = [], idx = [];
+  for (let g of list) {
+    if (!g.index) g = g.toNonIndexed();
+    const base = pos.length / 3;
+    pos.push(...g.attributes.position.array);
+    nor.push(...g.attributes.normal.array);
+    if (g.index) for (const i of g.index.array) idx.push(base + i);
+    else for (let i = 0; i < g.attributes.position.count; i++) idx.push(base + i);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setIndex(idx);
+  return out;
+}
+
+// how each fighter differs from the next: kit colours for the assault team, suits and vests for the guards
+const KIT = [[1, 1, 1], [0.36, 0.39, 0.46], [1.55, 1.32, 0.95], [0.72, 0.8, 0.72]];
+const SUIT = [[1, 1, 1], [2.5, 2.5, 2.6], [1.3, 1.5, 2.7], [2.3, 1.85, 1.4], [1.6, 1.6, 1.6]];
 
 function prep(scene) {
   scene.updateMatrixWorld(true);
@@ -240,7 +326,7 @@ function ik(up, fore, hand, T, pole) {
 const TINT = { A: new THREE.Color(1, 1, 1), B: new THREE.Color(1, 1, 1), H: new THREE.Color(1, 1, 1) };
 
 export class SkinnedBody {
-  constructor(look) {
+  constructor(look, variant = 0) {
     const src = look === 'H' ? A.civil : look === 'B' ? A.guard : A.soldier;
     this.look = look;
     this.lookKey = look;
@@ -262,6 +348,16 @@ export class SkinnedBody {
       }
     });
     this.tint = TINT[look];
+    // no two look quite the same
+    const v = variant | 0;
+    this.model.traverse((o) => {
+      if (!o.isMesh) return;
+      const m = o.material;
+      if (look === 'A' && /VanguardBody|gear-vest|gear-helmet/.test(m.name || o.name)) m.userData.base.multiply(new THREE.Color(...KIT[v % KIT.length]));
+      if (look === 'B' && /Outfit_Top|Outfit_Bottom/.test(m.name)) m.userData.base.multiply(new THREE.Color(...SUIT[v % SUIT.length]));
+      if (look === 'B' && o.name === 'gear-vest') o.visible = v % 2 === 1;
+      if (look === 'B' && o.name === 'gear-cap') o.visible = v % 3 === 2;
+    });
     this.b = {};
     this.model.traverse((o) => {
       if (o.isBone) this.b[o.name.replace(/^mixamorig:?/, '')] = o;

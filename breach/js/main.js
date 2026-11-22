@@ -10,13 +10,14 @@ import { Net, newCode } from './net.js';
 import { NetGame } from './netgame.js';
 import { BOT_NAMES } from './i18n.js';
 import { WEAPONS } from './weapons.js';
+import { setupTouch } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
 const q = new URLSearchParams(location.search);
 
 // ---------- settings ----------
-const DEF = { sens: 1.2, fov: 74, vol: 0.8, quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
+const DEF = { sens: 1.2, fov: 74, vol: 0.8, bright: 1.2, quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
 let settings = { ...DEF };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem('breach.settings') || '{}'));
@@ -35,6 +36,9 @@ setVolume(settings.vol);
 // ---------- renderer ----------
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+// overall brightness: a plain exposure over the whole picture (the sky keeps its own)
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = settings.bright ?? DEF.bright;
 let scale = settings.quality === 'auto' ? 1 : +settings.quality;
 function applySize() {
   const w = window.innerWidth, h = window.innerHeight;
@@ -51,7 +55,7 @@ function applyTexts() {
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
   for (const b of document.querySelectorAll('.langs button')) b.classList.toggle('on', b.dataset.lang === lang);
   document.title = lang === 'ru' ? 'Штурм особняка — тактический шутер 5 на 5 в браузере | GameMetric' : 'Mansion Breach — 5v5 tactical shooter in your browser | GameMetric';
-  $('ctrl-list').innerHTML = t('ctrl').map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  $('ctrl-list').innerHTML = t(touchOnly ? 'ctrlTouch' : 'ctrl').map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
 }
 for (const b of document.querySelectorAll('.langs button'))
   b.addEventListener('click', () => {
@@ -100,8 +104,8 @@ for (const b of document.querySelectorAll('.side'))
   });
 sides();
 
-const touchOnly = matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
-if (touchOnly) $('pc-only').hidden = false;
+// phones and tablets play with on-screen controls (?touch forces them on a computer)
+const touchOnly = q.has('touch') || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
 
 function slider(id, key, fmt) {
   const el = $('s-' + id), out = $('o-' + id);
@@ -111,12 +115,14 @@ function slider(id, key, fmt) {
     settings[key] = +el.value;
     out.textContent = fmt(settings[key]);
     if (key === 'vol') setVolume(settings.vol);
+    if (key === 'bright') renderer.toneMappingExposure = settings.bright;
     save();
   });
 }
 slider('sens', 'sens', (v) => (+v).toFixed(2));
 slider('fov', 'fov', (v) => `${v}°`);
 slider('vol', 'vol', (v) => `${Math.round(v * 100)}%`);
+slider('bright', 'bright', (v) => `${Math.round(v * 100)}%`);
 $('s-fps').checked = settings.showFps;
 $('s-fps').addEventListener('change', () => {
   settings.showFps = $('s-fps').checked;
@@ -178,7 +184,24 @@ function startGame(online) {
     $('hud').hidden = false;
     state = 'play';
     lockPointer();
+    if (touchOnly) goFullscreen();
   }, 30);
+}
+
+// on a phone the game wants the whole screen, sideways
+function goFullscreen() {
+  const el = document.documentElement;
+  if (!document.fullscreenElement && el.requestFullscreen)
+    el.requestFullscreen({ navigationUI: 'hide' })
+      .then(() => screen.orientation?.lock?.('landscape').catch(() => {}))
+      .catch(() => {});
+}
+function touchPause() {
+  if (state !== 'play' || !game) return;
+  if (buyOpen) closeBuy(false);
+  state = 'pause';
+  $('pause').hidden = false;
+  input.fire = false;
 }
 
 function toMenu() {
@@ -212,7 +235,16 @@ function makePreview() {
 
 // ---------- pointer lock ----------
 function lockPointer() {
-  if (touchOnly) return;
+  if (touchOnly) {
+    // no mouse to capture: the game simply goes on
+    if (game && state !== 'menu') {
+      state = 'play';
+      $('pause').hidden = true;
+      $('settings').hidden = true;
+      $('click-to-play').hidden = true;
+    }
+    return;
+  }
   try {
     const p = canvas.requestPointerLock({ unadjustedMovement: true });
     if (p && p.catch) p.catch(() => canvas.requestPointerLock());
@@ -223,6 +255,11 @@ function lockPointer() {
 // the game only goes on once the browser has really given us the mouse
 let wantResume = false;
 function resume() {
+  if (touchOnly) {
+    lockPointer();
+    goFullscreen();
+    return;
+  }
   wantResume = true;
   lockPointer();
   setTimeout(() => {
@@ -256,6 +293,38 @@ document.addEventListener('pointerlockerror', () => {
 const input = { keys: new Set(), fire: false, menuOpen: false };
 const look = { dx: 0, dy: 0 };
 let buyOpen = false;
+let touchCtl = null;
+if (touchOnly) {
+  touchCtl = setupTouch({
+    input,
+    look,
+    getGame: () => (state === 'play' ? game : null),
+    actions: {
+      tap(a) {
+        if (!game || state !== 'play') return;
+        if (a === 'pause') touchPause();
+        else if (a === 'buy') buyOpen ? closeBuy(false) : openBuy();
+        else if (a === 'next') {
+          const p = game.player;
+          const order = [1, 2, 3].filter((n) => p.hasSlot(n));
+          const i = order.indexOf(p.cur);
+          game.playerAction('slot' + order[(i + 1) % order.length]);
+        } else if (a === 'nade') {
+          const p = game.player;
+          // he grenade first, then the flashes; another tap swaps between them
+          const want = p.cur === 4 ? (p.flash > 0 ? 5 : 4) : p.cur === 5 ? (p.he > 0 ? 4 : 5) : p.he > 0 ? 4 : 5;
+          game.playerAction('slot' + want);
+        } else game.playerAction(a);
+      },
+      board(on) {
+        if (!game) return;
+        $('board').hidden = !on;
+        if (on) hud.drawBoard(game);
+      },
+    },
+  });
+  touchCtl.show(false);
+}
 
 function openBuy() {
   if (!game || !game.player.alive) return;
@@ -317,6 +386,7 @@ $('buy-grid').addEventListener('click', (e) => {
   if (b) doBuy(b.dataset.item);
 });
 $('buy').addEventListener('mousedown', (e) => e.stopPropagation());
+$('buy-close').addEventListener('click', () => closeBuy(!touchOnly));
 
 window.addEventListener('keydown', (e) => {
   if (state !== 'play' || !game) return;
@@ -417,6 +487,12 @@ function frame(now) {
         applySize();
       }
     }
+  }
+  if (touchCtl) {
+    document.body.classList.toggle('playing', !!game && state !== 'menu');
+    const on = state === 'play' && !!game && !buyOpen;
+    if (on !== touchCtl.visible) touchCtl.show((touchCtl.visible = on));
+    if (on) touchCtl.update(game);
   }
   if (state === 'play' && game) {
     // two smaller steps when the frame is long keeps collisions honest

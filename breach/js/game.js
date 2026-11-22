@@ -27,7 +27,7 @@ class Soldier {
     this.team = team;
     this.name = name;
     this.isPlayer = isPlayer;
-    this.body = makeBody(team);
+    this.body = makeBody(team, id);
     game.scene.add(this.body.root);
     this.radius = 0.3;
     this.height = 1.8;
@@ -1307,8 +1307,12 @@ export class Game {
     if (s.scoped) max *= 0.55;
     if (frozen) max = 0;
     const tgt = s.in.crouch ? 1 : 0;
+    const oldK = s.crouchK;
     s.crouchK += Math.max(-dt * 7, Math.min(dt * 7, tgt - s.crouchK));
     s.height = 1.8 - 0.5 * s.crouchK;
+    // in the air, crouching tucks the legs up instead of dropping the head (like in CS): the view stays
+    // steady and a crouch-jump reaches a little higher - crates and hedges, still not the cars
+    if (!s.onGround && s.crouchK !== oldK) s.feet += (s.crouchK - oldK) * 0.22;
     let wx = 0, wz = 0;
     const f = s.in.f, st = s.in.s;
     if (f || st) {
@@ -1443,6 +1447,20 @@ export class Game {
       p.in.jump = k.has('Space');
       p.in.crouch = k.has('ControlLeft') || k.has('ControlRight') || k.has('KeyC');
       p.in.walk = k.has('ShiftLeft') || k.has('ShiftRight');
+      // touch: the stick moves (a small push walks quietly), buttons jump and crouch
+      const st = input.stick;
+      if (st && (st.x || st.y)) {
+        const m = Math.hypot(st.x, st.y);
+        if (m > 0.2) {
+          p.in.f = -st.y / m;
+          p.in.s = st.x / m;
+          if (m < 0.65) p.in.walk = true;
+        }
+      }
+      if (input.touch) {
+        p.in.jump ||= input.touch.jump;
+        p.in.crouch ||= input.touch.crouch;
+      }
       if (input.menuOpen) {
         p.in.f = p.in.s = 0;
         p.in.jump = false;

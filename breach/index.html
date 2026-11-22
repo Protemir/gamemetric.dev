@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Штурм особняка — тактический шутер 5 на 5 в браузере | GameMetric</title>
 <meta name="description" content="Бесплатный тактический шутер от первого лица прямо в браузере: спецназ против охраны в особняке с заложниками, закупка оружия, раунды, боты трёх уровней и онлайн с друзьями по ссылке. Летит даже на встроенной видеокарте.">
 <link rel="canonical" href="https://gamemetric.dev/breach/">
@@ -34,9 +34,9 @@
  "isAccessibleForFree": true
 }
 </script>
-<link rel="stylesheet" href="style.css?v=6b5b80fa">
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=190ac8a0","./js/audio.js":"./js/audio.js?v=d82d48f3","./js/bots.js":"./js/bots.js?v=b00be73f","./js/decor.js":"./js/decor.js?v=1a1a6d82","./js/fx.js":"./js/fx.js?v=c6005b38","./js/game.js":"./js/game.js?v=5d806cfc","./js/guns.js":"./js/guns.js?v=986a96b7","./js/hud.js":"./js/hud.js?v=344d07be","./js/i18n.js":"./js/i18n.js?v=64a492f0","./js/main.js":"./js/main.js?v=e28e4796","./js/map.js":"./js/map.js?v=723e2c47","./js/net.js":"./js/net.js?v=1a02b247","./js/netgame.js":"./js/netgame.js?v=94f560d2","./js/people.js":"./js/people.js?v=a4269d94","./js/props.js":"./js/props.js?v=5d57b3c5","./js/textures.js":"./js/textures.js?v=d3a717af","./js/weapons.js":"./js/weapons.js?v=734fd103"}}</script>
-<script type="module" src="./js/main.js?v=e28e4796"></script>
+<link rel="stylesheet" href="style.css?v=07a5c3b0">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=190ac8a0","./js/audio.js":"./js/audio.js?v=d82d48f3","./js/bots.js":"./js/bots.js?v=b00be73f","./js/decor.js":"./js/decor.js?v=1a1a6d82","./js/fx.js":"./js/fx.js?v=c6005b38","./js/game.js":"./js/game.js?v=d828bdf2","./js/guns.js":"./js/guns.js?v=986a96b7","./js/hud.js":"./js/hud.js?v=482fbad1","./js/i18n.js":"./js/i18n.js?v=7f8249d4","./js/main.js":"./js/main.js?v=139e856e","./js/map.js":"./js/map.js?v=723e2c47","./js/net.js":"./js/net.js?v=1a02b247","./js/netgame.js":"./js/netgame.js?v=94f560d2","./js/people.js":"./js/people.js?v=0ad41f6d","./js/props.js":"./js/props.js?v=5d57b3c5","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=93c90e5a","./js/weapons.js":"./js/weapons.js?v=734fd103"}}</script>
+<script type="module" src="./js/main.js?v=139e856e"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -72,7 +72,7 @@
   <div id="fps" hidden></div>
   <div id="board" hidden><div id="board-head"></div><div class="bd-teams"><table id="board-a" class="bd-a"></table><table id="board-b" class="bd-b"></table></div></div>
   <div id="buy" hidden>
-    <div class="buy-head"><b data-t="buy"></b><span id="buy-money"></span><span id="buy-time"></span></div>
+    <div class="buy-head"><b data-t="buy"></b><span id="buy-money"></span><span id="buy-time"></span><button id="buy-close" type="button" aria-label="close">✕</button></div>
     <div id="buy-grid"></div>
     <div class="buy-hint" data-t="buyHint"></div>
   </div>
@@ -132,6 +132,7 @@
     <label class="field"><span data-t="sens"></span><input type="range" id="s-sens" min="0.2" max="4" step="0.05"><output id="o-sens"></output></label>
     <label class="field"><span data-t="fov"></span><input type="range" id="s-fov" min="60" max="90" step="1"><output id="o-fov"></output></label>
     <label class="field"><span data-t="volume"></span><input type="range" id="s-vol" min="0" max="1" step="0.05"><output id="o-vol"></output></label>
+    <label class="field"><span data-t="brightness"></span><input type="range" id="s-bright" min="0.8" max="1.8" step="0.05"><output id="o-bright"></output></label>
     <div class="field"><span data-t="quality"></span><div class="seg small" id="seg-q"><button data-v="auto">Auto</button><button data-v="1">100%</button><button data-v="0.75">75%</button><button data-v="0.5">50%</button></div></div>
     <label class="field check"><input type="checkbox" id="s-fps"><span data-t="showFps"></span></label>
     <button id="s-back" class="btn primary" data-t="back"></button>
@@ -166,6 +167,7 @@
 </div>
 
 <div id="click-to-play" class="overlay" hidden><div class="panel"><b data-t="clickToPlay"></b></div></div>
+<div id="rotate"><div><b>⟳</b><span data-t="rotate"></span></div></div>
 <div id="loading" class="overlay" hidden><div class="panel"><b data-t="loading"></b></div></div>
 </body>
 </html>

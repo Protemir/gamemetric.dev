@@ -229,3 +229,66 @@ input[type='range'] { accent-color: var(--accent); width: 100%; }
   .menu-main { padding-left: 0; }
   .btn.big { align-self: stretch; }
 }
+
+/* ---------- phone controls ---------- */
+#touch { position: fixed; inset: 0; z-index: 5; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#touch[hidden] { display: none; }
+#touch .tz { position: absolute; top: 0; bottom: 0; pointer-events: auto; touch-action: none; }
+#touch .tz-move { left: 0; width: 42%; }
+#touch .tz-look { left: 42%; right: 0; }
+#touch .stick { position: absolute; width: 140px; height: 140px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); border: 2px solid rgba(255, 255, 255, 0.25); pointer-events: none; }
+#touch .knob { position: absolute; left: 42px; top: 42px; width: 56px; height: 56px; border-radius: 50%; background: rgba(255, 255, 255, 0.35); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4); }
+#touch .tb { position: absolute; pointer-events: auto; touch-action: none; width: 52px; height: 52px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.28); background: rgba(10, 13, 17, 0.38); color: rgba(255, 255, 255, 0.9); font: 700 20px/1 var(--mono); display: flex; align-items: center; justify-content: center; padding: 0; -webkit-tap-highlight-color: transparent; }
+#touch .tb[hidden] { display: none; }
+#touch .tb.on { background: rgba(242, 177, 58, 0.45); border-color: var(--accent); }
+#touch .tb.lit { border-color: var(--accent); color: var(--accent); }
+#touch .tb-fire { right: calc(24px + env(safe-area-inset-right)); bottom: 66px; width: 92px; height: 92px; background: rgba(255, 80, 70, 0.28); border-color: rgba(255, 120, 110, 0.6); }
+#touch .tb-fire::after { content: ''; width: 26px; height: 26px; border: 3px solid rgba(255, 255, 255, 0.85); border-radius: 50%; box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.12); }
+#touch .tb-jump { right: calc(44px + env(safe-area-inset-right)); bottom: 170px; }
+#touch .tb-crouch { right: calc(130px + env(safe-area-inset-right)); bottom: 62px; }
+#touch .tb-alt { right: calc(130px + env(safe-area-inset-right)); bottom: 128px; }
+#touch .tb-reload { right: calc(190px + env(safe-area-inset-right)); bottom: 100px; width: 46px; height: 46px; font-size: 17px; }
+#touch .tb-use { right: calc(190px + env(safe-area-inset-right)); bottom: 156px; width: 46px; height: 46px; font-size: 17px; }
+#touch .tb-next { left: calc(18px + env(safe-area-inset-left)); bottom: 76px; width: 46px; height: 46px; }
+#touch .tb-nade { left: calc(70px + env(safe-area-inset-left)); bottom: 76px; width: 46px; height: 46px; font-size: 16px; }
+body.touch #slots { display: none; }
+#touch .tb-pause { left: calc(14px + env(safe-area-inset-left)); top: 170px; width: 40px; height: 40px; font-size: 15px; }
+#touch .tb-score { left: calc(60px + env(safe-area-inset-left)); top: 170px; width: 40px; height: 40px; font-size: 17px; }
+#touch .tb-buy { left: calc(106px + env(safe-area-inset-left)); top: 170px; width: 40px; height: 40px; font-size: 17px; color: var(--good); }
+@media (min-height: 521px) { #touch .tb-pause, #touch .tb-score, #touch .tb-buy { top: 214px; } }
+body.touch #view { touch-action: none; }
+body.touch #prompt { bottom: 34%; }
+/* small landscape screens: a tighter HUD */
+@media (max-height: 520px) {
+  #radar { width: 150px !important; height: 150px !important; left: 10px; top: 10px; }
+  #board { padding: 10px; }
+  #board table { font-size: 12px; }
+  #board td { padding: 3px 6px; }
+  #buy { padding: 10px; max-height: 92vh; overflow-y: auto; }
+}
+/* portrait phones: ask to turn the phone */
+#rotate { display: none; }
+@media (orientation: portrait) {
+  body.touch.playing #rotate { display: flex; position: fixed; inset: 0; z-index: 50; background: #0d1014; color: var(--text); align-items: center; justify-content: center; text-align: center; font: 600 18px/1.4 var(--font); padding: 24px; }
+  body.touch.playing #rotate b { display: block; font-size: 64px; margin-bottom: 12px; color: var(--accent); }
+}
+/* short landscape screens (phones turned sideways): a compact menu that scrolls */
+@media (max-height: 520px) {
+  .menu { padding: 10px 16px; overflow-y: auto; justify-content: flex-start; gap: 6px; }
+  .menu-bg { background: rgba(6, 8, 12, 0.8); }
+  .menu-main { width: min(780px, 100%); display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; padding-left: 0; align-items: start; }
+  .menu-main > h1, .menu-main > .tagline, .menu-main > #menu-note, .menu-main > #pc-only { grid-column: 1 / -1; }
+  .menu-main h1 { font-size: 30px; }
+  .tagline { display: none; }
+  .sides { grid-template-columns: 1fr; gap: 6px; }
+  .side { padding: 8px 12px; }
+  .side span, .seg button small { display: none; }
+  .seg button { padding: 8px 10px; }
+  .opts { gap: 6px; }
+  .opt label { margin-bottom: 3px; }
+  .play-row { grid-column: 2; margin: 0; }
+  .play-row .btn { padding: 11px 18px; font-size: 16px; }
+  .links { grid-column: 1; }
+  .menu-foot { display: none; }
+}
+#buy-close { margin-left: auto; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 30px; color: var(--text); font-size: 15px; }

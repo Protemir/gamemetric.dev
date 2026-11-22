@@ -273,7 +273,7 @@ export class Hud {
       pr.textContent = `${t('pickUp')} ${WEAPONS[game.nearDrop(p).kind].name[lang]}`;
     } else if (p.alive && game.canBuy(p) && game.mode !== 'dm' && game.phase !== 'end') {
       pr.hidden = false;
-      pr.textContent = `B — ${t('buy')}`;
+      pr.textContent = `${document.body.classList.contains('touch') ? '$' : 'B'} — ${t('buy')}`;
     } else pr.hidden = true;
     // freeze countdown
     if (game.phase === 'freeze') this.center(`${t('round')} ${game.round} · ${t('freeze')} ${Math.ceil(game.phaseEnd - game.time)}`, 0.2);
