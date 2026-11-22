@@ -12,7 +12,7 @@ const TEXT = {
     proto: 'Prototype',
     'breach.name': 'Mansion Breach',
     'breach.genre': 'Tactical shooter · 3D',
-    'breach.meta': '5v5 · online with friends · PC',
+    'breach.meta': '5v5 · online with friends · PC and phone',
     'breach.desc': 'Assault team against the guards in a mansion with hostages. Buy your guns, storm the house through the courtyard, the garage or the kitchen and lead the hostages out to the gate. Play against bots or invite friends with a link — up to 10 people in a room. Runs smoothly even on integrated graphics.',
     'lookaway.name': 'Hold Their Gaze',
     'lookaway.genre': 'Horror · 3D',
