@@ -645,8 +645,27 @@ export const TEX_SIZE = {
 
 const PIX = { plaster: [256, 512], w_hall: [256, 512], w_lib: [256, 512], w_garage: [256, 512], w_kitchen: [128, 512], w_dining: [256, 512], w_lounge: [256, 512], w_corr: [256, 512], rug: [512, 512] };
 
+// CC0 photo textures from Poly Haven (assets/tex), 512 px; the rest stays hand-drawn
+const PHOTO = {
+  grass: 'leafy_grass', pave: 'cobblestone_floor_08', terrace: 'patio_tiles', gravel: 'gravel_floor_02', wood: 'wood_floor',
+  parquet: 'herringbone_parquet', darkwood: 'dark_wooden_planks', tile: 'floor_tiles_06',
+  concrete: 'concrete_floor_worn_001', stone: 'stone_wall', plaster: 'beige_wall_001', w_garage: 'brick_wall_001',
+  w_kitchen: 'rounded_square_tiled_wall', roof: 'clay_roof_tiles_02', fire: 'medieval_red_brick',
+  w_lib: 'dark_paneled_wood', table: 'wood_table_worn', shed: 'weathered_planks', fountain: 'white_sandstone_bricks',
+  counter: 'marble_01', cabinet: 'wood_cabinet_worn_long',
+};
+const PHOTO_SIZE = {
+  grass: [3, 3], pave: [2.5, 2.5], terrace: [2, 2], gravel: [2.5, 2.5], wood: [2, 2], parquet: [1.6, 1.6], darkwood: [2.2, 2.2],
+  marble: [2, 2], tile: [1.5, 1.5], concrete: [3, 3], stone: [3, 3], plaster: [3, 3], w_garage: [2.5, 2.5], w_kitchen: [1.5, 1.5],
+  ceiling: [3, 3], roof: [2.5, 2.5], fire: [1.6, 1.6], w_lib: [2, 2], table: [1.5, 1.5], shed: [2, 2], fountain: [1.6, 1.6],
+  pillar: [1.2, 2.4], trim: [1.5, 1.5], sill: [1, 1], counter: [1, 1], cabinet: [1.2, 1.2],
+};
+export const PHOTO_ON = !new URLSearchParams(location.search).has('nophoto');
+if (PHOTO_ON) Object.assign(TEX_SIZE, PHOTO_SIZE);
+
 export function makeTextures(renderer) {
   const out = {};
+  const loader = new THREE.TextureLoader();
   const aniso = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   for (const key of Object.keys(DRAW)) {
     const [w, h] = PIX[key] || [256, 256];
@@ -658,6 +677,14 @@ export function makeTextures(renderer) {
     t.anisotropy = aniso;
     out[key] = t;
   }
+  if (PHOTO_ON)
+    for (const [key, name] of Object.entries(PHOTO)) {
+      const t = loader.load(`assets/tex/${name}.jpg`);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = aniso;
+      out[key] = t;
+    }
   return out;
 }
 

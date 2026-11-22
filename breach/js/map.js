@@ -204,7 +204,7 @@ export class GameMap {
     solid(41, 33, 41, 33, CEIL, K.PILLAR);
     solid(30, 42, 30, 42, CEIL, K.PILLAR);
     solid(41, 42, 41, 42, CEIL, K.PILLAR);
-    solid(35, 37, 36, 38, 1.2, K.STATUE);
+    solid(35, 37, 36, 38, 2.3, K.STATUE);
     solid(28, 44, 28, 45, 1.2, K.PLANT);
     solid(44, 44, 44, 45, 1.2, K.PLANT);
     // garage
@@ -317,10 +317,10 @@ export class GameMap {
   }
 
   // ---------- physics ----------
-  blocks(c, feet, top) {
+  blocks(c, feet, top, step = STEP) {
     if (c < 0) return true;
     if (this.noWalk[c]) return true;
-    if (this.h[c] > feet + STEP) return true;
+    if (this.h[c] > feet + step) return true;
     // window lintels stop you standing up in the frame; door lintels are out of reach anyway
     const l = this.lint[c];
     return l > 0 && this.h[c] > 0 && l < top;
@@ -335,7 +335,7 @@ export class GameMap {
       for (let z = z0; z <= z1; z++)
         for (let x = x0; x <= x1; x++) {
           const c = this.inb(x, z) ? z * W + x : -1;
-          if (!this.blocks(c, a.feet, a.feet + a.height)) continue;
+          if (!this.blocks(c, a.feet, a.feet + a.height, a.step ?? STEP)) continue;
           const px = Math.max(x, Math.min(a.x, x + 1)), pz = Math.max(z, Math.min(a.z, z + 1));
           let dx = a.x - px, dz = a.z - pz;
           const d2 = dx * dx + dz * dz;
@@ -366,7 +366,7 @@ export class GameMap {
     return hit;
   }
 
-  groundAt(x, z, r, feet) {
+  groundAt(x, z, r, feet, step = STEP) {
     let g = 0;
     const x0 = Math.floor(x - r), x1 = Math.floor(x + r), z0 = Math.floor(z - r), z1 = Math.floor(z + r);
     for (let cz = z0; cz <= z1; cz++)
@@ -374,7 +374,7 @@ export class GameMap {
         if (!this.inb(cx, cz)) continue;
         const c = cz * W + cx;
         const hh = this.h[c];
-        if (hh > g && hh <= feet + STEP + 0.01) {
+        if (hh > g && hh <= feet + step + 0.01) {
           // only cells that the circle really overlaps
           const px = Math.max(cx, Math.min(x, cx + 1)), pz = Math.max(cz, Math.min(z, cz + 1));
           if ((x - px) ** 2 + (z - pz) ** 2 < r * r * 0.8) g = hh;

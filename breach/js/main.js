@@ -4,6 +4,10 @@ import { Game } from './game.js';
 import { Hud, BUY_ITEMS } from './hud.js';
 import { initAudio, setVolume, sfx } from './audio.js';
 import { t, lang, setLang } from './i18n.js';
+import { loadPeople } from './people.js';
+import { Net, newCode } from './net.js';
+import { NetGame } from './netgame.js';
+import { BOT_NAMES } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -35,6 +39,7 @@ function applySize() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1) * scale);
   renderer.setSize(w, h, false);
   game?.resize(w, h);
+  preview?.resize(w, h);
 }
 window.addEventListener('resize', applySize);
 
@@ -134,14 +139,19 @@ $('p-settings').onclick = () => {
 };
 $('p-resume').onclick = () => resume();
 $('p-quit').onclick = () => toMenu();
-$('mo-menu').onclick = () => toMenu();
+$('mo-menu').onclick = () => (net ? backToLobby(true) : toMenu());
 $('mo-again').onclick = () => startGame();
 $('play').onclick = () => startGame();
+$('online').onclick = () => openLobby(newCode());
 $('click-to-play').onclick = () => resume();
 
-function startGame() {
+function startGame(online) {
   initAudio();
+  closeBuy(false);
+  input.menuOpen = false;
+  input.fire = false;
   $('menu').hidden = true;
+  $('lobby').hidden = true;
   $('match-over').hidden = true;
   $('pause').hidden = true;
   $('loading').hidden = false;
@@ -152,8 +162,15 @@ function startGame() {
       preview.dispose();
       preview = null;
     }
-    game = new Game(renderer, { team: settings.team, mode: settings.mode, diff: settings.diff }, hud);
+    if (online) {
+      game = new Game(renderer, online, hud);
+      new NetGame(game, net);
+      // the host's first round goes out now; a client plays back what arrived while it was loading
+      if (online.role === 'host') game.nh.onRound(true);
+      else for (const m of pending.splice(0)) game.nh.onClientMessage(m);
+    } else game = new Game(renderer, { team: settings.team, mode: settings.mode, diff: settings.diff }, hud);
     hud.attach(game);
+    $('mo-menu').textContent = t(online ? 'backToLobby' : 'menu');
     applySize();
     $('loading').hidden = true;
     $('hud').hidden = false;
@@ -163,6 +180,13 @@ function startGame() {
 }
 
 function toMenu() {
+  if (net) {
+    net.close();
+    net = null;
+    lobby = null;
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  $('lobby').hidden = true;
   if (game) {
     game.dispose();
     game = null;
@@ -194,16 +218,25 @@ function lockPointer() {
     canvas.requestPointerLock();
   }
 }
+// the game only goes on once the browser has really given us the mouse
+let wantResume = false;
 function resume() {
-  $('pause').hidden = true;
-  $('click-to-play').hidden = true;
-  state = 'play';
+  wantResume = true;
   lockPointer();
+  setTimeout(() => {
+    if (wantResume && document.pointerLockElement !== canvas) $('click-to-play').hidden = false;
+  }, 400);
 }
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
   if (locked) {
     $('click-to-play').hidden = true;
+    if (wantResume || state === 'pause') {
+      $('pause').hidden = true;
+      $('settings').hidden = true;
+    }
+    wantResume = false;
+    if (game) state = 'play';
     return;
   }
   if (state === 'play' && game && !game.over && !buyOpen) {
@@ -245,9 +278,11 @@ function closeBuy(relock = true) {
   $('buy').hidden = true;
   if (relock && state === 'play') lockPointer();
 }
+hud.onBuyClosed = () => closeBuy();
 function doBuy(item) {
   if (!game) return;
   const r = game.buy(game.player, item);
+  if (r === 'sent') return; // the host answers
   if (r === 'ok') sfx('buy');
   else {
     sfx('deny');
@@ -288,7 +323,8 @@ window.addEventListener('keydown', (e) => {
     }
   }
   input.keys.add(e.code);
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ControlLeft', 'KeyS', 'KeyW'].includes(e.code)) e.preventDefault();
+  // keep Ctrl+R, Ctrl+1.. and friends from reloading or switching tabs while crouching
+  if (e.ctrlKey || e.metaKey || ['Space', 'ArrowUp', 'ArrowDown', 'ControlLeft', 'ControlRight', 'KeyS', 'KeyW', 'KeyR', 'KeyD', 'KeyB', 'KeyE', 'KeyF'].includes(e.code)) e.preventDefault();
   const map = { Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', KeyQ: 'last', KeyR: 'reload', KeyE: 'use', KeyF: 'use' };
   if (map[e.code]) game.playerAction(map[e.code]);
   if (e.code === 'KeyB') openBuy();
@@ -371,7 +407,12 @@ function frame(now) {
     game.render(dt, look, settings);
     hud.update(game, now, settings, fps);
   } else if (state === 'pause' && game) {
-    game.render(0, { dx: 0, dy: 0 }, settings);
+    // online the match goes on behind the menu
+    if (game.role !== 'solo') {
+      game.update(dt, { keys: new Set(), fire: false, menuOpen: true });
+      hud.update(game, now, settings, fps);
+    }
+    game.render(game.role !== 'solo' ? dt : 0, { dx: 0, dy: 0 }, settings);
   } else if (preview) {
     renderPreview(preview, now / 1000);
   }
@@ -404,13 +445,276 @@ function renderPreview(g, time) {
 // ---------- start ----------
 applyTexts();
 applySize();
-const t0 = performance.now();
-makePreview();
-console.log(`mansion built in ${Math.round(performance.now() - t0)} ms`);
+// the rigged people load first (a few MB); the procedural bodies stand in if that fails
+$('loading').hidden = false;
+const assetsReady = loadPeople()
+  .catch((e) => console.warn('people models failed, using simple bodies', e))
+  .finally(() => {
+    $('loading').hidden = true;
+    if (!q.has('shot')) makePreview();
+    const m = location.hash.match(/room=([A-Z0-9]{4,8})/i);
+    if (m) openLobby(m[1].toUpperCase());
+  });
+
+// leaving the page mid-match asks first
+window.addEventListener('beforeunload', (e) => {
+  if (game && (state === 'play' || state === 'pause') && !game.over) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+// ---------- online: room, lobby, match ----------
+let net = null;
+let lobby = null; // the host's truth: { mode, diff, teams: {peer: team}, names: {peer: name} }
+const NAME_KEY = 'breach.name';
+function myName() {
+  let n = '';
+  try {
+    n = localStorage.getItem(NAME_KEY) || '';
+  } catch {}
+  return n || (lang === 'ru' ? 'Игрок' : 'Player') + Math.floor(10 + Math.random() * 89);
+}
+
+function openLobby(code) {
+  initAudio();
+  if (net) net.close();
+  lobby = { mode: settings.mode, diff: settings.diff, teams: {}, names: {}, started: false };
+  const name = myName();
+  $('lb-name').value = name;
+  $('lb-code').textContent = code;
+  const link = `${location.origin}${location.pathname}#room=${code}`;
+  $('lb-link').value = link;
+  history.replaceState(null, '', `${location.pathname}${location.search}#room=${code}`);
+  $('menu').hidden = true;
+  $('lobby').hidden = false;
+  $('lb-status').textContent = t('connecting');
+  net = new Net(code, name, {
+    onStatus: (s) => {
+      if (s === 'lost') $('lb-status').textContent = t('lostConn');
+      renderLobby();
+    },
+    onPeers: () => {
+      if (net.isHost) hostSync();
+      renderLobby();
+    },
+    onLeave: (peer) => {
+      if (!net.isHost) return;
+      delete lobby.teams[peer];
+      const s = game?.soldiers.find((o) => o.peer === peer);
+      if (s && game.role === 'host') {
+        const pool = lang === 'ru' ? BOT_NAMES[s.team] : BOT_NAMES[s.team + 'en'];
+        game.botify(s, pool[s.id % pool.length]);
+        net.broadcast({ k: 'roster', roster: game.roster() });
+      }
+      hostSync();
+    },
+    onHostLeft: () => {
+      // the match lives on the host's machine; without it everyone goes back to the menu
+      if (net && !net.isHost) {
+        toMenu();
+        setTimeout(() => hud.center?.(t('hostLeft'), 3), 50);
+        alertBox(t('hostLeft'));
+      } else if (net && net.isHost && game && game.role === 'client') {
+        toMenu();
+        alertBox(t('hostLeft'));
+      } else renderLobby();
+    },
+    onMessage: (from, m) => onNetMessage(from, m),
+  });
+}
+
+function alertBox(text) {
+  $('lb-status').textContent = text;
+  const note = $('menu-note');
+  note.textContent = text;
+  note.hidden = false;
+  clearTimeout(alertBox.t);
+  alertBox.t = setTimeout(() => (note.hidden = true), 8000);
+  const el = $('center-msg');
+  el.textContent = text;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+function hostSync() {
+  if (!net || !net.isHost) return;
+  // everyone in the room gets a team: the smaller one
+  for (const p of net.peers) {
+    if (!lobby.teams[p.peer]) {
+      const a = Object.values(lobby.teams).filter((x) => x === 'A').length;
+      const b = Object.values(lobby.teams).filter((x) => x === 'B').length;
+      lobby.teams[p.peer] = a <= b ? 'A' : 'B';
+    }
+    if (!lobby.names[p.peer]) lobby.names[p.peer] = p.name;
+  }
+  for (const k of Object.keys(lobby.teams)) if (!net.peers.some((p) => p.peer === k)) delete lobby.teams[k];
+  lobby.started = !!(game && game.role === 'host' && !game.over);
+  net.broadcast({ k: 'lobby', ...lobby });
+  // a friend arriving mid-match takes a bot's place
+  if (game && game.role === 'host' && !game.over) {
+    for (const p of net.peers) {
+      if (p.peer === net.id || game.soldiers.some((s) => s.peer === p.peer)) continue;
+      const s = game.addHuman(p.peer, lobby.names[p.peer] || p.name);
+      if (!s) continue;
+      lobby.teams[p.peer] = s.team;
+      net.send(p.peer, { k: 'start', roster: game.roster(), mode: game.mode, diff: game.opts.diff });
+      net.broadcast({ k: 'roster', roster: game.roster() }, true, p.peer);
+    }
+  }
+  renderLobby();
+}
+
+setInterval(() => !document.getElementById('lobby').hidden && renderLobby(), 1000);
+function renderLobby() {
+  if (!net || !lobby) return;
+  const list = { A: [], B: [] };
+  for (const p of net.peers) {
+    const team = lobby.teams[p.peer];
+    if (!team) continue;
+    const me = p.peer === net.id;
+    const tag = [p.peer === net.hostId ? t('host') : '', net.isHost && !me ? (net.linkState(p.peer) === 'p2p' ? t('linkDirect') : net.linkState(p.peer) === 'relay' ? t('linkRelay') : '…') : ''].filter(Boolean).join(', ');
+    list[team].push(`<li class="${me ? 'me' : ''}">${esc(lobby.names[p.peer] || p.name)}${tag ? ` <small>${tag}</small>` : ''}</li>`);
+  }
+  for (const team of ['A', 'B']) {
+    const bots = Math.max(0, 5 - list[team].length);
+    if (bots) list[team].push(`<li class="bot">+ ${bots} ${botWord(bots)}</li>`);
+    $('lb-' + team.toLowerCase()).innerHTML = list[team].join('');
+  }
+  for (const [id, key] of [['lb-mode', 'mode'], ['lb-diff', 'diff']]) for (const b of $(id).querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === lobby[key]);
+  $('lb-opts').classList.toggle('locked', !net.isHost);
+  $('lb-start').hidden = !net.isHost;
+  $('lb-status').textContent = net.isHost ? '' : lobby.started ? t('inMatch') : t('waitHost');
+}
+
+function botWord(n) {
+  if (lang !== 'ru') return n === 1 ? 'bot' : 'bots';
+  return n === 1 ? 'бот' : n < 5 ? 'бота' : 'ботов';
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+}
+
+for (const [id, key] of [['lb-mode', 'mode'], ['lb-diff', 'diff']])
+  $(id).addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b || !net?.isHost) return;
+    lobby[key] = b.dataset.v;
+    sfx('click');
+    hostSync();
+  });
+for (const el of document.querySelectorAll('.lb-team'))
+  el.addEventListener('click', () => {
+    if (!net) return;
+    const team = el.dataset.team;
+    const count = Object.entries(lobby.teams).filter(([p, x]) => x === team && p !== net.id).length;
+    if (count >= 5) {
+      $('lb-status').textContent = t('teamFull');
+      return;
+    }
+    sfx('click');
+    if (net.isHost) {
+      lobby.teams[net.id] = team;
+      hostSync();
+    } else net.toHost({ k: 'team', team });
+  });
+$('lb-name').addEventListener('change', () => {
+  const n = $('lb-name').value.trim().slice(0, 16);
+  if (!n || !net) return;
+  try {
+    localStorage.setItem(NAME_KEY, n);
+  } catch {}
+  if (net.isHost) {
+    lobby.names[net.id] = n;
+    hostSync();
+  } else net.toHost({ k: 'name', name: n });
+});
+$('lb-copy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($('lb-link').value);
+  } catch {
+    $('lb-link').select();
+    document.execCommand('copy');
+  }
+  $('lb-status').textContent = t('copied');
+};
+$('lb-leave').onclick = () => toMenu();
+$('lb-start').onclick = () => {
+  if (!net?.isHost) return;
+  // humans first in their team, bots fill the rest; ids 0-4 assault, 5-9 guards
+  const roster = [];
+  for (const team of ['A', 'B']) {
+    const humans = net.peers.filter((p) => lobby.teams[p.peer] === team).slice(0, 5);
+    const pool = (lang === 'ru' ? BOT_NAMES[team] : BOT_NAMES[team + 'en']).slice();
+    for (let i = 0; i < 5; i++) {
+      const h = humans[i];
+      roster.push({ id: roster.length, team, name: h ? lobby.names[h.peer] || h.name : pool[i], peer: h ? h.peer : null });
+    }
+  }
+  lobby.started = true;
+  net.broadcast({ k: 'start', roster, mode: lobby.mode, diff: lobby.diff });
+  startGame({ role: 'host', roster, myPeer: net.id, mode: lobby.mode, diff: lobby.diff, team: lobby.teams[net.id] });
+  setTimeout(hostSync, 100);
+};
+
+function onNetMessage(from, m) {
+  if (!net) return;
+  if (net.isHost) {
+    if (m.k === 'team') {
+      const count = Object.entries(lobby.teams).filter(([p, x]) => x === m.team && p !== from).length;
+      if (count < 5 && !(game && game.role === 'host' && !game.over)) lobby.teams[from] = m.team;
+      hostSync();
+    } else if (m.k === 'name') {
+      lobby.names[from] = String(m.name).slice(0, 16);
+      const s = game?.soldiers.find((o) => o.peer === from);
+      if (s) {
+        s.name = lobby.names[from];
+        net.broadcast({ k: 'roster', roster: game.roster() });
+      }
+      hostSync();
+    } else if (game && game.nh && game.role === 'host') game.nh.onHostMessage(from, m);
+    return;
+  }
+  if (m.k === 'lobby') {
+    lobby = m;
+    renderLobby();
+  } else if (m.k === 'start') {
+    pending.length = 0;
+    const me = m.roster.find((r) => r.peer === net.id);
+    if (!me) return;
+    startGame({ role: 'client', roster: m.roster, myPeer: net.id, mode: m.mode, diff: m.diff, team: me.team });
+  } else if (m.k === 'roster') {
+    if (game) for (const r of m.roster) if (game.soldiers[r.id]) game.soldiers[r.id].name = r.name;
+  } else if (m.k === 'toLobby') {
+    if (game && game.role === 'client') backToLobby(false);
+  } else if (game && game.nh) game.nh.onClientMessage(m);
+  else if (m.k !== 's') pending.push(m);
+}
+const pending = [];
+
+function backToLobby(announce) {
+  if (game) {
+    game.dispose();
+    game = null;
+  }
+  state = 'menu';
+  closeBuy(false);
+  $('hud').hidden = true;
+  $('pause').hidden = true;
+  $('match-over').hidden = true;
+  $('click-to-play').hidden = true;
+  document.exitPointerLock?.();
+  makePreview();
+  $('lobby').hidden = false;
+  if (announce && net?.isHost) net.broadcast({ k: 'toLobby' });
+  if (net?.isHost) hostSync();
+  renderLobby();
+}
 // ?shot — a staged frame for the cover pictures (no HUD, no menu)
 if (q.has('shot')) {
   $('menu').hidden = true;
-  setTimeout(() => {
+  assetsReady.then(() => {
     if (preview) preview.dispose();
     preview = null;
     game = new Game(renderer, { team: 'A', mode: 'hostage', diff: 'normal' }, { center() {}, banner() {}, feed() {}, onRound() {}, hit() {}, hurt() {} });
@@ -524,8 +828,8 @@ if (q.has('shot')) {
       requestAnimationFrame(loop);
     };
     loop();
-  }, 50);
+  });
 }
 
-if (q.has('debug')) window.__breach = { get game() { return game; }, get preview() { return preview; }, startGame, settings };
+if (q.has('debug')) window.__breach = { get game() { return game; }, get preview() { return preview; }, get net() { return net; }, startGame, settings };
 requestAnimationFrame(frame);

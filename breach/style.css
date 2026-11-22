@@ -178,8 +178,27 @@ input[type='range'] { accent-color: var(--accent); width: 100%; }
 .seg button small { color: var(--muted); font-size: 12px; }
 .seg.small button { text-align: center; padding: 8px; align-items: center; }
 .seg button.on { border-color: var(--accent); background: rgba(242, 177, 58, 0.14); }
-#play { align-self: flex-start; margin-top: 4px; }
+.play-row { justify-content: flex-start; flex-wrap: wrap; margin-top: 4px; }
+.btn.online { font-size: 18px; padding: 15px 26px; }
+.lobby { gap: 10px; }
+.lobby h2 b { color: var(--accent); font-family: var(--mono); letter-spacing: 0.12em; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.lb-link { display: flex; gap: 8px; }
+.lb-link input, .lb-name input { flex: 1; min-width: 0; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 9px 10px; font: inherit; font-size: 14px; }
+.lb-name { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+.lb-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lb-team { background: rgba(255, 255, 255, 0.04); border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; text-align: left; min-height: 150px; display: flex; flex-direction: column; gap: 6px; }
+.lb-team:hover { border-color: currentColor; }
+.lb-team ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; color: var(--text); font-size: 14px; }
+.lb-team li small { color: var(--muted); margin-left: 6px; }
+.lb-team li.bot { color: var(--muted); }
+.lb-team li.me { color: var(--accent); }
+#lb-opts { display: flex; flex-direction: column; gap: 6px; }
+#lb-opts.locked { pointer-events: none; opacity: 0.6; }
+
 #pc-only { color: var(--accent); margin: 0; }
+#menu-note { margin: 0; padding: 10px 14px; border-radius: 10px; background: rgba(255, 90, 90, 0.15); border: 1px solid rgba(255, 90, 90, 0.5); color: #ffd0d0; }
 .links { justify-content: flex-start; gap: 18px; }
 .link { background: none; border: 0; color: var(--muted); padding: 0; font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
 .link:hover { color: var(--text); }

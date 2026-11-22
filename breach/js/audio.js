@@ -227,7 +227,9 @@ export function sfx(name, pos = null, opt = {}) {
       break;
     }
     case 'use': {
-      const d = out(place(pos, 15) || { gain: 1, pan: 0 });
+      const P = pos ? place(pos, 15) : { gain: 1, pan: 0 };
+      if (!P) return;
+      const d = out(P);
       tone(d, t, 0.12, 'triangle', 660, 660, 0.15);
       tone(d, t + 0.1, 0.16, 'triangle', 990, 990, 0.15);
       break;

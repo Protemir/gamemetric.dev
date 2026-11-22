@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Штурм особняка — тактический шутер 5 на 5 в браузере | GameMetric</title>
-<meta name="description" content="Бесплатный тактический шутер от первого лица прямо в браузере: спецназ против охраны в особняке с заложниками, закупка оружия, раунды, боты трёх уровней. Летит даже на встроенной видеокарте.">
+<meta name="description" content="Бесплатный тактический шутер от первого лица прямо в браузере: спецназ против охраны в особняке с заложниками, закупка оружия, раунды, боты трёх уровней и онлайн с друзьями по ссылке. Летит даже на встроенной видеокарте.">
 <link rel="canonical" href="https://gamemetric.dev/breach/">
 <link rel="alternate" hreflang="ru" href="https://gamemetric.dev/breach/?lang=ru">
 <link rel="alternate" hreflang="en" href="https://gamemetric.dev/breach/?lang=en">
@@ -28,13 +28,14 @@
  "url": "https://gamemetric.dev/breach/",
  "image": "https://gamemetric.dev/breach/og.jpg",
  "genre": ["Shooter", "First-person shooter", "Tactical"],
- "playMode": "SinglePlayer",
+ "playMode": ["SinglePlayer", "MultiPlayer"],
  "gamePlatform": "Web browser",
  "inLanguage": ["ru", "en"],
  "isAccessibleForFree": true
 }
 </script>
 <link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 <script type="module" src="js/main.js"></script>
 </head>
 <body>
@@ -117,8 +118,9 @@
         <div class="seg small" id="seg-diff"><button data-v="easy" data-t="easy"></button><button data-v="normal" data-t="normal"></button><button data-v="hard" data-t="hard"></button></div>
       </div>
     </div>
-    <button id="play" class="btn primary big" data-t="play"></button>
+    <div class="row play-row"><button id="play" class="btn primary big" data-t="play"></button><button id="online" class="btn big online"><span data-t="online"></span></button></div>
     <p id="pc-only" hidden data-t="pcOnly"></p>
+    <p id="menu-note" hidden></p>
     <div class="row links"><button id="m-settings" class="link" data-t="settings"></button><button id="m-controls" class="link" data-t="controls"></button></div>
   </div>
   <footer class="menu-foot"><span data-t="made"></span> <a href="https://temirlab.com" target="_blank" rel="noopener">TEMIRLAB</a></footer>
@@ -141,6 +143,25 @@
     <h2 data-t="controls"></h2>
     <dl id="ctrl-list"></dl>
     <button id="c-back" class="btn primary" data-t="back"></button>
+  </div>
+</div>
+
+<div id="lobby" class="overlay" hidden>
+  <div class="panel wide lobby">
+    <h2><span data-t="lobby"></span> <b id="lb-code"></b></h2>
+    <p class="muted small" data-t="shareHint"></p>
+    <div class="lb-link"><input id="lb-link" readonly><button id="lb-copy" class="btn" data-t="copyLink"></button></div>
+    <label class="lb-name"><span data-t="yourName"></span><input id="lb-name" maxlength="16" autocomplete="nickname"></label>
+    <div class="lb-teams">
+      <button class="lb-team ta" data-team="A"><b data-t="sideA"></b><ul id="lb-a"></ul></button>
+      <button class="lb-team tb" data-team="B"><b data-t="sideB"></b><ul id="lb-b"></ul></button>
+    </div>
+    <div id="lb-opts">
+      <div class="seg" id="lb-mode"><button data-v="hostage"><b data-t="modeHostage"></b></button><button data-v="dm"><b data-t="modeDM"></b></button></div>
+      <div class="seg small" id="lb-diff"><button data-v="easy" data-t="easy"></button><button data-v="normal" data-t="normal"></button><button data-v="hard" data-t="hard"></button></div>
+    </div>
+    <p id="lb-status" class="muted"></p>
+    <div class="row"><button id="lb-start" class="btn primary" data-t="start"></button><button id="lb-leave" class="btn" data-t="leave"></button></div>
   </div>
 </div>
 

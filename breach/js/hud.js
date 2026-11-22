@@ -164,8 +164,9 @@ export class Hud {
   matchOver(win, game) {
     const el = $('match-over');
     el.hidden = false;
-    $('mo-title').textContent = t(win ? 'matchWin' : 'matchLose');
-    $('mo-title').className = win ? 'good' : 'bad';
+    $('mo-title').textContent = t(win === null ? 'draw' : win ? 'matchWin' : 'matchLose');
+    $('mo-title').className = win === null ? '' : win ? 'good' : 'bad';
+    $('mo-again').hidden = game.role !== 'solo';
     $('mo-score').textContent = game.mode === 'dm' ? `${game.dmKills.A} : ${game.dmKills.B}` : `${game.score.A} : ${game.score.B}`;
     const p = game.player;
     $('mo-stats').textContent = `${t('kills')}: ${p.kills} · ${t('deaths')}: ${p.deaths}`;
@@ -188,7 +189,8 @@ export class Hud {
     if (src.crouchK > 0.5) gap *= 0.8;
     const ch = $('crosshair');
     ch.style.setProperty('--gap', `${Math.min(46, gap).toFixed(1)}px`);
-    ch.hidden = !(src.alive) || (src === p && p.scoped) || w.melee && false;
+    // like the real thing: no crosshair on a sniper rifle without the scope
+    ch.hidden = !src.alive || (src === p && p.scoped) || !!w.scope;
     $('scope').hidden = !(src === p && p.alive && p.scoped);
     if (now > this.hitUntil) $('hitmark').className = 'hitmark';
     // flash
@@ -271,7 +273,10 @@ export class Hud {
       pr.textContent = `B — ${t('buy')}`;
     } else pr.hidden = true;
     // freeze countdown
-    if (game.phase === 'freeze') this.center(`${t('freeze')} ${Math.ceil(game.phaseEnd - game.time)}`, 0.2);
+    if (game.phase === 'freeze') this.center(`${t('round')} ${game.round} · ${t('freeze')} ${Math.ceil(game.phaseEnd - game.time)}`, 0.2);
+    if (game.phase === 'wait') this.center(t('inMatch'), 0.2);
+    // the buy menu closes itself when buying is no longer possible
+    if (this.buyOpen && (!p.alive || !game.canBuy(p))) this.onBuyClosed?.();
     if (this.buyOpen) this.refreshBuy();
     $('fps').hidden = !settings.showFps;
     $('fps').textContent = `${fps} FPS`;

@@ -1,6 +1,7 @@
 // Weapons: stats, prices and first-person models.
 import * as THREE from '../vendor/three.module.min.js';
 import { mergeGeos } from './map.js';
+import { gunGeometry, firstPersonArms, GUN_INFO } from './guns.js';
 
 // dmg per bullet, rate = seconds between shots, spread in radians, recoil = view kick per shot,
 // speed = run speed m/s with it in hand, pen = how much damage gets through armour
@@ -34,101 +35,8 @@ export function recoilKick(w, shot) {
   return [up, side];
 }
 
-const SHADE = (ny, nx, nz) => (Math.abs(ny) > 0.5 ? (ny > 0 ? 1 : 0.5) : Math.abs(nx) > 0.5 ? 0.78 : nz > 0 ? 0.68 : 0.9);
-function vbox(w, h, d, color, x, y, z, rx = 0, ry = 0) {
-  const g = new THREE.BoxGeometry(w, h, d).toNonIndexed();
-  if (rx) g.rotateX(rx);
-  if (ry) g.rotateY(ry);
-  g.translate(x, y, z);
-  const n = g.attributes.normal, c = new THREE.Color(color), col = new Float32Array(n.count * 3);
-  for (let i = 0; i < n.count; i++) {
-    const s = SHADE(n.getY(i), n.getX(i), n.getZ(i));
-    col[i * 3] = c.r * s;
-    col[i * 3 + 1] = c.g * s;
-    col[i * 3 + 2] = c.b * s;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  return g;
-}
-
-// first-person model in camera space: barrel along -z, muzzle position returned
+// first-person model in camera space: barrel along -z, origin at the right hand; muzzle position returned
 export function viewModel(kind, team) {
-  const sleeve = team === 'A' ? 0x2c3e57 : 0x6a1f24;
-  const glove = team === 'A' ? 0x1b1f24 : 0x2a2a2e;
-  const dark = 0x2a2c31, steel = 0x464a52, wood = 0x7a4c2a, black = 0x151618;
-  const parts = [];
-  let muzzle = [0, 0, -0.5];
-  const handR = (x, y, z) => {
-    parts.push(vbox(0.085, 0.09, 0.11, glove, x, y, z));
-    parts.push(vbox(0.1, 0.1, 0.34, sleeve, x + 0.02, y - 0.03, z + 0.2, 0.15));
-  };
-  const handL = (x, y, z) => {
-    parts.push(vbox(0.085, 0.085, 0.11, glove, x, y, z));
-    parts.push(vbox(0.1, 0.1, 0.36, sleeve, x - 0.05, y - 0.05, z + 0.2, 0.2, -0.35));
-  };
-  switch (kind) {
-    case 'knife':
-      parts.push(vbox(0.008, 0.04, 0.19, 0x9aa2ac, 0.0, 0.02, -0.14), vbox(0.006, 0.012, 0.18, 0xe6eaee, 0.0, 0.042, -0.14), vbox(0.05, 0.012, 0.02, steel, 0, 0.012, -0.045), vbox(0.03, 0.04, 0.11, black, 0, 0, 0.0));
-      handR(0, -0.01, 0.02);
-      muzzle = [0, 0.02, -0.25];
-      break;
-    case 'pistol':
-    case 'deagle': {
-      const big = kind === 'deagle';
-      parts.push(vbox(0.045, 0.055, big ? 0.24 : 0.19, big ? steel : dark, 0, 0.03, -0.07), vbox(0.04, 0.1, 0.05, black, 0, -0.03, 0.01, 0.25));
-      if (big) parts.push(vbox(0.05, 0.05, 0.06, black, 0, 0.03, -0.03));
-      handR(0.005, -0.04, 0.03);
-      handL(-0.03, -0.05, 0.0);
-      muzzle = [0, 0.035, big ? -0.2 : -0.17];
-      break;
-    }
-    case 'smg':
-      parts.push(vbox(0.055, 0.08, 0.32, dark, 0, 0.02, -0.12), vbox(0.035, 0.15, 0.045, black, 0, -0.08, -0.1), vbox(0.03, 0.03, 0.12, steel, 0, 0.03, -0.33), vbox(0.04, 0.09, 0.04, black, 0, -0.04, 0.0, 0.3), vbox(0.02, 0.02, 0.16, steel, 0, 0.02, 0.1));
-      handR(0.005, -0.05, 0.02);
-      handL(-0.01, -0.03, -0.22);
-      muzzle = [0, 0.03, -0.4];
-      break;
-    case 'shotgun':
-      parts.push(vbox(0.05, 0.06, 0.62, steel, 0, 0.03, -0.24), vbox(0.06, 0.06, 0.2, wood, 0, -0.02, -0.34), vbox(0.055, 0.1, 0.2, wood, 0, -0.01, 0.12, 0.12), vbox(0.05, 0.03, 0.55, black, 0, -0.005, -0.22));
-      handR(0.005, -0.06, 0.04);
-      handL(-0.01, -0.06, -0.33);
-      muzzle = [0, 0.03, -0.56];
-      break;
-    case 'rifle':
-      parts.push(
-        vbox(0.055, 0.1, 0.5, dark, 0, 0.02, -0.16),
-        vbox(0.045, 0.17, 0.06, black, 0, -0.1, -0.12, -0.25),
-        vbox(0.03, 0.03, 0.2, steel, 0, 0.04, -0.5),
-        vbox(0.06, 0.07, 0.2, wood, 0, 0.0, -0.32),
-        vbox(0.05, 0.11, 0.2, wood, 0, -0.01, 0.17, 0.1),
-        vbox(0.02, 0.04, 0.02, black, 0, 0.09, -0.36),
-        vbox(0.04, 0.035, 0.08, black, 0, 0.085, -0.04),
-      );
-      handR(0.005, -0.06, 0.02);
-      handL(-0.01, -0.04, -0.3);
-      muzzle = [0, 0.04, -0.6];
-      break;
-    case 'sniper':
-      parts.push(
-        vbox(0.055, 0.085, 0.7, 0x34402e, 0, 0.02, -0.22),
-        vbox(0.025, 0.025, 0.25, black, 0, 0.035, -0.66),
-        vbox(0.05, 0.05, 0.26, black, 0, 0.1, -0.12),
-        vbox(0.065, 0.065, 0.04, black, 0, 0.1, -0.25),
-        vbox(0.065, 0.065, 0.04, black, 0, 0.1, 0.0),
-        vbox(0.055, 0.12, 0.24, 0x34402e, 0, -0.02, 0.2, 0.1),
-        vbox(0.04, 0.09, 0.05, black, 0, -0.07, -0.02, 0.2),
-      );
-      handR(0.005, -0.06, 0.0);
-      handL(-0.01, -0.03, -0.3);
-      muzzle = [0, 0.035, -0.8];
-      break;
-    case 'he':
-    case 'flash':
-      parts.push(vbox(0.07, 0.1, 0.07, kind === 'he' ? 0x3e5a2c : 0x9aa0a8, 0, 0.04, -0.04), vbox(0.03, 0.03, 0.03, steel, 0, 0.1, -0.04), vbox(0.012, 0.06, 0.03, steel, 0.035, 0.08, -0.04));
-      handR(0.0, -0.01, 0.0);
-      muzzle = [0, 0.04, -0.06];
-      break;
-  }
-  const geo = mergeGeos(parts);
-  return { geo, muzzle };
+  const geo = mergeGeos([gunGeometry(kind), ...firstPersonArms(kind, team)]);
+  return { geo, muzzle: GUN_INFO[kind].muzzle };
 }

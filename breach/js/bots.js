@@ -78,7 +78,10 @@ export class Brain {
     if (!s.slots[1]) {
       if (m >= 6000 && sniperOk && Math.random() < 0.35) spend('sniper', 4750);
       else if (m >= 3700) spend('rifle', 2700);
-      else if (m >= 2300) spend(Math.random() < 0.3 ? 'shotgun' : 'smg', Math.random() < 0.3 ? 1700 : 1250);
+      else if (m >= 2300) {
+        const k = Math.random() < 0.3 ? 'shotgun' : 'smg';
+        spend(k, WEAPONS[k].price);
+      }
       else if (m >= 1500 && Math.random() < 0.5) spend('smg', 1250);
       else if (m >= 900 && s.slots[2] === 'pistol' && Math.random() < 0.4) spend('deagle', 700);
     }
@@ -214,9 +217,13 @@ export class Brain {
     }
     const w = WEAPONS[s.kind];
     // pick the right gun
-    if (s.cur !== 1 && s.slots[1] && s.ammoOf(s.slots[1]).mag + s.ammoOf(s.slots[1]).res > 0 && s.cur !== 4 && s.cur !== 5) s.switchSlot(1);
-    else if (s.cur === 1 && s.ammoOf(s.slots[1]).mag === 0 && s.ammoOf(s.slots[1]).res === 0) s.switchSlot(2);
-    else if (s.cur === 3 && this.target && s.slots[2]) s.switchSlot(2);
+    const left = (k) => (k ? s.ammoOf(k).mag + s.ammoOf(k).res : 0);
+    if (g.time >= s.switchUntil) {
+      if (s.cur !== 1 && left(s.slots[1]) > 0 && s.cur !== 4 && s.cur !== 5) s.switchSlot(1);
+      else if (s.cur === 1 && left(s.slots[1]) === 0) s.switchSlot(left(s.slots[2]) > 0 ? 2 : 3);
+      else if (s.cur === 2 && left(s.slots[2]) === 0 && left(s.slots[1]) === 0) s.switchSlot(3);
+      else if (s.cur === 3 && this.target && left(s.slots[2]) > 0) s.switchSlot(2);
+    }
 
     if (this.target && this.target.alive) {
       this.fight(dt, w);
@@ -230,7 +237,8 @@ export class Brain {
     if (this.lastKnown && g.time - this.lastKnown.t < (this.lastKnown.heard ? 4 : 6) && this.goal?.type !== 'escort') {
       const L = this.lastKnown;
       const d = Math.hypot(L.x - s.x, L.z - s.z);
-      const holding = this.goal && this.goal.type === 'hold' && d > 9 && Math.random() < 0.97;
+      if (L.stay === undefined) L.stay = Math.random() < 0.75;
+      const holding = this.goal && this.goal.type === 'hold' && d > 9 && L.stay;
       if (holding) {
         // defenders on a spot just turn to the noise
         this.applyLook(dt, yawTo(L.x - s.x, L.z - s.z), 0);
@@ -297,12 +305,15 @@ export class Brain {
     const a = s.ammoOf(s.kind);
     if (w && w.mag && a.mag === 0) {
       if (a.res > 0) g.reload(s);
-      else s.switchSlot(s.cur === 1 ? 2 : 3);
       return;
     }
     if (s.kind === 'knife' && d > 1.8) return;
     if (!g.clearShot(s, T)) return;
-    if (w && w.scope && !s.scoped && d > 6) s.scoped = 1;
+    if (w && w.scope && !s.scoped && d > 6) {
+      s.scoped = 1;
+      this.pauseUntil = g.time + 0.18 + this.k.react * 0.4;
+      return;
+    }
     inp.fire = true;
     if (w && w.auto && s.justFired) {
       this.burstLeft--;
@@ -416,7 +427,7 @@ export class Brain {
       }
       // follow the closest escort to protect it
       const esc = g.soldiers.find((o) => o.alive && o.team === s.team && o.brain?.goal?.type === 'escort');
-      const tgt = esc || g.player;
+      const tgt = esc || (g.player.team === s.team && g.player.alive ? g.player : null);
       if (tgt && tgt.alive && tgt !== s && Math.hypot(tgt.x - s.x, tgt.z - s.z) > 4) {
         if (!this.path || g.time > this.repathAt - 2) this.setGoalPoint(tgt.x, tgt.z);
         this.follow(dt, false);
