@@ -141,7 +141,7 @@ export class Chickens {
         const R = 0.24;
         const free = (x, z) => {
           const cell = m.cellAt(x, z);
-          return cell >= 0 && m.walk[cell];
+          return cell >= 0 && m.walk[cell] && m.h[cell] === 0;
         };
         if (free(nx - R, nz - R) && free(nx + R, nz - R) && free(nx - R, nz + R) && free(nx + R, nz + R)) {
           c.x = nx;

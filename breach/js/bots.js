@@ -122,10 +122,10 @@ export class Brain {
     }
   }
 
-  setGoalPoint(x, z) {
+  setGoalPoint(x, z, y = 0) {
     // jump through windows and over crates, except when leading a hostage
     const leading = this.g.hostages.some((h) => h.leader === this.s);
-    const p = this.g.map.path(this.s.x, this.s.z, x, z, !leading);
+    const p = this.g.map.path(this.s.x, this.s.z, x, z, !leading, this.s.feet, y);
     this.path = p;
     this.pi = 0;
     this.repathAt = this.g.time + 3 + Math.random();
@@ -173,7 +173,7 @@ export class Brain {
         this.aimHead = Math.random() < this.k.head;
         this.burstLeft = this.k.burst + Math.floor(Math.random() * 3);
       }
-      this.setKnown({ x: best.x, z: best.z, t: g.time });
+      this.setKnown({ x: best.x, z: best.z, y: best.feet, t: g.time });
       this.targetLost = g.time;
       g.reportSpotted(s, best);
     } else if (this.target) {
@@ -187,7 +187,7 @@ export class Brain {
         const d = Math.hypot(o.x - s.x, o.z - s.z);
         const loud = o.stepLoud && g.time - o.stepLoud < 0.5;
         if (loud && d < 13) {
-          this.setKnown({ x: o.x + (Math.random() - 0.5) * 2, z: o.z + (Math.random() - 0.5) * 2, t: g.time, heard: true });
+          this.setKnown({ x: o.x + (Math.random() - 0.5) * 2, z: o.z + (Math.random() - 0.5) * 2, y: o.feet, t: g.time, heard: true });
         }
       }
     }
@@ -204,13 +204,13 @@ export class Brain {
     const d = Math.hypot(x - this.s.x, z - this.s.z);
     if (d > 40) return;
     const noise = d * 0.12;
-    this.setKnown({ x: x + (Math.random() - 0.5) * noise, z: z + (Math.random() - 0.5) * noise, t: this.g.time, heard: true });
+    this.setKnown({ x: x + (Math.random() - 0.5) * noise, z: z + (Math.random() - 0.5) * noise, y: shooter.feet, t: this.g.time, heard: true });
   }
 
   hurt(by) {
     this.hurtBy = by;
     this.hurtAt = this.g.time;
-    if (!this.target && by) this.setKnown({ x: by.x, z: by.z, t: this.g.time });
+    if (!this.target && by) this.setKnown({ x: by.x, z: by.z, y: by.feet, t: this.g.time });
   }
 
   // ---------- main loop ----------
@@ -270,9 +270,9 @@ export class Brain {
       if (this.maybeNade(L)) return;
       if (!this.huntPt || Math.hypot(this.huntPt[0] - L.x, this.huntPt[1] - L.z) > 3) {
         this.huntPt = [L.x, L.z];
-        this.setGoalPoint(L.x, L.z);
+        this.setGoalPoint(L.x, L.z, L.y || 0);
       }
-      if (d < 1.5) this.lastKnown = null;
+      if (d < 1.5 && Math.abs((L.y || 0) - s.feet) < 1) this.lastKnown = null;
       this.follow(dt, true, yawTo(L.x - s.x, L.z - s.z) + away);
       return;
     }
@@ -306,25 +306,27 @@ export class Brain {
 
     // movement while fighting
     const rifleish = ['rifle', 'm4', 'mg', 'sniper', 'scout', 'deagle'].includes(s.kind);
-    const direct = d < 2 || g.map.clearWalk(s.x, s.z, T.x, T.z);
+    const direct = Math.abs(T.feet - s.feet) < 0.6 && (d < 2 || g.map.clearWalk(s.x, s.z, T.x, T.z));
     if (s.kind === 'knife') {
       if (direct) inp.f = 1;
       else {
         if (!this.path || g.time > (this.rushAt || 0)) {
           this.rushAt = g.time + 0.5;
-          this.setGoalPoint(T.x, T.z);
+          this.setGoalPoint(T.x, T.z, T.feet);
         }
         this.follow(dt, false, ay);
       }
     } else if (rifleish && d > 7) {
       // stand still for accuracy, peek-strafe between bursts
-      if (g.time < this.pauseUntil) inp.s = this.strafe;
+      if (g.time < this.pauseUntil && !this.edgeAt(this.strafe)) inp.s = this.strafe;
     } else {
       if (g.time > this.strafeAt) {
         this.strafe = -this.strafe;
         this.strafeAt = g.time + 0.35 + Math.random() * 0.6;
       }
       inp.s = this.strafe;
+      if (this.edgeAt(this.strafe)) inp.s = this.strafe = -this.strafe;
+      if (this.edgeAt(inp.s)) inp.s = 0;
       if (d > 14 && s.kind === 'shotgun' && direct) inp.f = 1;
     }
     if (this.k.react < 0.3 && d < 12 && Math.random() < dt * 0.25) this.crouchUntil = g.time + 0.8 + Math.random() * 1.6;
@@ -392,6 +394,14 @@ export class Brain {
     g.throwNade(s, 'smoke', yaw, 0.22 + Math.min(0.35, dd / 60), Math.min(15, 7 + dd * 0.45));
   }
 
+  // a drop of more than half a metre a little to the side (strafing direction st: +1 right, -1 left)
+  edgeAt(st) {
+    const s = this.s;
+    if (!st || s.feet < 1) return false;
+    const wx = Math.cos(s.yaw) * st, wz = -Math.sin(s.yaw) * st;
+    return this.g.map.groundAt(s.x + wx * 0.7, s.z + wz * 0.7, 0.2, s.feet + 0.1) < s.feet - 0.5;
+  }
+
   maybeNade(L) {
     const s = this.s, g = this.g;
     if (g.time < this.nadeAt || g.mode === 'dm') return false;
@@ -423,7 +433,7 @@ export class Brain {
     if (G.type === 'hunt') {
       if (!this.path || g.time > this.repathAt || this.pi >= this.path.length) {
         const e = g.guessEnemy(s);
-        if (e) this.setGoalPoint(e[0], e[1]);
+        if (e) this.setGoalPoint(e[0], e[1], e[2] || 0);
         else {
           const p = g.map.randomWalkNear(36, 30, 25);
           this.setGoalPoint(p[0], p[1]);
@@ -500,7 +510,7 @@ export class Brain {
       const esc = g.soldiers.find((o) => o.alive && o.team === s.team && o.brain?.goal?.type === 'escort');
       const tgt = esc || (g.player.team === s.team && g.player.alive ? g.player : null);
       if (tgt && tgt.alive && tgt !== s && Math.hypot(tgt.x - s.x, tgt.z - s.z) > 4) {
-        if (!this.path || g.time > this.repathAt - 2) this.setGoalPoint(tgt.x, tgt.z);
+        if (!this.path || g.time > this.repathAt - 2) this.setGoalPoint(tgt.x, tgt.z, tgt.feet);
         this.follow(dt, false);
       } else this.applyLook(dt, s.yaw + dt * 0.8, 0);
       return;
@@ -514,8 +524,8 @@ export class Brain {
         return;
       }
       const d = Math.hypot(sp.x - s.x, sp.z - s.z);
-      if (d > 0.8) {
-        if (!this.path || g.time > this.repathAt) this.setGoalPoint(sp.x, sp.z);
+      if (d > 0.8 || Math.abs(s.feet - (sp.y || 0)) > 1) {
+        if (!this.path || g.time > this.repathAt) this.setGoalPoint(sp.x, sp.z, sp.y || 0);
         this.follow(dt, false);
       } else {
         // on the spot: watch the entrance, glance around now and then

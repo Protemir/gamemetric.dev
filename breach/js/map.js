@@ -345,8 +345,9 @@ export class GameMap {
       { x: 25.5, z: 32.5, lx: 27, lz: 44.5, h: -1 },
       { x: 38.5, z: 12.5, lx: 32.5, lz: 8, h: -1 },
       // up on the hall galleries, watching the front door
-      { x: 28.5, z: 34.5, lx: 36, lz: 46, h: -1, up: true },
-      { x: 43.5, z: 33.5, lx: 36, lz: 46, h: -1, up: true },
+      { x: 28.5, z: 34.5, lx: 36, lz: 46, h: -1, up: true, y: GALLERY_H },
+      { x: 43.5, z: 33.5, lx: 36, lz: 46, h: -1, up: true, y: GALLERY_H },
+      { x: 36.5, z: 31.5, lx: 36, lz: 46, h: -1, up: true, y: GALLERY_H },
     ];
     // ways in for attackers
     this.routes = [
@@ -449,7 +450,7 @@ export class GameMap {
         }
         // standing on a slab in the air
         const dk = this.deck[c];
-        if (dk > g && dk <= feet + step + 0.01 && feet > dk - DECK_T - 0.05) {
+        if (dk > g && dk <= feet + step + 0.01 && feet > (r <= 0.1 ? dk - 0.05 : dk - DECK_T - 0.05)) {
           const px = Math.max(cx, Math.min(x, cx + 1)), pz = Math.max(cz, Math.min(z, cz + 1));
           if ((x - px) ** 2 + (z - pz) ** 2 < r * r * 0.8) g = dk;
         }
@@ -475,6 +476,8 @@ export class GameMap {
       const hh = water ? 0 : this.h[c];
       // from under the water into the deck: the pool's side
       if (!water && ya < -0.01 && axis >= 0) return { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c };
+      const dk0 = this.deck[c];
+      if (dk0 > 0 && dy < 0 && ya > dk0 && lo < dk0) return { t: Math.max(t0, (dk0 - oy) / dy), nx: 0, ny: 1, nz: 0, c };
       // solid block from the floor
       if (hh > 0 && lo < hh) {
         if (ya < hh && axis >= 0) return { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c };
@@ -527,25 +530,43 @@ export class GameMap {
 
   // ---------- bots: A* on the grid ----------
   // hops: may the path go over window sills and low crates (soldiers jump them; hostages cannot)
-  path(sx, sz, tx, tz, hops = false) {
-    let s = this.nearestWalk(Math.floor(sx), Math.floor(sz));
-    let t = this.nearestWalk(Math.floor(tx), Math.floor(tz));
-    if (s < 0 || t < 0) return null;
+  // sy / ty: the heights of the start and the goal, to tell the floor from a bridge over it
+  path(sx, sz, tx, tz, hops = false, sy = 0, ty = 0, flat = false) {
     const n = W * H;
-    if (!this._g) {
-      this._g = new Float32Array(n);
-      this._from = new Int32Array(n);
-      this._seen = new Uint32Array(n);
-      this._closed = new Uint32Array(n);
+    // up high (a gallery, a bridge): the cell the body touches whose floor is nearest its feet
+    const pick = (x, z, y) => {
+      if (flat || y <= 1) return -1;
+      let best = -1, bd = 0.6;
+      for (const [ox, oz] of [[0, 0], [0.27, 0], [-0.27, 0], [0, 0.27], [0, -0.27]]) {
+        const c = this.cellAt(x + ox, z + oz);
+        if (c < 0) continue;
+        if (this.deck[c] && Math.abs(this.deck[c] - y) < bd) (bd = Math.abs(this.deck[c] - y)), (best = n + c);
+        if (this.walk[c] && Math.abs(this.h[c] - y) < bd) (bd = Math.abs(this.h[c] - y)), (best = c);
+      }
+      return best;
+    };
+    let s = pick(sx, sz, sy), t = pick(tx, tz, ty);
+    if (s < 0) s = this.nearestWalk(Math.floor(sx), Math.floor(sz));
+    if (t < 0) t = this.nearestWalk(Math.floor(tx), Math.floor(tz));
+    if (s < 0 || t < 0) return null;
+    if (!this._g || this._g.length < 2 * n) {
+      this._g = new Float32Array(2 * n);
+      this._from = new Int32Array(2 * n);
+      this._seen = new Uint32Array(2 * n);
+      this._closed = new Uint32Array(2 * n);
       this._stamp = 0;
     }
     const g = this._g, from = this._from, seen = this._seen, closed = this._closed;
     const stamp = ++this._stamp;
-    const txc = t % W, tzc = (t / W) | 0;
-    const heur = (c) => {
+    const tcell = t % n, txc = tcell % W, tzc = (tcell / W) | 0;
+    const heur = (id) => {
+      const c = id % n;
       const dx = Math.abs((c % W) - txc), dz = Math.abs(((c / W) | 0) - tzc);
       return dx + dz - 0.59 * Math.min(dx, dz);
     };
+    const hn = (id) => (id >= n ? this.deck[id - n] : this.h[id]);
+    // can a body stand in this cell at about this height (on the floor/a block, or on a slab)
+    const levelOk = (cell, y) => (this.walk[cell] && Math.abs(this.h[cell] - y) <= 0.46) || (this.deck[cell] > 0 && Math.abs(this.deck[cell] - y) <= 0.46);
     const heap = [];
     const push = (c, f) => {
       heap.push([f, c]);
@@ -565,12 +586,12 @@ export class GameMap {
         let i = 0;
         for (;;) {
           const l = i * 2 + 1, r = l + 1;
-          let m = i;
-          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
-          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
-          if (m === i) break;
-          [heap[m], heap[i]] = [heap[i], heap[m]];
-          i = m;
+          let mm = i;
+          if (l < heap.length && heap[l][0] < heap[mm][0]) mm = l;
+          if (r < heap.length && heap[r][0] < heap[mm][0]) mm = r;
+          if (mm === i) break;
+          [heap[mm], heap[i]] = [heap[i], heap[mm]];
+          i = mm;
         }
       }
       return top[1];
@@ -580,45 +601,60 @@ export class GameMap {
     from[s] = -1;
     push(s, heur(s));
     let found = false, iter = 0;
-    while (heap.length && iter++ < 6000) {
-      const c = pop();
-      if (closed[c] === stamp) continue;
-      closed[c] = stamp;
-      if (c === t) {
+    const tryNode = (id, nid, ng) => {
+      if (closed[nid] === stamp) return;
+      if (seen[nid] !== stamp || ng < g[nid]) {
+        seen[nid] = stamp;
+        g[nid] = ng;
+        from[nid] = id;
+        push(nid, ng + heur(nid));
+      }
+    };
+    while (heap.length && iter++ < 9000) {
+      const id = pop();
+      if (closed[id] === stamp) continue;
+      closed[id] = stamp;
+      if (id === t) {
         found = true;
         break;
       }
+      const c = id % n, up = id >= n, y = hn(id);
       const cx = c % W, cz = (c / W) | 0;
       for (let dz = -1; dz <= 1; dz++)
         for (let dx = -1; dx <= 1; dx++) {
           if (!dx && !dz) continue;
           const nx = cx + dx, nz = cz + dz;
+          if (!this.inb(nx, nz)) continue;
           const nc = nz * W + nx;
-          const hop = hops && this.inb(nx, nz) ? this.hop[nc] : 0;
+          if (dx && dz && (!levelOk(cz * W + cx + dx, y) || !levelOk((cz + dz) * W + cx, y))) continue;
+          const step = (dx && dz ? 1.414 : 1) * this.cost[nc];
+          // onto a slab
+          if (!flat && this.deck[nc] > 0 && Math.abs(this.deck[nc] - y) <= 0.46) tryNode(id, n + nc, g[id] + step);
+          if (flat && this.h[nc] > 0) continue;
+          // onto the floor or a block (and the old hops over sills and crates, from the floor only)
+          if (up) {
+            if (this.walk[nc] && Math.abs(this.h[nc] - y) <= 0.46) tryNode(id, nc, g[id] + step);
+            continue;
+          }
+          const hop = hops ? this.hop[nc] : 0;
           if (!hop && !this.walkable(nx, nz)) continue;
           if (!hop && !this.hop[c] && Math.abs(this.h[nc] - this.h[c]) > 0.46) continue;
           // over a sill or a crate only straight across, never along it or round its corner
           if (hop && (dx && dz || this.hop[c])) continue;
-          if (dx && dz && (!this.walkable(cx + dx, cz) || !this.walkable(cx, cz + dz))) continue;
-          if (dx && dz && (Math.abs(this.h[cz * W + cx + dx] - this.h[c]) > 0.46 || Math.abs(this.h[(cz + dz) * W + cx] - this.h[c]) > 0.46)) continue;
-          if (closed[nc] === stamp) continue;
-          const ng = g[c] + (hop ? (hop === 1 ? 2.6 : 3.6) : (dx && dz ? 1.414 : 1) * this.cost[nc]);
-          if (seen[nc] !== stamp || ng < g[nc]) {
-            seen[nc] = stamp;
-            g[nc] = ng;
-            from[nc] = c;
-            push(nc, ng + heur(nc));
-          }
+          tryNode(id, nc, g[id] + (hop ? (hop === 1 ? 2.6 : 3.6) : step));
         }
     }
     if (!found) return null;
-    const cells = [];
-    for (let c = t; c !== -1; c = from[c]) cells.push(c);
-    cells.reverse();
-    // a third value marks the cells to jump onto
-    const pts = cells.map((c) => [(c % W) + 0.5, ((c / W) | 0) + 0.5, this.hop[c] && !this.walk[c] ? 1 : 0]);
-    pts.push([tx, tz]);
-    return this.smooth(sx, sz, pts);
+    const ids = [];
+    for (let id = t; id !== -1; id = from[id]) ids.push(id);
+    ids.reverse();
+    // a third value marks the cells to jump onto, a fourth the bridge level
+    const pts = ids.map((id) => {
+      const c = id % n;
+      return [(c % W) + 0.5, ((c / W) | 0) + 0.5, id < n && this.hop[c] && !this.walk[c] ? 1 : 0, id >= n ? 1 : 0];
+    });
+    pts.push([tx, tz, 0, t >= n ? 1 : 0]);
+    return this.smooth(sx, sz, pts, s >= n ? 1 : 0);
   }
 
   nearestWalk(x, z) {
@@ -627,6 +663,22 @@ export class GameMap {
       for (let dz = -r; dz <= r; dz++)
         for (let dx = -r; dx <= r; dx++) if (this.walkable(x + dx, z + dz)) return (z + dz) * W + x + dx;
     return -1;
+  }
+
+  // a straight line on a slab, with a body's width of slab on both sides
+  clearDeck(ax, az, bx, bz) {
+    const dx = bx - ax, dz = bz - az, d = Math.hypot(dx, dz);
+    if (d < 0.01) return true;
+    const px = (-dz / d) * 0.32, pz = (dx / d) * 0.32;
+    const n = Math.ceil(d / 0.25);
+    for (let i = 0; i <= n; i++) {
+      const x = ax + (dx * i) / n, z = az + (dz * i) / n;
+      for (const [qx, qz] of [[x, z], [x + px, z + pz], [x - px, z - pz]]) {
+        const c = this.cellAt(qx, qz);
+        if (c < 0 || !this.deck[c]) return false;
+      }
+    }
+    return true;
   }
 
   // can a 0.3 m wide body walk straight from a to b
@@ -646,12 +698,17 @@ export class GameMap {
     return true;
   }
 
-  smooth(sx, sz, pts) {
+  smooth(sx, sz, pts, lvl0 = 0) {
     const out = [];
-    let cx = sx, cz = sz, i = 0;
+    let cx = sx, cz = sz, i = 0, lvl = lvl0;
+    const ok = (j) => {
+      for (let k = i; k <= j; k++) if ((pts[k][3] || 0) !== lvl) return false;
+      return lvl ? this.clearDeck(cx, cz, pts[j][0], pts[j][1]) : this.clearWalk(cx, cz, pts[j][0], pts[j][1]);
+    };
     while (i < pts.length) {
       let j = Math.min(pts.length - 1, i + 14);
-      while (j > i && !this.clearWalk(cx, cz, pts[j][0], pts[j][1])) j--;
+      while (j > i && !ok(j)) j--;
+      lvl = pts[j][3] || 0;
       out.push(pts[j]);
       cx = pts[j][0];
       cz = pts[j][1];

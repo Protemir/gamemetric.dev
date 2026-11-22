@@ -278,7 +278,10 @@ export class Game {
     this.map = new GameMap();
     setBlocker((x, z, feet) => {
       const c = this.map.cellAt(x, z);
-      return c < 0 || this.map.h[c] > feet + 0.45;
+      if (c < 0 || this.map.h[c] > feet + 0.45) return true;
+      if (this.map.lint[c] > 0 && feet > this.map.lint[c] - 1.5) return true;
+      // up high: no sliding off the edge of a gallery or the bridge
+      return feet > 1 && this.map.groundAt(x, z, 0.05, feet + 0.1) < feet - 0.5;
     });
     for (const m of this.map.buildMeshes(this.tex, propsReady())) this.scene.add(m);
     for (const m of buildDecor(this.map, this.tex)) this.scene.add(m);
@@ -584,13 +587,15 @@ export class Game {
       const d = Math.hypot(px - s.x, pz - s.z);
       if (d < bd) {
         bd = d;
-        best = [px + (Math.random() - 0.5) * 6, pz + (Math.random() - 0.5) * 6];
+        // up on a gallery or the bridge the guess stays where they are (a few metres off would be the floor below)
+        const py = seen && this.time - seen.t < 8 ? seen.y || 0 : o.feet;
+        best = py > 1 ? [px, pz, py] : [px + (Math.random() - 0.5) * 6, pz + (Math.random() - 0.5) * 6, 0];
       }
     }
     return best;
   }
   reportSpotted(s, o) {
-    this.spotted.set(o, { x: o.x, z: o.z, t: this.time, by: s.team });
+    this.spotted.set(o, { x: o.x, z: o.z, y: o.feet, t: this.time, by: s.team });
   }
   clearShot(s, target) {
     const eye = s.feet + s.eyeH();
@@ -1607,7 +1612,7 @@ export class Game {
         const d = Math.hypot(L.x - h.x, L.z - h.z);
         if (d > 2.0) {
           if (!h.path || this.time > h.repath) {
-            h.path = this.map.path(h.x, h.z, L.x, L.z);
+            h.path = this.map.path(h.x, h.z, L.x, L.z, false, 0, 0, true);
             h.pi = 0;
             h.repath = this.time + 0.6;
           }
