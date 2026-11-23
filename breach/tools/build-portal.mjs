@@ -3,6 +3,7 @@
 // would lead off the portal), dust instead of blood (game.js reads window.BREACH_PORTAL).
 //
 //   node breach/tools/build-portal.mjs playgama
+//   node breach/tools/build-portal.mjs crazygames   (also writes files.json: the list for the dashboard upload)
 //
 // Output: dist/breach-<portal>/ and dist/breach-<portal>.zip in the repo root (dist/ is not in git).
 // Run tools/stamp.mjs first so the module versions in index.html are current.
@@ -14,7 +15,10 @@ import { fileURLToPath } from 'node:url';
 const game = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repo = path.resolve(game, '..');
 const portal = process.argv[2] || 'playgama';
-const SDK = { playgama: 'https://bridge.playgama.com/v2/stable/playgama-bridge.js' };
+const SDK = {
+  playgama: 'https://bridge.playgama.com/v2/stable/playgama-bridge.js',
+  crazygames: 'https://sdk.crazygames.com/crazygames-sdk-v3.js',
+};
 if (!SDK[portal]) throw new Error('unknown portal ' + portal);
 const NAME = 'Mansion Breach';
 
@@ -58,12 +62,25 @@ html = html.replace(
 <script type="module">
 window.BREACH_PORTAL = '${portal}';
 const wait = (ms) => new Promise((r) => setTimeout(() => r('slow'), ms));
+const region = (l) => (/^(ru|kk|ky|be|uz|tg|uk)\\b/i.test(l) ? 'ru' : 'en');
 try {
-  const b = window.bridge;
-  if (b && (await Promise.race([b.initialize().then(() => 'ok'), wait(6000)])) === 'ok') {
-    window.BREACH_SDK = b;
-    const l = String(b.platform.language || '');
-    if (l) window.BREACH_LANG = /^(ru|kk|ky|be|uz|tg|uk)\\b/i.test(l) ? 'ru' : 'en';
+  if (window.BREACH_PORTAL === 'playgama') {
+    const b = window.bridge;
+    if (b && (await Promise.race([b.initialize().then(() => 'ok'), wait(6000)])) === 'ok') {
+      window.BREACH_SDK = b;
+      const l = String(b.platform.language || '');
+      if (l) window.BREACH_LANG = region(l);
+    }
+  } else {
+    const s = window.CrazyGames && window.CrazyGames.SDK;
+    const ok = s && (await Promise.race([s.init().then(() => s.environment !== 'disabled'), wait(8000).then(() => false)]));
+    if (ok) {
+      window.BREACH_SDK = s;
+      // CrazyGames times the load from here to the first gameplayStart
+      s.game.loadingStart();
+      const l = s.user && s.user.systemInfo && s.user.systemInfo.locale;
+      if (l) window.BREACH_LANG = region(String(l));
+    }
   }
 } catch (e) {
   /* the game runs without the SDK */
@@ -73,9 +90,20 @@ await import('${main[1]}');
 );
 // in a portal's frame: no browser menu on a long press, no pull to refresh
 must('</head>', `<style>html, body { overscroll-behavior: none; -webkit-touch-callout: none; }</style>\n<script>document.addEventListener('contextmenu', (e) => e.preventDefault());</script>\n</head>`);
-const left = html.match(/https?:\/\/(?!bridge\.playgama\.com|www\.w3\.org)[^\s"'<>]+/g);
+const left = html.match(/https?:\/\/(?!bridge\.playgama\.com|sdk\.crazygames\.com|www\.w3\.org)[^\s"'<>]+/g);
 if (left) throw new Error('links out left in index.html: ' + left.join(', '));
 fs.writeFileSync(path.join(out, 'index.html'), html);
+// the dashboard upload takes a folder: the list of files (all but index.html are the site's own, same version)
+const list = [];
+const walk = (d, rel) => {
+  for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const r2 = rel ? rel + '/' + e.name : e.name;
+    if (e.isDirectory()) walk(path.join(d, e.name), r2);
+    else list.push(r2);
+  }
+};
+walk(out, '');
+fs.writeFileSync(path.join(repo, 'dist', `breach-${portal}-files.json`), JSON.stringify(list) + '\n');
 
 // nothing in the scripts may call home either (the room server is only used by the online mode, which is hidden)
 const zip = path.join(repo, 'dist', `breach-${portal}.zip`);

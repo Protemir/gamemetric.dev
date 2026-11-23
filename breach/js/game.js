@@ -8,6 +8,7 @@ import { Rain } from './weather.js';
 import { Smokes } from './smoke.js';
 import { Fireplace } from './fireplace.js';
 import { PoolToys } from './pool.js';
+import { portalHappy } from './portal.js';
 import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
@@ -290,7 +291,7 @@ export class Game {
     this.fx = new FX(this.scene);
     // the silly options: big heads, low gravity, exploding chickens
     this.fun = opts.fun || {};
-    this.noBlood = !!window.BREACH_PORTAL;
+    this.noBlood = window.BREACH_PORTAL === 'playgama';
     if (!opts.preview) setQuack(this.fun.quack);
     this.grav = this.fun.lowgrav ? 6 : GRAV;
     this.chickens = new Chickens(this);
@@ -852,6 +853,7 @@ export class Game {
   finishMatch(winner) {
     if (this.over) return;
     this.over = true;
+    if (!this.opts.preview && winner === this.player.team) portalHappy();
     if (this.time - (this.lastAnyKill ?? -9) < 0.3 && this.phase !== 'end') this.slowMo();
     for (const n of this.nades) this.dropNade(n);
     this.nades.length = 0;

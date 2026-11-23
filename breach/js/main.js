@@ -283,6 +283,8 @@ function startGame(online) {
 
 // on a phone the game wants the whole screen, sideways
 function goFullscreen() {
+  // on a portal the page sits in its frame, which has its own full screen button
+  if (PORTAL) return;
   const el = document.documentElement;
   if (!document.fullscreenElement && el.requestFullscreen)
     el.requestFullscreen({ navigationUI: 'hide' })
