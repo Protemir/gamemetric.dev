@@ -290,6 +290,7 @@ export class Game {
     this.fx = new FX(this.scene);
     // the silly options: big heads, low gravity, exploding chickens
     this.fun = opts.fun || {};
+    this.noBlood = !!window.BREACH_PORTAL;
     if (!opts.preview) setQuack(this.fun.quack);
     this.grav = this.fun.lowgrav ? 6 : GRAV;
     this.chickens = new Chickens(this);
@@ -1041,7 +1042,10 @@ export class Game {
       const dmg = w.dmg * Math.pow(w.falloff ?? 0.9, end / 10);
       this.damage(who, dmg, hit.part, s, s.kind, dx, dz, w.pen ?? 0.6);
       if (this.fun.confetti) this.confetti(ex, ey, ez, 6);
-      else {
+      else if (this.noBlood) {
+        this.fx.puff(ex, ey, ez, [0.62, 0.6, 0.56], 0.3, 0.3, 0.2, 0.6);
+        this.fx.spark(ex, ey, ez, -dx, -dy, -dz, [1, 0.85, 0.5], 4, 2);
+      } else {
         this.fx.puff(ex, ey, ez, [0.55, 0.06, 0.06], 0.35, 0.35, 0.2, 0.75);
         this.fx.spark(ex, ey, ez, -dx, -dy, -dz, [0.6, 0.05, 0.05], 4, 2);
         this.splashBlood(ex, ey, ez, dx, dy, dz, hit.part === 'head');
@@ -1209,7 +1213,7 @@ export class Game {
     if (this.fun.confetti) {
       this.confetti(o.x, o.feet + 1.2, o.z, 40);
       sfx('party', [o.x, o.feet + 1.2, o.z]);
-    } else this.fx.bloodDecal(o.x, this.map.groundAt(o.x, o.z, 0.05, o.feet + 0.1), o.z, 0, 1, 0, 1.3);
+    } else if (!this.noBlood) this.fx.bloodDecal(o.x, this.map.groundAt(o.x, o.z, 0.05, o.feet + 0.1), o.z, 0, 1, 0, 1.3);
     // "to the moon": the body takes off spinning and vanishes with a twinkle
     if (this.fun.fly) {
       o.flyVy = 5 + Math.random() * 3;

@@ -393,7 +393,8 @@ const saved = (() => {
 })();
 const q = new URLSearchParams(location.search).get('lang');
 const nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
-export let lang = q || saved || (/^(ru|kk|ky|be|uz|tg|uk)\b/i.test(nav) ? 'ru' : 'en');
+const portal = typeof window !== 'undefined' && window.BREACH_LANG ? window.BREACH_LANG : null;
+export let lang = q || saved || portal || (/^(ru|kk|ky|be|uz|tg|uk)\b/i.test(nav) ? 'ru' : 'en');
 if (!T[lang]) lang = 'en';
 
 export function setLang(l) {

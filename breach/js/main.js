@@ -11,6 +11,7 @@ import { NetGame } from './netgame.js';
 import { BOT_NAMES } from './i18n.js';
 import { WEAPONS } from './weapons.js';
 import { setupTouch } from './touch.js';
+import { PORTAL, portalReady, portalGameplay, portalInterstitial, onPortalMute, onPortalPause } from './portal.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -52,7 +53,12 @@ const save = () => {
     /* blocked */
   }
 };
+let portalMuted = false;
 setVolume(settings.vol);
+onPortalMute((m) => {
+  portalMuted = m;
+  setVolume(m ? 0 : settings.vol);
+});
 
 // ---------- renderer ----------
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
@@ -77,7 +83,7 @@ function applyTexts() {
   for (const el of document.querySelectorAll('[data-t-aria]')) el.setAttribute('aria-label', t(el.dataset.tAria));
   if (touchOnly) document.querySelectorAll('.buy-hint').forEach((el) => (el.textContent = t('buyHintTouch')));
   for (const b of document.querySelectorAll('.langs button')) b.classList.toggle('on', b.dataset.lang === lang);
-  document.title = lang === 'ru' ? 'Штурм особняка — тактический шутер 5 на 5 в браузере | GameMetric' : 'Mansion Breach — 5v5 tactical shooter in your browser | GameMetric';
+  document.title = PORTAL ? (lang === 'ru' ? 'Штурм особняка' : 'Mansion Breach') : lang === 'ru' ? 'Штурм особняка — тактический шутер 5 на 5 в браузере | GameMetric' : 'Mansion Breach — 5v5 tactical shooter in your browser | GameMetric';
   $('ctrl-list').innerHTML = t(touchOnly ? 'ctrlTouch' : 'ctrl').map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
 }
 for (const b of document.querySelectorAll('.langs button'))
@@ -180,7 +186,7 @@ function slider(id, key, fmt) {
     settings[key] = +el.value;
     out.textContent = fmt(settings[key]);
     if (key === 'ui') applyUi();
-    if (key === 'vol') setVolume(settings.vol);
+    if (key === 'vol' && !portalMuted) setVolume(settings.vol);
     if (key === 'bright') renderer.toneMappingExposure = settings.bright;
     save();
   });
@@ -219,8 +225,14 @@ $('p-quit').onclick = () => {
   if (net?.isHost && game && !game.over && net.peers.length > 1 && !confirm(t('hostQuitAsk'))) return;
   toMenu();
 };
-$('mo-menu').onclick = () => (net ? backToLobby(true) : toMenu());
-$('mo-again').onclick = () => startGame();
+$('mo-menu').onclick = () => {
+  portalInterstitial();
+  net ? backToLobby(true) : toMenu();
+};
+$('mo-again').onclick = () => {
+  portalInterstitial();
+  startGame();
+};
 $('play').onclick = () => {
   if (touchOnly) goFullscreen();
   startGame();
@@ -633,6 +645,7 @@ let last = performance.now();
 let fps = 60, frames = 0, fpsAt = last, slowFor = 0, fastFor = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  portalGameplay(state === 'play' && !!game && !game.over);
   let dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   frames++;
@@ -729,9 +742,17 @@ const assetsReady = Promise.all([
   .finally(() => {
     $('loading').hidden = true;
     if (!q.has('shot')) makePreview();
+    portalReady();
     const m = location.hash.match(/room=([A-Z0-9]{4,8})/i);
-    if (m) openLobby(m[1].toUpperCase());
+    if (m && !PORTAL) openLobby(m[1].toUpperCase());
   });
+if (PORTAL) $('online').hidden = true;
+// the platform's own menu pauses a solo match
+onPortalPause(() => {
+  if (!game || state !== 'play' || game.role !== 'solo') return;
+  if (touchOnly) touchPause();
+  else document.exitPointerLock?.();
+});
 
 // leaving the page mid-match asks first
 window.addEventListener('beforeunload', (e) => {
