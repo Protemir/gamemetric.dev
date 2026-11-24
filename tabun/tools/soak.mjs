@@ -38,15 +38,13 @@ await ev('(document.getElementById("playBtn").click(), 1)');
 await sleep(200);
 ok(await ev(`__tabun.state === "play" && __tabun.run.__id === ${runId1}`), 'двойной старт не сбрасывает уровень');
 
-// 3) пауза в ожидании итогов → после продолжения итоги всё равно показываются
+// 3) забег решён — пауза не включается (иначе «В меню» терял бы награду), итоги показываются
 await ev(fast);
 await sleep(300);
 await ev('(document.getElementById("pauseBtn").click(), 1)');
-await sleep(2200);
-ok(await ev('__tabun.state === "pause"'), 'пауза держится, итоги не выскочили поверх паузы');
-await ev('(document.getElementById("mResume").click(), 1)');
+ok(await ev('__tabun.state !== "pause"'), 'после финиша пауза не включается');
 for (let k = 0; k < 30; k++) { await sleep(200); if (await ev('__tabun.state === "result"')) break; }
-ok(await ev('__tabun.state === "result"'), 'после паузы итоги показались');
+ok(await ev('__tabun.state === "result"'), 'итоги показались');
 
 // 4) смена размера посреди забега
 await ev('(__tabun.menu(), document.getElementById("modal").classList.add("hidden"), __tabun.start(), 1)');

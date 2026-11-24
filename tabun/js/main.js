@@ -20,7 +20,9 @@ if (P.has('shot')) document.documentElement.classList.add('shot');
 detectLang();
 
 let save = S.load();
-if (P.has('level')) save.lvl = Math.max(1, Number(P.get('level')) || 1);
+// ?level=N — только на этот запуск (для проверок и ссылок); в сохранение не попадает и снимается после первых итогов
+let levelOverride = P.has('level') ? Math.max(1, Number(P.get('level')) || 1) : null;
+const curLvl = () => levelOverride ?? save.lvl;
 let world = null, run = null, L = null;
 let state = 'loading';  // loading | menu | play | result | pause
 let targetX = 0;
@@ -33,8 +35,13 @@ let lastT = 0;
 let dragHintOn = false;
 let resultIn = 0;
 let daily = false;      // идёт «Байга дня»
-const dayIndex = () => { const d = new Date(); return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 864e5); };
-const dailyDiff = () => Math.max(4, Math.min(30, save.lvl + 2));       // через сколько секунд игры показать итоги (0 — не ждём)
+const dayIndex = () => { const d = new Date(); return Math.round(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 864e5); };
+const dailyDiff = () => {
+  // одна трасса на весь день: сложность запоминается при первом открытии дня
+  const day = dayIndex();
+  if (!save.dailyDiff || save.dailyDiff.day !== day) { save.dailyDiff = { day, diff: Math.max(4, Math.min(30, save.lvl + 2)) }; S.store(save); }
+  return save.dailyDiff.diff;
+};       // через сколько секунд игры показать итоги (0 — не ждём)
 let shownHints = {};
 try { shownHints = JSON.parse(localStorage.getItem('tabun.hints') || '{}'); } catch { /* нет доступа */ }
 
@@ -99,7 +106,7 @@ function onResize() {
 
 // —— уровни ——
 function prepare() {
-  L = daily ? dailyLevel(dayIndex(), dailyDiff()) : level(save.lvl);
+  L = daily ? dailyLevel(dayIndex(), dailyDiff()) : level(curLvl());
   run = new Run(L, { start: S.startHerd(save), leader: S.leaderBonus(save) });
   for (const b of run.bodies) { b.x = run.cx + b.sx; b.d = run.d + b.sd; b.spawn = 1; }
   world.setLevel(L, run);
@@ -122,8 +129,8 @@ function startLevel() {
   $('progLvl').textContent = daily ? t('daily_run') : t('level') + ' ' + L.n;
   updateCoins();
   makeTags();
-  if (save.lvl <= 2 && !AUTO) { dragHintOn = true; $('dragHint').classList.remove('hidden'); $('dragHint').querySelector('span').textContent = t('drag'); }
-  if (save.lvl === 1) showHint('gate', 1.2);
+  if (curLvl() <= 2 && !daily && !AUTO) { dragHintOn = true; $('dragHint').classList.remove('hidden'); $('dragHint').querySelector('span').textContent = t('drag'); }
+  if (curLvl() === 1 && !daily) showHint('gate', 1.2);
   sfx('click');
   sfx('whoosh');
   world.startIntro();
@@ -140,12 +147,12 @@ function showMenu() {
   $('logoS').textContent = t('subtitle');
   $('allGames').textContent = '← ' + t('allGames');
   $('allGames').classList.toggle('hidden', PORTAL);
-  $('lvlName').textContent = t('level') + ' ' + save.lvl;
+  $('lvlName').textContent = t('level') + ' ' + curLvl();
   $('starTotal').textContent = '★ ' + S.totalStars(save);
   $('bossTag').textContent = t('boss');
   $('bossTag').classList.toggle('hidden', !L.boss);
   $('playBtn').querySelector('.pl').textContent = t('play');
-  $('playBtn').querySelector('.sub').textContent = L.boss ? '⚡ ' + t('boss') + ' · ' + t('level') + ' ' + save.lvl : t('level') + ' ' + save.lvl;
+  $('playBtn').querySelector('.sub').textContent = L.boss ? '⚡ ' + t('boss') + ' · ' + t('level') + ' ' + curLvl() : t('level') + ' ' + curLvl();
   $('upsTitle').textContent = t('upsTitle');
   renderPath();
   $('coatsBtn').querySelector('.lbl').textContent = t('coats');
@@ -289,7 +296,7 @@ function showSettings(inGame) {
   $('mSound').onclick = () => { save.sound = !save.sound; setSound(save.sound); S.store(save); showSettings(inGame); };
   $('mMusic').onclick = () => { save.music = save.music === false; setMusic(save.music); S.store(save); showSettings(inGame); };
   $('mQual').onclick = () => { const L4 = ['auto', 'high', 'mid', 'low']; save.quality = L4[(L4.indexOf(save.quality || 'auto') + 1) % 4]; S.store(save); applyQuality(); showSettings(inGame); };
-  $('mLang').onclick = () => { setLang(getLang() === 'ru' ? 'en' : 'ru'); if (inGame) { $('progLvl').textContent = t('level') + ' ' + L.n; showSettings(true); } else { closeModal(); showMenu(); } };
+  $('mLang').onclick = () => { setLang(getLang() === 'ru' ? 'en' : 'ru'); if (inGame) { $('progLvl').textContent = daily ? t('daily_run') : t('level') + ' ' + L.n; showSettings(true); } else { closeModal(); showMenu(); } };
   if (inGame) {
     $('mResume').onclick = () => { closeModal(); state = 'play'; lastT = performance.now(); };
     $('mMenu').onclick = () => { closeModal(); showMenu(); };
@@ -298,6 +305,8 @@ function showSettings(inGame) {
 
 function pause() {
   if (state !== 'play') return;
+  // забег уже решён (победа или поражение) — сначала итоги, иначе «В меню» потеряет награду
+  if (run && (run.state === 'win' || run.state === 'lose')) return;
   state = 'pause';
   showSettings(true);
 }
@@ -305,10 +314,13 @@ function pause() {
 // —— подсказки ——
 function showHint(key, delay = 0) {
   if (shownHints[key] || AUTO) return;
-  shownHints[key] = 1;
-  try { localStorage.setItem('tabun.hints', JSON.stringify(shownHints)); } catch { /* нет доступа */ }
+  if (showHint.pending?.[key]) return;
+  (showHint.pending ||= {})[key] = 1;
   setTimeout(() => {
-    if (state !== 'play') return;
+    showHint.pending[key] = 0;
+    if (state !== 'play' || shownHints[key]) return;
+    shownHints[key] = 1;
+    try { localStorage.setItem('tabun.hints', JSON.stringify(shownHints)); } catch { /* нет доступа */ }
     const h = $('hint');
     h.textContent = t('hint_' + key);
     h.classList.remove('hidden');
@@ -428,7 +440,7 @@ function buzz(p) { try { if (save.sound && navigator.vibrate) navigator.vibrate(
 const MILES = [25, 50, 100, 200, 300, 500, 750, 999];
 let mileIdx = 0;
 function checkMilestone() {
-  if (run.state !== 'run') return;
+  if (run.state !== 'run' && run.state !== 'clash') return;
   while (mileIdx < MILES.length && run.count >= MILES[mileIdx]) {
     const n = MILES[mileIdx++];
     if (mileIdx < MILES.length && run.count >= MILES[mileIdx]) continue; // перепрыгнули — празднуем только последнее
@@ -579,12 +591,12 @@ function showResult() {
   save.played++;
   save.best = Math.max(save.best, peak);
   let stars = 0, oldStars = 0;
-  if (res.win && daily) { save.dailyWin = S.dayKey(); }
+  if (res.win && daily) { save.dailyWin = S.dayKey(); stars = S.starsFor(res.mult); }
   else if (res.win) {
     stars = S.starsFor(res.mult);
     oldStars = Number(save.stars[L.n]) || 0;
     save.stars[L.n] = Math.max(oldStars, stars);
-    save.lvl++;
+    if (levelOverride === null) save.lvl++; // уровень из ссылки не двигает настоящий прогресс
   }
   S.store(save);
   if (res.win) {
@@ -595,6 +607,10 @@ function showResult() {
   }
   if (save.lvl >= 10) unlock('lvl10');
   if (save.lvl >= 25) unlock('lvl25');
+  // за достижения на итогах тоже начислено — показываем общую сумму, иначе счётчик «прыгает»
+  const gained = save.coins - coinsBefore;
+  const achBonus = gained - got;
+  if (levelOverride !== null) levelOverride = null;
   lastShare = { win: res.win, mult: res.mult, stars, peak, n: L.n, daily, boss: L.boss };
   $('resShare').classList.toggle('hidden', !res.win);
   $('hud').classList.add('result-mode');
@@ -605,7 +621,7 @@ function showResult() {
   r.classList.toggle('win', res.win);
   $('resT').textContent = res.win ? t('win') : t('lose');
   $('resSub').textContent = res.win ? t('best', { n: peak }) : run.rival.count < run.rival.start ? t('rivalWon', { n: run.rival.count }) : t('lostWay');
-  $('resMult').textContent = res.win ? '×' + res.mult + (L.boss || firstDaily ? ' · ×2' : '') : '';
+  $('resMult').textContent = (res.win ? '×' + res.mult + (L.boss || firstDaily ? ' · ×2' : '') : '') + (achBonus > 0 ? '  🏆 +' + achBonus : '');
   // проиграл, но хватает на улучшение — зовём в меню улучшаться
   const canUp = !res.win && ['herd', 'income', 'leader'].some((k) => save.up[k] < S.UPS[k].max && save.coins >= S.upCost(k, save.up[k]));
   r.dataset.up = canUp ? '1' : '';
@@ -617,7 +633,7 @@ function showResult() {
   const t0 = performance.now();
   const tickC = () => {
     const k = Math.min(1, (performance.now() - t0) / 700);
-    b.textContent = '+' + fmt(got * k);
+    b.textContent = '+' + fmt(gained * k);
     if (k < 1) requestAnimationFrame(tickC);
   };
   tickC();
@@ -626,7 +642,7 @@ function showResult() {
   sr.innerHTML = res.win ? [1, 2, 3].map((i) => `<i class="${i <= stars ? 'on' : ''}" style="animation-delay:${0.25 + i * 0.22}s">★</i>`).join('') : '';
   if (res.win) for (let i = 1; i <= stars; i++) setTimeout(() => sfx('step', i * 2), 250 + i * 220);
   // монеты летят в счётчик
-  if (got > 0) setTimeout(() => flyCoins(Math.min(12, 4 + Math.round(got / 60)), coinsBefore, got), 400);
+  if (gained > 0) setTimeout(() => flyCoins(Math.min(12, 4 + Math.round(gained / 60)), coinsBefore, gained), 400);
   if (AUTO) setTimeout(() => { if (state === 'result') { showMenu(); setTimeout(startLevel, 300); } }, 1200);
 }
 

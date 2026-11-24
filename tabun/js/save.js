@@ -5,9 +5,42 @@ const DEF = { lvl: 1, coins: 0, up: { herd: 0, income: 0, leader: 0 }, sets: ['s
 export function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (s && typeof s === 'object') return { ...DEF, ...s, up: { ...DEF.up, ...(s.up || {}) }, daily: { ...DEF.daily, ...(s.daily || {}) }, stars: s.stars && typeof s.stars === 'object' ? s.stars : {}, ach: s.ach && typeof s.ach === 'object' ? s.ach : {}, sets: Array.isArray(s.sets) && s.sets.length ? s.sets : ['steppe'] };
+    if (s && typeof s === 'object' && !Array.isArray(s)) return sanitize(s);
   } catch { /* испорчено или нет доступа */ }
   return structuredClone(DEF);
+}
+
+// испорченное или старое сохранение: каждое поле — к своему типу и диапазону, иначе значение по умолчанию
+const int = (v, lo, hi, d) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.min(hi, Math.max(lo, Math.floor(Number(v)))) : d);
+const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+function sanitize(s) {
+  const up = obj(s.up);
+  const sets = (Array.isArray(s.sets) ? s.sets : []).filter((k) => typeof k === 'string' && k in SETS);
+  if (!sets.includes('steppe')) sets.unshift('steppe');
+  const stars = {};
+  for (const [k, v] of Object.entries(obj(s.stars))) if (int(k, 1, 1e6, 0) && int(v, 0, 3, 0)) stars[int(k, 1, 1e6, 1)] = int(v, 0, 3, 0);
+  const ach = {};
+  for (const k of Object.keys(obj(s.ach))) ach[k] = 1;
+  const daily = obj(s.daily);
+  const dd = obj(s.dailyDiff);
+  return {
+    ...DEF,
+    lvl: int(s.lvl, 1, 1e6, 1),
+    coins: int(s.coins, 0, 1e9, 0),
+    up: { herd: int(up.herd, 0, UPS.herd.max, 0), income: int(up.income, 0, UPS.income.max, 0), leader: int(up.leader, 0, UPS.leader.max, 0) },
+    sets,
+    set: sets.includes(s.set) ? s.set : 'steppe',
+    sound: s.sound !== false,
+    music: s.music !== false,
+    daily: { last: typeof daily.last === 'string' ? daily.last : '', streak: int(daily.streak, 0, 1e6, 0) },
+    best: int(s.best, 0, 999, 0),
+    played: int(s.played, 0, 1e9, 0),
+    stars,
+    ach,
+    quality: ['auto', 'high', 'mid', 'low'].includes(s.quality) ? s.quality : 'auto',
+    dailyWin: typeof s.dailyWin === 'string' ? s.dailyWin : '',
+    dailyDiff: Number.isFinite(dd.day) && Number.isFinite(dd.diff) ? { day: dd.day, diff: int(dd.diff, 4, 30, 4) } : null,
+  };
 }
 export function store(s) {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* нет доступа */ }

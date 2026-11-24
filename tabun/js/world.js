@@ -600,6 +600,7 @@ export class World {
     this.dust.clear(); this.sparks.clear();
     this.rearT = -1;
     this.boost = 0;
+    this._dc = null; // пыль под цвет дороги этого уровня
     if (this.prints) { this.prints.count = 0; this.printN = 0; }
     this.fireworks = [];
     this.camPos.set(0, 9, 14);

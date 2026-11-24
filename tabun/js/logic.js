@@ -85,7 +85,7 @@ function genLevel(n, seedN = n, daily = false) {
   let best = null;
   for (let v = 0; v < 12; v++) {
     const L = genLevelOnce(n, v, seedN, daily);
-    if (L.autoGot >= 12 + n) return L;
+    if (L.autoGot >= 12 + Math.min(n, 30)) return L; // порог не растёт после 30-го — иначе высокие уровни перебирают все варианты впустую
     if (!best || L.autoGot > best.autoGot) best = L;
   }
   return best;
@@ -484,7 +484,7 @@ export class Run {
             this.wild.splice(w, 1);
             this.count = Math.min(MAX_COUNT, this.count + (h.golden ? GOLDEN : 1));
             if (h.golden) { this.coins += 30; this.emit('golden', { x: h.x, d: h.d, n: GOLDEN }); this.sync(false, { x: h.x, d: h.d }); }
-            if (this.bodies.length < this.cap) {
+            if (!h.golden && this.bodies.length < this.cap) {
               const nb = this.newBody(h.x, h.d, 1);
               nb.joined = 1;
               nb.coat = h.coat;
