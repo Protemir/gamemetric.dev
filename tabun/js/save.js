@@ -1,6 +1,6 @@
 // Сохранение «Табуна» в localStorage. Если хранилища нет — играем без сохранения.
 const KEY = 'tabun.save.v1';
-const DEF = { lvl: 1, coins: 0, up: { herd: 0, income: 0, leader: 0 }, sets: ['steppe'], set: 'steppe', sound: true, daily: { last: '', streak: 0 }, best: 0, played: 0, stars: {}, music: true, ach: {} };
+const DEF = { lvl: 1, coins: 0, up: { herd: 0, income: 0, leader: 0 }, sets: ['steppe'], set: 'steppe', sound: true, daily: { last: '', streak: 0 }, best: 0, played: 0, stars: {}, music: true, ach: {}, quality: 'auto' };
 
 export function load() {
   try {

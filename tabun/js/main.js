@@ -76,6 +76,7 @@ async function boot() {
   $('gl').addEventListener('webglcontextrestored', () => location.reload());
   world.setHerdSet(save.set);
   world.setShadows(!P.has('noshadow'));
+  applyQuality();
   world.onBoom = () => sfx('boom');
   world.onThunder = () => { flash('white'); setTimeout(() => sfx('thunder'), 350 + Math.random() * 700); buzz(30); };
   setSound(save.sound);
@@ -283,10 +284,11 @@ function showCoats() {
 
 function showSettings(inGame) {
   const row = (label, val, id) => `<div class="mrow"><span>${label}</span><button id="${id}" class="${val ? 'on' : ''}">${val === null ? '' : val ? t('on') : t('off')}</button></div>`;
-  modal(`<h3 class="mtitle">${inGame ? t('pause') : '⚙'}</h3>${row(t('sound'), save.sound, 'mSound')}${row(t('music'), save.music !== false, 'mMusic')}<div class="mrow"><span>🌐</span><button id="mLang">${t('lang')}</button></div>
-    <div class="mbtns">${inGame ? `<button class="big disp" id="mResume">${t('resume')}</button><button class="pill" id="mMenu">${t('menu')}</button>` : `<button class="pill" id="mClose">OK</button>`}</div>`);
+  modal(`<h3 class="mtitle">${inGame ? t('pause') : '⚙'}</h3><div class="rows">${row(t('sound'), save.sound, 'mSound')}${row(t('music'), save.music !== false, 'mMusic')}<div class="mrow"><span>${t('quality')}</span><button id="mQual" class="on">${t('q_' + (save.quality || 'auto'))}</button></div><div class="mrow"><span>🌐</span><button id="mLang">${t('lang')}</button></div></div>
+    <div class="mbtns">${inGame ? `<button class="big disp" id="mResume">${t('resume')}</button><button class="pill" id="mMenu">${t('menu')}</button>` : `<button class="pill" id="mClose">OK</button>`}</div>`, true);
   $('mSound').onclick = () => { save.sound = !save.sound; setSound(save.sound); S.store(save); showSettings(inGame); };
   $('mMusic').onclick = () => { save.music = save.music === false; setMusic(save.music); S.store(save); showSettings(inGame); };
+  $('mQual').onclick = () => { const L4 = ['auto', 'high', 'mid', 'low']; save.quality = L4[(L4.indexOf(save.quality || 'auto') + 1) % 4]; S.store(save); applyQuality(); showSettings(inGame); };
   $('mLang').onclick = () => { setLang(getLang() === 'ru' ? 'en' : 'ru'); if (inGame) { $('progLvl').textContent = t('level') + ' ' + L.n; showSettings(true); } else { closeModal(); showMenu(); } };
   if (inGame) {
     $('mResume').onclick = () => { closeModal(); state = 'play'; lastT = performance.now(); };
@@ -768,11 +770,28 @@ function frame(now) {
     const fps = fpsN / fpsAcc;
     fpsT = fps;
     // тяжело: сначала гасим тени, потом сужаем круг детальных коней, потом уменьшаем чёткость
-    if (fps < 42 && world.shadowsOn) world.setShadows(false);
+    if ((save.quality || 'auto') !== 'auto') { /* фиксированное качество — не трогаем */ }
+    else if (fps < 42 && world.shadowsOn) world.setShadows(false);
     else if (fps < 42 && (world.lodNear ?? 22) > 10) { world.lodNear = (world.lodNear ?? 22) - 6; for (const p of [world.gallop, world.idle, world.eat]) p.setNear?.(world.lodNear); }
     else if (fps < 42 && world.pixelRatio > 0.8) { lowSteps++; world.setPixelRatio(Math.max(0.75, world.pixelRatio - 0.35)); }
     fpsAcc = 0; fpsN = 0;
   }
+}
+
+// качество графики: «авто» подстраивается само, остальные — фиксированные
+function applyQuality() {
+  const q = save.quality || 'auto';
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+  const set = (shadows, near, pr) => {
+    world.setShadows(shadows && !P.has('noshadow'));
+    world.lodNear = near;
+    for (const p of [world.gallop, world.idle, world.eat]) p.setNear?.(near);
+    world.setPixelRatio(pr);
+  };
+  if (q === 'high') set(true, 26, dpr);
+  else if (q === 'mid') set(false, 14, Math.min(dpr, 1.25));
+  else if (q === 'low') set(false, 6, Math.min(dpr, 0.9));
+  else set(true, 22, dpr);
 }
 
 // —— для тестов ——

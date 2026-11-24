@@ -263,6 +263,12 @@ export class World {
       this.streaks.frustumCulled = false;
       this.scene.add(this.streaks);
     }
+    // табунщики: два всадника по бокам табуна
+    this.herders = [
+      { r: this.makeRider({ hue: 205, sat: 0.55, noFlag: true }), side: -1, coat: 'bay', ph: 0.61 },
+      { r: this.makeRider({ hue: 100, sat: 0.45, noFlag: true }), side: 1, coat: 'black', ph: 0.13 },
+    ];
+    for (const h of this.herders) this.scene.add(h.r);
     this.rivalRider = this.makeRider({ chapan: '#2a2440', trim: '#9aa0b0', hat: '#3a3030', flag: '#1f1f2e', hue: 232, sat: 0.38 });
     this.scene.add(this.rivalRider);
     this.rivalLeaderCol = new THREE.Color('#1c1614');
@@ -329,10 +335,12 @@ export class World {
       x.fillStyle = o.flag || '#c4281f'; x.beginPath(); x.arc(70, 40, 10, 0, Math.PI * 2); x.fill();
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
     })();
-    add(new THREE.CylinderGeometry(0.025, 0.025, 2.3, 6), pole, 0.3, 1.05, 0.1);
+    const poleMesh = add(new THREE.CylinderGeometry(0.025, 0.025, 2.3, 6), pole, 0.3, 1.05, 0.1);
+    if (o.noFlag) poleMesh.visible = false;
     const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.6, 8, 1).translate(0.475, 0, 0), new THREE.MeshLambertMaterial({ map: flagTex, side: THREE.DoubleSide }));
     flag.position.set(0.3, 1.88, 0.1);
     g.add(flag);
+    if (o.noFlag) flag.visible = false;
     g.userData.flag = flag;
     g.userData.flagBase = flag.geometry.attributes.position.array.slice();
     g.visible = false;
@@ -993,6 +1001,26 @@ export class World {
       f.geometry.attributes.position.needsUpdate = true;
       f.rotation.y = gal ? Math.PI * 0.5 : 0.4;
     } else if (this.rider) this.rider.visible = false;
+    // табунщики скачут по краям табуна, чуть позади вожака
+    for (const h of this.herders) {
+      const show = run.count > 0 && run.state !== 'lose';
+      h.r.visible = show;
+      if (!show) continue;
+      const sh3 = herdShape(Math.max(1, Math.min(run.count, run.cap)));
+      const wide = run.state === 'clash' || run.state === 'ladder' || run.state === 'win';
+      const hx = h.side * Math.min(HALF + (wide ? 2.6 : 1.0), (menu ? 2.6 : sh3.a + 1.4) + Math.abs(run.cx) * 0.2) + (menu ? 0 : run.cx * 0.6);
+      const hd = run.d + (menu ? -1.5 - (h.side > 0 ? 1.2 : 0) : sh3.b * 0.35 - (h.side > 0 ? 1.6 : 0));
+      const gal = running && !menu && run.state !== 'win';
+      const hp = gal ? this.gallop : this.idle;
+      const hph = gal ? h.ph + t * gallopRate : h.ph + t * 0.4;
+      m4.compose(v.set(hx, 0, -hd), q.setFromEuler(e.set(0, 0, 0)), s.set(1.08, 1.08, 1.08));
+      hp.add(hph, m4, this.coat(h.coat));
+      shadow(hx, -hd, 1.08);
+      const sk = this.seat(hp, hph);
+      if (sk) h.r.position.set(hx + sk.x * 1.08, sk.y * 1.08, -hd + sk.z * 1.08);
+      else h.r.position.set(hx, 1.3, -hd);
+      h.r.scale.setScalar(1.08 / 1.3);
+    }
     // волки
     let rc = 0;
     for (const w of run.wolves || []) {
