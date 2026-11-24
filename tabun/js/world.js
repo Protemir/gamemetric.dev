@@ -143,6 +143,21 @@ export class World {
     this.gallop = new HorsePool(assets.horse.gallop, hm, 420, this.scene);
     this.idle = new HorsePool(assets.horse.idle, hm, 260, this.scene);
     this.eat = new HorsePool(assets.horse.eat, hm, 120, this.scene);
+    this.wolfRun = new HorsePool(assets.wolf.run, hm, 90, this.scene);
+    this.wolfStalk = new HorsePool(assets.wolf.stalk, hm, 90, this.scene);
+    this.wolfCols = ['#3e4144', '#4d4f4f', '#36332f', '#57534c'].map((c) => new THREE.Color(c));
+    // красные круги под волками — видно издалека
+    const ringTex = canvasTex(64, 64, (g, w) => {
+      const gr = g.createRadialGradient(w / 2, w / 2, w * 0.18, w / 2, w / 2, w / 2);
+      gr.addColorStop(0, 'rgba(255,60,40,0)'); gr.addColorStop(0.55, 'rgba(255,60,40,0.85)'); gr.addColorStop(0.75, 'rgba(255,60,40,0.5)'); gr.addColorStop(1, 'rgba(255,60,40,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, w, w);
+    }, { srgb: false });
+    this.rings = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.9, 1.9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: ringTex, transparent: true, depthWrite: false, fog: false }), 90);
+    this.rings.frustumCulled = false;
+    this.rings.renderOrder = 2;
+    this.rings.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.scene.add(this.rings);
+    this.leaderCol = new THREE.Color('#f4efe6');
 
     // тени-пятна под конями
     const shTex = canvasTex(64, 128, (g, w, h) => {
@@ -676,7 +691,7 @@ export class World {
     this.time += dt;
     const t = this.time;
     const m4 = this.m4, q = this.q, e = this.e, v = this.v3, s = this.s3;
-    this.gallop.begin(); this.idle.begin(); this.eat.begin();
+    this.gallop.begin(); this.idle.begin(); this.eat.begin(); this.wolfRun.begin(); this.wolfStalk.begin();
     let sh = 0;
     const shadow = (x, z, sc = 1) => {
       if (sh >= 900) return;
@@ -696,6 +711,31 @@ export class World {
       else this.idle.add(b.phase + t * 0.4, m4, col);
       shadow(b.x, -b.d, sc);
     }
+    // вожак-ақбоз: впереди табуна, крупнее всех
+    if (run.count > 0 && (running || menu) && run.state !== 'lose') {
+      const sh2 = herdShape(Math.max(1, Math.min(run.count, run.cap)));
+      const lx = run.cx;
+      const ld = run.d + sh2.b + 1.9;
+      m4.compose(v.set(lx, 0, -ld), q.setFromEuler(e.set(0, 0, 0)), s.set(1.3, 1.3, 1.3));
+      if (running && !menu) this.gallop.add(0.37 + t * gallopRate, m4, this.leaderCol);
+      else this.idle.add(0.2 + t * 0.4, m4, this.leaderCol);
+      shadow(lx, -ld, 1.3);
+    }
+    // волки
+    let rc = 0;
+    for (const w of run.wolves || []) {
+      const pulse = 1 + Math.sin(t * 6 + w.id) * 0.08;
+      m4.compose(v.set(w.x, 0.03, -w.d), q.identity(), s.set(pulse, 1, pulse));
+      this.rings.setMatrixAt(rc++, m4);
+      const yaw = w.run ? Math.atan2(-w.vx, w.vd) : Math.PI;
+      m4.compose(v.set(w.x, 0, -w.d), q.setFromEuler(e.set(0, yaw, 0)), s.set(1, 1, 1));
+      const col = this.wolfCols[w.id % this.wolfCols.length];
+      if (w.run) this.wolfRun.add(w.phase + t * 1.9, m4, col);
+      else this.wolfStalk.add(w.phase + t * 0.5, m4, col);
+      shadow(w.x, -w.d, 0.6);
+    }
+    this.rings.count = rc;
+    this.rings.instanceMatrix.needsUpdate = true;
     // дикие
     for (const w of run.wild) {
       m4.compose(v.set(w.x, 0, -w.d), q.setFromEuler(e.set(0, w.yaw + Math.PI, 0)), s.set(1, 1, 1));
@@ -734,7 +774,7 @@ export class World {
       this.gallop.add(g.phase + g.t * 0.2, m4, col);
       if (g.y < 1) shadow(g.x, -g.d, fade);
     }
-    this.gallop.end(); this.idle.end(); this.eat.end();
+    this.gallop.end(); this.idle.end(); this.eat.end(); this.wolfRun.end(); this.wolfStalk.end();
     this.shadows.count = sh;
     this.shadows.instanceMatrix.needsUpdate = true;
 
@@ -803,6 +843,10 @@ export class World {
       const c = ev.kind === 'fall' ? new THREE.Color('#3a2a1a') : this.dustColor();
       for (let i = 0; i < 5; i++) this.dust.emit(ev.x, 0.3, -ev.d, (Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3, c, 0.9, 1, 3, 0, 0.8);
       if (ev.kind === 'hit' || ev.kind === 'bump') this.shake = Math.max(this.shake, 0.25);
+    } else if (ev.type === 'bite') {
+      const c = new THREE.Color('#8a3a2a');
+      for (let i = 0; i < 8; i++) this.dust.emit(ev.x, 0.5, -ev.d, (Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3, i % 2 ? c : this.dustColor(), 0.8, 0.8, 2.4, 0, 0.9);
+      this.shake = Math.max(this.shake, 0.18);
     } else if (ev.type === 'recruit') {
       const c = new THREE.Color('#fff3b0');
       for (let i = 0; i < 6; i++) this.sparks.emit(ev.x, 1.8, -ev.d, (Math.random() - 0.5) * 3, 3 + Math.random() * 2, (Math.random() - 0.5) * 2, c, 0.6, 0.25, 0.1, 9, 1);

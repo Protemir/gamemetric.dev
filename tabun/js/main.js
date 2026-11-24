@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
 import { level, Run, DT, autoTarget, HALF, reward, herdShape, opText } from './logic.js';
 import { World } from './world.js';
-import { loadHorse, HERD_SETS, COATS } from './horses.js';
+import { loadHorse, loadWolf, HERD_SETS, COATS } from './horses.js';
 import { initAudio, sfx, hooves, setSound } from './audio.js';
 import { t, detectLang, setLang, getLang } from './i18n.js';
 import * as S from './save.js';
@@ -27,6 +27,7 @@ let acc = 0;
 let peak = 0;
 let lastT = 0;
 let dragHintOn = false;
+let resultIn = 0;       // через сколько секунд игры показать итоги (0 — не ждём)
 let shownHints = {};
 try { shownHints = JSON.parse(localStorage.getItem('tabun.hints') || '{}'); } catch { /* нет доступа */ }
 
@@ -42,11 +43,12 @@ async function boot() {
   setLoad(0.05);
   const loader = new GLTFLoader();
   let done = 0;
-  const tick = () => setLoad(0.1 + (++done / 4) * 0.85);
-  const [horse, rock, bush] = await Promise.all([
+  const tick = () => setLoad(0.1 + (++done / 5) * 0.85);
+  const [horse, rock, bush, wolf] = await Promise.all([
     loadHorse('models/horse.glb').then((h) => { tick(); return h; }),
     loader.loadAsync('models/rock.glb').then((g) => { tick(); return g; }),
     loader.loadAsync('models/bush.glb').then((g) => { tick(); return g; }),
+    loadWolf('models/wolf.glb').then((w) => { tick(); return w; }),
     document.fonts.load("400 40px 'Russo One'").then(tick, tick),
   ]);
   const norm = (scene, base) => {
@@ -59,8 +61,11 @@ async function boot() {
     return { g, size };
   };
   const r = norm(rock.scene, false), b = norm(bush.scene, true);
-  const assets = { horse, rock: r.g, rockScale: 1 / Math.max(r.size.x, r.size.y, r.size.z), bush: b.g, bushScale: 1.1 / b.size.y };
+  const assets = { horse, rock: r.g, rockScale: 1 / Math.max(r.size.x, r.size.y, r.size.z), bush: b.g, bushScale: 1.1 / b.size.y, wolf };
   world = new World($('gl'), assets);
+  // телефон может отобрать WebGL при сворачивании — не даём экрану остаться чёрным
+  $('gl').addEventListener('webglcontextlost', (e) => { e.preventDefault(); pause(); });
+  $('gl').addEventListener('webglcontextrestored', () => location.reload());
   world.setHerdSet(save.set);
   setSound(save.sound);
   onResize();
@@ -91,10 +96,14 @@ function prepare() {
 }
 
 function startLevel() {
+  if (state === 'play' || state === 'loading') return;
   initAudio();
+  resultIn = 0;
   if (state !== 'menu' || !run) prepare();
   state = 'play';
   slowT = 0; timeScale = 1; acc = 0;
+  mileIdx = 0;
+  while (mileIdx < MILES.length && run.count >= MILES[mileIdx]) mileIdx++;
   hideAll();
   $('hud').classList.remove('hidden');
   $('progLvl').textContent = t('level') + ' ' + L.n;
@@ -162,6 +171,7 @@ function renderUps() {
       if (key === 'herd') {
         keepRun.count = S.startHerd(save);
         keepRun.sync();
+        for (const h of keepRun.bodies) { if (h.spawn < 1) { h.x = keepRun.cx + h.sx; h.d = keepRun.d + h.sd; h.spawn = 1; } }
       }
       keepRun.leader = S.leaderBonus(save);
       world.setAul?.(S.yurts(save));
@@ -233,7 +243,7 @@ function showSettings(inGame) {
   modal(`<h3 class="mtitle">${inGame ? t('pause') : '⚙'}</h3>${row(t('sound'), save.sound, 'mSound')}<div class="mrow"><span>🌐</span><button id="mLang">${t('lang')}</button></div>
     <div class="mbtns">${inGame ? `<button class="big disp" id="mResume">${t('resume')}</button><button class="pill" id="mMenu">${t('menu')}</button>` : `<button class="pill" id="mClose">OK</button>`}</div>`);
   $('mSound').onclick = () => { save.sound = !save.sound; setSound(save.sound); S.store(save); showSettings(inGame); };
-  $('mLang').onclick = () => { setLang(getLang() === 'ru' ? 'en' : 'ru'); if (inGame) showSettings(true); else { closeModal(); showMenu(); } };
+  $('mLang').onclick = () => { setLang(getLang() === 'ru' ? 'en' : 'ru'); if (inGame) { $('progLvl').textContent = t('level') + ' ' + L.n; showSettings(true); } else { closeModal(); showMenu(); } };
   if (inGame) {
     $('mResume').onclick = () => { closeModal(); state = 'play'; lastT = performance.now(); };
     $('mMenu').onclick = () => { closeModal(); showMenu(); };
@@ -292,10 +302,10 @@ function placeTags() {
   if (!herdTag) return;
   const sh = herdShape(Math.max(1, Math.min(run.count, run.cap)));
   if (run.count > 0 && run.state !== 'win') {
-    const p = world.project(run.cx * 0.9, 2.6, run.d + sh.b * 0.6);
+    const p = world.project(run.cx * 0.9, 3.4, run.d + sh.b * 0.6);
     herdTag.style.display = '';
     herdTag.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
-    if (herdTag._n !== run.count) { herdTag._n = run.count; herdTag.textContent = run.count; }
+    if (herdTag._n !== run.count) { herdTag._n = run.count; herdTag.textContent = run.count; herdTag.style.fontSize = Math.round(24 + Math.min(18, Math.log2(Math.max(1, run.count)) * 1.8)) + 'px'; }
   } else herdTag.style.display = 'none';
   const rv = run.rival;
   const rp = world.project(0, 2.8, rv.d - herdShape(Math.max(1, Math.min(rv.count, run.cap))).b * 0.5);
@@ -304,6 +314,22 @@ function placeTags() {
   if (showR) {
     rivalTag.style.transform = `translate(${rp.x}px, ${rp.y}px) translate(-50%, -100%)`;
     if (rivalTag._n !== rv.count) { rivalTag._n = rv.count; rivalTag.textContent = rv.count; }
+  }
+}
+
+// вибрация на телефоне (не везде есть — молча пропускаем)
+function buzz(p) { try { if (save.sound && navigator.vibrate) navigator.vibrate(p); } catch { /* нет */ } }
+
+// круглые числа табуна — праздник
+const MILES = [25, 50, 100, 200, 300, 500, 750, 999];
+let mileIdx = 0;
+function checkMilestone() {
+  if (run.state !== 'run') return;
+  while (mileIdx < MILES.length && run.count >= MILES[mileIdx]) {
+    const n = MILES[mileIdx++];
+    if (mileIdx < MILES.length && run.count >= MILES[mileIdx]) continue; // перепрыгнули — празднуем только последнее
+    banner(n === 100 ? t('milestone100') : t('milestone', { n }));
+    sfx('milestone');
   }
 }
 
@@ -320,6 +346,7 @@ function handleEvents() {
         const txt = ev.delta >= 0 ? (g.op === 'x' ? opText(g) : '+' + ev.delta) : String(ev.delta);
         floatText(txt, ev.x, 2.2, ev.d, ev.good ? 'good huge' : 'bad huge');
         sfx(ev.good ? 'good' : 'bad', g.op === 'x' ? 6 : 0);
+        if (!ev.good) buzz(60);
         popTag(herdTag);
         break;
       }
@@ -334,14 +361,21 @@ function handleEvents() {
         popTag(herdTag);
         break;
       case 'loss':
-        if (now - lastLossSfx > 120) { sfx(ev.kind === 'fall' ? 'fall' : 'hit'); lastLossSfx = now; }
+        if (ev.kind !== 'wolf' && now - lastLossSfx > 120) { sfx(ev.kind === 'fall' ? 'fall' : 'hit'); lastLossSfx = now; buzz(20); }
         if (ev.n > 0) floatText('−' + ev.n, ev.x, 1.8, ev.d, 'bad');
         break;
       case 'rock': sfx('rock'); showHint('rock'); break;
+      case 'wolves': showHint('wolf'); break;
+      case 'howl': sfx('howl'); break;
+      case 'bite':
+        if (now - lastLossSfx > 90) { sfx('bite'); lastLossSfx = now; }
+        buzz(25);
+        break;
       case 'river': sfx('splash'); showHint('river'); break;
       case 'leader':
         floatText(t('leader', { n: ev.v }), run.cx, 3.4, run.d + 4, 'gold huge');
         break;
+      case 'clash-hit': buzz([40, 30, 60]); break;
       case 'clash-start':
         banner(t('clash'));
         sfx('drum');
@@ -355,11 +389,11 @@ function handleEvents() {
         break;
       case 'win':
         sfx('win');
-        setTimeout(() => showResult(), 1400);
+        resultIn = 1.4;
         break;
       case 'lose':
         sfx('lose');
-        setTimeout(() => showResult(), 1300);
+        resultIn = 1.3;
         break;
     }
   }
@@ -374,6 +408,7 @@ function checkUpcomingHints() {
     if (d - front > 45) break;
     if (d < front) continue;
     if (it.type === 'wild') showHint('wild');
+    else if (it.type === 'wolf') showHint('wolf');
     else if (it.type === 'pit') showHint('pit');
     else if (it.type === 'fence') showHint('fence');
   }
@@ -398,7 +433,10 @@ function showResult() {
   $('resT').textContent = res.win ? t('win') : t('lose');
   $('resSub').textContent = res.win ? t('best', { n: peak }) : run.rival.count < run.rival.start ? t('rivalWon', { n: run.rival.count }) : t('lostWay');
   $('resMult').textContent = res.win ? '×' + res.mult + (L.boss ? ' · ×2' : '') : '';
-  $('resNext').textContent = res.win ? t('next') : t('retry');
+  // проиграл, но хватает на улучшение — зовём в меню улучшаться
+  const canUp = !res.win && ['herd', 'income', 'leader'].some((k) => save.up[k] < S.UPS[k].max && save.coins >= S.upCost(k, save.up[k]));
+  r.dataset.up = canUp ? '1' : '';
+  $('resNext').textContent = res.win ? t('next') : canUp ? t('upgrade') : t('retry');
   $('resMenu').textContent = t('menu');
   // счётчик монет бежит
   const b = $('resCoins').querySelector('b');
@@ -433,7 +471,8 @@ function bindInput() {
   window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
     if (e.code === 'KeyP' || (e.code === 'Escape' && !PORTAL)) { if (state === 'play') pause(); }
-    if ((e.code === 'Space' || e.code === 'Enter') && state === 'menu' && $('modal').classList.contains('hidden')) startLevel();
+    initAudio();
+    if ((e.code === 'Space' || e.code === 'Enter') && state === 'menu' && $('modal').classList.contains('hidden')) { e.preventDefault(); startLevel(); }
   });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
@@ -446,7 +485,12 @@ function bindUI() {
   $('pauseBtn').onclick = () => { sfx('click'); pause(); };
   $('setBtn').onclick = () => { sfx('click'); showSettings(false); };
   $('coatsBtn').onclick = () => { sfx('click'); showCoats(); };
-  $('resNext').onclick = () => { sfx('click'); if (run?.result?.win) showMenu(); else startLevel(); };
+  $('resNext').onclick = () => {
+    sfx('click');
+    if (run?.result?.win) showMenu();
+    else if ($('result').dataset.up) { showMenu(); for (const el of $('ups').children) if (!el.classList.contains('poor')) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash', 'glow'); } }
+    else startLevel();
+  };
   $('resMenu').onclick = () => { sfx('click'); showMenu(); };
 }
 
@@ -472,11 +516,13 @@ function frame(now) {
     }
     peak = Math.max(peak, run.count);
     handleEvents();
+    checkMilestone();
     checkUpcomingHints();
     const pr = run.progress;
     $('progBar').firstElementChild.style.width = pr * 100 + '%';
     $('progBar').lastElementChild.style.left = pr * 100 + '%';
     hooves(run.count, run.state === 'run' || run.state === 'ladder' || run.state === 'clash', rdt);
+    if (resultIn > 0 && (resultIn -= rdt) <= 0) { resultIn = 0; showResult(); }
   } else if (state === 'result') {
     run.step(rdt, run.cx);
     run.events.length = 0;
@@ -499,7 +545,7 @@ function frame(now) {
 window.__tabun = {
   get state() { return state; }, get run() { return run; }, get save() { return save; }, get world() { return world; },
   get fps() { return fpsT; },
-  start: startLevel, menu: showMenu,
+  start: startLevel, menu: showMenu, auto: autoTarget,
   setSave(s) { save = { ...save, ...s }; S.store(save); },
   layout() {
     const sel = ['#pauseBtn', '#hudCoins', '#prog', '#setBtn', '#allGames', '#menuCoins', '#logo', '#lvlRow', '#playBtn', '#ups', '#coatsBtn', '#aulInfo', '#resT', '#resCoins', '#resNext', '#resMenu', '#hint'];

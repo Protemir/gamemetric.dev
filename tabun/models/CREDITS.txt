@@ -2,6 +2,7 @@
 horse.glb — "Horse"   https://poly.pizza/m/qvTrSG9pZF
 rock.glb  — "Rock"    https://poly.pizza/m/RtLRqYjfMs
 bush.glb  — "Bush"    https://poly.pizza/m/ooG6CkLyE8
+wolf.glb  — "Wolf"    https://poly.pizza/m/P1gU3Qkr9r
 Звук / Sound: sounds/horse-neigh.mp3 — Joseph SARDIN / BigSoundBank, CC0 (см. sounds/SOURCES.txt)
 Шрифты / Fonts: Russo One, Rubik — SIL Open Font License
 three.js — MIT License, см. vendor/LICENSE

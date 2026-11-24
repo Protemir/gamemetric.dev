@@ -100,6 +100,29 @@ export function sfx(name, arg = 0) {
     case 'splash':
       noise(t, 0.4, { vol: 0.15, freq: 2500, type: 'bandpass', q: 0.7, slide: 0.5 });
       break;
+    case 'howl': {
+      // вой: два голоса, глиссандо с вибрато
+      for (const [f0, dl, v] of [[360, 0, 0.09], [300, 0.25, 0.06]]) {
+        const o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+        o.type = 'sine'; lfo.frequency.value = 6; lg.gain.value = 9;
+        lfo.connect(lg).connect(o.frequency);
+        const t0 = t + dl;
+        o.frequency.setValueAtTime(f0, t0);
+        o.frequency.exponentialRampToValueAtTime(f0 * 1.9, t0 + 0.7);
+        o.frequency.exponentialRampToValueAtTime(f0 * 1.4, t0 + 1.8);
+        g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(v, t0 + 0.4); g.gain.exponentialRampToValueAtTime(0.001, t0 + 2);
+        o.connect(g).connect(master); o.start(t0); lfo.start(t0); o.stop(t0 + 2.05); lfo.stop(t0 + 2.05);
+      }
+      break;
+    }
+    case 'bite':
+      noise(t, 0.18, { vol: 0.35, freq: 900, type: 'bandpass', q: 2, slide: 0.4 });
+      tone(160, t, 0.15, { type: 'sawtooth', vol: 0.08, slide: 0.6 });
+      break;
+    case 'milestone':
+      [0, 4, 7, 12, 16].forEach((s2, i) => tone(523 * Math.pow(2, s2 / 12), t + i * 0.06, 0.35, { type: 'triangle', vol: 0.12 }));
+      noise(t, 0.6, { vol: 0.08, freq: 6000, type: 'highpass' });
+      break;
     case 'clash':
       noise(t, 0.12, { vol: 0.3, freq: 600 + Math.random() * 400, q: 1 });
       tone(70 + Math.random() * 30, t, 0.1, { vol: 0.2, slide: 0.7 });

@@ -88,7 +88,7 @@ function genLevelOnce(n, variant) {
   };
   // что уже можно ставить на этом уровне
   const can = {
-    mult: n >= 2, pit: n >= 3, rock: n >= 4, fence: n >= 6, river: n >= 8, div: n >= 3, chest: n >= 2,
+    mult: n >= 2, pit: n >= 3, rock: n >= 5, wolf: n >= 4, fence: n >= 6, river: n >= 8, div: n >= 3, chest: n >= 2,
   };
   // ожидаемое число коней по «умному» пути — чтобы выбор в воротах был задачей, а не очевидностью
   let E = 5 + Math.floor(n / 3);
@@ -98,13 +98,20 @@ function genLevelOnce(n, variant) {
   while (d < end) {
     const w = [
       ['gate', 55], ['wild', n === 1 ? 25 : 14],
-      ['rock', can.rock ? 13 : 0], ['pit', can.pit ? 11 : 0],
+      ['rock', can.rock ? 10 : 0], ['pit', can.pit ? 11 : 0], ['wolf', can.wolf ? 13 : 0],
       ['fence', can.fence ? 9 : 0], ['river', can.river ? 4 : 0],
     ].filter(([t, wt]) => wt > 0 && !(t === lastType && t !== 'gate'));
     let tot = w.reduce((s, x) => s + x[1], 0), r = R() * tot, type = 'gate';
     for (const [t, wt] of w) { if ((r -= wt) < 0) { type = t; break; } }
     if (type === 'gate') {
       const g = makeGatePair(E, R, can, n);
+      // засада: стая сторожит выгодную сторону ворот
+      if (can.wolf && !g.full && R() < 0.28) {
+        const vl = applyOp(E, g.left), vr = applyOp(E, g.right);
+        const k = ri(2, 3 + Math.min(4, Math.floor(n / 4)));
+        L.items.push({ type: 'wolf', d: d - 13, x: vl >= vr ? -2.75 : 2.75, n: k, seed: ri(1, 1e6) });
+        E -= Math.round(k * 0.5);
+      }
       L.items.push({ type: 'gate', d, ...g });
       const sides = g.full ? [g.full] : [g.left, g.right];
       E = Math.max(...sides.map((s) => applyOp(E, s)));
@@ -115,6 +122,11 @@ function genLevelOnce(n, variant) {
       L.items.push({ type: 'wild', d: d + 4, x: pick([-3, -1.5, 0, 1.5, 3]), n: k, seed: ri(1, 1e6) });
       E += Math.round(k * 0.8);
       d += ri(24, 30);
+    } else if (type === 'wolf') {
+      const k = ri(3, 4 + Math.min(6, Math.floor(n / 3)));
+      L.items.push({ type: 'wolf', d, x: pick([-3, -1.5, 0, 1.5, 3]), n: k, seed: ri(1, 1e6) });
+      E -= Math.round(k * 0.4);
+      d += ri(26, 32);
     } else if (type === 'rock') {
       const many = n >= 9 && R() < 0.4 ? 2 : 1;
       if (lastType === 'fence' || lastType === 'pit') d += 12;
@@ -145,8 +157,9 @@ function genLevelOnce(n, variant) {
   if (n === 1) L.items = L.items.filter((it) => it.type === 'gate' || it.type === 'wild');
   // соперник: столько, сколько набирает автопилот, умноженное на долю
   const start = 5 + Math.floor((n - 1) / 3);
-  const got = simulate(L, { start, leader: 0 });
-  const ratio = boss ? 0.9 : Math.min(0.8, 0.45 + n * 0.025);
+  // два прогона с разной «случайностью» — уровень не должен держаться на одной удачной партии
+  const got = Math.min(simulate(L, { start, leader: 0, seed: 0 }), simulate(L, { start, leader: 0, seed: 1 }));
+  const ratio = boss ? 0.84 : Math.min(0.8, 0.45 + n * 0.025);
   L.rival = Math.max(3, Math.round(got * ratio));
   L.autoGot = got;
   L.variant = variant;
@@ -177,7 +190,7 @@ function makeGatePair(E, R, can, n) {
 
 // —— забег ——
 export class Run {
-  constructor(L, { start = 5, leader = 0, cap = CAP } = {}) {
+  constructor(L, { start = 5, leader = 0, cap = CAP, seed = 0 } = {}) {
     this.L = L;
     this.cap = cap;
     this.count = start;
@@ -191,6 +204,7 @@ export class Run {
     this.ghosts = [];        // упавшие, сбитые, ушедшие — только для картинки
     this.wild = [];          // дикие кони на трассе
     this.rocks = [];
+    this.wolves = [];        // волки: стоят, потом бегут наперерез; один волк — один конь
     this.events = [];
     this.coins = 0;
     this.lossAcc = 0;
@@ -202,11 +216,12 @@ export class Run {
     this.stepCost = Math.max(1, Math.ceil(L.rival * 0.05));
     this.finishD = L.length;
     this.ladderD0 = this.rival.d + 12;
-    this.R = rng(L.n * 31 + 7);
+    this.R = rng(L.n * 31 + 7 + seed * 7777);
+    const RR = rng(L.n * 97 + 3); // у соперника свой поток: его размер не должен менять забег
     this.sync(true);
     for (let i = 0; i < Math.min(L.rival, cap); i++) {
       const s = slotOf(i, Math.min(L.rival, cap), herdShape(Math.min(L.rival, cap)));
-      this.rival.bodies.push({ id: this.nextId++, x: s.sx, d: this.rival.d - s.sd, phase: this.R(), k: 3 + this.R() * 3, sx: s.sx, sd: -s.sd });
+      this.rival.bodies.push({ id: this.nextId++, x: s.sx, d: this.rival.d - s.sd, phase: RR(), k: 3 + RR() * 3, sx: s.sx, sd: -s.sd });
     }
   }
 
@@ -246,9 +261,9 @@ export class Run {
   }
 
   // конь погиб: число уменьшается на «вес» тела (при большом табуне одно тело — несколько коней)
-  kill(i, kind, extra) {
+  kill(i, kind, extra, fixed = 0) {
     const b = this.bodies[i];
-    const w = this.count / Math.max(1, this.bodies.length);
+    const w = fixed || this.count / Math.max(1, this.bodies.length);
     this.lossAcc += w;
     const k = Math.floor(this.lossAcc + 1e-6);
     this.lossAcc -= k;
@@ -278,7 +293,7 @@ export class Run {
   ghostStep(g, dt) {
     g.t += dt;
     if (g.kind === 'fall') { g.vy -= 22 * dt; g.y += g.vy * dt; g.d += g.vd * dt; g.rot += dt * 2.5; }
-    else if (g.kind === 'hit' || g.kind === 'bump' || g.kind === 'clash') {
+    else if (g.kind === 'hit' || g.kind === 'bump' || g.kind === 'clash' || g.kind === 'wolf') {
       g.vy -= 20 * dt; g.y = Math.max(0, g.y + g.vy * dt); g.x += g.vx * dt; g.d += g.vd * dt; g.rot += dt * 7;
       if (g.y === 0) { g.vx *= 0.9; g.vd *= 0.9; }
     }
@@ -338,6 +353,17 @@ export class Run {
           }
         }
         if (it.active && this.d > it.d + 40) it.done = true;
+      } else if (it.type === 'wolf') {
+        if (!it.active && front > it.d - 65) {
+          it.active = true;
+          const R = rng(it.seed);
+          for (let k = 0; k < it.n; k++) {
+            const a = R() * Math.PI * 2, r = Math.sqrt(R()) * (0.7 + it.n * 0.13);
+            this.wolves.push({ id: this.nextId++, x: clamp(it.x + Math.cos(a) * r, -HALF + 0.4, HALF - 0.4), d: it.d + Math.sin(a) * r * 1.2, phase: R(), run: false, vx: 0, vd: 0, item: it.i, sp: 3 + R() * 1.2 });
+          }
+          this.emit('wolves', { x: it.x, d: it.d, n: it.n });
+        }
+        if (it.active && this.d - sh.b > it.d + 30) it.done = true;
       } else if (it.type === 'rock') {
         // валун катится поперёк так, чтобы быть на середине трассы, когда табун подойдёт
         const lead = ((HALF + 4) / it.speed) * this.speed;
@@ -378,6 +404,32 @@ export class Run {
             this.emit('recruit', { x: h.x, d: h.d });
             break;
           }
+        }
+      }
+    }
+
+    // волки: близко — бросаются к ближайшему коню
+    for (let w = this.wolves.length - 1; w >= 0; w--) {
+      const wf = this.wolves[w];
+      if (wf.d < this.d - sh.b - 12) { this.wolves.splice(w, 1); continue; }
+      const near = wf.d - front;
+      if (!wf.run && near < 24) { wf.run = true; if (!this.howled || this.t - this.howled > 3) { this.howled = this.t; this.emit('howl', { x: wf.x, d: wf.d }); } }
+      if (!wf.run || !this.bodies.length) continue;
+      let best = null, bd = 1e9;
+      for (const b of this.bodies) { const q = (b.x - wf.x) ** 2 + (b.d - wf.d) ** 2 * 0.3; if (q < bd) { bd = q; best = b; } }
+      const dx = best.x - wf.x;
+      wf.vx = clamp(dx * 3, -wf.sp, wf.sp);
+      wf.vd = -4.5;
+      wf.x = clamp(wf.x + wf.vx * dt, -HALF + 0.3, HALF - 0.3);
+      wf.d += wf.vd * dt;
+      if (Math.abs(wf.d - this.d) > sh.b + 2) continue;
+      for (let i = this.bodies.length - 1; i >= 0; i--) {
+        const b = this.bodies[i];
+        if ((b.x - wf.x) ** 2 + (b.d - wf.d) ** 2 < 1.1) {
+          this.kill(i, 'wolf', { vx: wf.vx * 0.6, vy: 3.5, vd: -2 }, 1);
+          this.wolves.splice(w, 1);
+          this.emit('bite', { x: wf.x, d: wf.d });
+          break;
         }
       }
     }
@@ -548,13 +600,20 @@ export function autoTarget(run) {
   if (gate) {
     if (gate.full) want = run.cx;
     else {
-      const val = (g) => (g.op === '$' ? run.count + 0.5 : applyOp(run.count, g));
-      want = val(gate.left) >= val(gate.right) ? -2.6 : 2.6;
+      const pack = (side) => run.wolves.filter((w) => (side < 0 ? w.x < 0 : w.x >= 0) && w.d < gate.d && w.d > run.d - sh.b).length;
+      const val = (g, side) => (g.op === '$' ? run.count + 0.5 : applyOp(run.count, g)) - pack(side) * 1.5;
+      want = val(gate.left, -1) >= val(gate.right, 1) ? -2.6 : 2.6;
     }
   }
   // дикие кони — если по пути
   const wild = run.wild.filter((w) => w.d > front - 2 && w.d - front < 25);
   if (wild.length && (!gate || gate.d - front > 22)) want = wild.reduce((s, w) => s + w.x, 0) / wild.length;
+  // стая без ворот рядом — в сторону
+  const pk = run.wolves.filter((w) => w.d > run.d - sh.b && w.d - front < 26);
+  if (pk.length && (!gate || gate.d - front > 30)) {
+    const mx = pk.reduce((q, w) => q + w.x, 0) / pk.length;
+    want = mx > 0 ? -HALF + sh.a * 0.6 + 0.3 : HALF - sh.a * 0.6 - 0.3;
+  }
   if (avoid !== null) want = avoid;
   // 4) овраг на пути — важнее всего: туда не идём, даже уходя от валуна
   const pit = ahead.find((it) => it.type === 'pit' && it.d0 - front < 18 && it.d1 > run.d - sh.b);

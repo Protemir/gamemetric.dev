@@ -26,13 +26,23 @@ export async function loadHorse(url, onProgress) {
   const gltf = await new GLTFLoader().loadAsync(url, onProgress);
   const clip = (name) => gltf.animations.find((a) => a.name === name);
   const gallop = bake(gltf, clip('Gallop'), 12);
-  const idle = bake(gltf, clip('Idle'), 8);
-  const eat = bake(gltf, clip('Eating'), 8);
+  const idle = bake(gltf, clip('Idle'), 8, { yaw: gallop.yaw });
+  const eat = bake(gltf, clip('Eating'), 8, { yaw: gallop.yaw });
   return { gallop, idle, eat };
 }
 
+// волк Quaternius (CC0): бег и стойка «голова к земле»
+const WOLF_PARTS = { Main: 1, Main_Light: 1.45 };
+export async function loadWolf(url) {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  const clip = (name) => gltf.animations.find((a) => a.name === name);
+  const o = { height: 1.25, parts: WOLF_PARTS };
+  const run = bake(gltf, clip('Gallop'), 10, o);
+  return { run, stalk: bake(gltf, clip('Idle_2_HeadLow'), 8, { ...o, yaw: run.yaw }), attack: bake(gltf, clip('Attack'), 8, { ...o, yaw: run.yaw }) };
+}
+
 // один клип → массив BufferGeometry, общие index/color/coat
-function bake(gltf, clip, frames) {
+function bake(gltf, clip, frames, { height = HORSE_H, parts = COAT_PARTS, yaw: yawIn = null } = {}) {
   const scene = gltf.scene;
   const meshes = [];
   scene.traverse((o) => { if (o.isSkinnedMesh) meshes.push(o); });
@@ -48,7 +58,7 @@ function bake(gltf, clip, frames) {
   for (const m of meshes) {
     const g = m.geometry, n = g.attributes.position.count;
     const name = m.material.name;
-    const shade = COAT_PARTS[name];
+    const shade = parts[name];
     const c = m.material.color;
     for (let i = 0; i < n; i++) {
       if (shade !== undefined) { color[(off + i) * 3] = color[(off + i) * 3 + 1] = color[(off + i) * 3 + 2] = shade; coat[off + i] = 1; }
@@ -84,14 +94,14 @@ function bake(gltf, clip, frames) {
     const x = p0[i * 3], y = p0[i * 3 + 1], z = p0[i * 3 + 2];
     minY = Math.min(minY, y); maxY = Math.max(maxY, y); minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
   }
-  const s = HORSE_H / (maxY - minY);
+  const s = height / (maxY - minY);
   const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
   const alongX = maxX - minX > maxZ - minZ;
   // где голова: средняя координата верхних вершин
   let headSum = 0, headN = 0;
   for (let i = 0; i < total; i++) if (p0[i * 3 + 1] > minY + (maxY - minY) * 0.8) { headSum += alongX ? p0[i * 3] - cx : p0[i * 3 + 2] - cz; headN++; }
   const headSign = Math.sign(headSum / Math.max(1, headN)) || 1;
-  const yaw = alongX ? (headSign > 0 ? Math.PI / 2 : -Math.PI / 2) : (headSign > 0 ? Math.PI : 0);
+  const yaw = yawIn !== null ? yawIn : alongX ? (headSign > 0 ? Math.PI / 2 : -Math.PI / 2) : (headSign > 0 ? Math.PI : 0);
   const cs = Math.cos(yaw), sn = Math.sin(yaw);
   const idxAttr = new THREE.BufferAttribute(total > 65535 ? new Uint32Array(index) : new Uint16Array(index), 1);
   const colAttr = new THREE.BufferAttribute(color, 3);
@@ -114,6 +124,7 @@ function bake(gltf, clip, frames) {
   }
   mixer.stopAllAction();
   out.duration = clip.duration;
+  out.yaw = yaw;
   return out;
 }
 
