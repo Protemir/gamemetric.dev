@@ -27,7 +27,7 @@ export async function loadRealHorse(url, loUrl) {
   return { gallop, idle, eat: idle, gallopLo, idleLo, material, textured: true };
 }
 
-function bakeTex(gltf, mesh, clip, frames, norm) {
+function bakeTex(gltf, mesh, clip, frames, norm, height = HORSE_H) {
   const scene = gltf.scene;
   const mixer = new THREE.AnimationMixer(scene);
   mixer.clipAction(clip).play();
@@ -80,7 +80,7 @@ function bakeTex(gltf, mesh, clip, frames, norm) {
       const x = p0[i * 3], y = p0[i * 3 + 1], z = p0[i * 3 + 2];
       minY = Math.min(minY, y); maxY = Math.max(maxY, y); minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
     }
-    norm.s = HORSE_H / (maxY - minY);
+    norm.s = height / (maxY - minY);
     norm.cx = (minX + maxX) / 2; norm.cz = (minZ + maxZ) / 2; norm.minY = minY;
     const alongX = maxX - minX > maxZ - minZ;
     let hs = 0, hn = 0;
@@ -121,6 +121,21 @@ function bakeTex(gltf, mesh, clip, frames, norm) {
   out.duration = clip.duration;
   out.yaw = norm.yaw;
   return out;
+}
+
+// реалистичный волк: Dire Wolf Lite (Literock Studios, бесплатная лицензия, как у коня). Цвет — родная текстура.
+export async function loadRealWolf(url) {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  const clip = (name) => gltf.animations.find((a) => a.name === name);
+  let mesh = null;
+  gltf.scene.traverse((o) => { if (o.isSkinnedMesh && !mesh) mesh = o; });
+  const norm = {};
+  const run = bakeTex(gltf, mesh, clip('run_loop'), 12, norm, 1.05);
+  const stalk = bakeTex(gltf, mesh, clip('idle_loop'), 16, norm, 1.05);
+  const src = mesh.material;
+  const material = new THREE.MeshStandardMaterial({ map: src.map, normalMap: src.normalMap, roughness: 0.85, metalness: 0 });
+  material.normalScale.set(0.7, 0.7);
+  return { run, stalk, material, textured: true };
 }
 
 // масть по яркости текстуры: шерсть, мышцы и грива остаются, цвет — из instanceColor

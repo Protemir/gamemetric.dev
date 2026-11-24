@@ -4,7 +4,7 @@ import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
 import { level, dailyLevel, Run, DT, autoTarget, HALF, reward, herdShape, opText } from './logic.js';
 import { World } from './world.js';
 import { loadHorse, loadWolf, HERD_SETS, COATS } from './horses.js';
-import { loadRealHorse } from './realhorse.js';
+import { loadRealHorse, loadRealWolf } from './realhorse.js';
 import { loadRiderProto } from './riderreal.js';
 import { initAudio, sfx, hooves, setSound, setMusic, music } from './audio.js';
 import { t, detectLang, setLang, getLang } from './i18n.js';
@@ -55,7 +55,7 @@ async function boot() {
     (TOY ? loadHorse('models/horse.glb') : loadRealHorse('models/warhorse.glb', 'models/warhorse-lo.glb')).then((h) => { tick(); return h; }),
     loader.loadAsync('models/rock.glb').then((g) => { tick(); return g; }),
     loader.loadAsync('models/bush.glb').then((g) => { tick(); return g; }),
-    loadWolf('models/wolf.glb').then((w) => { tick(); return w; }),
+    (TOY ? loadWolf('models/wolf.glb') : loadRealWolf('models/direwolf.glb')).then((w) => { tick(); return w; }),
     (TOY ? Promise.resolve(null) : loadRiderProto('models/rider.glb')).then((r) => { tick(); return r; }),
     document.fonts.load("400 40px 'Russo One'").then(tick, tick),
   ]);

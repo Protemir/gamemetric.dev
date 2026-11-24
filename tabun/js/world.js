@@ -203,9 +203,11 @@ export class World {
       this.idle = new LodPool(this.idle, il, this.camera);
       this.eat = new LodPool(this.eat, il, this.camera);
     }
-    this.wolfRun = new HorsePool(assets.wolf.run, toy, 90, this.scene);
-    this.wolfStalk = new HorsePool(assets.wolf.stalk, toy, 90, this.scene);
-    this.wolfCols = ['#3e4144', '#4d4f4f', '#36332f', '#57534c'].map((c) => new THREE.Color(c));
+    const wm = assets.wolf.textured ? assets.wolf.material : toy;
+    this.wolfRun = new HorsePool(assets.wolf.run, wm, 90, this.scene);
+    this.wolfStalk = new HorsePool(assets.wolf.stalk, wm, 90, this.scene);
+    // у реалистичного волка цвет из текстуры, инстанс лишь чуть меняет оттенок
+    this.wolfCols = (assets.wolf.textured ? ['#ffffff', '#e2e2e2', '#d8d0c4', '#c8c8c8'] : ['#3e4144', '#4d4f4f', '#36332f', '#57534c']).map((c) => new THREE.Color(c));
     // красные круги под волками — видно издалека
     const ringTex = canvasTex(64, 64, (g, w) => {
       const gr = g.createRadialGradient(w / 2, w / 2, w * 0.18, w / 2, w / 2, w / 2);
