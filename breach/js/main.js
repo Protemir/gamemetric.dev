@@ -1056,6 +1056,7 @@ function hostSync() {
       s.sentStartAt = performance.now();
       net.send(p.peer, { k: 'start', roster: game.roster(), mode: game.opts.mode, diff: game.opts.diff, fun: game.fun });
       game.nh?.sendDropsTo(p.peer);
+      game.nh?.sendSmokesTo(p.peer);
       net.broadcast({ k: 'roster', roster: game.roster() }, true, p.peer);
     }
   }
@@ -1192,10 +1193,14 @@ function onNetMessage(from, m) {
         s.sentStartAt = performance.now();
         net.send(from, { k: 'start', roster: game.roster(), mode: game.opts.mode, diff: game.opts.diff, fun: game.fun });
         game.nh?.sendDropsTo(from);
+        game.nh?.sendSmokesTo(from);
       }
       game.nh?.sendState(from, s, m.has ? !!m.alive : true);
       // then the guns lying about (they may have changed while the player was away)
-      if (m.has) game.nh?.sendDropsTo(from);
+      if (m.has) {
+        game.nh?.sendDropsTo(from);
+        game.nh?.sendSmokesTo(from);
+      }
     } else if (game && game.nh && game.role === 'host') game.nh.onHostMessage(from, m);
     return;
   }

@@ -191,7 +191,7 @@ export class NetGame {
           if (!Number.isInteger(tid) || tid < 0) continue;
           const target = tid >= 100 ? g.hostages[tid - 100] : g.soldiers[tid];
           if (!target || !Number.isFinite(dmg) || dmg <= 0 || !Number.isFinite(dx) || !Number.isFinite(dz)) continue;
-          if (target.alive === false || target.state === 'dead') continue;
+          if (target.alive === false || target.state === 'dead' || target.state === 'rescued') continue;
           if (tid < 100 ? target.team === s.team : s.team === 'B') continue;
           g.damage(target, Math.min(500, dmg), PARTS[part] || 'body', s, kind, dx, dz, Number.isFinite(pen) ? Math.max(0, Math.min(1, pen)) : 0.6);
         }
@@ -265,6 +265,11 @@ export class NetGame {
   sendState(peer, s, theyThinkAlive) {
     if (s.alive) this.net.send(peer, { k: 'P', r: this.g.round, id: s.id, x: r2(s.x), z: r2(s.z), y: r3(s.yaw), L: loadoutOf(s), keep: theyThinkAlive ? 1 : 0, f: r2(s.feet) });
     else if (theyThinkAlive) this.net.send(peer, { k: 'K', v: s.id, by: -1, w: 0, hd: 0, dx: 0, dz: 0 });
+  }
+
+  sendSmokesTo(peer) {
+    if (!this.host || !this.g.smokes) return;
+    for (const c of this.g.smokes.list) this.net.send(peer, { k: 'sk', x: r2(c.x), y: r2(c.y), z: r2(c.z), a: Math.round((this.g.time - c.t0) * 10) });
   }
 
   sendDropsTo(peer) {
@@ -555,6 +560,13 @@ export class NetGame {
         break;
       case 'rd':
         g.radio(g.soldiers[m.id], m.i, 'net');
+        break;
+      case 'sk':
+        if (g.smokes && [m.x, m.y, m.z, m.a].every(Number.isFinite) && !g.smokes.list.some((c) => Math.hypot(c.x - m.x / 100, c.z - m.z / 100) < 0.5)) {
+          g.smokes.add(m.x / 100, m.y / 100, m.z / 100);
+          const c = g.smokes.list[g.smokes.list.length - 1];
+          if (c) c.t0 = g.time - m.a / 10;
+        }
         break;
       case 'pg':
         if ([m.x, m.y, m.z].every(Number.isFinite)) g.ping(g.soldiers[m.id], m.x / 100, m.y / 100, m.z / 100, m.e >= 0 ? g.soldiers[m.e] || null : null, 'net');

@@ -169,7 +169,7 @@ export class Brain {
     }
     if (best) {
       if (best !== this.target) {
-        const first = !this.target || g.time - this.targetLost > 1.2;
+        const first = g.time - (this.targetLost ?? -9) > 1.2;
         if (first) g.botCallout?.(s, best);
         this.target = best;
         this.reactAt = g.time + this.k.react * (0.7 + Math.random() * 0.6) * (first ? 1 : 0.5);
@@ -179,7 +179,7 @@ export class Brain {
         this.aimHead = Math.random() < this.k.head;
         this.burstLeft = this.k.burst + Math.floor(Math.random() * 3);
       }
-      this.setKnown({ x: best.x, z: best.z, y: best.feet, t: g.time });
+      this.setKnown({ x: best.x, z: best.z, y: best.feet, t: g.time, who: best });
       this.targetLost = g.time;
       g.reportSpotted(s, best);
     } else if (this.target) {
@@ -210,13 +210,13 @@ export class Brain {
     const d = Math.hypot(x - this.s.x, z - this.s.z);
     if (d > 40) return;
     const noise = d * 0.12;
-    this.setKnown({ x: x + (Math.random() - 0.5) * noise, z: z + (Math.random() - 0.5) * noise, y: shooter.feet, t: this.g.time, heard: true });
+    this.setKnown({ x: x + (Math.random() - 0.5) * noise, z: z + (Math.random() - 0.5) * noise, y: shooter.feet, t: this.g.time, heard: true, who: shooter });
   }
 
   hurt(by) {
     this.hurtBy = by;
     this.hurtAt = this.g.time;
-    if (!this.target && by) this.setKnown({ x: by.x, z: by.z, y: by.feet, t: this.g.time });
+    if (!this.target && by) this.setKnown({ x: by.x, z: by.z, y: by.feet, t: this.g.time, who: by });
   }
 
   // ---------- main loop ----------
@@ -263,6 +263,7 @@ export class Brain {
     if (g.mode === 'hostage' && s.team === 'A' && s.smoke > 0 && this.entrySmoke !== g.round && g.phase === 'live' && this.path && g.time >= s.switchUntil && !g.map.isIndoor(s.x, s.z)) this.entrySmokeTry();
 
     // last known enemy position
+    if (this.lastKnown?.who && !this.lastKnown.who.alive) this.lastKnown = null;
     const bombJob = g.bomb && (g.bomb.carrier === s || (s.team === 'B' && g.bomb.planted));
     if (this.lastKnown && !bombJob && g.time - this.lastKnown.t < (this.lastKnown.heard ? 4 : 6) && this.goal?.type !== 'escort') {
       const L = this.lastKnown;
@@ -342,6 +343,7 @@ export class Brain {
 
     // shooting
     if (g.time < this.reactAt || g.time < this.pauseUntil) return;
+    if (rifleish && d > 7 && Math.hypot(s.vx, s.vz) > 1.4) return;
     const tol = 0.05 + Math.atan2(0.35, d);
     if (off > tol * 1.6) return;
     if (s.kind === 'he' || s.kind === 'flash' || s.kind === 'smoke') {
@@ -366,6 +368,7 @@ export class Brain {
       if (this.burstLeft <= 0) {
         const long = d > 14;
         this.pauseUntil = g.time + (long ? 0.28 + Math.random() * 0.25 : 0.08);
+        this.strafe = -this.strafe;
         this.burstLeft = long ? this.k.burst : this.k.burst * 3;
       }
     }
@@ -428,8 +431,9 @@ export class Brain {
     // where it would really end up: a wall close ahead throws it back at our own feet,
     // and an attacker's grenade must not land by a hostage
     const [ex, , ez] = g.nadeArc(s, { kind, yaw, pitch, speed }).end;
-    if (kind !== 'smoke' && Math.hypot(ex - s.x, ez - s.z) < (kind === 'he' ? 7 : 6)) return false;
-    if (kind === 'he' && s.team === 'A' && g.hostages.some((h) => h.state !== 'dead' && h.state !== 'rescued' && Math.hypot(h.x - ex, h.z - ez) < 6)) return false;
+    if (Math.hypot(ex - s.x, ez - s.z) < (kind === 'he' ? 7 : kind === 'smoke' ? 4 : 6)) return false;
+    if (kind === 'he' && s.team === 'A' && g.hostages.some((h) => h.state !== 'dead' && h.state !== 'rescued' && Math.hypot(h.x - ex, h.z - ez) < 8)) return false;
+    if (kind === 'flash' && g.soldiers.some((o) => o !== s && o.alive && o.team === s.team && Math.hypot(o.x - ex, o.z - ez) < 12 && g.map.los(o.x, o.feet + o.eyeH(), o.z, ex, 1, ez))) return false;
     s.yaw = yaw;
     g.throwNade(s, kind, yaw, pitch, speed);
     if (kind === 'flash') this.lookAwayUntil = g.time + 1.9;
@@ -445,6 +449,15 @@ export class Brain {
       return;
     }
     if (g.bomb && this.bombGoal(dt)) return;
+    if ((G.type === 'hunt' || G.type === 'cover') && s.team === 'A' && g.hostages.length && g.time > (this.hostCheckAt || 0)) {
+      this.hostCheckAt = g.time + 1;
+      const h = g.freeHostageFor(s);
+      if (h) {
+        this.goal = { type: 'hostage', h };
+        this.path = null;
+        return;
+      }
+    }
     if (G.type === 'hunt') {
       if (!this.path || g.time > this.repathAt || this.pi >= this.path.length) {
         const e = g.guessEnemy(s);

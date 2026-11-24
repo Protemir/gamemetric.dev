@@ -1222,12 +1222,7 @@ export class Game {
       return;
     }
     const duck = s.isPlayer ? this.toys.hit(ox, oy, oz, dx, dy, dz, hit ? hit.t : maxT) : null;
-    if (duck) {
-      if (tracer && muzzle && (!s.isPlayer || Math.random() < 0.5)) this.fx.tracer(muzzle[0], muzzle[1], muzzle[2], ox + dx * duck.t, oy + dy * duck.t, oz + dz * duck.t, s.isPlayer ? 0.5 : 1);
-      this._ends?.push([ox + dx * duck.t, oy + dy * duck.t, oz + dz * duck.t]);
-      this.toys.shoot(duck.d, dx, dz);
-      return;
-    }
+    if (duck) this.toys.shoot(duck.d, dx, dz);
     const end = hit ? hit.t : maxT;
     const ex = ox + dx * end, ey = oy + dy * end, ez = oz + dz * end;
     this.glass.ray(ox, oy, oz, dx, dy, dz, end);
@@ -1360,6 +1355,7 @@ export class Game {
       return;
     }
     if (o instanceof Hostage) {
+      if (o.state === 'dead' || o.state === 'rescued') return;
       o.hp -= dmg * (part === 'head' ? 4 : 1);
       if (o.hp <= 0 && o.state !== 'dead') {
         o.state = 'dead';
@@ -1414,6 +1410,7 @@ export class Game {
     o.deaths++;
     o.feet = this.map.groundAt(o.x, o.z, o.radius * 0.9, Math.max(0, o.feet));
     o.vy = 0;
+    this.spotted.delete(o);
     o.killer = by;
     o.killWeapon = weapon;
     o.killHead = !!head;
@@ -1876,9 +1873,18 @@ export class Game {
         const d = Math.hypot(L.x - h.x, L.z - h.z);
         if (d > 2.0) {
           if (this.time > h.repath) {
-            h.path = this.map.path(h.x, h.z, L.x, L.z, false, 0, 0, true);
-            h.pi = 0;
-            h.repath = this.time + 0.6;
+            let tx = L.x, tz = L.z;
+            if (L.feet > 0.3) {
+              const f = this.map.nearestFlat(L.x, L.z, L.feet);
+              if (f) [tx, tz] = f;
+            }
+            const np = this.map.path(h.x, h.z, tx, tz, false, 0, 0, true);
+            // no way found this time: keep walking the old one
+            if (np || !h.path) {
+              h.path = np;
+              h.pi = 0;
+            }
+            h.repath = this.time + (np ? 0.6 : 1.5);
           }
           if (h.path && h.pi < h.path.length) {
             const p = h.path[h.pi];
@@ -3064,6 +3070,10 @@ export class Game {
 
   // a friend left: a bot carries on in their place
   botify(s, name) {
+    for (const h of this.hostages) if (h.leader === s && h.state === 'follow') {
+      h.leader = null;
+      h.state = 'idle';
+    }
     s.peer = null;
     s.lastQ = 0;
     s.tOff = null;

@@ -672,6 +672,20 @@ export class GameMap {
     return this.smooth(sx, sz, pts, s >= n ? 1 : 0);
   }
 
+  // the closest ground-floor cell (no stairs, gallery or slab) that can be seen from a point, as its centre
+  // (the nearest one may well be behind the hall's wall, in the next room)
+  nearestFlat(x, z, feet = 0) {
+    const cx = Math.floor(x), cz = Math.floor(z);
+    for (let r = 0; r < 10; r++)
+      for (let dz = -r; dz <= r; dz++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const nx = cx + dx, nz = cz + dz;
+          if (this.walkable(nx, nz) && this.h[nz * W + nx] < 0.05 && !(this.deck[nz * W + nx] > 0) && this.los(x, feet + 1.5, z, nx + 0.5, 1, nz + 0.5)) return [nx + 0.5, nz + 0.5];
+        }
+    return null;
+  }
+
   nearestWalk(x, z) {
     if (this.walkable(x, z)) return z * W + x;
     for (let r = 1; r < 6; r++)
