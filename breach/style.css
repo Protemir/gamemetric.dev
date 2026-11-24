@@ -299,7 +299,9 @@ body.touch #slots { display: none; }
 #touch .tb-pause { left: calc(14px + env(safe-area-inset-left)); top: 170px; width: 40px; height: 40px; font-size: 15px; }
 #touch .tb-score { left: calc(60px + env(safe-area-inset-left)); top: 170px; width: 40px; height: 40px; font-size: 17px; }
 #touch .tb-buy { left: calc(106px + env(safe-area-inset-left)); top: 170px; width: 40px; height: 40px; font-size: 17px; color: var(--good); }
-@media (min-height: 521px) { #touch .tb-pause, #touch .tb-score, #touch .tb-buy { top: 214px; } }
+#touch .tb-radio { left: calc(152px + env(safe-area-inset-left)); top: 170px; width: 40px; height: 40px; font-size: 16px; }
+#touch .tb-ping { left: calc(198px + env(safe-area-inset-left)); top: 170px; width: 40px; height: 40px; font-size: 17px; color: #ffe14a; }
+@media (min-height: 521px) { #touch .tb-pause, #touch .tb-score, #touch .tb-buy, #touch .tb-radio, #touch .tb-ping { top: 214px; } }
 body.touch #view { touch-action: none; }
 body.touch #prompt { top: auto; bottom: 34%; }
 /* small landscape screens: a tighter HUD */
@@ -393,7 +395,7 @@ body.touch #wname { display: none; }
 .buy-head { position: sticky; top: -10px; z-index: 2; background: inherit; padding-top: 6px; }
 /* short screens: the buttons do not grow into each other, whatever the interface size */
 @media (max-height: 420px) {
-  #touch .tb, #touch .stick, #radar { zoom: min(var(--ui), 0.95); }
+  #touch .tb, #touch .stick, #radar, #vitals, #weapon { zoom: min(var(--ui), 0.95); }
 }
 /* the round banner on short screens: smaller, and scaled with the interface */
 #banner { zoom: var(--ui); }
@@ -467,3 +469,25 @@ body.freezecam #hud::before { content: ''; position: absolute; inset: 0; pointer
 #bomb-bar span { display: block; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #ffd27a; text-shadow: 0 1px 3px #000; margin-bottom: 4px; }
 #bomb-bar i { display: block; height: 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.25); overflow: hidden; }
 #bomb-bar s { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #f2b13a, #ff7a2a); }
+
+/* radio calls in the feed, the team's marks on screen, the radio menu */
+.feed-row.radio { background: rgba(14, 22, 16, 0.78); color: #d8f0c8; }
+#pings { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.ping { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.ping b { position: absolute; left: -9px; top: -22px; width: 18px; height: 18px; transform: rotate(45deg); background: #ffe14a; border: 2px solid rgba(0, 0, 0, 0.7); box-shadow: 0 0 10px rgba(255, 225, 74, 0.7); animation: ping-in 0.35s cubic-bezier(0.2, 1.6, 0.4, 1); }
+.ping span { position: absolute; left: 0; top: 2px; transform: translateX(-50%); white-space: nowrap; font: 700 12px/1 var(--mono); color: #fff; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
+.ping.enemy b { background: #ff3b3b; box-shadow: 0 0 12px rgba(255, 59, 59, 0.8); }
+.ping.enemy span { color: #ffb0a8; }
+.ping.mine b { border-color: #fff; }
+@keyframes ping-in { from { transform: rotate(45deg) scale(2.2); opacity: 0; } to { transform: rotate(45deg) scale(1); opacity: 1; } }
+#radio { position: fixed; left: 24px; top: 50%; transform: translateY(-50%); min-width: 220px; padding: 10px; border-radius: 12px; background: rgba(10, 13, 17, 0.88); border: 1px solid rgba(255, 255, 255, 0.14); display: flex; flex-direction: column; gap: 4px; pointer-events: auto; z-index: 30; zoom: var(--ui); }
+#radio b { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #9ab; padding: 0 6px 4px; }
+#radio button { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; border: 0; background: rgba(255, 255, 255, 0.05); color: #eef; font: 600 15px/1.1 system-ui, sans-serif; text-align: left; cursor: pointer; }
+#radio button:hover, #radio button:active { background: rgba(242, 177, 58, 0.22); }
+#radio kbd { min-width: 18px; text-align: center; font: 700 12px/18px var(--mono); color: #f2b13a; border: 1px solid rgba(242, 177, 58, 0.5); border-radius: 4px; }
+body.touch #radio kbd { display: none; }
+body.touch #radio button { padding: 9px 12px; }
+/* on a phone: in the middle, two columns, big enough for a thumb */
+body.touch #radio { left: 50%; transform: translate(-50%, -50%); display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 300px; }
+body.touch #radio b { grid-column: 1 / 3; text-align: center; }
+body.touch #radio button { justify-content: center; text-align: center; min-height: 40px; }

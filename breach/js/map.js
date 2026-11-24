@@ -365,6 +365,16 @@ export class GameMap {
       [[66, 30], [66, 14.5], [58, 13]],
     ];
     this.rescue = { x0: 26, z0: 57, x1: 46, z1: 62 };
+    // the hall cells just past a railing: closed to anyone whose feet are up at the railing's height
+    // (people on the hall floor, jumps included, pass under the gallery as before)
+    this.railAbove = new Float32Array(W * H);
+    for (const [xr, xs] of [[30, 29], [42, 43]])
+      for (let z = 33; z <= 43; z++) {
+        const c = z * W + xr;
+        const h = z <= 36 ? GALLERY_H : this.h[z * W + xs];
+        if (h > 2.2) this.railAbove[c] = Math.max(1.45, h - 0.8);
+      }
+    for (let x = 31; x <= 41; x++) this.railAbove[33 * W + x] = GALLERY_H - 1;
   }
 
   // ---------- physics ----------
@@ -383,6 +393,7 @@ export class GameMap {
     // the garden wall round the grounds cannot be climbed (low gravity could reach it from the shed)
     if (this.kind[c] === K.STONE || this.kind[c] === K.WALL || this.kind[c] === K.PILLAR) return true;
     // the wall above a window or a door blocks; a body mostly below the lintel slips in and the head is pushed down
+    if (!this.railOff && this.railAbove[c] > 0 && feet > this.railAbove[c]) return true;
     const l = this.lint[c];
     return l > 0 && top > l + 0.35;
   }
@@ -391,6 +402,10 @@ export class GameMap {
   collide(a) {
     const r = a.radius;
     this.swimmer = !!(a.isPlayer || a.remote);
+    {
+      const cc = this.cellAt(a.x, a.z);
+      this.railOff = cc >= 0 && this.h[cc] < 1;
+    }
     let hit = false;
     for (let pass = 0; pass < 2; pass++) {
       const x0 = Math.floor(a.x - r), x1 = Math.floor(a.x + r), z0 = Math.floor(a.z - r), z1 = Math.floor(a.z + r);

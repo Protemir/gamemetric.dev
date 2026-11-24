@@ -46,6 +46,14 @@ export function interp(s, delay) {
   while (B.length > 2 && B[1].t < rt - 0.2) B.shift();
 }
 
+// the sender's clock turned into ours: the smallest delay seen so far, creeping up slowly if the road gets longer
+function senderTime(o, t) {
+  const off = now() - t;
+  if (o.tOff == null || off < o.tOff || off - o.tOff > 2) o.tOff = off;
+  else o.tOff += (off - o.tOff) * 0.02;
+  return t + o.tOff;
+}
+
 function pushSample(s, sample) {
   (s.nb ||= []).push(sample);
   if (s.nb.length > 30) s.nb.shift();
@@ -61,6 +69,7 @@ export class NetGame {
     this.net = net;
     this.sendAt = 0;
     this.nadeSeq = 0;
+    this.lastSnapT = now();
     game.nh = this;
   }
 
@@ -77,7 +86,7 @@ export class NetGame {
     const g = this.g;
     const T = now();
     if (this.host) {
-      for (const s of g.soldiers) if (s.remote) interp(s, 0.08);
+      for (const s of g.soldiers) if (s.remote) interp(s, this.net.linkState(s.peer) === 'p2p' ? 0.08 : 0.2);
       if (T >= this.sendAt) {
         this.sendAt = T + 0.05;
         this.net.broadcast(this.snapshot(), false);
@@ -108,7 +117,8 @@ export class NetGame {
         this.sendAt = T + 0.033;
         const p = g.player;
         const am = p.ammo[p.kind];
-        if (p.alive) this.net.toHost({ k: 'p', r: this.g.round, a: am ? [am.mag, am.res] : null, x: r2(p.x), z: r2(p.z), f: r2(p.feet), y: r3(p.yaw), p: r3(p.pitch), c: r2(p.crouchK), vx: r2(p.vx), vz: r2(p.vz), w: KINDS.indexOf(p.kind) }, false);
+        this.pSeq = (this.pSeq || 0) + 1;
+        if (p.alive) this.net.toHost({ k: 'p', q: this.pSeq, ct: Math.round(T * 1000), r: this.g.round, a: am ? [am.mag, am.res] : null, x: r2(p.x), z: r2(p.z), f: r2(p.feet), y: r3(p.yaw), p: r3(p.pitch), c: r2(p.crouchK), vx: r2(p.vx), vz: r2(p.vz), w: KINDS.indexOf(p.kind) }, false);
       }
     }
   }
@@ -122,6 +132,7 @@ export class NetGame {
     return {
       k: 's',
       n: this.snapN,
+      ht: Math.round(now() * 1000),
       ph: PH.indexOf(g.phase),
       tl: Math.round(tl * 10),
       bt: Math.round(Math.max(0, g.buyTimeLeft()) * 10),
@@ -145,9 +156,14 @@ export class NetGame {
       case 'p':
         if (!s.alive || ![m.x, m.z, m.f, m.y, m.p].every(Number.isFinite)) return;
         if (Number.isFinite(m.r) && m.r !== g.round) return;
+        // a packet older than one already here is dropped (a player who reloaded starts counting again)
+        if (Number.isFinite(m.q)) {
+          if (s.lastQ && m.q <= s.lastQ && s.lastQ - m.q < 600) return;
+          s.lastQ = m.q;
+        }
         {
           const n0 = (v) => (Number.isFinite(v) ? v / 100 : 0);
-          pushSample(s, { t: now(), x: m.x / 100, z: m.z / 100, f: m.f / 100, y: m.y / 1000, p: m.p / 1000, c: Math.max(0, Math.min(1, n0(m.c))), vx: n0(m.vx), vz: n0(m.vz) });
+          pushSample(s, { t: Number.isFinite(m.ct) ? senderTime(s, m.ct / 1000) : now(), x: m.x / 100, z: m.z / 100, f: m.f / 100, y: m.y / 1000, p: m.p / 1000, c: Math.max(0, Math.min(1, n0(m.c))), vx: n0(m.vx), vz: n0(m.vz) });
         }
         {
           const k = KINDS[m.w], w = WEAPONS[k];
@@ -218,6 +234,16 @@ export class NetGame {
       case 'hold':
         s.useHeld = !!m.on && s.alive;
         break;
+      case 'rd':
+        g.radio(s, m.i, from);
+        break;
+      case 'pg': {
+        if (![m.x, m.y, m.z].every(Number.isFinite)) return;
+        const e = Number.isInteger(m.e) && m.e >= 0 ? g.soldiers[m.e] : null;
+        const real = e && e.alive && e.team !== s.team && Math.hypot(e.x - m.x / 100, e.z - m.z / 100) < 3 ? e : null;
+        g.ping(s, m.x / 100, m.y / 100, m.z / 100, real, from);
+        break;
+      }
       case 'snd':
         this.net.broadcast({ k: 'snd', id: s.id, n: m.n }, true, from);
         if (m.n === 'reload') sfx('reload', [s.x, 1.2, s.z], { dur: 2 });
@@ -293,6 +319,19 @@ export class NetGame {
   onBoom(n) {
     if (this.host) this.net.broadcast({ k: 'b', nid: n.nid, kind: n.kind, x: n.x, y: n.y, z: n.z });
   }
+  // to the players of one team only (the other side never receives them)
+  teamSend(team, m, except) {
+    for (const o of this.g.soldiers) if (o.peer && o.team === team && o.peer !== except && o.peer !== this.net.id) this.net.send(o.peer, m);
+  }
+  onRadio(s, i, src) {
+    if (this.host) this.teamSend(s.team, { k: 'rd', id: s.id, i }, src);
+    else if (s === this.g.player) this.net.toHost({ k: 'rd', i });
+  }
+  onPing(s, pg, src) {
+    const m = { k: 'pg', x: r2(pg.x), y: r2(pg.y), z: r2(pg.z), e: pg.enemy ? pg.enemy.id : -1 };
+    if (this.host) this.teamSend(s.team, { ...m, id: s.id }, src);
+    else if (s === this.g.player) this.net.toHost(m);
+  }
   onMsg(key, team) {
     if (this.host) this.net.broadcast({ k: 'M', key, team: team || '' });
   }
@@ -347,6 +386,7 @@ export class NetGame {
           this.lastSnap = m.n;
         }
         if (m.bo && g.bomb) g.bomb.applyNet(m.bo);
+        const snapT = Number.isFinite(m.ht) ? senderTime(this, m.ht / 1000) : now();
         this.lastSnapT = now();
         this.quietShown = false;
         const prevPhase = g.phase;
@@ -372,7 +412,7 @@ export class NetGame {
             } else this.deadSeen = null;
           }
           if (s.remote) {
-            pushSample(s, { t: T, x: a[0] / 100, z: a[1] / 100, f: a[2] / 100, y: a[3] / 1000, p: a[4] / 1000, c: a[5] / 100, vx: a[6] / 100, vz: a[7] / 100 });
+            pushSample(s, { t: snapT, x: a[0] / 100, z: a[1] / 100, f: a[2] / 100, y: a[3] / 1000, p: a[4] / 1000, c: a[5] / 100, vx: a[6] / 100, vz: a[7] / 100 });
             const k = KINDS[a[11]];
             if (k && a[8] && (s.netKind !== k || !s.body.gunKind)) {
               s.netKind = k;
@@ -387,6 +427,12 @@ export class NetGame {
             if (a[8] && !s.alive && (!s.deadAt || g.time - s.deadAt > 1.5)) {
               s.alive = true;
               s.deadAt = 0;
+              if (s.remote) {
+                s.nb = s.nb ? s.nb.slice(-1) : [];
+                s.x = a[0] / 100;
+                s.z = a[1] / 100;
+                s.feet = a[2] / 100;
+              }
               s.body.revive();
               s.body.root.visible = true;
             }
@@ -463,10 +509,17 @@ export class NetGame {
         g.applyRound(m);
         break;
       case 'P': {
+        const stale = Number.isFinite(m.r) && m.r !== g.round;
         if (Number.isFinite(m.r)) g.round = m.r;
         const s = g.soldiers[m.id];
         if (!s) break;
-        if (m.keep && s === me && me.alive) {
+        if (stale && s === me) {
+          // the round changed while we were away: last round's guns, marks and bomb go
+          g.clearDrops();
+          g.pings.length = 0;
+          g.bomb?.reset();
+        }
+        if (m.keep && !stale && s === me && me.alive) {
           this.applyLoadout(m.L, false);
           break;
         }
@@ -499,6 +552,12 @@ export class NetGame {
       }
       case 'b':
         g.boom(m.nid, m.kind, m.x, m.y, m.z);
+        break;
+      case 'rd':
+        g.radio(g.soldiers[m.id], m.i, 'net');
+        break;
+      case 'pg':
+        if ([m.x, m.y, m.z].every(Number.isFinite)) g.ping(g.soldiers[m.id], m.x / 100, m.y / 100, m.z / 100, m.e >= 0 ? g.soldiers[m.e] || null : null, 'net');
         break;
       case 'M':
         if (!m.team || m.team === me.team) g.hud.center(t(m.key), 2);

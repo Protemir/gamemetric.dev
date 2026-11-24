@@ -170,6 +170,7 @@ export class Brain {
     if (best) {
       if (best !== this.target) {
         const first = !this.target || g.time - this.targetLost > 1.2;
+        if (first) g.botCallout?.(s, best);
         this.target = best;
         this.reactAt = g.time + this.k.react * (0.7 + Math.random() * 0.6) * (first ? 1 : 0.5);
         const e = this.k.err * (1 + Math.min(1.5, bd / 30));
@@ -274,7 +275,7 @@ export class Brain {
         this.applyLook(dt, yawTo(L.x - s.x, L.z - s.z) + away, 0);
         return;
       }
-      if (this.maybeNade(L)) return;
+      if (!L.ally && this.maybeNade(L)) return;
       if ((!this.path && g.time > this.repathAt - 2.5) || !this.huntPt || Math.hypot(this.huntPt[0] - L.x, this.huntPt[1] - L.z) > 3) {
         this.huntPt = [L.x, L.z];
         this.setGoalPoint(L.x, L.z, L.y || 0);

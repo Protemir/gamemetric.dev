@@ -15,6 +15,8 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
     <button class="tb tb-pause" data-a="pause">II</button>
     <button class="tb tb-score" data-a="score">☰</button>
     <button class="tb tb-buy" data-a="buy">$</button>
+    <button class="tb tb-radio" data-a="radio">📻</button>
+    <button class="tb tb-ping" data-a="ping">◆</button>
     <button class="tb tb-fire" data-a="fire"></button>
     <button class="tb tb-alt" data-a="alt">◎</button>
     <button class="tb tb-jump" data-a="jump">⤒</button>
@@ -71,6 +73,7 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
         owners.set(tch.identifier, { kind: 'btn', a, el, x: tch.clientX, y: tch.clientY });
         if (a === 'fire') {
           input.fire = true;
+          input.fireTap = true;
           if (g && !g.player.alive) g.playerAction('next');
         } else if (a === 'jump') {
           input.touch.jump = true;
@@ -129,7 +132,7 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
   root.addEventListener('touchcancel', end, { passive: false });
   // the crouch button shows whether it is on
   const crouchBtn = $('.tb-crouch');
-  const btnBuy = $('.tb-buy'), btnNade = $('.tb-nade'), btnUse = $('.tb-use'), btnAlt = $('.tb-alt');
+  const btnBuy = $('.tb-buy'), btnNade = $('.tb-nade'), btnUse = $('.tb-use'), btnAlt = $('.tb-alt'), btnRadio = $('.tb-radio'), btnPing = $('.tb-ping');
   let slowAt = 0;
   return {
     // soft: only the buy menu is over the controls; the thumb on the stick and the crouch stay
@@ -172,12 +175,13 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
       slowAt = now + 120;
       const p = g.player;
       btnBuy.hidden = !(p.alive && g.canBuy(p) && g.phase !== 'end');
+      btnRadio.hidden = btnPing.hidden = !p.alive;
       btnNade.hidden = !(p.alive && (p.he > 0 || p.flash > 0 || p.smoke > 0));
       btnUse.classList.toggle('lit', !!(g.nearHostage() || g.nearDrop(p) || g.bomb?.canUse(p)));
       btnAlt.hidden = !(p.alive && (p.kind === 'knife' || p.kind === 'sniper' || p.kind === 'scout'));
     },
     label() {
-      for (const [cls, key] of Object.entries({ fire: 'fire', alt: 'aLabelAlt', jump: 'aLabelJump', crouch: 'aLabelCrouch', reload: 'aLabelReload', use: 'aLabelUse', next: 'aLabelNext', nade: 'aLabelNade', buy: 'buy', score: 'aLabelScore', pause: 'aLabelPause' }))
+      for (const [cls, key] of Object.entries({ fire: 'fire', alt: 'aLabelAlt', jump: 'aLabelJump', crouch: 'aLabelCrouch', reload: 'aLabelReload', use: 'aLabelUse', next: 'aLabelNext', nade: 'aLabelNade', buy: 'buy', score: 'aLabelScore', pause: 'aLabelPause', radio: 'radioTitle', ping: 'aLabelPing' }))
         $('.tb-' + cls)?.setAttribute('aria-label', t(key));
     },
   };

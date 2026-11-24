@@ -289,7 +289,8 @@ export class Bomb {
     if (this.planted) {
       const left = this.timeLeft();
       const gap = left < 2 ? 0.08 : 0.14 + 0.86 * (left / FUSE);
-      if (g.time >= this.beepAt) {
+      const quiet = g.role === 'client' && g.nh && performance.now() / 1000 - (g.nh.lastSnapT || 0) > 1.5;
+      if (g.time >= this.beepAt && !quiet) {
         this.beepAt = g.time + gap;
         this.ledUntil = g.time + Math.min(0.07, gap * 0.5);
         sfx('beep', [this.x, this.y + 0.2, this.z], { high: left < 10 });

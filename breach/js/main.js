@@ -282,6 +282,9 @@ function startGame(online) {
   closeBuy(false);
   input.menuOpen = false;
   input.fire = false;
+  input.fireTap = input.jumpTap = false;
+  input.keys.clear();
+  if (input.touch) input.touch.crouch = input.touch.jump = input.touch.use = false;
   $('menu').hidden = true;
   $('lobby').hidden = true;
   $('match-over').hidden = true;
@@ -291,6 +294,7 @@ function startGame(online) {
   setTimeout(() => {
     if (gen !== startGen || (online && !net)) {
       $('loading').hidden = true;
+      clientStarting = false;
       return;
     }
     if (game) game.dispose();
@@ -303,7 +307,10 @@ function startGame(online) {
       new NetGame(game, net);
       // the host's first round goes out now; a client plays back what arrived while it was loading
       if (online.role === 'host') game.nh.onRound(true);
-      else for (const m of pending.splice(0)) game.nh.onClientMessage(m);
+      else {
+        clientStarting = false;
+        for (const m of pending.splice(0)) game.nh.onClientMessage(m);
+      }
     } else {
       game = new Game(renderer, { team: settings.team, mode: settings.mode, diff: settings.diff, fun: settings.fun }, hud);
       const fun = Object.keys(settings.fun || {}).filter((k) => settings.fun[k]);
@@ -479,6 +486,8 @@ function enableTouch() {
       tap(a) {
         if (!game || state !== 'play') return;
         if (a === 'pause') touchPause();
+        else if (a === 'radio') openRadio();
+        else if (a === 'ping') game.playerPing();
         else if (a === 'buy') buyOpen ? closeBuy(false) : openBuy();
         else if (a === 'next') {
           const p = game.player;
@@ -539,6 +548,7 @@ document.addEventListener('visibilitychange', () => {
 
 function openBuy() {
   if (!game || !game.player.alive || game.over) return;
+  openRadio(false);
   if (!game.canBuy(game.player)) {
     hud.center(game.mode === 'dm' || game.buyTimeLeft() <= 0 ? t('buyClosed') : t('buyZone'), 1.5);
     sfx('deny');
@@ -603,7 +613,33 @@ $('buy-grid').addEventListener('click', (e) => {
 $('buy').addEventListener('mousedown', (e) => e.stopPropagation());
 $('buy-close').addEventListener('click', () => closeBuy(!touchOnly));
 
+// ---------- radio ----------
+let radioOpen = false, radioT = 0;
+function openRadio(on = !radioOpen) {
+  radioOpen = on && !buyOpen && !!game && game.player.alive && !game.over;
+  $('radio').hidden = !radioOpen;
+  clearTimeout(radioT);
+  if (radioOpen) radioT = setTimeout(() => openRadio(false), 5000);
+}
+function sayRadio(i) {
+  openRadio(false);
+  if (!game || !game.player.alive || state !== 'play' || game.over) return;
+  game.radio(game.player, i);
+  // "enemy spotted" also marks what you look at
+  if (i === 2) game.playerPing();
+}
+document.body.appendChild($('radio'));
+$('radio').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) sayRadio(+b.dataset.i);
+});
+for (const ev of ['mousedown', 'touchstart', 'touchend']) $('radio').addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
+
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && radioOpen) {
+    openRadio(false);
+    return;
+  }
   if (e.code === 'Escape') {
     if (!$('controls').hidden) $('controls').hidden = true;
     else if (!$('settings').hidden) $('s-back').click();
@@ -639,6 +675,19 @@ window.addEventListener('keydown', (e) => {
       return;
     }
   }
+  if (radioOpen && /^(Digit|Numpad)[1-6]$/.test(e.code)) {
+    sayRadio(+e.code.slice(-1) - 1);
+    e.preventDefault();
+    return;
+  }
+  if (e.code === 'KeyZ') {
+    openRadio();
+    return;
+  }
+  if (e.code === 'KeyV') {
+    game.playerPing();
+    return;
+  }
   input.keys.add(e.code);
   if (e.code === 'Space') input.jumpTap = true;
   // keep Ctrl+R, Ctrl+1.. and friends from reloading or switching tabs while crouching
@@ -665,8 +714,15 @@ canvas.addEventListener('mousedown', (e) => {
     if (!buyOpen) lockPointer();
     return;
   }
+  // the wheel button marks a spot for the team
+  if (e.button === 1) {
+    e.preventDefault();
+    if (game.player.alive) game.playerPing();
+    return;
+  }
   if (e.button === 0) {
     input.fire = true;
+    input.fireTap = true;
     if (!game.player.alive) game.playerAction('next');
   }
   if (e.button === 2) game.playerAction('alt');
@@ -725,6 +781,7 @@ let last = performance.now();
 let fps = 60, frames = 0, fpsAt = last, slowFor = 0, fastFor = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  if (radioOpen && (!game || game.over || state !== 'play' || !game.player.alive)) openRadio(false);
   portalGameplay(state === 'play' && !!game && !game.over, !game ? 'quit' : game.over ? (game.matchWin ? 'win' : 'lose') : null);
   let dt = Math.min(0.1, (now - last) / 1000);
   last = now;
@@ -763,6 +820,7 @@ function frame(now) {
     const steps = dt > 1 / 40 ? 2 : 1;
     for (let i = 0; i < steps; i++) game.update(dt / steps, input);
     input.jumpTap = false;
+    input.fireTap = false;
     game.visual(dt);
     game.render(dt, look, settings);
     hud.update(game, now, settings, fps);
@@ -916,6 +974,7 @@ function openLobby(code) {
     },
     onHostLeft: () => {
       if (net && (!game || game.over)) {
+        if (!game) startGen++;
         // still in the lobby (or the match is over): the next one in becomes the host and the room carries on
         if (game) backToLobby(false);
         if (net.isHost) hostSync();
@@ -1126,6 +1185,8 @@ function onNetMessage(from, m) {
       if (!s) return hostSync();
       // a new tab (page reloaded): it needs the whole match first
       if (!m.has) {
+        s.lastQ = 0;
+        s.tOff = null;
         // (a friend who has only just been given a place already has the start on its way)
         if (performance.now() - (s.sentStartAt || 0) < 4000) return;
         s.sentStartAt = performance.now();
@@ -1133,6 +1194,8 @@ function onNetMessage(from, m) {
         game.nh?.sendDropsTo(from);
       }
       game.nh?.sendState(from, s, m.has ? !!m.alive : true);
+      // then the guns lying about (they may have changed while the player was away)
+      if (m.has) game.nh?.sendDropsTo(from);
     } else if (game && game.nh && game.role === 'host') game.nh.onHostMessage(from, m);
     return;
   }
@@ -1150,15 +1213,17 @@ function onNetMessage(from, m) {
     pending.length = 0;
     const me = m.roster.find((r) => r.peer === net.id);
     if (!me) return;
+    clientStarting = true;
     startGame({ role: 'client', roster: m.roster, myPeer: net.id, mode: m.mode, diff: m.diff, team: me.team, fun: m.fun || {} });
   } else if (m.k === 'roster') {
     if (game) for (const r of m.roster) if (game.soldiers[r.id]) game.soldiers[r.id].name = r.name;
   } else if (m.k === 'toLobby') {
     if (game && game.role === 'client') backToLobby(false);
-  } else if (game && game.nh) game.nh.onClientMessage(m);
+  } else if (game && game.nh && !clientStarting) game.nh.onClientMessage(m);
   else if (m.k !== 's') pending.push(m);
 }
 const pending = [];
+let clientStarting = false;
 let syncAt = 0;
 function askSync() {
   if (!net || net.isHost || performance.now() < syncAt) return;

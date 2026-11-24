@@ -20,6 +20,9 @@ import { Brain } from './bots.js';
 import { FX } from './fx.js';
 import { t, lang, BOT_NAMES } from './i18n.js';
 
+// radio calls, in the order of the menu (1-6)
+export const RADIO = ['rGo', 'rCover', 'rEnemy', 'rHelp', 'rBack', 'rOk'];
+const PING_LIFE = 6, PING_ENEMY_LIFE = 4;
 const GRAV = 16, JUMP = 5.45, FREEZE = 5, ROUND = 115, BUYTIME = 22, WIN_ROUNDS = 8, DM_KILLS = 60, DM_TIME = 600;
 // the extra modes all run on the deathmatch machinery (respawns, no rounds) with their own rules
 export const GUN_LADDER = ['smg', 'm4', 'rifle', 'shotgun', 'scout', 'mg', 'sniper', 'deagle', 'pistol', 'knife'];
@@ -108,6 +111,7 @@ class Soldier {
     // the same slot still has to be redrawn when a bought gun replaced the one that was in it
     if (!this.hasSlot(n) || (n === this.cur && !instant && this.shown === this.kind)) return;
     if (n !== this.cur) this.prev = this.cur;
+    (this.ready ||= {})[this.kind] = this.nextFire || 0;
     this.cur = n;
     this.shown = this.kind;
     this.reloadUntil = 0;
@@ -116,6 +120,7 @@ class Soldier {
     this.shots = 0;
     this.pinAt = this.throwAt = 0;
     this.switchUntil = instant ? 0 : this.g.time + (n === 3 ? 0.35 : 0.6);
+    this.nextFire = Math.max(Math.min(this.nextFire || 0, Math.max(this.g.time, this.switchUntil)), this.ready[this.kind] || 0);
     this.body.setGun(this.kind);
     if (this.isPlayer) {
       this.g.vm.setKind(this.kind, this.team);
@@ -349,6 +354,9 @@ export class Game {
     this.lossStreak = { A: 0, B: 0 };
     this.round = 0;
     this.spotted = new Map();
+    this.pings = [];
+    this.radioQ = [];
+    this.teamRadioAt = { A: -99, B: -99 };
     this.view = { x: 0, y: 1.6, z: 0, yaw: 0, pitch: 0, shake: 0 };
     this.spec = null;
     this.over = false;
@@ -374,6 +382,7 @@ export class Game {
   applyRound(m) {
     this.round = m.r;
     this.bomb?.reset();
+    this.pings.length = 0;
     this.fx.clear();
     this.smokes?.clear();
     this.clearDrops();
@@ -611,6 +620,99 @@ export class Game {
     }
     return best;
   }
+  // ---------- radio and marks ----------
+  // A radio call to the team: in the feed of that team, with a crackle. src: undefined when made here,
+  // 'net' when it came from the host, the player's peer id when the host got it from that player.
+  radio(s, i, src) {
+    if (!s || !s.alive || !Number.isInteger(i) || !RADIO[i]) return;
+    if (src !== 'net' && this.time - (s.radioAt ?? -9) < (src ? 0.85 : 1.2)) return;
+    s.radioAt = this.time;
+    if (s.team === this.player.team && !this.opts.preview) {
+      this.hud.radio?.(s, t(RADIO[i]));
+      sfx('radio');
+    }
+    if (src !== 'net') this.nh?.onRadio(s, i, src);
+    if (this.role !== 'client') this.radioReact(s, i);
+  }
+  // the bots of that team act on it: "go" ends their wait, "help" brings the near ones over,
+  // and a call from a human gets an answer
+  radioReact(s, i) {
+    const key = RADIO[i];
+    for (const b of this.soldiers) {
+      if (!b.brain || !b.alive || b === s || b.team !== s.team) continue;
+      if (key === 'rGo') b.brain.waitUntil = Math.min(b.brain.waitUntil, Math.max(this.time, this.phase === 'freeze' ? this.liveAt : 0));
+      if (key === 'rHelp' && !b.brain.target && Math.hypot(b.x - s.x, b.z - s.z) < 35 && Math.random() < 0.6) b.brain.setKnown({ x: s.x, z: s.z, y: s.feet, t: this.time, ally: true });
+    }
+    if ((s.isPlayer || s.remote) && key !== 'rOk' && Math.random() < 0.7) {
+      const mates = this.soldiers.filter((b) => b.brain && b.alive && b.team === s.team);
+      if (mates.length) this.radioQ.push({ at: this.time + 0.6 + Math.random() * 0.8, s: mates[Math.floor(Math.random() * mates.length)], i: RADIO.indexOf('rOk') });
+    }
+  }
+  // a bot that sees an enemy first says so now and then, and marks them
+  botCallout(s, o) {
+    if (this.role === 'client' || this.mode === 'dm' || this.phase !== 'live') return;
+    if (this.time - this.teamRadioAt[s.team] < 10 || Math.random() > 0.4) return;
+    this.teamRadioAt[s.team] = this.time;
+    this.radio(s, RADIO.indexOf('rEnemy'));
+    this.ping(s, o.x, o.feet + 1.9, o.z, o);
+  }
+  updateRadio() {
+    for (let k = this.radioQ.length - 1; k >= 0; k--) {
+      const q = this.radioQ[k];
+      if (this.time < q.at) continue;
+      this.radioQ.splice(k, 1);
+      this.radio(q.s, q.i);
+    }
+    // marks fade out
+    if (this.pings.length) this.pings = this.pings.filter((p) => this.time - p.at < (p.enemy ? PING_ENEMY_LIFE : PING_LIFE));
+  }
+  // A mark for the team: a spot, or an enemy (who then shows on the team's radar for a moment).
+  ping(s, x, y, z, enemy = null, src) {
+    if (!s || !s.alive || ![x, y, z].every(Number.isFinite)) return;
+    if (src !== 'net' && this.time - (s.pingAt ?? -9) < (src ? 0.55 : 0.8)) return;
+    s.pingAt = this.time;
+    // one mark each: a new one replaces the old
+    this.pings = this.pings.filter((p) => p.by !== s);
+    const pg = { x, y, z, enemy: enemy && enemy.team !== s.team ? enemy : null, by: s, team: s.team, at: this.time };
+    this.pings.push(pg);
+    if (this.pings.length > 10) this.pings.shift();
+    if (s.team === this.player.team && !this.opts.preview) sfx('ping');
+    if (pg.enemy) this.reportSpotted(s, pg.enemy);
+    if (src !== 'net') this.nh?.onPing(s, pg, src);
+    // the team's bots go and have a look (guards on their spot just turn to it)
+    if (this.role !== 'client' && (s.isPlayer || s.remote))
+      for (const b of this.soldiers)
+        if (b.brain && b.alive && b.team === s.team && !b.brain.target && Math.hypot(b.x - x, b.z - z) < 40 && Math.random() < (pg.enemy ? 0.7 : 0.45))
+          b.brain.setKnown({ x, z, y: pg.enemy ? pg.enemy.feet : this.map.groundAt(x, z, 0.1, y + 0.1), t: this.time, ally: !pg.enemy });
+  }
+  // the player marks what the crosshair is on: an enemy near the line of sight, or the wall or floor it hits
+  playerPing() {
+    const p = this.player;
+    if (!p.alive || this.over) return;
+    const v = this.view;
+    const cp = Math.cos(v.pitch);
+    const dx = -Math.sin(v.yaw) * cp, dy = Math.sin(v.pitch), dz = -Math.cos(v.yaw) * cp;
+    let best = null, bt = 70;
+    for (const o of this.soldiers) {
+      if (!o.alive || o.team === p.team) continue;
+      const tx = o.x - v.x, ty = o.feet + 1.1 - v.y, tz = o.z - v.z;
+      const along = tx * dx + ty * dy + tz * dz;
+      if (along < 0.5 || along > bt) continue;
+      const off = Math.hypot(tx - dx * along, ty - dy * along, tz - dz * along);
+      if (off > 0.9 + along * 0.012) continue;
+      if (!this.map.los(v.x, v.y, v.z, o.x, o.feet + 1.4, o.z) || this.smokeBlocks(v.x, v.y, v.z, o.x, o.feet + 1.4, o.z)) continue;
+      best = o;
+      bt = along;
+    }
+    if (best) {
+      this.ping(p, best.x, best.feet + 1.9, best.z, best);
+      return;
+    }
+    const hit = this.map.raycast(v.x, v.y, v.z, dx, dy, dz, 70);
+    const tt = hit ? Math.max(0.3, hit.t - 0.08) : 40;
+    this.ping(p, v.x + dx * tt, v.y + dy * tt, v.z + dz * tt);
+  }
+
   reportSpotted(s, o) {
     this.spotted.set(o, { x: o.x, z: o.z, y: o.feet, t: this.time, by: s.team });
   }
@@ -768,6 +870,8 @@ export class Game {
       this.bomb.reset();
       if (this.role !== 'client') this.bomb.start();
     }
+    this.pings.length = 0;
+    this.radioQ.length = 0;
     this.hud.onRound?.();
     if (!this.preview) sfx('start');
     this.nh?.onRound(first);
@@ -804,11 +908,17 @@ export class Game {
       for (const s of this.soldiers)
         if (!s.alive && s.respawnAt && this.time >= s.respawnAt && !this.over) {
           const list = this.map.spawns[s.team];
-          let best = list[0], bd = -1;
+          let best = list[0], bd = -Infinity;
           for (const sp of list) {
             let md = 1e9;
-            for (const o of this.soldiers) if (o.alive && o.team !== s.team) md = Math.min(md, Math.hypot(o.x - sp[0], o.z - sp[1]));
-            const score = md + Math.random() * 6;
+            let crowd = 0;
+            for (const o of this.soldiers) {
+              if (!o.alive) continue;
+              const d = Math.hypot(o.x - sp[0], o.z - sp[1]);
+              if (o.team !== s.team) md = Math.min(md, d);
+              if (d < 1.5) crowd = 50;
+            }
+            const score = md + Math.random() * 6 - crowd;
             if (score > bd) {
               bd = score;
               best = sp;
@@ -963,7 +1073,7 @@ export class Game {
       }
     }
     // body box
-    const top = eye - 0.13, bottom = o.feet;
+    const top = eye - 0.085, bottom = o.feet;
     const hw = 0.26;
     const slab = (o0, d, lo, hi) => {
       if (Math.abs(d) < 1e-8) return o0 >= lo && o0 <= hi ? [-Infinity, Infinity] : null;
@@ -1014,7 +1124,7 @@ export class Game {
     if (s.reloadUntil) s.reloadUntil = 0; // shotgun can interrupt its reload
     a.mag--;
     // keep the rhythm while the trigger stays down, so 45 fps fires as fast as 144
-    s.nextFire = (s.nextFire > this.time - 0.1 ? s.nextFire : this.time) + w.rate;
+    s.nextFire = (w.auto && s.nextFire > this.time - 0.1 ? s.nextFire : this.time) + w.rate;
     s.recoverAt = this.time + w.rate + 0.04;
     if (this.time - s.lastShot > w.rate * 2.2 + 0.12) s.shots = 0;
     s.lastShot = this.time;
@@ -1183,7 +1293,8 @@ export class Game {
     }
     // somebody in the pool can be reached from the side
     const swimmerNear = this.soldiers.some((o) => o.alive && o.swimming && o.team !== s.team && Math.hypot(o.x - s.x, o.z - s.z) < 3);
-    const range = (heavy ? w.range * 0.85 : w.range) * (swimmerNear ? 1.6 : 1);
+    const base = heavy ? w.range * 0.85 : w.range;
+    const range = base * (swimmerNear ? 1.6 : 1);
     const eye = s.feet + s.eyeH();
     const dx = -Math.sin(s.yaw) * Math.cos(s.pitch), dy = Math.sin(s.pitch), dz = -Math.cos(s.yaw) * Math.cos(s.pitch);
     let best = null, bt = range;
@@ -1194,7 +1305,8 @@ export class Game {
         const ddx = -Math.sin(yy) * Math.cos(s.pitch), ddz = -Math.cos(yy) * Math.cos(s.pitch);
         // the blade stops at a wall like everything else
         const wall = this.map.raycast(s.x, eye, s.z, ddx, dy, ddz, range);
-        const h = this.hitTest(o, s.x, eye, s.z, ddx, dy, ddz, wall ? Math.min(bt, wall.t) : bt);
+        const reach = Math.min(bt, base * (o.swimming ? 1.6 : 1));
+        const h = this.hitTest(o, s.x, eye, s.z, ddx, dy, ddz, wall ? Math.min(reach, wall.t) : reach);
         if (h && h.t < bt) {
           bt = h.t;
           best = { o, part: h.part };
@@ -1228,7 +1340,9 @@ export class Game {
           this.dmgShot = new Map();
         }
         const before = this.dmgShot.get(o) || 0;
-        const add = Math.max(0, Math.min(dmg * (part === 'head' ? 4 : part === 'legs' ? 0.75 : 1) * (o.armor > 0 ? 0.75 : 1), o.hp - before));
+        const raw = dmg * (part === 'head' ? 4 : part === 'legs' ? 0.75 : 1);
+        const armd = o.armor > 0 && (part === 'body' || (part === 'head' && o.helmet));
+        const add = Math.max(0, Math.min(Math.round(armd ? raw * (pen ?? 0.6) : raw), o.hp - before));
         this.dmgShot.set(o, before + add);
         this.stats.dmg += add;
       }
@@ -1563,9 +1677,9 @@ export class Game {
     const dx = -Math.sin(yaw) * Math.cos(pitch), dy = Math.sin(pitch), dz = -Math.cos(yaw) * Math.cos(pitch);
     // start in front of the eye, but never inside a wall
     let reach = 0.45;
-    const wall = this.map.raycast(s.x, eye, s.z, dx, dy, dz, 0.6);
+    const wall = this.map.raycast(s.x, eye - 0.08, s.z, dx, dy, dz, 0.6);
     if (wall) reach = Math.max(0, wall.t - 0.12);
-    const n = this.spawnNade(s, kind, s.x + dx * reach, eye - 0.08, s.z + dz * reach, dx * speed + s.vx * 0.6, dy * speed + 1.5, dz * speed + s.vz * 0.6, this.nh ? this.nh.newNadeId() : null);
+    const n = this.spawnNade(s, kind, s.x + dx * reach, eye - 0.08 + dy * reach, s.z + dz * reach, dx * speed + s.vx * 0.6, dy * speed + 1.5, dz * speed + s.vz * 0.6, this.nh ? this.nh.newNadeId() : null);
     this.nh?.onNade(n);
     if (!s.isPlayer) sfx('pin', [s.x, 1, s.z]);
     if (s.isPlayer) this.vm.kick = 1;
@@ -1924,15 +2038,22 @@ export class Game {
       }
     }
     // soldiers push each other apart a little
+    let pushed = false;
     for (const o of this.soldiers) {
       if (o === s || !o.alive) continue;
       const dx = s.x - o.x, dz = s.z - o.z, d = Math.hypot(dx, dz);
-      if (d < 0.55 && d > 1e-4 && Math.abs(s.feet - o.feet) < 1.2) {
+      if (d < 0.55 && Math.abs(s.feet - o.feet) < 1.2) {
         const p = (0.55 - d) * 0.5;
-        s.x += (dx / d) * p;
-        s.z += (dz / d) * p;
+        // exactly on top of each other: part along a direction of one's own
+        const a = s.id * 2.4;
+        const ux = d > 1e-4 ? dx / d : Math.cos(a), uz = d > 1e-4 ? dz / d : Math.sin(a);
+        s.x += ux * p;
+        s.z += uz * p;
+        pushed = true;
       }
     }
+    // 6: the push never leaves anyone inside a wall
+    if (pushed) this.map.collide(s);
     s.feet += (vy0 + s.vy) * 0.5 * dt;
     // head against the ceiling or a window lintel
     const cell = this.map.cellAt(s.x, s.z);
@@ -1947,7 +2068,7 @@ export class Game {
     }
     let ground = swim ? this.map.groundAt(s.x, s.z, s.radius * 0.9, s.feet, s.step) : this.map.groundAt(s.x, s.z, s.radius * 0.9, Math.max(s.feet, feet0, 0), s.onGround ? 0.45 : 0.22);
     const bt = this.toys.boardTop(s.x, s.z);
-    s.onBoard = bt != null && s.feet >= bt - (s.onGround ? 0.46 : 0.15);
+    s.onBoard = bt != null && Math.max(s.feet, feet0) >= bt - (s.onGround ? 0.46 : 0.15);
     if (s.onBoard) {
       // a hard landing on the board throws you back up
       if (!s.onGround && s.vy < -5 && s.feet <= bt) {
@@ -2036,9 +2157,9 @@ export class Game {
     const eye = s.feet + s.eyeH();
     const dx = -Math.sin(yaw) * Math.cos(pitch), dy = Math.sin(pitch), dz = -Math.cos(yaw) * Math.cos(pitch);
     let reach = 0.45;
-    const wall = this.map.raycast(s.x, eye, s.z, dx, dy, dz, 0.6);
+    const wall = this.map.raycast(s.x, eye - 0.08, s.z, dx, dy, dz, 0.6);
     if (wall) reach = Math.max(0, wall.t - 0.12);
-    let x = s.x + dx * reach, y = eye - 0.08, z = s.z + dz * reach;
+    let x = s.x + dx * reach, y = eye - 0.08 + dy * reach, z = s.z + dz * reach;
     let vx = dx * speed + s.vx * 0.6, vy = dy * speed + 1.5, vz = dz * speed + s.vz * 0.6;
     const fuse = kind === 'he' ? 1.7 : kind === 'smoke' ? 1.9 : 1.5;
     const pts = o ? [] : this._arcPts || (this._arcPts = []);
@@ -2347,7 +2468,7 @@ export class Game {
           a.res -= take;
         }
       }
-      const wantFire = s.isPlayer ? input.fire && !input.menuOpen : s.in.fire;
+      const wantFire = s.isPlayer ? (input.fire || input.fireTap) && !input.menuOpen : s.in.fire;
       s.justFired = false;
       if (wantFire && !frozen) {
         const w = WEAPONS[s.kind];
@@ -2432,6 +2553,7 @@ export class Game {
     if (this.role !== 'client') this.drown(dt);
     this.updateHostages(dt);
     this.bomb?.update(dt);
+    this.updateRadio();
     this.updateDrops();
     if (!this.over) this.chickens.update(dt);
     if (this.mode === 'dm' && this.time > (this.flockAt || 0)) {
@@ -2818,7 +2940,7 @@ export class Game {
       vm.swayX += (-look.dx * 0.0004 - vm.swayX) * Math.min(1, dt * 10);
       vm.swayY += (look.dy * 0.0004 - vm.swayY) * Math.min(1, dt * 10);
       vm.kick = Math.max(0, vm.kick - dt * 9);
-      vm.draw = Math.max(0, vm.draw - dt * 3.2);
+      vm.draw = Math.max(0, vm.draw - dt * (vm.kind === 'knife' ? 2.9 : 1.7));
       let reloadK = 0;
       if (p.reloadUntil) {
         const w = WEAPONS[p.kind];
@@ -2921,6 +3043,8 @@ export class Game {
     {
       const s = pick();
       if (!s) return null;
+      s.lastQ = 0;
+      s.tOff = null;
       s.brain = null;
       s.peer = peer;
       s.remote = true;
@@ -2941,6 +3065,8 @@ export class Game {
   // a friend left: a bot carries on in their place
   botify(s, name) {
     s.peer = null;
+    s.lastQ = 0;
+    s.tOff = null;
     s.remote = false;
     s.netKind = null;
     s.nb = null;

@@ -4,6 +4,7 @@ import { WEAPONS, GEAR } from './weapons.js';
 import { t, lang } from './i18n.js';
 import { levelOf, rankName, medalsOf, xpOf, award } from './rank.js';
 import { sfx } from './audio.js';
+import * as THREE from '../vendor/three.module.min.js';
 import { SITES, PLANT_T, DEFUSE_T } from './bomb.js';
 
 const $ = (id) => document.getElementById(id);
@@ -188,6 +189,62 @@ export class Hud {
     setTimeout(() => row.remove(), 6000);
   }
 
+  // a radio call in the feed: who, in their team's colour, and what
+  radio(s, text) {
+    if (!this.feedEl) return;
+    const row = document.createElement('div');
+    row.className = 'feed-row radio';
+    row.innerHTML = `📻 <span class="${s.team === 'A' ? 'ta' : 'tb'}">${esc(s.name)}</span>: ${esc(text)}`;
+    this.feedEl.prepend(row);
+    while (this.feedEl.children.length > 6) this.feedEl.lastChild.remove();
+    setTimeout(() => row.remove(), 6000);
+  }
+
+  // the team's marks on screen: a diamond with the distance, pinned to the edge when off screen
+  drawPings(game) {
+    const box = $('pings'), me = game.player;
+    if (!box) return;
+    const list = game.pings.filter((p) => p.team === me.team);
+    while (box.children.length < list.length) {
+      const el = document.createElement('div');
+      el.className = 'ping';
+      el.innerHTML = '<b></b><span></span>';
+      box.appendChild(el);
+    }
+    const v = (this._pv ||= new THREE.Vector3()), cam = game.camera, W = innerWidth, H = innerHeight;
+    const vx = game.view.x, vy = game.view.y, vz = game.view.z;
+    for (let k = 0; k < box.children.length; k++) {
+      const el = box.children[k], p = list[k];
+      if (!p) {
+        if (!el.hidden) el.hidden = true;
+        continue;
+      }
+      el.hidden = false;
+      v.set(p.x, p.y, p.z).project(cam);
+      let x = v.x, y = v.y;
+      const behind = v.z > 1;
+      if (behind) {
+        x = -x;
+        y = -y;
+      }
+      // off screen or behind: slide to the edge in its direction
+      const m = Math.max(Math.abs(x), Math.abs(y));
+      if (behind || m > 0.94) {
+        const k2 = 0.94 / Math.max(m, 1e-3);
+        x *= k2;
+        y *= k2;
+      }
+      el.style.transform = `translate(${((x * 0.5 + 0.5) * W).toFixed(1)}px, ${((-y * 0.5 + 0.5) * H).toFixed(1)}px)`;
+      const life = p.enemy ? 4 : 6, age = game.time - p.at;
+      el.style.opacity = Math.min(1, (life - age) * 1.5).toFixed(2);
+      const cls = 'ping ' + (p.enemy ? 'enemy' : p.team === 'A' ? 'ta' : 'tb') + (p.by === me ? ' mine' : '');
+      if (el.className !== cls) el.className = cls;
+      const d = Math.round(Math.hypot(p.x - vx, p.y - vy, p.z - vz));
+      const txt = (p.enemy ? t('pingEnemy') + ' · ' : '') + d + ' ' + t('meters');
+      if (el.lastChild.textContent !== txt) el.lastChild.textContent = txt;
+    }
+  }
+
   notice(text) {
     if (!this.feedEl) return;
     const row = document.createElement('div');
@@ -343,6 +400,7 @@ export class Hud {
 
   // ---------- per frame ----------
   update(game, now, settings, fps) {
+    this.drawPings(game);
     {
       const b = game.bomb, bar = $('bomb-bar');
       const on = !!b && b.who === game.player && b.prog > 0 && game.player.alive;
@@ -537,6 +595,19 @@ export class Hud {
       g.fill();
     };
     for (const h of game.hostages) if (h.state === 'idle' || h.state === 'follow') dot(h.x, h.z, '#ffd23f', 3);
+    for (const pg of game.pings) {
+      if (pg.team !== me.team) continue;
+      const px = (pg.x - v.x) * S, pz = (pg.z - v.z) * S;
+      g.save();
+      g.translate(px, pz);
+      g.rotate(Math.PI / 4);
+      g.fillStyle = pg.enemy ? '#ff3b3b' : '#ffe14a';
+      g.strokeStyle = 'rgba(0,0,0,.7)';
+      g.lineWidth = 1.5;
+      g.fillRect(-3.6, -3.6, 7.2, 7.2);
+      g.strokeRect(-3.6, -3.6, 7.2, 7.2);
+      g.restore();
+    }
     const bomb = game.bomb;
     if (bomb) {
       g.font = '900 15px system-ui, sans-serif';

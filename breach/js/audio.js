@@ -330,6 +330,19 @@ export function sfx(name, pos = null, opt = {}) {
       tone(d, t, 0.15, 'square', 220, 180, 0.07);
       break;
     }
+    case 'radio': {
+      // a squelch and a click, like a handheld radio keyed up
+      const d = out({ gain: 0.8, pan: 0 });
+      noise(d, t, 0.09, 'bandpass', 1900, 1.2, 0.09);
+      tone(d, t + 0.08, 0.05, 'square', 1250, 1250, 0.035);
+      break;
+    }
+    case 'ping': {
+      const d = out({ gain: 1, pan: 0 });
+      tone(d, t, 0.09, 'sine', 1180, 1180, 0.12);
+      tone(d, t + 0.08, 0.14, 'sine', 1580, 1580, 0.1);
+      break;
+    }
     case 'beep': {
       // the planted bomb: a short electronic beep, heard across the house
       const P = place(pos, 45);

@@ -45,7 +45,13 @@ let playing = false, started = false;
 export function portalGameplay(on, end) {
   if (!(bridge || cg)) return;
   on = on && !portalHold();
-  if (on === playing) return;
+  if (on === playing) {
+    if (!on && end && started && bridge) {
+      say(end === 'win' ? 'level_completed' : 'level_failed');
+      started = false;
+    }
+    return;
+  }
   playing = on;
   if (cg) {
     safe(() => (on ? cg.game.gameplayStart() : cg.game.gameplayStop()));
