@@ -122,6 +122,8 @@ export class World {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.pixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
     this.renderer.setPixelRatio(this.pixelRatio);
     this.scene = new THREE.Scene();
@@ -136,6 +138,12 @@ export class World {
     this.hemi = new THREE.HemisphereLight('#fff', '#888', 1);
     this.sun = new THREE.DirectionalLight('#fff', 2);
     this.scene.add(this.hemi, this.sun, this.sun.target);
+    // тень — прямоугольник вокруг табуна, едет за камерой
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(1024, 1024);
+    Object.assign(this.sun.shadow.camera, { left: -20, right: 20, top: 34, bottom: -26, near: 1, far: 140 });
+    this.sun.shadow.bias = -0.0006;
+    this.sun.shadow.normalBias = 0.03;
     this.scene.fog = new THREE.Fog('#cfdde3', 110, 560);
 
     this.buildSky();
@@ -199,6 +207,8 @@ export class World {
       const gl = new HorsePool(assets.horse.gallopLo, hm, 700, this.scene, TK);
       const il = new HorsePool(assets.horse.idleLo, hm, 500, this.scene, TK);
       this.loPools.push(gl, il);
+      // дальним коням тень не нужна — её почти не видно, а стоит она как ещё один табун
+      for (const p of [gl, il]) for (const m of p.meshes) m.castShadow = false;
       this.gallop = new LodPool(this.gallop, gl, this.camera);
       this.idle = new LodPool(this.idle, il, this.camera);
       this.eat = new LodPool(this.eat, il, this.camera);
@@ -222,6 +232,19 @@ export class World {
     this.leaderCol = new THREE.Color('#f4efe6');
     this.rider = this.makeRider();
     this.scene.add(this.rider);
+    this.rear = assets.horse.rear ? new HorsePool(assets.horse.rear, hm, 2, this.scene, TK) : null;
+    this.rearT = -1;
+    this.wolfBite = assets.wolf.bite ? new HorsePool(assets.wolf.bite, wm, 40, this.scene) : null;
+    this.boost = 0;
+    {
+      const N = 90;
+      this.streakSeed = Float32Array.from({ length: N * 3 }, () => Math.random());
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 6), 3).setUsage(THREE.DynamicDrawUsage));
+      this.streaks = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, fog: false, depthWrite: false }));
+      this.streaks.frustumCulled = false;
+      this.scene.add(this.streaks);
+    }
     this.rivalRider = this.makeRider({ chapan: '#2a2440', trim: '#9aa0b0', hat: '#3a3030', flag: '#1f1f2e', hue: 232, sat: 0.38 });
     this.scene.add(this.rivalRider);
     this.rivalLeaderCol = new THREE.Color('#1c1614');
@@ -323,6 +346,13 @@ export class World {
 
   startIntro() { this.intro = 1.6; }
 
+  // тени: на слабом устройстве выключаются первыми
+  setShadows(on) {
+    this.sun.castShadow = on;
+    this.shadowsOn = on;
+    this.shadows.material.opacity = on ? 0.28 : 0.55;
+  }
+
   // точка седла в том кадре, который сейчас рисует пул (у реалистичного коня она запечена)
   seat(pool, phase) {
     const s = pool.frames.sock;
@@ -411,6 +441,7 @@ export class World {
     grass.repeat.set(800 / 34, 3200 / 34);
     this.groundMat = new THREE.MeshLambertMaterial({ map: grass, color: '#c8c27a' });
     this.ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 3200).rotateX(-Math.PI / 2), this.groundMat);
+    this.ground.receiveShadow = true;
     this.ground.position.z = -1200;
     this.scene.add(this.ground);
   }
@@ -493,6 +524,7 @@ export class World {
     const track = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2 + 1.6, total + 60).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: this.trackTex, color: new THREE.Color(T.dirt).lerp(new THREE.Color('#ffffff'), 0.55).multiplyScalar(1.15) }));
     this.trackTex.repeat.set(1, (total + 60) / 14);
     track.position.set(0, 0.01, -(total / 2) + 30);
+    track.receiveShadow = true;
     G.add(track);
     this.buildDecor(L, total);
     this.items = [];
@@ -537,6 +569,8 @@ export class World {
     // валуны
     this.rockObjs = new Map();
     this.dust.clear(); this.sparks.clear();
+    this.rearT = -1;
+    this.boost = 0;
     this.fireworks = [];
     this.camPos.set(0, 9, 14);
     this.camLook.set(0, 0, -12);
@@ -871,6 +905,7 @@ export class World {
     const t = this.time;
     const m4 = this.m4, q = this.q, e = this.e, v = this.v3, s = this.s3;
     this.gallop.begin(); this.idle.begin(); this.eat.begin(); this.wolfRun.begin(); this.wolfStalk.begin();
+    this.rear?.begin(); this.wolfBite?.begin();
     for (const p of this.loPools) p.begin();
     let sh = 0;
     const shadow = (x, z, sc = 1) => {
@@ -892,19 +927,31 @@ export class World {
       shadow(b.x, -b.d, sc);
     }
     // вожак-ақбоз: впереди табуна, крупнее всех
-    if (run.count > 0 && (running || menu) && run.state !== 'lose') {
+    const win = run.state === 'win';
+    if ((run.count > 0 || win) && (running || menu || win) && run.state !== 'lose') {
       const sh2 = herdShape(Math.max(1, Math.min(run.count, run.cap)));
       const lx = run.cx;
       const ld = run.d + sh2.b + 1.9;
+      if (this.rear) {
+        if (menu && this.rearT < 0 && Math.random() < dt * 0.1) this.rearT = 0;
+        if (this.rearT >= 0) { this.rearT += dt; if (this.rearT >= this.rear.frames.duration * 0.98) this.rearT = -1; }
+      }
+      const rearing = !!this.rear && this.rearT >= 0;
+      const gal = running && !menu && !rearing;
+      const lp = rearing ? this.rear : gal ? this.gallop : this.idle;
+      const lph = rearing ? this.rearT / this.rear.frames.duration : gal ? 0.37 + t * gallopRate : 0.2 + t * 0.4;
       m4.compose(v.set(lx, 0, -ld), q.setFromEuler(e.set(0, 0, 0)), s.set(1.3, 1.3, 1.3));
-      if (running && !menu) this.gallop.add(0.37 + t * gallopRate, m4, this.leaderCol);
-      else this.idle.add(0.2 + t * 0.4, m4, this.leaderCol);
+      lp.add(lph, m4, this.leaderCol);
       shadow(lx, -ld, 1.3);
       const R = this.rider;
       R.visible = true;
-      const gal = running && !menu;
-      const sk = this.seat(gal ? this.gallop : this.idle, gal ? 0.37 + t * gallopRate : 0.2 + t * 0.4);
-      if (sk) { R.position.set(lx + sk.x * 1.3, sk.y * 1.3, -ld + sk.z * 1.3); R.rotation.set(0, 0, 0); }
+      const sk = this.seat(lp, lph);
+      if (sk) {
+        R.position.set(lx + sk.x * 1.3, sk.y * 1.3, -ld + sk.z * 1.3);
+        // на дыбах седло поднимается — всадник откидывается назад вместе со спиной коня
+        const base = this.idle.frames.sock?.[0]?.y ?? sk.y;
+        R.rotation.set(rearing ? Math.min(0.95, Math.max(0, (sk.y - base) * 1.6)) : 0, 0, 0);
+      }
       else {
         const bob = gal ? Math.abs(Math.sin((0.37 + t * gallopRate) * Math.PI * 2 / 1)) * 0.09 : 0;
         R.position.set(lx, 1.55 + bob, -ld + 0.12);
@@ -925,7 +972,8 @@ export class World {
       const yaw = w.run ? Math.atan2(-w.vx, w.vd) : Math.PI;
       m4.compose(v.set(w.x, 0, -w.d), q.setFromEuler(e.set(0, yaw, 0)), s.set(1, 1, 1));
       const col = this.wolfCols[w.id % this.wolfCols.length];
-      if (w.run) this.wolfRun.add(w.phase + t * 1.9, m4, col);
+      if (w.run && this.wolfBite && w.near < 3.2) this.wolfBite.add(Math.min(0.95, 1 - w.near / 3.2), m4, col);
+      else if (w.run) this.wolfRun.add(w.phase + t * 1.9, m4, col);
       else this.wolfStalk.add(w.phase + t * 0.5, m4, col);
       shadow(w.x, -w.d, 0.6);
     }
@@ -997,6 +1045,7 @@ export class World {
       if (g.y < 1) shadow(g.x, -g.d, fade);
     }
     this.gallop.end(); this.idle.end(); this.eat.end(); this.wolfRun.end(); this.wolfStalk.end();
+    this.rear?.end(); this.wolfBite?.end();
     for (const p of this.loPools) p.end();
     this.shadows.count = sh;
     this.shadows.instanceMatrix.needsUpdate = true;
@@ -1170,6 +1219,7 @@ export class World {
       const cols = ['#ffd23a', '#3fa9ff', '#ff5a7a', '#7be07b', '#ffffff'].map((c) => new THREE.Color(c));
       for (let i = 0; i < 40; i++) this.sparks.emit((Math.random() - 0.5) * 10, 4 + Math.random() * 2, -ev.d, (Math.random() - 0.5) * 6, 3 + Math.random() * 4, (Math.random() - 0.5) * 4, cols[i % cols.length], 1.6, 0.3, 0.25, 6, 1);
     } else if (ev.type === 'win') {
+      this.rearT = 0;
       this.confetti(run);
       const cols = ['#ffd23a', '#ff5a7a', '#3fa9ff', '#7be07b', '#ffffff', '#ff9a3a'];
       for (let i = 0; i < 7; i++) this.fireworks.push({ t: 0.15 + i * 0.32, x: (Math.random() - 0.5) * 22, y: 16 + Math.random() * 8, z: -(run.d + 30 + Math.random() * 20), col: cols[i % cols.length] });
@@ -1177,6 +1227,7 @@ export class World {
       // всплески — в цикле по коням в воде
     } else if (ev.type === 'gate') {
       if (!ev.good) this.shake = Math.max(this.shake, 0.3);
+      if (ev.good && ev.op?.op === 'x') this.boost = Math.max(this.boost, ev.op.v >= 3 ? 1 : 0.75);
     }
   }
 
@@ -1223,7 +1274,24 @@ export class World {
     const hfov = 2 * Math.atan(needHalfW / Math.max(6, distToHerd));
     let vfov = 2 * Math.atan(Math.tan(hfov / 2) / aspect) * (180 / Math.PI);
     vfov = clamp(vfov, menu ? 50 : 46, 82);
-    this.camera.fov += (vfov - this.camera.fov) * k;
+    // базовый обзор копим отдельно, рывок прибавляем только при выводе (иначе он нарастает каждый кадр)
+    this.baseFov = (this.baseFov ?? this.camera.fov) + (vfov - (this.baseFov ?? this.camera.fov)) * k;
+    this.camera.fov = this.baseFov;
+    // рывок: обзор шире и полосы ветра мимо камеры
+    if (this.boost > 0) this.boost = Math.max(0, this.boost - dt * 1.1);
+    this.camera.fov = this.baseFov + this.boost * 9 * (menu ? 0 : 1);
+    {
+      const P = this.streaks.geometry.attributes.position.array, S = this.streakSeed, n = S.length / 3, c = this.camPos;
+      for (let i = 0; i < n; i++) {
+        const side = S[i * 3] < 0.5 ? -1 : 1;
+        const x = c.x + side * (2.5 + S[i * 3] * 7), y = 0.4 + S[i * 3 + 1] * 6;
+        const z = c.z - 30 + ((S[i * 3 + 2] * 30 + this.time * 70) % 30);
+        P[i * 6] = x; P[i * 6 + 1] = y; P[i * 6 + 2] = z; P[i * 6 + 3] = x; P[i * 6 + 4] = y; P[i * 6 + 5] = z - 3.5;
+      }
+      this.streaks.geometry.attributes.position.needsUpdate = true;
+      this.streaks.material.opacity = this.boost * 0.5;
+      this.streaks.visible = this.boost > 0.01;
+    }
     // в меню картинку сдвигаем вверх: снизу кнопки, табун должен быть над ними
     if (menu && this.w) this.camera.setViewOffset(this.w, this.h, 0, this.h * (this.w > this.h ? 0.1 : 0.12), this.w, this.h);
     else if (this.camera.view?.enabled) this.camera.clearViewOffset();

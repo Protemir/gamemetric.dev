@@ -75,6 +75,7 @@ async function boot() {
   $('gl').addEventListener('webglcontextlost', (e) => { e.preventDefault(); pause(); });
   $('gl').addEventListener('webglcontextrestored', () => location.reload());
   world.setHerdSet(save.set);
+  world.setShadows(!P.has('noshadow'));
   world.onBoom = () => sfx('boom');
   world.onThunder = () => { flash('white'); setTimeout(() => sfx('thunder'), 350 + Math.random() * 700); buzz(30); };
   setSound(save.sound);
@@ -762,8 +763,9 @@ function frame(now) {
   if (fpsAcc > 2.5) {
     const fps = fpsN / fpsAcc;
     fpsT = fps;
-    // тяжело: сначала сужаем круг детальных коней, потом уменьшаем чёткость
-    if (fps < 42 && (world.lodNear ?? 22) > 10) { world.lodNear = (world.lodNear ?? 22) - 6; for (const p of [world.gallop, world.idle, world.eat]) p.setNear?.(world.lodNear); }
+    // тяжело: сначала гасим тени, потом сужаем круг детальных коней, потом уменьшаем чёткость
+    if (fps < 42 && world.shadowsOn) world.setShadows(false);
+    else if (fps < 42 && (world.lodNear ?? 22) > 10) { world.lodNear = (world.lodNear ?? 22) - 6; for (const p of [world.gallop, world.idle, world.eat]) p.setNear?.(world.lodNear); }
     else if (fps < 42 && world.pixelRatio > 0.8) { lowSteps++; world.setPixelRatio(Math.max(0.75, world.pixelRatio - 0.35)); }
     fpsAcc = 0; fpsN = 0;
   }

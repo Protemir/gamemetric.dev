@@ -13,6 +13,7 @@ export async function loadRealHorse(url, loUrl) {
   const norm = {};
   const gallop = bakeTex(gltf, mesh, clip('canter_loop'), 16, norm);
   const idle = bakeTex(gltf, mesh, clip('idle_loop'), 20, norm);
+  const rear = clip('rear') ? bakeTex(gltf, mesh, clip('rear'), 30, norm) : null; // на дыбы — для вожака
   const material = texturedMaterial(mesh.material);
   // дальняя детализация: та же лошадь, упрощённая в Blender в 4 раза; UV и текстура те же
   let gallopLo = null, idleLo = null;
@@ -24,7 +25,7 @@ export async function loadRealHorse(url, loUrl) {
     gallopLo = bakeTex(lo, ml, clipLo('canter_loop'), 16, normLo);
     idleLo = bakeTex(lo, ml, clipLo('idle_loop'), 20, normLo);
   }
-  return { gallop, idle, eat: idle, gallopLo, idleLo, material, textured: true };
+  return { gallop, idle, eat: idle, gallopLo, idleLo, rear, material, textured: true };
 }
 
 function bakeTex(gltf, mesh, clip, frames, norm, height = HORSE_H) {
@@ -132,10 +133,11 @@ export async function loadRealWolf(url) {
   const norm = {};
   const run = bakeTex(gltf, mesh, clip('run_loop'), 12, norm, 1.05);
   const stalk = bakeTex(gltf, mesh, clip('idle_loop'), 16, norm, 1.05);
+  const bite = clip('bite') ? bakeTex(gltf, mesh, clip('bite'), 10, norm, 1.05) : null;
   const src = mesh.material;
   const material = new THREE.MeshStandardMaterial({ map: src.map, normalMap: src.normalMap, roughness: 0.85, metalness: 0 });
   material.normalScale.set(0.7, 0.7);
-  return { run, stalk, material, textured: true };
+  return { run, stalk, bite, material, textured: true };
 }
 
 // масть по яркости текстуры: шерсть, мышцы и грива остаются, цвет — из instanceColor

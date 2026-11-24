@@ -168,7 +168,7 @@ export class HorsePool {
       m.instanceColor.setUsage(THREE.DynamicDrawUsage);
       m.count = 0;
       m.frustumCulled = false;
-      m.castShadow = false;
+      m.castShadow = true;
       scene.add(m);
       return m;
     });

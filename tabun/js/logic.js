@@ -473,6 +473,7 @@ export class Run {
       if (!wf.run || !this.bodies.length) continue;
       let best = null, bd = 1e9;
       for (const b of this.bodies) { const q = (b.x - wf.x) ** 2 + (b.d - wf.d) ** 2 * 0.3; if (q < bd) { bd = q; best = b; } }
+      wf.near = Math.hypot(best.x - wf.x, best.d - wf.d);
       const dx = best.x - wf.x;
       wf.vx = clamp(dx * 3, -wf.sp, wf.sp);
       wf.vd = -4.5;

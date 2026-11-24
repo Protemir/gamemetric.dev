@@ -66,6 +66,7 @@ export function makeSeatedRider(proto, height, hue, sat) {
       const mats = [o.material].flat().map((m) => { const nm = m.clone(); if (m.map?.image) nm.map = recolor(m.map.image, hue, sat); return nm; });
       o.material = Array.isArray(o.material) ? mats : mats[0];
       o.frustumCulled = false;
+      o.castShadow = true;
     }
   });
   model.scale.setScalar(height / proto.height);
