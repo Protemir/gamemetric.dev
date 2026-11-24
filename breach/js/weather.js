@@ -77,8 +77,11 @@ export class Rain {
     if (g.time > this.nextBolt) {
       this.nextBolt = g.time + 14 + Math.random() * 20;
       this.flash = 1;
-      clearTimeout(this.boltT);
-      this.boltT = setTimeout(() => !g.disposed && !g.over && sfx('thunder'), 500 + Math.random() * 1500);
+      this.thunderAt = g.time + 0.5 + Math.random() * 1.5;
+    }
+    if (this.thunderAt && g.time >= this.thunderAt) {
+      this.thunderAt = 0;
+      if (!g.over) sfx('thunder');
     }
     if (this.flash > 0) {
       this.flash = Math.max(0, this.flash - dt * 3);

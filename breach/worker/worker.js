@@ -32,7 +32,13 @@ export class Room extends DurableObject {
     const socks = this.ctx.getWebSockets();
     // ten players at most (five a side)
     const away = [...(await this.ctx.storage.list({ prefix: 'gone:' })).keys()].filter((k) => k !== 'gone:' + peer).length;
-    if (socks.filter((s) => s.deserializeAttachment()?.peer !== peer && !s.deserializeAttachment()?.replaced).length + away >= 10) return new Response('full', { status: 409 });
+    if (socks.filter((s) => s.deserializeAttachment()?.peer !== peer && !s.deserializeAttachment()?.replaced).length + away >= 10) {
+      const [client, server] = Object.values(new WebSocketPair());
+      server.accept();
+      server.send(JSON.stringify({ t: 'full' }));
+      server.close(4009, 'full');
+      return new Response(null, { status: 101, webSocket: client });
+    }
     // a reconnect with the same id replaces the old socket, keeps its place in the queue (who is host)
     // and must not announce a "leave" when the old socket finally closes
     let joined = Date.now();

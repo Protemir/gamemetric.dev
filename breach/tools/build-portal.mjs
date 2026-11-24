@@ -66,15 +66,27 @@ const region = (l) => (/^(ru|kk|ky|be|uz|tg|uk)\\b/i.test(l) ? 'ru' : 'en');
 try {
   if (window.BREACH_PORTAL === 'playgama') {
     const b = window.bridge;
-    if (b && (await Promise.race([b.initialize().then(() => 'ok'), wait(6000)])) === 'ok') {
+    const init = b && b.initialize();
+    if (b && (await Promise.race([init.then(() => 'ok'), wait(6000)])) === 'ok') {
       window.BREACH_SDK = b;
       const l = String(b.platform.language || '');
       if (l) window.BREACH_LANG = region(l);
-    }
+    } else if (init)
+      init.then(() => {
+        window.BREACH_SDK = b;
+        dispatchEvent(new Event('breach-sdk'));
+      }, () => {});
   } else {
     const s = window.CrazyGames && window.CrazyGames.SDK;
-    const ok = s && (await Promise.race([s.init().then(() => s.environment !== 'disabled'), wait(8000).then(() => false)]));
-    if (ok) {
+    const init = s && s.init().then(() => s.environment !== 'disabled');
+    const ok = s && (await Promise.race([init, wait(8000).then(() => 'slow')]));
+    if (ok === 'slow')
+      init.then((on) => {
+        if (!on) return;
+        window.BREACH_SDK = s;
+        dispatchEvent(new Event('breach-sdk'));
+      }, () => {});
+    else if (ok) {
       window.BREACH_SDK = s;
       // CrazyGames times the load from here to the first gameplayStart
       s.game.loadingStart();

@@ -893,6 +893,7 @@ export class Game {
     for (const n of this.nades) this.dropNade(n);
     this.nades.length = 0;
     this.nh?.onOver(winner);
+    this.matchWin = winner !== 'draw' && winner === this.player.team;
     this.hud.matchOver(winner === 'draw' ? null : winner === this.player.team, this);
   }
 
@@ -1326,6 +1327,7 @@ export class Game {
       o.flyVy = 5 + Math.random() * 3;
       o.flyAt = this.time;
       o.flySpin = (Math.random() < 0.5 ? -1 : 1) * (4 + Math.random() * 4);
+      o.flyYaw = o.yaw;
       sfx('whee', [o.x, o.feet + 1, o.z]);
     }
     if (by && by !== o) by.roundKills = (by.roundKills || 0) + 1;
@@ -2261,9 +2263,9 @@ export class Game {
       }
       s.flyVy += 6 * dt;
       s.feet = Math.min(60, s.feet + s.flyVy * dt);
-      s.yaw += s.flySpin * dt;
+      s.flyYaw = (s.flyYaw ?? s.yaw) + s.flySpin * dt;
       b.root.position.set(s.x, s.feet, s.z);
-      b.root.rotation.set((this.time - s.flyAt) * 3, s.yaw, 0);
+      b.root.rotation.set((this.time - s.flyAt) * 3, s.flyYaw, 0);
       if (s.feet > 28 && b.root.visible && !s.isPlayer) {
         b.root.visible = false;
         this.fx.flash(s.x, s.feet + 1, s.z, 3, 0.4);
@@ -2761,8 +2763,8 @@ export class Game {
         h.rotation.x += ins * 0.25;
       }
       vm.mat.color.setScalar(this.charLight(p.x, p.z) * 1.08);
-      vm.flashT -= dt;
       vm.flash.visible = vm.flashT > 0;
+      vm.flashT -= dt;
       if (vm.flash.visible) {
         vm.flash.scale.setScalar(0.16 + Math.random() * 0.08);
         vm.flash.material.rotation = Math.random() * 6;
@@ -2814,10 +2816,18 @@ export class Game {
   addHuman(peer, name) {
     const humans = (team) => this.soldiers.filter((s) => s.team === team && (s.peer || s.isPlayer)).length;
     const order = this.variant === 'zombie' ? ['B', 'A'] : humans('A') <= humans('B') ? ['A', 'B'] : ['B', 'A'];
-    for (const team of order) {
-      const bots = this.soldiers.filter((s) => s.team === team && s.brain);
-      if (!bots.length) continue;
-      const s = bots.find((b) => !b.alive) || bots[0];
+    const pick = () => {
+      const teams = order.filter((t) => this.soldiers.some((s) => s.team === t && s.brain));
+      if (!teams.length) return null;
+      const from = (team, lastOk) =>
+        this.soldiers.find((s) => s.team === team && s.brain && !s.alive) ||
+        this.soldiers.find((s) => s.team === team && s.brain && (lastOk || this.mode === 'dm' || this.phase !== 'live' || this.soldiers.filter((o) => o.team === team && o.alive).length > 1));
+      const other = this.variant !== 'zombie' && teams[1];
+      return from(teams[0], false) || (other && from(teams[1], false)) || from(teams[0], true);
+    };
+    {
+      const s = pick();
+      if (!s) return null;
       s.brain = null;
       s.peer = peer;
       s.remote = true;
@@ -2886,6 +2896,7 @@ export class Game {
     }
     this.rain?.dispose();
     this.chickens?.dispose();
+    this.fx?.dispose();
     this.envRT?.dispose();
     const all = [];
     this.scene.traverse((o) => all.push(o));

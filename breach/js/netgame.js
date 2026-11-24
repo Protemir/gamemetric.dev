@@ -135,7 +135,10 @@ export class NetGame {
       case 'p':
         if (!s.alive || ![m.x, m.z, m.f, m.y, m.p].every(Number.isFinite)) return;
         if (Number.isFinite(m.r) && m.r !== g.round) return;
-        pushSample(s, { t: now(), x: m.x / 100, z: m.z / 100, f: m.f / 100, y: m.y / 1000, p: m.p / 1000, c: m.c / 100, vx: m.vx / 100, vz: m.vz / 100 });
+        {
+          const n0 = (v) => (Number.isFinite(v) ? v / 100 : 0);
+          pushSample(s, { t: now(), x: m.x / 100, z: m.z / 100, f: m.f / 100, y: m.y / 1000, p: m.p / 1000, c: Math.max(0, Math.min(1, n0(m.c))), vx: n0(m.vx), vz: n0(m.vz) });
+        }
         if (KINDS[m.w] && s.netKind !== KINDS[m.w]) {
           s.netKind = KINDS[m.w];
           s.body.setGun(s.netKind);
@@ -143,9 +146,18 @@ export class NetGame {
         break;
       case 'f': {
         if (!s.alive) return;
+        // n5: a shot fired in the round before (it may arrive after the new one began) hurts nobody
+        if (Number.isFinite(m.r) && m.r !== g.round) return;
         const kind = KINDS[m.w] || 'pistol';
+        const xyz = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
+        if (!xyz(m.m)) return;
+        const ends = Array.isArray(m.e) ? m.e.slice(0, 12).filter(xyz) : [];
+        m = { ...m, e: ends };
         this.showShot(s, kind, m.m, m.e);
-        for (const [tid, dmg, part, dx, dz, pen] of Array.isArray(m.h) ? m.h.slice(0, 12) : []) {
+        for (const hit of Array.isArray(m.h) ? m.h.slice(0, 12) : []) {
+          if (!Array.isArray(hit)) continue;
+          const [tid, dmg, part, dx, dz, pen] = hit;
+          if (!Number.isInteger(tid) || tid < 0) continue;
           const target = tid >= 100 ? g.hostages[tid - 100] : g.soldiers[tid];
           if (!target || !Number.isFinite(dmg) || dmg <= 0 || !Number.isFinite(dx) || !Number.isFinite(dz)) continue;
           if (target.alive === false || target.state === 'dead') continue;
@@ -157,6 +169,7 @@ export class NetGame {
       }
       case 'n':
         if (!s.alive || !['he', 'flash', 'smoke'].includes(m.kind) || ![m.x, m.y, m.z, m.vx, m.vy, m.vz].every(Number.isFinite)) return;
+        if (Number.isFinite(m.r) && m.r !== g.round) return;
         // the host keeps count: a thrown grenade is gone, and nobody throws one they do not have
         const cnt = m.kind === 'he' ? 'he' : m.kind === 'smoke' ? 'smoke' : 'flash';
         if (s[cnt] <= 0) return;
@@ -196,7 +209,7 @@ export class NetGame {
   // ---------- host -> everyone ----------
   onFire(s, kind, muzzle, ends, hits) {
     if (this.host) this.net.broadcast({ k: 'f', id: s.id, w: KINDS.indexOf(kind), m: muzzle.map(r2), e: ends.map((e) => e.map(r2)) });
-    else if (s === this.g.player) this.net.toHost({ k: 'f', w: KINDS.indexOf(kind), m: muzzle.map(r2), e: ends.map((e) => e.map(r2)), h: hits });
+    else if (s === this.g.player) this.net.toHost({ k: 'f', r: this.g.round, w: KINDS.indexOf(kind), m: muzzle.map(r2), e: ends.map((e) => e.map(r2)), h: hits });
   }
   onDrop(d) {
     if (this.host) this.net.broadcast({ k: 'D', id: d.id, w: KINDS.indexOf(d.kind), x: r2(d.x), z: r2(d.z), f: r2(d.y), y: r3(d.mesh.rotation.y), o: d.owner ?? -1 });
@@ -256,7 +269,7 @@ export class NetGame {
   }
   onNade(n) {
     if (this.host) this.net.broadcast({ k: 'n', id: n.owner.id, kind: n.kind, x: n.x, y: n.y, z: n.z, vx: n.vx, vy: n.vy, vz: n.vz, nid: n.nid }, true, n.owner.peer);
-    else this.net.toHost({ k: 'n', kind: n.kind, x: n.x, y: n.y, z: n.z, vx: n.vx, vy: n.vy, vz: n.vz, nid: n.nid });
+    else this.net.toHost({ k: 'n', r: this.g.round, kind: n.kind, x: n.x, y: n.y, z: n.z, vx: n.vx, vy: n.vy, vz: n.vz, nid: n.nid });
   }
   onBoom(n) {
     if (this.host) this.net.broadcast({ k: 'b', nid: n.nid, kind: n.kind, x: n.x, y: n.y, z: n.z });

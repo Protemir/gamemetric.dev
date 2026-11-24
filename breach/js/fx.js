@@ -87,6 +87,7 @@ export class FX {
     this.decals = new THREE.InstancedMesh(dg, dm, MAX_DECALS);
     this.decals.count = 0;
     this.decals.frustumCulled = false;
+    this.decals.renderOrder = -1;
     this.decalI = 0;
     scene.add(this.decals);
     // sparks (points)
@@ -109,6 +110,7 @@ export class FX {
     this.tracers = new THREE.LineSegments(tg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.tracers.frustumCulled = false;
     this.tracers.renderOrder = 3;
+    tg.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1);
     this.tr = [];
     scene.add(this.tracers);
     // puffs and flashes (sprites)
@@ -119,6 +121,7 @@ export class FX {
     for (let i = 0; i < MAX_PUFFS; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false }));
       s.visible = false;
+      s.renderOrder = 3;
       scene.add(s);
       this.puffs.push({ s, life: 0 });
     }
@@ -142,6 +145,7 @@ export class FX {
     this.blood = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), bm, MAX_BLOOD);
     this.blood.count = 0;
     this.blood.frustumCulled = false;
+    this.blood.renderOrder = -1;
     this.bloodI = 0;
     scene.add(this.blood);
     // grenade scorch marks on the floor
@@ -149,6 +153,7 @@ export class FX {
     this.scorch = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), scm, MAX_SCORCH);
     this.scorch.count = 0;
     this.scorch.frustumCulled = false;
+    this.scorch.renderOrder = -1;
     this.scorchI = 0;
     scene.add(this.scorch);
     // bits of floor, plaster and casing thrown by a blast: little dark chunks that bounce and lie
@@ -203,6 +208,13 @@ export class FX {
     this.decalI = (this.decalI + 1) % MAX_DECALS;
     this.decals.count = Math.max(this.decals.count, this.decalI === 0 ? MAX_DECALS : this.decalI);
     this.decals.instanceMatrix.needsUpdate = true;
+  }
+
+  // textures that may no longer hang on any material when the match ends
+  dispose() {
+    this.denseTex?.dispose();
+    this.puffTex?.dispose();
+    for (const t of this.sprayTex || []) t.dispose();
   }
 
   // a spray tag on a wall
@@ -307,11 +319,13 @@ export class FX {
     p.s.scale.setScalar(size);
     p.s.material.rotation = Math.random() * 6;
     p.life = p.max = life;
+    p.s.material.opacity = 1;
+    p.fresh = true;
   }
 
   tracer(ax, ay, az, bx, by, bz, bright = 1) {
     if (this.tr.length >= MAX_TRACERS) this.tr.shift();
-    this.tr.push({ ax, ay, az, bx, by, bz, life: 0.07, max: 0.07, k: bright });
+    this.tr.push({ ax, ay, az, bx, by, bz, life: 0.07, max: 0.07, k: bright, fresh: true });
   }
 
   update(dt) {
@@ -389,8 +403,17 @@ export class FX {
     this.sparks.visible = n > 0;
     // tracers
     let m = 0;
-    for (let i = this.tr.length - 1; i >= 0; i--) if ((this.tr[i].life -= dt) <= 0) this.tr.splice(i, 1);
+    for (let i = this.tr.length - 1; i >= 0; i--) {
+      const tr = this.tr[i];
+      // a new one is drawn at least once, however long the frame was
+      if (tr.fresh) tr.fresh = false;
+      else if ((tr.life -= dt) <= 0) this.tr.splice(i, 1);
+    }
+    let cx = 0, cy = 0, cz = 0;
     for (const tr of this.tr) {
+      cx += tr.ax + tr.bx;
+      cy += tr.ay + tr.by;
+      cz += tr.az + tr.bz;
       const k = (tr.life / tr.max) * tr.k;
       this.trPos.set([tr.ax, tr.ay, tr.az, tr.bx, tr.by, tr.bz], m * 6);
       this.trCol.set([1 * k * 0.4, 0.85 * k * 0.4, 0.5 * k * 0.4, 1 * k, 0.9 * k, 0.6 * k], m * 6);
@@ -400,6 +423,8 @@ export class FX {
     this.tracers.geometry.attributes.position.needsUpdate = true;
     this.tracers.geometry.attributes.color.needsUpdate = true;
     this.tracers.visible = m > 0;
+    // sorted against the smoke by where the tracers really are, not by the map's corner
+    if (m) this.tracers.geometry.boundingSphere.center.set(cx / (2 * m), cy / (2 * m), cz / (2 * m));
     // puffs
     for (const p of this.puffs) {
       if (p.life <= 0) continue;
@@ -424,6 +449,10 @@ export class FX {
     }
     for (const p of this.flashes) {
       if (p.life <= 0) continue;
+      if (p.fresh) {
+        p.fresh = false;
+        continue;
+      }
       p.life -= dt;
       if (p.life <= 0) p.s.visible = false;
       else {

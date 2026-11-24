@@ -31,6 +31,16 @@ const ICON = {
 
 const MEDAL_ICON = { immortal: '🛡️', grinder: '🌪️', triple: '🔥', sniper: '🎯', ninja: '🔪', boomer: '💥', chickens: '🐔', eagle: '🦅', unstoppable: '🚂', swimmer: '🏊', pacifist: '🕊️', fodder: '🥩', teamplayer: '🤝' };
 
+export const XH_COLORS = { green: '#6dff7a', yellow: '#ffe14a', cyan: '#45e6ff', white: '#ffffff', pink: '#ff5ad2', red: '#ff4a4a' };
+export function styleXhair(el, s) {
+  if (!el) return;
+  el.dataset.xh = s.xh || 'cross';
+  el.style.setProperty('--chc', XH_COLORS[s.xhc] || XH_COLORS.green);
+  el.style.setProperty('--chl', `${s.xhl ?? 9}px`);
+  el.style.setProperty('--cht', `${s.xht ?? 2}px`);
+  el.style.setProperty('--cho', `${-Math.floor((s.xht ?? 2) / 2)}px`);
+}
+
 export class Hud {
   constructor() {
     this.radar = $('radar');
@@ -319,9 +329,10 @@ export class Hud {
     const src = game.specTarget || p;
     const w = WEAPONS[src.kind] || WEAPONS.knife;
     const hs = Math.hypot(src.vx, src.vz);
-    let gap = 4;
+    const g0 = settings?.xhg ?? 4;
+    let gap = g0;
     if (w.spread) {
-      gap = 4 + (w.moveSpread * Math.max(0, Math.min(1, (hs - 1.4) / Math.max(1, w.speed - 1.4))) + (src.onGround ? 0 : 0.1) + (w.auto ? Math.min(src.shots || 0, 10) * w.spread * 0.12 : 0)) * 260;
+      gap = g0 + (w.moveSpread * Math.max(0, Math.min(1, (hs - 1.4) / Math.max(1, w.speed - 1.4))) + (src.onGround ? 0 : 0.1) + (w.auto ? Math.min(src.shots || 0, 10) * w.spread * 0.12 : 0)) * 260;
       if (w.scope) gap += 14;
     }
     if (src.crouchK > 0.5) gap *= 0.8;

@@ -5,9 +5,13 @@
 // CrazyGames (SDK v3): loadingStop once the menu is up, gameplayStart/Stop, a midgame ad between matches,
 // happytime on a won match, the portal's mute setting.
 export const PORTAL = window.BREACH_PORTAL || null;
-const sdk = window.BREACH_SDK || null;
-const bridge = PORTAL === 'playgama' ? sdk : null;
-const cg = PORTAL === 'crazygames' ? sdk : null;
+let sdk = null, bridge = null, cg = null;
+function bind(s) {
+  sdk = s;
+  bridge = PORTAL === 'playgama' ? s : null;
+  cg = PORTAL === 'crazygames' ? s : null;
+}
+bind(window.BREACH_SDK || null);
 
 const say = (msg) => {
   try {
@@ -26,8 +30,9 @@ const safe = (fn) => {
   }
 };
 
-let readySent = false;
+let readySent = false, readyWanted = false;
 export function portalReady() {
+  readyWanted = true;
   if (readySent || !(bridge || cg)) return;
   readySent = true;
   if (bridge) say('game_ready');
@@ -36,16 +41,23 @@ export function portalReady() {
 
 // called every frame with "is a match being played right now"; the portal hears only changes
 let playing = false, started = false;
-export function portalGameplay(on) {
-  if (!(bridge || cg) || on === playing) return;
+// end: 'win' or 'lose' when the match is over, 'quit' when left for the menu, nothing for a pause
+export function portalGameplay(on, end) {
+  if (!(bridge || cg)) return;
+  on = on && !portalHold();
+  if (on === playing) return;
   playing = on;
   if (cg) {
     safe(() => (on ? cg.game.gameplayStart() : cg.game.gameplayStop()));
     return;
   }
-  if (on) say(started ? 'level_resumed' : 'level_started');
-  else say('level_paused');
-  if (on) started = true;
+  if (on) {
+    say(started ? 'level_resumed' : 'level_started');
+    started = true;
+  } else if (end) {
+    say(end === 'win' ? 'level_completed' : 'level_failed');
+    started = false;
+  } else say('level_paused');
 }
 
 // a match won: CrazyGames' little celebration
@@ -67,16 +79,19 @@ export const portalHold = () => adOn || platformPaused;
 export function onPortalHold(fn) {
   holdFns.push(fn);
 }
-if (bridge)
-  try {
-    bridge.advertisement.on(bridge.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, (s) => {
-      if (s === 'opened') setHold(true, platformPaused);
-      else if (s === 'closed' || s === 'failed') setHold(false, platformPaused);
-    });
-    bridge.platform.on(bridge.EVENT_NAME.PAUSE_STATE_CHANGED, (p) => setHold(adOn, !!p));
-  } catch {
-    /* no events */
-  }
+function holdEvents() {
+  if (bridge)
+    try {
+      bridge.advertisement.on(bridge.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, (s) => {
+        if (s === 'opened') setHold(true, platformPaused);
+        else if (s === 'closed' || s === 'failed') setHold(false, platformPaused);
+      });
+      bridge.platform.on(bridge.EVENT_NAME.PAUSE_STATE_CHANGED, (p) => setHold(adOn, !!p));
+    } catch {
+      /* no events */
+    }
+}
+holdEvents();
 
 // between matches: a full-screen ad if the platform has one (it decides the timing); mute(true/false) around it
 let muteForAd = () => {};
@@ -106,7 +121,9 @@ export function portalInterstitial() {
 }
 
 // fn(muted) whenever the platform's sound, its pause, an ad or a hidden tab should silence the game
+let muteFn = null;
 export function onPortalMute(fn) {
+  muteFn = fn;
   if (cg) {
     const st = { setting: false, ad: false };
     const tell = () => fn(st.setting || st.ad);
@@ -153,6 +170,17 @@ export function onPortalMute(fn) {
   }
   tell();
 }
+
+// the SDK started after the game had already loaded: hook it up now
+addEventListener('breach-sdk', () => {
+  if (sdk || !window.BREACH_SDK) return;
+  bind(window.BREACH_SDK);
+  holdEvents();
+  if (muteFn) onPortalMute(muteFn);
+  // the menu is already up (CrazyGames never heard loadingStart, so no loadingStop either)
+  if (readyWanted && bridge) portalReady();
+  playing = false;
+});
 
 // Custom events for the Playgama dashboard (Bridge analytics): which mode people pick, how far they get
 // (first kill, first death, rounds, the match result), and whether they quit, play again or close the page.

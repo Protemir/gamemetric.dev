@@ -126,9 +126,22 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
   const btnBuy = $('.tb-buy'), btnNade = $('.tb-nade'), btnUse = $('.tb-use'), btnAlt = $('.tb-alt');
   let slowAt = 0;
   return {
-    show(on) {
+    // soft: only the buy menu is over the controls; the thumb on the stick and the crouch stay
+    show(on, soft) {
       root.hidden = !on;
-      if (!on) {
+      if (on && stickId !== null) stick.hidden = false;
+      if (!on && soft) {
+        for (const [id, o] of owners) {
+          if (o.kind === 'stick') continue;
+          if (o.kind === 'btn') {
+            o.el.classList.remove('on');
+            if (o.a === 'score') actions.board(false);
+          }
+          owners.delete(id);
+        }
+        input.fire = false;
+        input.touch.jump = false;
+      } else if (!on) {
         for (const o of owners.values()) {
           if (o.kind !== 'btn') continue;
           o.el.classList.remove('on');

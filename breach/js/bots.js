@@ -115,7 +115,7 @@ export class Brain {
       const route = map.routes[Math.floor(Math.random() * map.routes.length)];
       this.goal = { type: 'route', pts: route.slice(), i: 0 };
       // some wait a moment so they do not all arrive in a line
-      this.waitUntil = g.time + Math.random() * 2.5;
+      this.waitUntil = (g.phase === 'freeze' ? g.liveAt : g.time) + Math.random() * 2.5;
     } else {
       const spot = g.claimHold(s);
       this.goal = { type: 'hold', spot };
@@ -365,6 +365,7 @@ export class Brain {
 
   entrySmokeTry() {
     const s = this.s, g = this.g, P = this.path;
+    if (g.time < s.nextFire) return;
     // walk along the path to the first point inside the house
     let px = s.x, pz = s.z, run = 0, entry = null;
     for (let i = this.pi; i < P.length && run < 26 && !entry; i++) {
@@ -404,7 +405,7 @@ export class Brain {
 
   maybeNade(L) {
     const s = this.s, g = this.g;
-    if (g.time < this.nadeAt || g.mode === 'dm') return false;
+    if (g.time < this.nadeAt || g.mode === 'dm' || g.time < s.nextFire || g.time < s.switchUntil) return false;
     const d = Math.hypot(L.x - s.x, L.z - s.z);
     if (d < 7 || d > 22) return false;
     const smoke = s.smoke > 0 && s.team === 'A' && d > 10 && Math.random() < 0.6;

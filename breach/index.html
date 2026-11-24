@@ -34,9 +34,9 @@
  "isAccessibleForFree": true
 }
 </script>
-<link rel="stylesheet" href="style.css?v=7ef54fda">
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=f8cdc5cf","./js/audio.js":"./js/audio.js?v=e1c23fb2","./js/bots.js":"./js/bots.js?v=e2d68305","./js/chickens.js":"./js/chickens.js?v=370b5353","./js/decor.js":"./js/decor.js?v=4f5739dd","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=45d05e8c","./js/game.js":"./js/game.js?v=97f1d744","./js/glass.js":"./js/glass.js?v=49029896","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=65311ef4","./js/i18n.js":"./js/i18n.js?v=3a5f3080","./js/main.js":"./js/main.js?v=20f5f3af","./js/map.js":"./js/map.js?v=6fd4ad55","./js/net.js":"./js/net.js?v=3c0f35e2","./js/netgame.js":"./js/netgame.js?v=3d537120","./js/people.js":"./js/people.js?v=83c1bd6d","./js/pool.js":"./js/pool.js?v=452932b4","./js/portal.js":"./js/portal.js?v=51fa5388","./js/props.js":"./js/props.js?v=f8c89cdb","./js/rank.js":"./js/rank.js?v=e24c53d4","./js/smoke.js":"./js/smoke.js?v=b48919cd","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=2623766c","./js/weapons.js":"./js/weapons.js?v=544e0c0c","./js/weather.js":"./js/weather.js?v=fcfe03e8"}}</script>
-<script type="module" src="./js/main.js?v=20f5f3af"></script>
+<link rel="stylesheet" href="style.css?v=18cef263">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=f8cdc5cf","./js/audio.js":"./js/audio.js?v=e1c23fb2","./js/bots.js":"./js/bots.js?v=f6a393d9","./js/chickens.js":"./js/chickens.js?v=370b5353","./js/decor.js":"./js/decor.js?v=4f5739dd","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=80f030a4","./js/game.js":"./js/game.js?v=798184a3","./js/glass.js":"./js/glass.js?v=49029896","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=3fc6a7dd","./js/i18n.js":"./js/i18n.js?v=63fd1e25","./js/main.js":"./js/main.js?v=9ae2e1e0","./js/map.js":"./js/map.js?v=a47da4ab","./js/net.js":"./js/net.js?v=67be16a0","./js/netgame.js":"./js/netgame.js?v=a543f1f4","./js/people.js":"./js/people.js?v=83c1bd6d","./js/pool.js":"./js/pool.js?v=452932b4","./js/portal.js":"./js/portal.js?v=dd2b6f17","./js/props.js":"./js/props.js?v=f8c89cdb","./js/rank.js":"./js/rank.js?v=e24c53d4","./js/smoke.js":"./js/smoke.js?v=b48919cd","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=9c5e459c","./js/weapons.js":"./js/weapons.js?v=544e0c0c","./js/weather.js":"./js/weather.js?v=25ab4afb"}}</script>
+<script type="module" src="./js/main.js?v=9ae2e1e0"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -51,7 +51,7 @@
     <div class="team tb"><b id="sc-b">0</b><div class="dots" id="alive-b"></div></div>
   </div>
   <div id="feed"></div>
-  <div id="crosshair"><i class="l"></i><i class="r"></i><i class="u"></i><i class="d"></i><i class="c"></i></div>
+  <div id="crosshair" class="xhair"><i class="o"></i><i class="l"></i><i class="r"></i><i class="u"></i><i class="d"></i><i class="c"></i></div>
   <div id="hitmark" class="hitmark"><i></i><i></i><i></i><i></i></div>
   <div id="hurt-layer"></div>
   <div id="nade-warn" hidden><b></b></div>
@@ -155,6 +155,12 @@
     <label class="field"><span data-t="uiSize"></span><input type="range" id="s-ui" min="0.6" max="1.3" step="0.02"><output id="o-ui"></output></label>
     <label class="field"><span data-t="tsens"></span><input type="range" id="s-tsens" min="0.3" max="3" step="0.05"><output id="o-tsens"></output></label>
     <label class="field"><span data-t="brightness"></span><input type="range" id="s-bright" min="0.8" max="1.8" step="0.05"><output id="o-bright"></output></label>
+    <div class="xh-prev"><b data-t="xhair"></b><div id="xh-prev" class="xhair"><i class="o"></i><i class="l"></i><i class="r"></i><i class="u"></i><i class="d"></i><i class="c"></i></div></div>
+    <div class="field xh"><span data-t="xhShape"></span><div class="seg small" id="seg-xh"><button data-v="cross" data-t="xhCross"></button><button data-v="dot" data-t="xhDot"></button><button data-v="circle" data-t="xhCircle"></button><button data-v="tee" data-t="xhTee"></button></div></div>
+    <div class="field xh"><span data-t="xhColor"></span><div class="seg small swatch" id="seg-xhc"><button data-v="green" data-t-aria="colGreen" style="--sw:#6dff7a"></button><button data-v="yellow" data-t-aria="colYellow" style="--sw:#ffe14a"></button><button data-v="cyan" data-t-aria="colCyan" style="--sw:#45e6ff"></button><button data-v="white" data-t-aria="colWhite" style="--sw:#ffffff"></button><button data-v="pink" data-t-aria="colPink" style="--sw:#ff5ad2"></button><button data-v="red" data-t-aria="colRed" style="--sw:#ff4a4a"></button></div></div>
+    <label class="field"><span data-t="xhSize"></span><input type="range" id="s-xhl" min="3" max="16" step="1"><output id="o-xhl"></output></label>
+    <label class="field"><span data-t="xhThick"></span><input type="range" id="s-xht" min="1" max="4" step="1"><output id="o-xht"></output></label>
+    <label class="field"><span data-t="xhGap"></span><input type="range" id="s-xhg" min="0" max="12" step="1"><output id="o-xhg"></output></label>
     <div class="field"><span data-t="skin"></span><div class="seg small" id="seg-skin"><button data-v="none" data-t="skinNone"></button><button data-v="gold" data-t="skinGold"></button><button data-v="red" data-t="skinRed"></button><button data-v="arctic" data-t="skinArctic"></button><button data-v="neon" data-t="skinNeon"></button></div></div>
     <div class="field"><span data-t="quality"></span><div class="seg small" id="seg-q"><button data-v="auto" data-t="auto"></button><button data-v="1">100%</button><button data-v="0.75">75%</button><button data-v="0.5">50%</button></div></div>
     <label class="field check"><input type="checkbox" id="s-fps"><span data-t="showFps"></span></label>

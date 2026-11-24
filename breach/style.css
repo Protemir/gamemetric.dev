@@ -47,15 +47,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .feed-row i { color: var(--muted); font-style: normal; margin: 0 6px; font-size: 12px; }
 @keyframes pop { from { transform: translateX(20px); opacity: 0; } }
 
-#crosshair { --gap: 4px; position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-#crosshair i { position: absolute; background: #6dff7a; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); }
-#crosshair .l, #crosshair .r { width: 9px; height: 2px; top: -1px; }
-#crosshair .u, #crosshair .d { width: 2px; height: 9px; left: -1px; }
-#crosshair .l { right: var(--gap); }
-#crosshair .r { left: var(--gap); }
-#crosshair .u { bottom: var(--gap); }
-#crosshair .d { top: var(--gap); }
-#crosshair .c { width: 2px; height: 2px; left: -1px; top: -1px; }
+/* the crosshair: shape, colour, length, thickness and gap come from the settings */
+.xhair { --gap: 4px; --chc: #6dff7a; --chl: 9px; --cht: 2px; position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.xhair i { position: absolute; background: var(--chc); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); }
+.xhair .l, .xhair .r { width: var(--chl); height: var(--cht); top: var(--cho, -1px); }
+.xhair .u, .xhair .d { width: var(--cht); height: var(--chl); left: var(--cho, -1px); }
+.xhair .l { right: var(--gap); }
+.xhair .r { left: var(--gap); }
+.xhair .u { bottom: var(--gap); }
+.xhair .d { top: var(--gap); }
+.xhair .c { width: var(--cht); height: var(--cht); left: var(--cho, -1px); top: var(--cho, -1px); }
+.xhair .o { display: none; left: 0; top: 0; transform: translate(-50%, -50%); width: calc(var(--gap) * 2 + var(--chl)); height: calc(var(--gap) * 2 + var(--chl)); box-sizing: border-box; background: none; border: var(--cht) solid var(--chc); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.55); }
+.xhair[data-xh='circle'] .o { display: block; }
+.xhair[data-xh='circle'] :is(.l, .r, .u, .d), .xhair[data-xh='dot'] :is(.l, .r, .u, .d), .xhair[data-xh='tee'] .u { display: none; }
+.xhair[data-xh='dot'] .c { width: calc(var(--cht) * 2 + 2px); height: calc(var(--cht) * 2 + 2px); left: 0; top: 0; transform: translate(-50%, -50%); border-radius: 50%; }
 .hitmark { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; }
 .hitmark.show { opacity: 1; }
 .hitmark i { position: absolute; width: 10px; height: 2px; background: #fff; box-shadow: 0 0 2px #000; }
@@ -421,3 +426,13 @@ body.touch label:has(#s-sens), body:not(.touch) label:has(#s-tsens) { display: n
 /* long player names stay inside their team column */
 .lb-team { min-width: 0; }
 .lb-team li { overflow-wrap: anywhere; }
+
+/* crosshair editor: a strip half light wall, half dark, to judge the colour on both */
+.xh-prev { position: relative; height: 74px; border-radius: 10px; border: 1px solid var(--line); overflow: hidden; background: linear-gradient(90deg, #c9bfa9 0 50%, #20242b 50% 100%); }
+.xh-prev b { position: absolute; left: 10px; top: 6px; font-size: 13px; color: #2a2620; }
+.xh-prev .xhair { --gap: 4px; }
+.seg.swatch { gap: 6px; }
+.seg.swatch button { flex: 1; min-width: 0; height: 30px; padding: 0; background: var(--sw) !important; border: 2px solid rgba(0, 0, 0, 0.5); }
+.seg.swatch button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.field > .seg { grid-column: 2 / 4; }
+.field > .seg.small button { min-width: 0; padding-left: 4px; padding-right: 4px; }

@@ -653,7 +653,7 @@ export class GameMap {
       const c = id % n;
       return [(c % W) + 0.5, ((c / W) | 0) + 0.5, id < n && this.hop[c] && !this.walk[c] ? 1 : 0, id >= n ? 1 : 0];
     });
-    pts.push([tx, tz, 0, t >= n ? 1 : 0]);
+    if (t >= n || this.walkable(Math.floor(tx), Math.floor(tz))) pts.push([tx, tz, 0, t >= n ? 1 : 0]);
     return this.smooth(sx, sz, pts, s >= n ? 1 : 0);
   }
 

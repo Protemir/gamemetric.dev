@@ -1,7 +1,7 @@
 // Boot, menus, settings, input and the main loop.
 import * as THREE from '../vendor/three.module.min.js';
 import { Game } from './game.js';
-import { Hud, BUY_ITEMS } from './hud.js';
+import { Hud, BUY_ITEMS, styleXhair } from './hud.js';
 import { initAudio, setVolume, sfx, rainSound, setHiddenAudio } from './audio.js';
 import { t, lang, setLang } from './i18n.js';
 import { loadPeople } from './people.js';
@@ -19,7 +19,7 @@ const canvas = $('view');
 const q = new URLSearchParams(location.search);
 
 // ---------- settings ----------
-const DEF = { sens: 1.2, tsens: 1, ui: 1, fov: 74, vol: 0.8, bright: 1.2, fun: {}, skin: 'none', quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
+const DEF = { xh: 'cross', xhc: 'green', xhl: 9, xht: 2, xhg: 4, sens: 1.2, tsens: 1, ui: 1, fov: 74, vol: 0.8, bright: 1.2, fun: {}, skin: 'none', quality: 'auto', showFps: false, team: 'A', mode: 'hostage', diff: 'normal' };
 let settings = { ...DEF };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem('breach.settings') || '{}'));
@@ -37,6 +37,9 @@ try {
   num('fov', 60, 90);
   num('vol', 0, 1);
   num('bright', 0.8, 1.8);
+  num('xhl', 3, 16);
+  num('xht', 1, 4);
+  num('xhg', 0, 12);
   const one = (k, list) => {
     if (!list.includes(settings[k])) settings[k] = DEF[k];
   };
@@ -45,6 +48,8 @@ try {
   one('mode', ['hostage', 'dm', 'gun', 'knife', 'zombie']);
   one('diff', ['easy', 'normal', 'hard']);
   one('skin', ['none', 'gold', 'red', 'arctic', 'neon']);
+  one('xh', ['cross', 'dot', 'circle', 'tee']);
+  one('xhc', ['green', 'yellow', 'cyan', 'white', 'pink', 'red']);
   if (!settings.fun || typeof settings.fun !== 'object') settings.fun = {};
 }
 const save = () => {
@@ -125,8 +130,15 @@ function seg(id, key) {
       scale = settings.quality === 'auto' ? 1 : +settings.quality;
       applySize();
     }
+    if (key.startsWith('xh')) applyXhair();
   });
   set();
+}
+// the crosshair in the game and its preview in the settings look the same
+function applyXhair() {
+  styleXhair($('crosshair'), settings);
+  styleXhair($('xh-prev'), settings);
+  $('xh-prev').style.setProperty('--gap', `${settings.xhg}px`);
 }
 seg('seg-mode', 'mode');
 seg('seg-diff', 'diff');
@@ -144,6 +156,8 @@ for (const b of document.querySelectorAll('#seg-fun button')) {
 }
 seg('seg-q', 'quality');
 seg('seg-skin', 'skin');
+seg('seg-xh', 'xh');
+seg('seg-xhc', 'xhc');
 function sides() {
   for (const b of document.querySelectorAll('.side')) b.classList.toggle('on', b.dataset.side === settings.team);
 }
@@ -199,6 +213,7 @@ function slider(id, key, fmt) {
     if (key === 'ui') applyUi();
     if (key === 'vol' && !portalMuted) setVolume(settings.vol);
     if (key === 'bright') renderer.toneMappingExposure = settings.bright;
+    if (key.startsWith('xh')) applyXhair();
     save();
   });
 }
@@ -208,6 +223,10 @@ slider('vol', 'vol', (v) => `${Math.round(v * 100)}%`);
 slider('bright', 'bright', (v) => `${Math.round(v * 100)}%`);
 slider('ui', 'ui', (v) => `${Math.round(v * 100)}%`);
 slider('tsens', 'tsens', (v) => (+v).toFixed(2));
+slider('xhl', 'xhl', (v) => `${v}px`);
+slider('xht', 'xht', (v) => `${v}px`);
+slider('xhg', 'xhg', (v) => `${v}px`);
+applyXhair();
 applyUi();
 $('s-fps').checked = settings.showFps;
 $('s-fps').addEventListener('change', () => {
@@ -257,6 +276,7 @@ $('click-to-play').onclick = () => resume();
 let startGen = 0;
 function startGame(online) {
   const gen = ++startGen;
+  closeSettings();
   clearTimeout(hud.xpTimer);
   initAudio();
   closeBuy(false);
@@ -415,7 +435,7 @@ function resume() {
   wantResume = true;
   lockPointer();
   setTimeout(() => {
-    if (wantResume && state !== 'menu' && game && document.pointerLockElement !== canvas) $('click-to-play').hidden = false;
+    if (wantResume && state !== 'menu' && game && !game.over && document.pointerLockElement !== canvas) $('click-to-play').hidden = false;
   }, 400);
 }
 document.addEventListener('pointerlockchange', () => {
@@ -608,7 +628,12 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.code === 'KeyB' || e.code === 'Escape') {
       closeBuy(e.code === 'KeyB');
-      if (e.code === 'Escape' && !touchOnly) $('click-to-play').hidden = false;
+      if (e.code === 'Escape' && !touchOnly && game && !game.over) {
+        state = 'pause';
+        $('pause').hidden = false;
+        input.keys.clear();
+        input.fire = false;
+      }
       e.preventDefault();
       return;
     }
@@ -656,12 +681,13 @@ window.addEventListener('mousemove', (e) => {
   look.dx += e.movementX;
   look.dy += e.movementY;
 });
-let wheelSum = 0, wheelAt = 0;
+let wheelSum = 0, wheelAt = 0, wheelLast = 0;
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   if (state !== 'play' || !game || !game.player.alive || buyOpen) return;
   const now = performance.now();
-  if (now - wheelAt > 400) wheelSum = 0;
+  if (now - wheelLast > 400) wheelSum = 0;
+  wheelLast = now;
   wheelSum += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
   if (Math.abs(wheelSum) < 50 || now - wheelAt < 140) return;
   wheelAt = now;
@@ -698,7 +724,7 @@ let last = performance.now();
 let fps = 60, frames = 0, fpsAt = last, slowFor = 0, fastFor = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  portalGameplay(state === 'play' && !!game && !game.over);
+  portalGameplay(state === 'play' && !!game && !game.over, !game ? 'quit' : game.over ? (game.matchWin ? 'win' : 'lose') : null);
   let dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   frames++;
@@ -728,7 +754,7 @@ function frame(now) {
   if (touchCtl) {
     document.body.classList.toggle('playing', !!game && state !== 'menu');
     const on = state === 'play' && !!game && !buyOpen;
-    if (on !== touchCtl.visible) touchCtl.show((touchCtl.visible = on));
+    if (on !== touchCtl.visible) touchCtl.show((touchCtl.visible = on), buyOpen && !!game && state === 'play');
     if (on) touchCtl.update(game);
   }
   if (state === 'play' && game && !(game.role === 'solo' && portalHold())) {
@@ -836,6 +862,7 @@ function myName() {
 
 function openLobby(code) {
   initAudio();
+  closeSettings();
   if (net) net.close();
   knownPeers = null;
   lobby = { mode: settings.mode, diff: settings.diff, teams: {}, names: {}, started: false };
@@ -850,6 +877,11 @@ function openLobby(code) {
   $('lb-status').textContent = t('connecting');
   net = new Net(code, name, {
     onStatus: (s) => {
+      if (s === 'full' || s === 'replaced') {
+        toMenu();
+        alertBox(t(s === 'full' ? 'roomFull' : 'tabReplaced'));
+        return;
+      }
       if (s === 'lost') {
         lobbyNote(t('lostConn'));
         if (game && !net.lostShown) {

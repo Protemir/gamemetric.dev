@@ -11,18 +11,32 @@ export function newCode() {
   return s;
 }
 
-export function myPeerId() {
-  let id = null;
+function freshId() {
+  const id = Math.random().toString(36).slice(2, 10);
   try {
-    id = sessionStorage.getItem('breach.peer');
+    sessionStorage.setItem('breach.peer', id);
   } catch {}
-  if (!id) {
-    id = Math.random().toString(36).slice(2, 10);
-    try {
-      sessionStorage.setItem('breach.peer', id);
-    } catch {}
-  }
   return id;
+}
+let peerId = null, peerUsed = false;
+try {
+  peerId = sessionStorage.getItem('breach.peer');
+} catch {}
+// a copied tab asks the others whether its id is already in use and takes a new one if so
+const tabs = typeof BroadcastChannel === 'function' ? new BroadcastChannel('breach.peer') : null;
+if (tabs) {
+  tabs.onmessage = (e) => {
+    const d = e.data || {};
+    if (d.q && d.q === peerId) tabs.postMessage({ taken: peerId });
+    else if (d.taken && d.taken === peerId && !peerUsed) peerId = freshId();
+  };
+  if (peerId) tabs.postMessage({ q: peerId });
+}
+
+export function myPeerId() {
+  if (!peerId) peerId = freshId();
+  peerUsed = true;
+  return peerId;
 }
 
 export class Net {
@@ -61,8 +75,20 @@ export class Net {
     };
     ws.onclose = (e) => {
       if (this.closed) return;
-      // replaced by this same player in another tab: stop fighting over the seat
-      if (e.code === 4000) return;
+      // replaced by this same player in another tab: stop fighting over the seat, and say so
+      if (e.code === 4000) {
+        if (ws === this.ws) {
+          this.closed = true;
+          this.h.onStatus?.('replaced');
+        }
+        return;
+      }
+      // ten players already: no point in trying again
+      if (e.code === 4009) {
+        this.closed = true;
+        this.h.onStatus?.('full');
+        return;
+      }
       this.h.onStatus?.('lost');
       // try again after a short pause (a phone switching networks, a sleepy tab); a full room gives up
       this.fails = (this.fails || 0) + 1;
@@ -160,6 +186,7 @@ export class Net {
         this.links.delete(m.peer);
       }
       this.updateHost();
+      if (hostLeft && this.isHost) for (const p of this.peers) if (p.peer !== this.id) this.linkTo(p.peer);
       this.h.onLeave?.(m.peer);
       if (hostLeft) this.h.onHostLeft?.();
       this.h.onPeers?.(this.peers);
@@ -185,6 +212,18 @@ export class Net {
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         l.open = false;
         l.relay = true;
+        if (pc.connectionState === 'failed' && this.isHost && (l.tries || 0) < 5)
+          setTimeout(() => {
+            if (this.closed || this.links.get(peer) !== l || !this.peers.some((p) => p.peer === peer)) return;
+            try {
+              pc.close();
+            } catch {}
+            this.links.delete(peer);
+            this.linkTo(peer).then(() => {
+              const n = this.links.get(peer);
+              if (n) n.tries = (l.tries || 0) + 1;
+            });
+          }, 2000);
       } else if (pc.connectionState === 'connected' && l.r?.readyState === 'open' && l.u?.readyState === 'open') l.open = true;
     };
     // no direct link in 7 s: fall back to the relay
@@ -202,7 +241,16 @@ export class Net {
         clearTimeout(l.timer);
       }
     };
-    ch.onmessage = (e) => this.h.onMessage?.(peer, JSON.parse(e.data));
+    ch.onmessage = (e) => {
+      if (!this.isHost && peer !== this.hostId) return;
+      let m;
+      try {
+        m = JSON.parse(e.data);
+      } catch {
+        return;
+      }
+      if (m && typeof m === 'object') this.h.onMessage?.(peer, m);
+    };
   }
 
   async linkTo(peer) {
@@ -221,6 +269,7 @@ export class Net {
     let l = this.links.get(from);
     if (m.sdp) {
       if (m.sdp.type === 'offer') {
+        if (this.isHost || from !== this.hostId) return;
         if (l) {
           try {
             l.pc.close();
