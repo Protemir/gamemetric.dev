@@ -55,10 +55,10 @@ export class Chickens {
     while (spots.length < 9 && guard++ < 800) {
       const x = 2 + Math.random() * 68, z = 2 + Math.random() * 60;
       const c = m.cellAt(x, z);
-      if (c < 0 || !m.walk[c] || m.indoor[c] || m.zone[c]) continue;
+      if (c < 0 || !m.walk[c] || m.indoor[c] || m.zone[c] || !this.fits(x, z)) continue;
       spots.push([x, z]);
     }
-    for (const [x, z] of [[14.5, 12.5], [20.5, 19.5], [16.5, 11.5]]) spots.push([x, z]);
+    for (const [x, z] of [[14.5, 12.5], [20.5, 19.5], [16.5, 11.5]]) if (this.fits(x, z)) spots.push([x, z]);
     for (const [x, z] of spots) {
       const mesh = new THREE.Mesh(chickenGeo(), this.mat);
       mesh.matrixAutoUpdate = true;
@@ -83,6 +83,16 @@ export class Chickens {
       c.run = 1.6;
       c.wait = 0;
     }
+  }
+
+  // the whole bird fits here: every corner of its square on free open ground
+  fits(x, z) {
+    const m = this.g.map, R = this.g.fun?.bigchick ? 0.55 : 0.24;
+    const free = (px, pz) => {
+      const cell = m.cellAt(px, pz);
+      return cell >= 0 && m.walk[cell] && m.h[cell] === 0;
+    };
+    return free(x - R, z - R) && free(x + R, z - R) && free(x - R, z + R) && free(x + R, z + R);
   }
 
   // "giant chickens" make them three times bigger (big heads: a quarter)
@@ -145,12 +155,9 @@ export class Chickens {
         const sp = c.run > 0 ? 3.6 : 0.7;
         const nx = c.x + (dx / d) * sp * dt, nz = c.z + (dz / d) * sp * dt;
         // the whole bird must fit: its middle in a free cell let half of it walk into walls
-        const R = this.g.fun.bigchick ? 0.55 : 0.24;
-        const free = (x, z) => {
-          const cell = m.cellAt(x, z);
-          return cell >= 0 && m.walk[cell] && m.h[cell] === 0;
-        };
-        if (free(nx - R, nz - R) && free(nx + R, nz - R) && free(nx - R, nz + R) && free(nx + R, nz + R)) {
+        // (one that is somehow already half in a wall may still walk out)
+        const mid = m.cellAt(nx, nz);
+        if (this.fits(nx, nz) || (!this.fits(c.x, c.z) && mid >= 0 && m.walk[mid] && m.h[mid] === 0)) {
           c.x = nx;
           c.z = nz;
           moving = true;

@@ -12,7 +12,7 @@ import { BOT_NAMES } from './i18n.js';
 import { WEAPONS } from './weapons.js';
 import { setupTouch } from './touch.js';
 import { levelOf, rankName, loadXp } from './rank.js';
-import { PORTAL, portalReady, portalGameplay, portalInterstitial, onPortalMute, onPortalPause, track } from './portal.js';
+import { PORTAL, portalReady, portalGameplay, portalInterstitial, onPortalMute, onPortalHold, portalHold, track } from './portal.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -98,7 +98,9 @@ function applyTexts() {
 for (const b of document.querySelectorAll('.langs button'))
   b.addEventListener('click', () => {
     setLang(b.dataset.lang);
-    location.search = `?lang=${b.dataset.lang}${q.has('touch') ? '&touch' : ''}${q.has('mouse') ? '&mouse' : ''}`;
+    const u = new URL(location.href);
+    u.searchParams.set('lang', b.dataset.lang);
+    location.replace(u.href);
   });
 
 // ---------- menu ----------
@@ -293,6 +295,11 @@ function startGame(online) {
     $('loading').hidden = true;
     $('hud').hidden = false;
     state = 'play';
+    if (game.role === 'solo' && portalHold()) {
+      state = 'pause';
+      $('pause').hidden = false;
+      return;
+    }
     lockPointer();
     if (touchOnly) goFullscreen();
   }, 30);
@@ -316,7 +323,7 @@ matchMedia('(orientation: portrait)').addEventListener?.('change', (e) => {
   if (e.matches && touchOnly && game && game.role === 'solo' && state === 'play') touchPause();
 });
 function touchPause() {
-  if (state !== 'play' || !game) return;
+  if (state !== 'play' || !game || game.over) return;
   if (buyOpen) closeBuy(false);
   state = 'pause';
   $('pause').hidden = false;
@@ -496,7 +503,7 @@ else if (!q.has('mouse') && (mobileUA || !matchMedia('(any-pointer: fine)').matc
   );
 // the page closed in the middle of a match: where it happened
 addEventListener('pagehide', () => {
-  if (state === 'play' && game && !game.over) game.tele('leave');
+  if ((state === 'play' || state === 'pause') && game && !game.over) game.tele('leave');
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -580,7 +587,11 @@ window.addEventListener('keydown', (e) => {
     if (!$('controls').hidden) $('controls').hidden = true;
     else if (!$('settings').hidden) $('s-back').click();
     else if (state === 'pause' && game && !$('pause').hidden && !game.over) {
-      resume();
+      if (touchOnly) resume();
+      else {
+        $('pause').hidden = true;
+        $('click-to-play').hidden = false;
+      }
       return;
     }
   }
@@ -712,7 +723,7 @@ function frame(now) {
     if (on !== touchCtl.visible) touchCtl.show((touchCtl.visible = on));
     if (on) touchCtl.update(game);
   }
-  if (state === 'play' && game) {
+  if (state === 'play' && game && !(game.role === 'solo' && portalHold())) {
     // two smaller steps when the frame is long keeps collisions honest
     const steps = dt > 1 / 40 ? 2 : 1;
     for (let i = 0; i < steps; i++) game.update(dt / steps, input);
@@ -781,9 +792,9 @@ const assetsReady = Promise.all([
     if (m && !PORTAL) openLobby(m[1].toUpperCase());
   });
 if (PORTAL) $('online').hidden = true;
-// the platform's own menu pauses a solo match
-onPortalPause(() => {
-  if (!game || state !== 'play' || game.role !== 'solo') return;
+// the platform's own menu or an ad pauses a solo match
+onPortalHold(() => {
+  if (!game || state !== 'play' || game.role !== 'solo' || game.over) return;
   if (touchOnly) touchPause();
   else document.exitPointerLock?.();
 });
@@ -956,7 +967,9 @@ function renderLobby() {
   for (const [id, key] of [['lb-mode', 'mode'], ['lb-diff', 'diff']]) for (const b of $(id).querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === lobby[key]);
   $('lb-opts').classList.toggle('locked', !net.isHost);
   $('lb-start').hidden = !net.isHost;
-  const fun = Object.entries((net.isHost ? settings.fun : lobby.fun) || {}).filter(([, on]) => on).map(([k]) => t(document.querySelector(`#seg-fun [data-f="${k}"]`)?.dataset.t || 'fun' + k[0].toUpperCase() + k.slice(1)));
+  const fun = Object.entries((net.isHost ? settings.fun : lobby.fun) || {}).filter(([, on]) => on).map(([k]) => [...document.querySelectorAll('#seg-fun [data-f]')].find((b) => b.dataset.f === k)?.dataset.t)
+    .filter(Boolean)
+    .map((k) => t(k));
   $('lb-fun').textContent = fun.length ? `${t('fun')}: ${fun.join(', ')}` : '';
   if (performance.now() < (lobbyNoteUntil || 0)) return;
   $('lb-status').textContent = net.isHost ? '' : lobby.started ? t('inMatch') : t('waitHost');

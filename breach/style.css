@@ -407,3 +407,7 @@ body.touch label:has(#s-sens), body:not(.touch) label:has(#s-tsens) { display: n
 
 /* the narrowest phones: the header keeps the language buttons, the rank is on the screen after a match */
 @media (max-width: 420px) { #rank-chip { display: none; } }
+
+/* phones: "Гонка вооружений" and "Team deathmatch" fit their mode buttons */
+@media (max-width: 760px), (max-height: 520px) { .seg.modes b { font-size: 14px; } }
+@media (max-width: 420px) { .seg.modes b { font-size: 13px; } .seg.modes button { padding-left: 6px; padding-right: 6px; } }

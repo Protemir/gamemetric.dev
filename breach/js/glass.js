@@ -142,6 +142,7 @@ export class Glass {
 
   dispose() {
     this.game.scene.remove(this.mesh);
+    this.mesh.dispose();
     this.mesh.geometry.dispose();
     this.mat.map.dispose();
     this.mat.dispose();

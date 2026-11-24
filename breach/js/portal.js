@@ -53,6 +53,31 @@ export function portalHappy() {
   if (cg) safe(() => cg.game.happytime());
 }
 
+// an ad on screen or the platform's own pause: a solo match stands still meanwhile
+let adOn = false, platformPaused = false;
+const holdFns = [];
+function setHold(ad, paused) {
+  const was = adOn || platformPaused;
+  adOn = ad;
+  platformPaused = paused;
+  if (!was && (adOn || platformPaused)) for (const fn of holdFns) safe(fn);
+}
+export const portalHold = () => adOn || platformPaused;
+// fn() when an ad opens or the platform pauses the game
+export function onPortalHold(fn) {
+  holdFns.push(fn);
+}
+if (bridge)
+  try {
+    bridge.advertisement.on(bridge.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, (s) => {
+      if (s === 'opened') setHold(true, platformPaused);
+      else if (s === 'closed' || s === 'failed') setHold(false, platformPaused);
+    });
+    bridge.platform.on(bridge.EVENT_NAME.PAUSE_STATE_CHANGED, (p) => setHold(adOn, !!p));
+  } catch {
+    /* no events */
+  }
+
 // between matches: a full-screen ad if the platform has one (it decides the timing); mute(true/false) around it
 let muteForAd = () => {};
 export function portalInterstitial() {
@@ -63,9 +88,18 @@ export function portalInterstitial() {
   if (cg) {
     safe(() =>
       cg.ad.requestAd('midgame', {
-        adStarted: () => muteForAd(true),
-        adFinished: () => muteForAd(false),
-        adError: () => muteForAd(false),
+        adStarted: () => {
+          setHold(true, false);
+          muteForAd(true);
+        },
+        adFinished: () => {
+          setHold(false, false);
+          muteForAd(false);
+        },
+        adError: () => {
+          setHold(false, false);
+          muteForAd(false);
+        },
       }),
     );
   }
@@ -136,12 +170,3 @@ export function track(name, params = {}) {
   }
 }
 
-// fn() when the platform pauses the game (its own menu)
-export function onPortalPause(fn) {
-  if (!bridge) return;
-  try {
-    bridge.platform.on(bridge.EVENT_NAME.PAUSE_STATE_CHANGED, (p) => p && fn());
-  } catch {
-    /* none */
-  }
-}

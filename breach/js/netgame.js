@@ -99,7 +99,7 @@ export class NetGame {
       if (T >= this.sendAt) {
         this.sendAt = T + 0.033;
         const p = g.player;
-        if (p.alive) this.net.toHost({ k: 'p', x: r2(p.x), z: r2(p.z), f: r2(p.feet), y: r3(p.yaw), p: r3(p.pitch), c: r2(p.crouchK), vx: r2(p.vx), vz: r2(p.vz), w: KINDS.indexOf(p.kind) }, false);
+        if (p.alive) this.net.toHost({ k: 'p', r: this.g.round, x: r2(p.x), z: r2(p.z), f: r2(p.feet), y: r3(p.yaw), p: r3(p.pitch), c: r2(p.crouchK), vx: r2(p.vx), vz: r2(p.vz), w: KINDS.indexOf(p.kind) }, false);
       }
     }
   }
@@ -134,6 +134,7 @@ export class NetGame {
     switch (m.k) {
       case 'p':
         if (!s.alive || ![m.x, m.z, m.f, m.y, m.p].every(Number.isFinite)) return;
+        if (Number.isFinite(m.r) && m.r !== g.round) return;
         pushSample(s, { t: now(), x: m.x / 100, z: m.z / 100, f: m.f / 100, y: m.y / 1000, p: m.p / 1000, c: m.c / 100, vx: m.vx / 100, vz: m.vz / 100 });
         if (KINDS[m.w] && s.netKind !== KINDS[m.w]) {
           s.netKind = KINDS[m.w];
@@ -204,7 +205,7 @@ export class NetGame {
   // a friend joining mid-match gets the guns already lying about
   // a player back after a dropout: their life and kit as the host has them
   sendState(peer, s, theyThinkAlive) {
-    if (s.alive) this.net.send(peer, { k: 'P', id: s.id, x: r2(s.x), z: r2(s.z), y: r3(s.yaw), L: loadoutOf(s), keep: theyThinkAlive ? 1 : 0, f: r2(s.feet) });
+    if (s.alive) this.net.send(peer, { k: 'P', r: this.g.round, id: s.id, x: r2(s.x), z: r2(s.z), y: r3(s.yaw), L: loadoutOf(s), keep: theyThinkAlive ? 1 : 0, f: r2(s.feet) });
     else if (theyThinkAlive) this.net.send(peer, { k: 'K', v: s.id, by: -1, w: 0, hd: 0, dx: 0, dz: 0 });
   }
 
@@ -231,6 +232,9 @@ export class NetGame {
   onHostageDown(h) {
     if (this.host) this.net.broadcast({ k: 'HK', i: this.g.hostages.indexOf(h) });
   }
+  onDealt(by, d) {
+    if (this.host && d > 0) this.net.send(by.peer, { k: 'dd', d: Math.round(d) });
+  }
   onHurt(o, by, d) {
     if (this.host && o.peer) this.net.send(o.peer, { k: 'h', by: by ? by.id : -1, d });
   }
@@ -242,7 +246,7 @@ export class NetGame {
     this.net.broadcast({ k: 'R', r: g.round, first: first ? 1 : 0, sp: g.soldiers.map((s) => [s.id, r2(s.x), r2(s.z), r3(s.yaw)]), L });
   }
   onSpawn(s) {
-    if (this.host) this.net.broadcast({ k: 'P', id: s.id, x: r2(s.x), z: r2(s.z), y: r3(s.yaw), L: loadoutOf(s) });
+    if (this.host) this.net.broadcast({ k: 'P', r: this.g.round, id: s.id, x: r2(s.x), z: r2(s.z), y: r3(s.yaw), L: loadoutOf(s) });
   }
   onEnd(winner, why) {
     if (this.host) this.net.broadcast({ k: 'E', w: winner, why });
@@ -303,6 +307,7 @@ export class NetGame {
     const me = g.player;
     switch (m.k) {
       case 's': {
+        if (!g.round && Number.isFinite(m.r)) g.round = m.r;
         if (m.n != null) {
           if (m.n <= (this.lastSnap || 0)) break;
           this.lastSnap = m.n;
@@ -407,6 +412,9 @@ export class NetGame {
         }
         break;
       }
+      case 'dd':
+        if (Number.isFinite(m.d) && m.d > 0) g.stats.dmg += Math.min(400, m.d);
+        break;
       case 'h': {
         const by = g.soldiers[m.by];
         if (by) g.hud.hurt(Math.atan2(-(by.x - me.x), -(by.z - me.z)) - me.yaw, m.d);
@@ -419,6 +427,7 @@ export class NetGame {
         g.applyRound(m);
         break;
       case 'P': {
+        if (Number.isFinite(m.r)) g.round = m.r;
         const s = g.soldiers[m.id];
         if (!s) break;
         if (m.keep && s === me && me.alive) {

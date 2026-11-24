@@ -93,8 +93,20 @@ export class Net {
       this.fails = 0;
       const again = this.hadHello;
       this.hadHello = true;
+      const before = this.peers.map((p) => p.peer), hostBefore = this.hostId;
       this.peers = [m.you, ...m.peers].sort((a, b) => a.joined - b.joined);
       this.updateHost();
+      // people who left while we were cut off: the server told only those who were connected
+      const gone = again ? before.filter((id) => id !== this.id && !this.peers.some((p) => p.peer === id)) : [];
+      for (const id of gone) {
+        const l = this.links.get(id);
+        if (l) {
+          try {
+            l.pc?.close();
+          } catch {}
+          this.links.delete(id);
+        }
+      }
       this.h.onStatus?.('ok');
       // the host links to everyone already waiting
       if (this.isHost) for (const p of this.peers) if (p.peer !== this.id) this.linkTo(p.peer);
@@ -108,6 +120,8 @@ export class Net {
           this.links.delete(this.hostId);
         }
       }
+      for (const id of gone) this.h.onLeave?.(id);
+      if (again && hostBefore && gone.includes(hostBefore)) this.h.onHostLeft?.();
       if (again) this.h.onReconnected?.();
     } else if (m.t === 'join') {
       const known = this.peers.some((p) => p.peer === m.peer);

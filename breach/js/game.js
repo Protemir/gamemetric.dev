@@ -1014,13 +1014,14 @@ export class Game {
       const yy = baseY + (Math.cos(ang) * r) / Math.max(0.3, Math.cos(baseP));
       const dx = -Math.sin(yy) * Math.cos(py), dy = Math.sin(py), dz = -Math.cos(yy) * Math.cos(py);
       this.bullet(s, s.x, eye, s.z, dx, dy, dz, w, muzzle, i === 0 || i % 3 === 0);
+      if (!s.alive) break;
     }
     this.ejectShell(s, w, eye);
     // recoil
     const [up, side] = recoilKick(w, s.shots);
     s.punchP += up;
     s.punchY += side;
-    if (this.fun.recoil) this.rocketRecoil(s, w);
+    if (this.fun.recoil && s.alive) this.rocketRecoil(s, w);
     s.shots++;
     if (w.scope && s.scoped) s.scoped = 0;
     s.justFired = true;
@@ -1060,7 +1061,7 @@ export class Game {
       }
     }
     // a chicken in the way takes the bullet
-    const ch = this.chickens.hit(ox, oy, oz, dx, dy, dz, hit ? hit.t : maxT);
+    const ch = this.role === 'solo' || s.isPlayer ? this.chickens.hit(ox, oy, oz, dx, dy, dz, hit ? hit.t : maxT) : null;
     if (ch) {
       if (tracer && muzzle && (!s.isPlayer || Math.random() < 0.5)) this.fx.tracer(muzzle[0], muzzle[1], muzzle[2], ox + dx * ch.t, oy + dy * ch.t, oz + dz * ch.t, s.isPlayer ? 0.5 : 1);
       this._ends?.push([ox + dx * ch.t, oy + dy * ch.t, oz + dz * ch.t]);
@@ -1125,6 +1126,7 @@ export class Game {
   }
 
   knife(s, w, heavy = false) {
+    if (s.isPlayer) this.shotSeq++;
     this._hits = [];
     this.knifeHit(s, w, heavy);
     if (this.nh) this.nh.onFire(s, 'knife', [s.x, s.feet + 1.2, s.z], [], this._hits);
@@ -1225,6 +1227,7 @@ export class Game {
     }
     d = Math.round(d);
     if (by && by.isPlayer && o.team !== by.team) this.stats.dmg += Math.max(0, Math.min(d, o.hp));
+    else if (by && by.peer && weapon === 'he' && o.team !== by.team) this.nh?.onDealt(by, Math.max(0, Math.min(d, o.hp)));
     o.hp -= d;
     if (o.brain) o.brain.hurt(by);
     // the body flinches from the hit
@@ -1658,6 +1661,7 @@ export class Game {
       h.state = 'follow';
       h.leader = s;
       h.path = null;
+      h.repath = 0;
       sfx('use', [h.x, 1, h.z]);
       if (this.player.team === 'B') this.hud.center(t('hostageTaken'), 2);
       this.nh?.onMsg('hostageTaken', 'B');
@@ -1702,7 +1706,7 @@ export class Game {
         const L = h.leader;
         const d = Math.hypot(L.x - h.x, L.z - h.z);
         if (d > 2.0) {
-          if (!h.path || this.time > h.repath) {
+          if (this.time > h.repath) {
             h.path = this.map.path(h.x, h.z, L.x, L.z, false, 0, 0, true);
             h.pi = 0;
             h.repath = this.time + 0.6;
