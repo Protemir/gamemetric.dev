@@ -11,6 +11,7 @@ import { NetGame } from './netgame.js';
 import { BOT_NAMES } from './i18n.js';
 import { WEAPONS } from './weapons.js';
 import { setupTouch } from './touch.js';
+import { levelOf, rankName, loadXp } from './rank.js';
 import { PORTAL, portalReady, portalGameplay, portalInterstitial, onPortalMute, onPortalPause, track } from './portal.js';
 
 const $ = (id) => document.getElementById(id);
@@ -77,8 +78,16 @@ function applySize() {
 window.addEventListener('resize', applySize);
 
 // ---------- texts ----------
+// the player's rank in the menu's corner
+function paintRank() {
+  const r = levelOf(loadXp());
+  $('rc-name').textContent = rankName(r.level);
+  $('rc-bar').style.width = ((100 * r.into) / r.span).toFixed(1) + '%';
+  $('rank-chip').title = `${r.into} / ${r.span} ${t('xp')}`;
+}
 function applyTexts() {
   document.documentElement.lang = lang;
+  paintRank();
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
   for (const el of document.querySelectorAll('[data-t-aria]')) el.setAttribute('aria-label', t(el.dataset.tAria));
   if (touchOnly) document.querySelectorAll('.buy-hint').forEach((el) => (el.textContent = t('buyHintTouch')));
@@ -246,6 +255,7 @@ $('click-to-play').onclick = () => resume();
 let startGen = 0;
 function startGame(online) {
   const gen = ++startGen;
+  clearTimeout(hud.xpTimer);
   initAudio();
   closeBuy(false);
   input.menuOpen = false;
@@ -320,6 +330,7 @@ function closeSettings() {
 }
 function toMenu() {
   wantResume = false;
+  clearTimeout(hud.xpTimer);
   startGen++;
   closeSettings();
   if (net) {
@@ -334,6 +345,7 @@ function toMenu() {
     game = null;
   }
   state = 'menu';
+  paintRank();
   $('hud').hidden = true;
   $('pause').hidden = true;
   $('match-over').hidden = true;
@@ -364,9 +376,18 @@ function lockPointer() {
   }
   try {
     const p = canvas.requestPointerLock({ unadjustedMovement: true });
-    if (p && p.catch) p.catch(() => canvas.requestPointerLock());
+    if (p && p.catch)
+      p.catch(() => {
+        const p2 = canvas.requestPointerLock();
+        if (p2 && p2.catch) p2.catch(() => {});
+      });
   } catch {
-    canvas.requestPointerLock();
+    try {
+      const p2 = canvas.requestPointerLock();
+      if (p2 && p2.catch) p2.catch(() => {});
+    } catch {
+      /* no pointer lock here: the click-to-play panel stays */
+    }
   }
 }
 // the game only goes on once the browser has really given us the mouse
@@ -935,7 +956,7 @@ function renderLobby() {
   for (const [id, key] of [['lb-mode', 'mode'], ['lb-diff', 'diff']]) for (const b of $(id).querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === lobby[key]);
   $('lb-opts').classList.toggle('locked', !net.isHost);
   $('lb-start').hidden = !net.isHost;
-  const fun = Object.entries((net.isHost ? settings.fun : lobby.fun) || {}).filter(([, on]) => on).map(([k]) => t('fun' + k[0].toUpperCase() + k.slice(1)));
+  const fun = Object.entries((net.isHost ? settings.fun : lobby.fun) || {}).filter(([, on]) => on).map(([k]) => t(document.querySelector(`#seg-fun [data-f="${k}"]`)?.dataset.t || 'fun' + k[0].toUpperCase() + k.slice(1)));
   $('lb-fun').textContent = fun.length ? `${t('fun')}: ${fun.join(', ')}` : '';
   if (performance.now() < (lobbyNoteUntil || 0)) return;
   $('lb-status').textContent = net.isHost ? '' : lobby.started ? t('inMatch') : t('waitHost');

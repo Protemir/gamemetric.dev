@@ -85,15 +85,22 @@ export class Chickens {
     }
   }
 
+  // "giant chickens" make them three times bigger (big heads: a quarter)
+  size() {
+    const f = this.g.fun || {};
+    return (f.bigchick ? 3 : 1) * (f.heads ? 1.25 : 1);
+  }
+
   // nearest chicken a ray passes through before maxT (a 22 cm ball round the body)
   hit(ox, oy, oz, dx, dy, dz, maxT) {
     let best = null;
     for (const c of this.list) {
-      const hx = c.x - ox, hy = 0.25 - oy, hz = c.z - oz;
+      const k = this.size();
+      const hx = c.x - ox, hy = 0.25 * k - oy, hz = c.z - oz;
       const t = hx * dx + hy * dy + hz * dz;
       if (t <= 0 || t > maxT) continue;
       const d2 = hx * hx + hy * hy + hz * hz - t * t;
-      if (d2 < 0.22 * 0.22 && (!best || t < best.t)) best = { c, t };
+      if (d2 < 0.22 * k * 0.22 * k && (!best || t < best.t)) best = { c, t };
     }
     return best;
   }
@@ -138,7 +145,7 @@ export class Chickens {
         const sp = c.run > 0 ? 3.6 : 0.7;
         const nx = c.x + (dx / d) * sp * dt, nz = c.z + (dz / d) * sp * dt;
         // the whole bird must fit: its middle in a free cell let half of it walk into walls
-        const R = 0.24;
+        const R = this.g.fun.bigchick ? 0.55 : 0.24;
         const free = (x, z) => {
           const cell = m.cellAt(x, z);
           return cell >= 0 && m.walk[cell] && m.h[cell] === 0;
@@ -168,7 +175,7 @@ export class Chickens {
       const bob = moving ? Math.abs(Math.sin(c.phase)) * 0.03 : 0;
       c.mesh.position.set(c.x, bob, c.z);
       c.mesh.rotation.set(moving ? 0 : Math.max(0, Math.sin(c.phase)) * 0.35, c.yaw, moving ? Math.sin(c.phase) * 0.12 : 0);
-      c.mesh.scale.setScalar(g.fun.heads ? 1.25 : 1);
+      c.mesh.scale.setScalar(this.size());
       if (g.time > c.cluckAt) {
         c.cluckAt = g.time + 4 + Math.random() * 12;
         sfx('cluck', [c.x, 0.3, c.z]);

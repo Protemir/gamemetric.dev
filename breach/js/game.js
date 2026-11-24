@@ -4,6 +4,7 @@ import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos, WATER_Y, POOL_BOTTOM, DEC
 import { buildDecor } from './decor.js';
 import { buildProps, propsReady } from './props.js';
 import { Chickens } from './chickens.js';
+import { Glass } from './glass.js';
 import { Rain } from './weather.js';
 import { Smokes } from './smoke.js';
 import { Fireplace } from './fireplace.js';
@@ -295,6 +296,7 @@ export class Game {
     if (!opts.preview) setQuack(this.fun.quack);
     this.grav = this.fun.lowgrav ? 6 : GRAV;
     this.chickens = new Chickens(this);
+    this.glass = new Glass(this);
     this.smokes = new Smokes(this);
     this.fireplace = new Fireplace(this);
     this.toys = new PoolToys(this);
@@ -347,6 +349,10 @@ export class Game {
     this.view = { x: 0, y: 1.6, z: 0, yaw: 0, pitch: 0, shake: 0 };
     this.spec = null;
     this.over = false;
+    // what the player did this match, for the screen after it (rank.js)
+    this.stats = { shots: 0, hits: 0, dmg: 0, hs: 0, knife: 0, nade: 0, best: 0, chickens: 0, swim: 0 };
+    this.shotSeq = 0;
+    this.shotHit = 0;
     this.flashWhite = 0;
     this.player.switchSlot(2, true);
     this.dmKills = { A: 0, B: 0 };
@@ -368,6 +374,7 @@ export class Game {
     this.smokes?.clear();
     this.clearDrops();
     this.firstBlood = false;
+    this.glass.reset();
     this.chickens.spawn();
     for (const s of this.soldiers) s.roundKills = 0;
     for (const n of this.nades) this.dropNade(n);
@@ -699,6 +706,7 @@ export class Game {
     this.result = null;
     this.rescued = 0;
     this.firstBlood = false;
+    this.glass.reset();
     this.chickens.spawn();
     for (const s of this.soldiers) s.roundKills = 0;
     const order = { A: this.map.spawns.A.slice().sort(() => Math.random() - 0.5), B: this.map.spawns.B.slice().sort(() => Math.random() - 0.5) };
@@ -880,6 +888,27 @@ export class Game {
     this.hud.matchOver(winner === 'draw' ? null : winner === this.player.team, this);
   }
 
+  // "rocket recoil": the shot pushes back along the aim; aimed at the floor it lifts you
+  rocketRecoil(s, w) {
+    const k = w.pellets ? 8 : w.scope ? 5.5 : w.auto ? 0.8 : 2.4;
+    const cp = Math.cos(s.pitch);
+    s.vx += Math.sin(s.yaw) * cp * k;
+    s.vz += Math.cos(s.yaw) * cp * k;
+    const hs = Math.hypot(s.vx, s.vz);
+    if (hs > 11) {
+      s.vx *= 11 / hs;
+      s.vz *= 11 / hs;
+    }
+    const lift = -Math.sin(s.pitch) * k;
+    if (lift > 0.6 && s.onGround) {
+      s.vy = Math.max(s.vy, Math.min(8, lift));
+      s.onGround = false;
+    }
+    // the speed it gave is allowed in the air (the air cap would cut it)
+    s.airCap = Math.max(s.airCap || 0, Math.hypot(s.vx, s.vz));
+    if (s.isPlayer) this.view.shake = Math.min(0.6, this.view.shake + k * 0.03);
+  }
+
   // ---------- combat ----------
   hitTest(o, ox, oy, oz, dx, dy, dz, maxT) {
     const eye = o.feet + o.eyeH();
@@ -973,6 +1002,10 @@ export class Game {
       muzzle = [s.x + fx * 0.7 * cp + Math.cos(s.yaw) * 0.12, eye - 0.28 + Math.sin(s.pitch) * 0.6, s.z + fz * 0.7 * cp - Math.sin(s.yaw) * 0.12];
     }
     const pellets = w.pellets || 1;
+    if (s.isPlayer) {
+      this.stats.shots++;
+      this.shotSeq++;
+    }
     this._ends = [];
     this._hits = [];
     for (let i = 0; i < pellets; i++) {
@@ -987,6 +1020,7 @@ export class Game {
     const [up, side] = recoilKick(w, s.shots);
     s.punchP += up;
     s.punchY += side;
+    if (this.fun.recoil) this.rocketRecoil(s, w);
     s.shots++;
     if (w.scope && s.scoped) s.scoped = 0;
     s.justFired = true;
@@ -1031,6 +1065,7 @@ export class Game {
       if (tracer && muzzle && (!s.isPlayer || Math.random() < 0.5)) this.fx.tracer(muzzle[0], muzzle[1], muzzle[2], ox + dx * ch.t, oy + dy * ch.t, oz + dz * ch.t, s.isPlayer ? 0.5 : 1);
       this._ends?.push([ox + dx * ch.t, oy + dy * ch.t, oz + dz * ch.t]);
       this.chickens.kill(ch.c, s);
+      if (s.isPlayer) this.stats.chickens++;
       return;
     }
     const duck = s.isPlayer ? this.toys.hit(ox, oy, oz, dx, dy, dz, hit ? hit.t : maxT) : null;
@@ -1042,6 +1077,7 @@ export class Game {
     }
     const end = hit ? hit.t : maxT;
     const ex = ox + dx * end, ey = oy + dy * end, ez = oz + dz * end;
+    this.glass.ray(ox, oy, oz, dx, dy, dz, end);
     if (dy < 0 && oy > WATER_Y && ey < WATER_Y) {
       const ts = (WATER_Y - oy) / dy, sx = ox + dx * ts, sz = oz + dz * ts;
       if (this.map.inWater(sx, sz)) {
@@ -1136,6 +1172,23 @@ export class Game {
   }
 
   damage(o, dmg, part, by, weapon, dx, dz, pen) {
+    // accuracy counts a shot once however many pellets hit; damage is what the target could still lose
+    if (by && by.isPlayer && o !== by && !(o instanceof Hostage) && o.team !== by.team && o.alive && o.hp > 0 && !(o.spawnProtect > this.time)) {
+      if (this.shotHit !== this.shotSeq && weapon !== 'knife' && !WEAPONS[weapon]?.nade) {
+        this.shotHit = this.shotSeq;
+        this.stats.hits++;
+      }
+      if (this.role === 'client') {
+        if (this.dmgSeq !== this.shotSeq) {
+          this.dmgSeq = this.shotSeq;
+          this.dmgShot = new Map();
+        }
+        const before = this.dmgShot.get(o) || 0;
+        const add = Math.max(0, Math.min(dmg * (part === 'head' ? 4 : part === 'legs' ? 0.75 : 1) * (o.armor > 0 ? 0.75 : 1), o.hp - before));
+        this.dmgShot.set(o, before + add);
+        this.stats.dmg += add;
+      }
+    }
     if (this.role === 'client') {
       // the host decides; we only report our own hits and show the marker
       if (by === this.player && this._hits) {
@@ -1171,6 +1224,7 @@ export class Game {
       d = taken;
     }
     d = Math.round(d);
+    if (by && by.isPlayer && o.team !== by.team) this.stats.dmg += Math.max(0, Math.min(d, o.hp));
     o.hp -= d;
     if (o.brain) o.brain.hurt(by);
     // the body flinches from the hit
@@ -1223,6 +1277,11 @@ export class Game {
     if (by && by !== o) {
       if (by.team !== o.team) {
         by.kills++;
+        if (by.isPlayer) {
+          if (head) this.stats.hs++;
+          if (weapon === 'knife') this.stats.knife++;
+          if (weapon === 'he' && !this.chickenBlast) this.stats.nade++;
+        }
         if (by.isPlayer && by.kills === 1) this.tele('first_kill', { weapon: weapon || '' });
         by.money = Math.min(16000, by.money + (WEAPONS[weapon]?.reward ?? 300));
         if (this.mode === 'dm' && this.role !== 'client') this.dmKills[by.team]++;
@@ -1412,6 +1471,7 @@ export class Game {
     if (!by || !by.isPlayer || by === o || o.team === by.team || this.preview) return;
     this.streak = this.time - (this.lastKillAt ?? -99) < 4.5 ? (this.streak || 0) + 1 : 1;
     this.lastKillAt = this.time;
+    this.stats.best = Math.max(this.stats.best, this.streak);
     const enemiesLeft = this.soldiers.filter((s) => s.team !== by.team && s.alive).length;
     let key = null, level = 1;
     if (enemiesLeft === 0 && this.mode !== 'dm' && (by.roundKills || 0) >= this.soldiers.filter((s) => s.team !== by.team).length) (key = 'annAce'), (level = 5);
@@ -1522,6 +1582,7 @@ export class Game {
         }
       }
       n.mesh.position.set(n.x, n.y, n.z);
+      this.glass.touch(n.x, n.z, n.y, n.y, n.vx, n.vz);
       n.mesh.rotation.x += dt * 8;
       if (this.role === 'client') {
         // the host says when it goes off; drop it if that message never comes
@@ -1546,10 +1607,12 @@ export class Game {
     }
     if (n.kind === 'he') {
       sfx('explode', [n.x, n.y, n.z]);
+      this.glass.blast(n.x, n.y, n.z, 5);
       this.fx.flash(n.x, n.y + 0.3, n.z, 4, 0.18);
       for (let i = 0; i < 6; i++) this.fx.puff(n.x + (Math.random() - 0.5), n.y + 0.4 + Math.random() * 0.6, n.z + (Math.random() - 0.5), [0.35, 0.32, 0.3], 2.2, 1.6, 0.6, 0.8);
       this.fx.spark(n.x, n.y + 0.1, n.z, 0, 1, 0, [1, 0.7, 0.3], 30, 7);
       if (!this.map.inWater(n.x, n.z)) this.fx.decal(n.x, this.map.groundAt(n.x, n.z, 0.05, n.y + 0.1) + 0.01, n.z, 0, 1, 0);
+      this.chickenBlast = !!n.chicken;
       if (this.role !== 'client' && !(n.chicken && this.role !== 'solo')) for (const o of [...this.soldiers, ...(n.owner?.team === 'B' ? [] : this.hostages)]) {
         if (o instanceof Soldier ? !o.alive : o.state === 'dead' || o.state === 'rescued') continue;
         const cy = o.feet + 1.0;
@@ -1560,6 +1623,7 @@ export class Game {
         if (o instanceof Soldier && n.owner && o.team === n.owner.team && o !== n.owner) continue;
         this.damage(o, dmg, 'body', n.owner, 'he', o.x - n.x, o.z - n.z, 0.6);
       }
+      this.chickenBlast = false;
       const pd = Math.hypot(this.view.x - n.x, this.view.z - n.z);
       if (pd < 20) this.view.shake = Math.min(1, this.view.shake + (1 - pd / 20) * 0.9);
     } else {
@@ -1725,10 +1789,13 @@ export class Game {
         wz /= l;
       }
     }
+    // "ice rink": on the ground you barely stop and barely speed up, everybody slides
+    const ice = this.fun.ice && s.onGround && !swim;
+    const iceGrip = s.brain ? 2.2 : 0.45, iceAcc = s.brain ? 5 : 2.2;
     if (s.onGround || swim) {
       const sp = Math.hypot(s.vx, s.vz);
       if (sp > 0) {
-        const drop = Math.max(sp, 1.6) * 7 * dt;
+        const drop = Math.max(sp, 1.6) * (ice ? iceGrip : 7) * dt;
         const ns = Math.max(0, sp - drop) / sp;
         s.vx *= ns;
         s.vz *= ns;
@@ -1738,7 +1805,7 @@ export class Game {
       const cur = s.vx * wx + s.vz * wz;
       const add = max - cur;
       if (add > 0) {
-        const acc = Math.min(add, (s.onGround || swim ? (swim ? 6 : 11) : 1.8) * Math.max(max, 1) * dt);
+        const acc = Math.min(add, (s.onGround || swim ? (swim ? 6 : ice ? iceAcc : 11) : 1.8) * Math.max(max, 1) * dt);
         s.vx += acc * wx;
         s.vz += acc * wz;
       }
@@ -1778,11 +1845,16 @@ export class Game {
       if (s.in.jump && !frozen && edge && s.feet > float - 0.35 && s.vy < 2) s.vy = 4.2;
       s.onGround = false;
     } else s.vy -= this.grav * dt;
-    const px = s.x + s.vx * dt, pz = s.z + s.vz * dt;
-    s.x = px;
-    s.z = pz;
     s.step = swim ? (s.in.jump ? 1.75 : 0.3) : s.onGround ? 0.45 : 0.22;
-    this.map.collide(s);
+    const sub = Math.max(1, Math.min(8, Math.ceil((Math.hypot(s.vx, s.vz) * dt) / 0.3)));
+    let px = s.x, pz = s.z;
+    for (let k = 0; k < sub; k++) {
+      px = s.x + (s.vx * dt) / sub;
+      pz = s.z + (s.vz * dt) / sub;
+      s.x = px;
+      s.z = pz;
+      this.map.collide(s);
+    }
     const cx = s.x - px, cz = s.z - pz, cl = Math.hypot(cx, cz);
     if (cl > 1e-5) {
       const nx = cx / cl, nz = cz / cl, vn = s.vx * nx + s.vz * nz;
@@ -2053,6 +2125,7 @@ export class Game {
   // into or out of the water: a splash everyone near hears and sees
   splash(s, into) {
     const big = into && s.vy < -3;
+    if (into && s.isPlayer) this.stats.swim++;
     sfx(into ? 'splash' : 'drip', s.isPlayer ? null : [s.x, 0.2, s.z], { big });
     for (let i = 0; i < (into ? (big ? 9 : 5) : 3); i++) this.fx.puff(s.x + (Math.random() - 0.5) * 0.8, WATER_Y + 0.1 + Math.random() * 0.4, s.z + (Math.random() - 0.5) * 0.8, [0.86, 0.94, 1], big ? 1.1 : 0.7, 0.6, 1.4, 0.75);
     if (into && s.isPlayer && big) this.view.shake = Math.min(1, this.view.shake + 0.25);
@@ -2105,6 +2178,10 @@ export class Game {
 
   // ---------- frame ----------
   update(dt, input) {
+    if (this.mode === 'dm' && this.time > (this.glazierAt ?? 90)) {
+      this.glazierAt = this.time + 90;
+      this.glass.reset();
+    }
     if (this.slow > 0) {
       this.slow -= dt;
       dt *= 0.3;
@@ -2177,6 +2254,7 @@ export class Game {
         const air = s.onGround === false;
         if (!b.culled) b.animate({ dt, speed: Math.hypot(s.vx, s.vz), crouch: s.crouchK, pitch: s.pitch, kick: s.kick, y: s.feet, back, rel, air });
         b.setLight(this.charLight(s.x, s.z));
+        if (s.alive) this.glass.touch(s.x, s.z, s.feet, s.feet + 1.6, s.vx, s.vz);
         continue;
       }
       if (s.brain && !this.over) {
@@ -2187,6 +2265,7 @@ export class Game {
         } else s.brain.update(dt);
       }
       this.move(s, dt, frozen);
+      if (s.alive) this.glass.touch(s.x, s.z, s.feet, s.feet + 1.6, s.vx, s.vz);
       // reload / fire
       if (s.reloadUntil && this.time >= s.reloadUntil) {
         const w = WEAPONS[s.kind];
@@ -2747,6 +2826,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    this.glass.dispose();
     if (this.fun.talk) window.speechSynthesis?.cancel();
     if (!this.opts.preview) setQuack(false);
     if (this.underwater) {

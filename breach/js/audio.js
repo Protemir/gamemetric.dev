@@ -261,6 +261,19 @@ export function sfx(name, pos = null, opt = {}) {
       tone(d, t, 0.12, 'sine', 160, 90, 0.3);
       break;
     }
+    case 'glass': {
+      // a crash and a few tinkles of falling pieces
+      const P_ = place(pos, 45);
+      if (!P_) return;
+      const d = out(P_);
+      noise(d, t, 0.22, 'highpass', 3800, 0.8, 0.32, 0.004);
+      noise(d, t, 0.08, 'bandpass', 1800, 1.2, 0.18, 0.003);
+      for (let i = 0; i < 6; i++) {
+        const f = 2600 + Math.random() * 3600, at = t + 0.05 + Math.random() * 0.45;
+        tone(d, at, 0.12, 'sine', f, f * 0.98, 0.05 + Math.random() * 0.05, 0.002);
+      }
+      break;
+    }
     case 'impact': {
       const P = place(pos, 30);
       if (!P) return;

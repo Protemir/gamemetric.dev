@@ -34,9 +34,9 @@
  "isAccessibleForFree": true
 }
 </script>
-<link rel="stylesheet" href="style.css?v=d9bea3c3">
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=f8cdc5cf","./js/audio.js":"./js/audio.js?v=f773a7df","./js/bots.js":"./js/bots.js?v=9b8ff810","./js/chickens.js":"./js/chickens.js?v=eda82caa","./js/decor.js":"./js/decor.js?v=4f5739dd","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=09bd5e9b","./js/game.js":"./js/game.js?v=588da517","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=d7ed8d2d","./js/i18n.js":"./js/i18n.js?v=1dc30dd6","./js/main.js":"./js/main.js?v=6cec3d8e","./js/map.js":"./js/map.js?v=1d19d7c0","./js/net.js":"./js/net.js?v=0e908693","./js/netgame.js":"./js/netgame.js?v=d0973ebb","./js/people.js":"./js/people.js?v=83c1bd6d","./js/pool.js":"./js/pool.js?v=452932b4","./js/portal.js":"./js/portal.js?v=09d1d706","./js/props.js":"./js/props.js?v=f8c89cdb","./js/smoke.js":"./js/smoke.js?v=3f57e074","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=2623766c","./js/weapons.js":"./js/weapons.js?v=544e0c0c","./js/weather.js":"./js/weather.js?v=fcfe03e8"}}</script>
-<script type="module" src="./js/main.js?v=6cec3d8e"></script>
+<link rel="stylesheet" href="style.css?v=b08c548d">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=f8cdc5cf","./js/audio.js":"./js/audio.js?v=d7af4c16","./js/bots.js":"./js/bots.js?v=9b8ff810","./js/chickens.js":"./js/chickens.js?v=4ed1760f","./js/decor.js":"./js/decor.js?v=4f5739dd","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=09bd5e9b","./js/game.js":"./js/game.js?v=3ef5c447","./js/glass.js":"./js/glass.js?v=e7b3ecd1","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=a746ce60","./js/i18n.js":"./js/i18n.js?v=81e1d27a","./js/main.js":"./js/main.js?v=197dd0a8","./js/map.js":"./js/map.js?v=1d19d7c0","./js/net.js":"./js/net.js?v=0e908693","./js/netgame.js":"./js/netgame.js?v=3387b2c6","./js/people.js":"./js/people.js?v=83c1bd6d","./js/pool.js":"./js/pool.js?v=452932b4","./js/portal.js":"./js/portal.js?v=09d1d706","./js/props.js":"./js/props.js?v=f8c89cdb","./js/rank.js":"./js/rank.js?v=e24c53d4","./js/smoke.js":"./js/smoke.js?v=3f57e074","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=2623766c","./js/weapons.js":"./js/weapons.js?v=544e0c0c","./js/weather.js":"./js/weather.js?v=fcfe03e8"}}</script>
+<script type="module" src="./js/main.js?v=197dd0a8"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -88,7 +88,15 @@
   <div class="panel">
     <h2 id="mo-title"></h2>
     <div id="mo-score"></div>
-    <p id="mo-stats"></p>
+    <div id="mo-medals" hidden></div>
+    <div id="mo-stats"></div>
+    <div id="mo-xp">
+      <div class="xp-head"><b id="mo-rank"></b><span id="mo-xpgain"></span></div>
+      <div class="xp-track"><i id="mo-xpbar"></i></div>
+      <div id="mo-rankup" hidden></div>
+      <small id="mo-xpparts"></small>
+      <small id="mo-xpnext"></small>
+    </div>
     <div class="row"><button id="mo-again" class="btn primary" data-t="again"></button><button id="mo-menu" class="btn" data-t="menu"></button></div>
   </div>
 </div>
@@ -106,7 +114,10 @@
   <div class="menu-bg"></div>
   <header class="menu-top">
     <a class="back" href="/" data-t="allGames"></a>
-    <nav class="langs"><button data-lang="ru">RU</button><button data-lang="en">EN</button></nav>
+    <div class="top-r">
+      <div id="rank-chip"><b id="rc-name"></b><span class="xp-track"><i id="rc-bar"></i></span></div>
+      <nav class="langs"><button data-lang="ru">RU</button><button data-lang="en">EN</button></nav>
+    </div>
   </header>
   <div class="menu-main">
     <h1><span data-t="title"></span></h1>
@@ -120,7 +131,7 @@
         <div class="seg modes" id="seg-mode"><button data-v="hostage"><b data-t="modeHostage"></b><small data-t="modeHostageDesc"></small></button><button data-v="dm"><b data-t="modeDM"></b><small data-t="modeDMDesc"></small></button><button data-v="gun"><b data-t="modeGun"></b><small data-t="modeGunDesc"></small></button><button data-v="knife"><b data-t="modeKnife"></b><small data-t="modeKnifeDesc"></small></button><button data-v="zombie"><b data-t="modeZombie"></b><small data-t="modeZombieDesc"></small></button></div>
       </div>
       <div class="opt"><label data-t="fun"></label>
-        <div class="seg small fun" id="seg-fun"><button data-f="heads" data-t="funHeads"></button><button data-f="lowgrav" data-t="funGrav"></button><button data-f="boom" data-t="funBoom"></button><button data-f="rain" data-t="funRain"></button><button data-f="quack" data-t="funQuack"></button><button data-f="confetti" data-t="funConfetti"></button><button data-f="fly" data-t="funFly"></button><button data-f="talk" data-t="funTalk"></button><button data-f="hats" data-t="funHats"></button></div>
+        <div class="seg small fun" id="seg-fun"><button data-f="heads" data-t="funHeads"></button><button data-f="lowgrav" data-t="funGrav"></button><button data-f="boom" data-t="funBoom"></button><button data-f="rain" data-t="funRain"></button><button data-f="quack" data-t="funQuack"></button><button data-f="confetti" data-t="funConfetti"></button><button data-f="fly" data-t="funFly"></button><button data-f="talk" data-t="funTalk"></button><button data-f="hats" data-t="funHats"></button><button data-f="ice" data-t="funIce"></button><button data-f="recoil" data-t="funRecoil"></button><button data-f="bigchick" data-t="funBigChick"></button></div>
       </div>
       <div class="opt"><label data-t="diff"></label>
         <div class="seg small" id="seg-diff"><button data-v="easy" data-t="easy"></button><button data-v="normal" data-t="normal"></button><button data-v="hard" data-t="hard"></button></div>

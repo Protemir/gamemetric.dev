@@ -283,6 +283,10 @@ export class NetGame {
     for (const e0 of ends || []) {
       const e = e0.map((v) => v / 100);
       g.fx.tracer(mz[0], mz[1], mz[2], e[0], e[1], e[2], 1);
+      {
+        const gx = e[0] - mz[0], gy = e[1] - mz[1], gz = e[2] - mz[2], gd = Math.hypot(gx, gy, gz);
+        if (gd > 0.1) g.glass?.ray(mz[0], mz[1], mz[2], gx / gd, gy / gd, gz / gd, gd);
+      }
       const dx = e[0] - s.x, dy = e[1] - eye, dz = e[2] - s.z, d = Math.hypot(dx, dy, dz);
       if (d < 0.1) continue;
       const hit = g.map.raycast(s.x, eye, s.z, dx / d, dy / d, dz / d, d + 0.2);

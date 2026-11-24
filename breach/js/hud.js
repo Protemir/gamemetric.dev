@@ -2,6 +2,8 @@
 import { W, H } from './map.js';
 import { WEAPONS, GEAR } from './weapons.js';
 import { t, lang } from './i18n.js';
+import { levelOf, rankName, medalsOf, xpOf, award } from './rank.js';
+import { sfx } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const S = 3; // radar pixels per metre
@@ -26,6 +28,8 @@ export const BUY_ITEMS = [
 const ICON = {
   knife: '🗡', pistol: '🔫', deagle: '🔫', smg: '▬', shotgun: '▬', rifle: '▬', sniper: '▬', m4: '▬', scout: '▬', mg: '▬', he: '💥', flash: '✸', smoke: '☁',
 };
+
+const MEDAL_ICON = { immortal: '🛡️', grinder: '🌪️', triple: '🔥', sniper: '🎯', ninja: '🔪', boomer: '💥', chickens: '🐔', eagle: '🦅', unstoppable: '🚂', swimmer: '🏊', pacifist: '🕊️', fodder: '🥩', teamplayer: '🤝' };
 
 export class Hud {
   constructor() {
@@ -215,8 +219,66 @@ export class Hud {
     $('mo-again').hidden = game.role !== 'solo';
     $('mo-score').textContent = game.variant === 'zombie' ? `${t('peopleLeft')}: ${game.soldiers.filter((s) => s.team === 'A' && s.alive).length}` : game.variant === 'gun' ? '' : game.mode === 'dm' ? `${game.dmKills.A} : ${game.dmKills.B}` : `${game.score.A} : ${game.score.B}`;
     const p = game.player;
-    $('mo-stats').textContent = `${t('kills')}: ${p.kills} · ${t('deaths')}: ${p.deaths}`;
+    const st = game.stats;
+    const acc = st.shots ? Math.round((100 * st.hits) / st.shots) : 0;
+    $('mo-stats').innerHTML = [
+      [t('kills'), p.kills],
+      [t('deaths'), p.deaths],
+      [t('headshots'), st.hs],
+      [t('accuracy'), st.shots ? acc + '%' : '—'],
+      [t('damage'), Math.round(st.dmg)],
+      [t('bestStreak'), st.best],
+    ]
+      .map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`)
+      .join('');
+    const medals = medalsOf(st, p, !!win);
+    $('mo-medals').innerHTML = medals
+      .map((m, i) => `<div class="medal" style="animation-delay:${0.25 + i * 0.18}s"><i>${MEDAL_ICON[m]}</i><b>${t('medal_' + m)}</b><small>${t('medal_' + m + '_d')}</small></div>`)
+      .join('');
+    $('mo-medals').hidden = !medals.length;
+    // experience: kept between visits; the bar fills from where it was
+    const played = p.kills + p.deaths > 0 || st.shots > 0;
+    const xp = xpOf(st, p, !!win && played, played);
+    const { before, after } = award(xp.total);
+    $('mo-xpgain').textContent = '+' + xp.total + ' ' + t('xp');
+    $('mo-xpparts').textContent = xp.parts.map(([k, v]) => `+${v} ${t(k)}`).join(' · ');
+    this.xpBar(before, after);
     document.exitPointerLock?.();
+  }
+
+  // the bar after a match: fills to the new amount, through a rank-up if there is one
+  xpBar(before, after) {
+    clearTimeout(this.xpTimer);
+    const bar = $('mo-xpbar'), name = $('mo-rank'), up = $('mo-rankup'), next = $('mo-xpnext');
+    const a = levelOf(before), b = levelOf(after);
+    const show = (lv, frac, anim) => {
+      bar.style.transition = anim ? 'width 0.9s cubic-bezier(.2,.8,.2,1)' : 'none';
+      bar.style.width = (Math.max(0, Math.min(1, frac)) * 100).toFixed(1) + '%';
+      name.textContent = rankName(lv);
+    };
+    const tail = () => {
+      const left = b.span - b.into;
+      next.textContent = t('xpToNext').replace('{n}', left).replace('{r}', rankName(b.level + 1));
+    };
+    up.hidden = true;
+    show(a.level, a.into / a.span, false);
+    tail();
+    if (b.level === a.level) {
+      this.xpTimer = setTimeout(() => show(b.level, b.into / b.span, true), 450);
+      return;
+    }
+    // to the end of the old rank, then the new one from zero
+    this.xpTimer = setTimeout(() => {
+      show(a.level, 1, true);
+      this.xpTimer = setTimeout(() => {
+        show(b.level, 0, false);
+        if ($('match-over').hidden) return;
+        up.hidden = false;
+        up.textContent = t('rankUp') + ' ' + rankName(b.level);
+        sfx('streak', null, { n: 5 });
+        this.xpTimer = setTimeout(() => show(b.level, b.into / b.span, true), 60);
+      }, 1000);
+    }, 450);
   }
 
   // ---------- per frame ----------
