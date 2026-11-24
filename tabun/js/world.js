@@ -1,6 +1,6 @@
 // «Табун» — сцена: небо, степь, трасса, ворота, препятствия, финал, пыль, камера.
 import * as THREE from 'three';
-import { HALF, LADDER, herdShape, opText, isGood } from './logic.js';
+import { HALF, LADDER, herdShape, opText, isGood, gateOpsAt } from './logic.js';
 import { HorsePool, horseMaterial, COATS, HERD_SETS, WILD_COATS, RIVAL_COATS } from './horses.js';
 
 const TAU = Math.PI * 2;
@@ -11,6 +11,7 @@ export const THEME = {
   day: { top: '#3f86d8', hor: '#d6e8f2', sun: '#fff2d6', sunI: 2.2, hemi: ['#d8ecff', '#7d6a3a', 1.15], fog: '#d6e4e6', grass: '#9fbf55', dirt: '#c9a874', mount: '#8aa3b8', sunDir: [0.35, 0.8, 0.45] },
   gold: { top: '#4f7fc4', hor: '#f3d29a', sun: '#ffd79a', sunI: 2.3, hemi: ['#ffe7c4', '#6b5330', 1.05], fog: '#ead2a6', grass: '#c9b550', dirt: '#d0a36a', mount: '#a49aa6', sunDir: [-0.6, 0.45, 0.35] },
   dusk: { top: '#3a5aa0', hor: '#f6c08e', sun: '#ffd2a6', sunI: 1.8, hemi: ['#ffe8d6', '#8a7a5c', 1.45], fog: '#ecc29c', grass: '#bdb25c', dirt: '#c99c6a', mount: '#8c84a4', sunDir: [0.55, 0.32, 0.6] },
+  night: { top: '#081028', hor: '#2b3c6e', sun: '#c9d8ff', sunI: 1.5, hemi: ['#7e93d0', '#2a2a3a', 1.35], fog: '#1f2c55', grass: '#7f9a78', dirt: '#a8967e', mount: '#2c3862', sunDir: [-0.5, 0.2, -0.8], night: true },
   winter: { top: '#6f97c4', hor: '#e8eef4', sun: '#fff6ea', sunI: 2.0, hemi: ['#eef4ff', '#9aa6b0', 1.35], fog: '#e6edf2', grass: '#f4f6f8', dirt: '#cfc6b8', mount: '#a9bcd2', sunDir: [0.4, 0.5, 0.5], snow: true },
   morning: { top: '#5d93d6', hor: '#f4e2cf', sun: '#fff0dc', sunI: 2.1, hemi: ['#e4efff', '#6d6440', 1.1], fog: '#e6e2d8', grass: '#a3c062', dirt: '#c7a679', mount: '#93a7c2', sunDir: [-0.4, 0.55, -0.5] },
 };
@@ -135,6 +136,30 @@ export class World {
     this.scene.fog = new THREE.Fog('#cfdde3', 110, 560);
 
     this.buildSky();
+    // ночь: звёзды и луна живут на небесной сфере
+    {
+      const N = 900, pos = new Float32Array(N * 3);
+      for (let i = 0; i < N; i++) {
+        const u = Math.random(), th = Math.random() * TAU, y = 0.08 + u * 0.92, r = Math.sqrt(1 - y * y);
+        pos[i * 3] = Math.cos(th) * r * 900; pos[i * 3 + 1] = y * 900; pos[i * 3 + 2] = Math.sin(th) * r * 900;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      this.stars = new THREE.Points(g, new THREE.PointsMaterial({ color: '#ffffff', size: 2.2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.9, depthWrite: false }));
+      this.stars.renderOrder = -9;
+      this.sky.add(this.stars);
+      const moonTex = canvasTex(128, 128, (c, w) => {
+        const gr = c.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+        gr.addColorStop(0, 'rgba(255,255,245,1)'); gr.addColorStop(0.32, 'rgba(250,248,235,1)'); gr.addColorStop(0.36, 'rgba(200,215,255,0.35)'); gr.addColorStop(1, 'rgba(160,180,255,0)');
+        c.fillStyle = gr; c.fillRect(0, 0, w, w);
+      }, { srgb: false });
+      this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, fog: false, depthWrite: false, transparent: true }));
+      this.moon.scale.setScalar(150);
+      this.moon.renderOrder = -8;
+      this.sky.add(this.moon);
+      this.torchLight = new THREE.PointLight('#ffb060', 0, 40, 1.6);
+      this.scene.add(this.torchLight);
+    }
     this.buildMountains();
     this.buildGround();
     this.buildTextures();
@@ -429,6 +454,35 @@ export class World {
       if (o) { G.add(o.root); this.items.push(o); }
     }
     this.buildFinish(run);
+    // ночь: звёзды, луна, факелы вдоль дороги
+    const night = !!T.night;
+    this.stars.visible = night;
+    this.moon.visible = night;
+    if (night) this.moon.position.copy(sd).multiplyScalar(820);
+    this.torchLight.intensity = night ? 60 : 0;
+    this.torches = null;
+    if (night) {
+      const n = Math.floor(total / 18) * 2;
+      const pole = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 2.3, 6).translate(0, 1.15, 0), new THREE.MeshLambertMaterial({ color: '#4a3220' }), n);
+      const fp = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        const x = (i % 2 ? 1 : -1) * (HALF + 1.3), z = -(i >> 1) * 18 - 8;
+        this.m4.makeTranslation(x, 0, z);
+        pole.setMatrixAt(i, this.m4);
+        fp[i * 3] = x; fp[i * 3 + 1] = 2.45; fp[i * 3 + 2] = z;
+      }
+      G.add(pole);
+      const fg = new THREE.BufferGeometry();
+      fg.setAttribute('position', new THREE.BufferAttribute(fp, 3));
+      const flameTex = canvasTex(64, 64, (c, w) => {
+        const gr = c.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+        gr.addColorStop(0, 'rgba(255,250,210,1)'); gr.addColorStop(0.25, 'rgba(255,190,80,0.9)'); gr.addColorStop(0.6, 'rgba(255,110,30,0.25)'); gr.addColorStop(1, 'rgba(255,80,0,0)');
+        c.fillStyle = gr; c.fillRect(0, 0, w, w);
+      }, { srgb: false });
+      flameTex.userData.own = true;
+      this.torches = new THREE.Points(fg, new THREE.PointsMaterial({ map: flameTex, size: 1.6, sizeAttenuation: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+      G.add(this.torches);
+    }
     // валуны
     this.rockObjs = new Map();
     this.dust.clear(); this.sparks.clear();
@@ -564,7 +618,7 @@ export class World {
   gateTex(g, w, h) {
     const good = isGood(g);
     return canvasTex(512, 256, (c, W, H) => {
-      const col = g.op === '$' ? ['rgba(255,206,60,0.92)', 'rgba(230,140,10,0.92)'] : good ? ['rgba(70,175,255,0.84)', 'rgba(16,96,226,0.84)'] : ['rgba(255,96,76,0.84)', 'rgba(200,28,28,0.84)'];
+      const col = g.op === '?' ? ['rgba(170,90,255,0.9)', 'rgba(110,40,210,0.9)'] : g.op === '$' ? ['rgba(255,206,60,0.92)', 'rgba(230,140,10,0.92)'] : good ? ['rgba(70,175,255,0.84)', 'rgba(16,96,226,0.84)'] : ['rgba(255,96,76,0.84)', 'rgba(200,28,28,0.84)'];
       const gr = c.createLinearGradient(0, 0, 0, H);
       gr.addColorStop(0, col[0]); gr.addColorStop(1, col[1]);
       roundRect(c, 6, 6, W - 12, H - 12, 26); c.fillStyle = gr; c.fill();
@@ -892,12 +946,20 @@ export class World {
       if (it.type === 'gate' && it.done && !o.broken) {
         o.broken = true;
         for (const [k, p] of Object.entries(o.panels)) {
-          if (k === it.hit) { p.mesh.visible = false; this.burstPanel(p, it); }
+          if (p.g === it.hitOp) { p.mesh.visible = false; this.burstPanel(p, it); }
           else p.fade = 1;
         }
       }
       if (o.panels) for (const p of Object.values(o.panels)) if (p.fade !== undefined && p.fade > 0) { p.fade -= dt * 2.5; p.mesh.material.opacity = Math.max(0, p.fade); }
       if (o.mat) o.mat.uniforms.t.value = t;
+      if (it.type === 'gate' && it.swap && !it.done) {
+        const ops = gateOpsAt(it, run.t);
+        for (const p of Object.values(o.panels)) {
+          const tx = p.g === ops.left ? -HALF / 2 : HALF / 2;
+          p.mesh.position.x += (tx - p.mesh.position.x) * Math.min(1, dt * 9);
+          p.x = p.mesh.position.x;
+        }
+      }
     }
     // валуны
     const live = new Set();
@@ -938,6 +1000,8 @@ export class World {
       const flap = Math.sin(t * 0.7 + u.ph) > 0.6 ? Math.sin(t * 9 + u.ph) * 0.5 : 0.05;
       u.lw.rotation.z = flap; u.rw.rotation.z = -flap;
     }
+    if (this.torches) this.torches.material.size = 1.5 + Math.sin(t * 17) * 0.12 + Math.sin(t * 7.3) * 0.1;
+    if (this.torchLight.intensity > 0) this.torchLight.position.set(run.cx, 7, -(run.d + 2));
     // снегопад на зимних уровнях
     if (this.theme?.snow) {
       this.snowAcc = (this.snowAcc || 0) + dt * 120;
@@ -969,7 +1033,7 @@ export class World {
   dustColor() { return this._dc || (this._dc = new THREE.Color(this.theme?.dirt || '#c9a874').lerp(new THREE.Color('#ffffff'), 0.25)); }
 
   burstPanel(p, it) {
-    const c = new THREE.Color(p.g.op === '$' ? '#ffc93a' : isGood(p.g) ? '#3fa9ff' : '#ff5040');
+    const c = new THREE.Color(p.g.op === '?' ? '#b070ff' : p.g.op === '$' ? '#ffc93a' : isGood(p.g) ? '#3fa9ff' : '#ff5040');
     const white = new THREE.Color('#ffffff');
     for (let i = 0; i < 70; i++) {
       const x = p.x + (Math.random() - 0.5) * p.w, y = 0.6 + Math.random() * p.w * 0.45;

@@ -22,6 +22,12 @@ export function rng(seed) {
 }
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+export const SWAP_T = 1.3;   // ворота-«качели» меняются местами раз в столько секунд
+// какие ворота где стоят в момент t
+export function gateOpsAt(it, t) {
+  if (!it.swap) return { left: it.left, right: it.right };
+  return Math.floor((t + it.i * 0.37) / SWAP_T) % 2 ? { left: it.right, right: it.left } : { left: it.left, right: it.right };
+}
 
 // —— ворота ——
 export function applyOp(count, g) {
@@ -30,11 +36,12 @@ export function applyOp(count, g) {
     case '-': return Math.max(0, count - g.v);
     case 'x': return Math.min(MAX_COUNT, count * g.v);
     case '/': return Math.floor(count / g.v);
+    case '?': return applyOp(count, g.real);   // загадка: внутри настоящие ворота
     default: return count; // '$' — сундук, коней не меняет
   }
 }
-export const isGood = (g) => g.op === '+' || g.op === 'x' || g.op === '$';
-export const opText = (g) => (g.op === 'x' ? '×' + g.v : g.op === '/' ? '÷' + g.v : g.op === '$' ? '+' + g.v + ' ₸' : g.op + g.v);
+export const isGood = (g) => g.op === '+' || g.op === 'x' || g.op === '$' || g.op === '?';
+export const opText = (g) => (g.op === '?' ? '?' : g.op === 'x' ? '×' + g.v : g.op === '/' ? '÷' + g.v : g.op === '$' ? '+' + g.v + ' ₸' : g.op + g.v);
 
 // —— форма табуна: эллипс, растёт вширь до предела, потом в длину ——
 export function herdShape(n) {
@@ -62,29 +69,39 @@ export function level(n) {
   return L;
 }
 
-export const THEMES = ['day', 'gold', 'winter', 'dusk', 'day', 'gold', 'morning', 'winter'];
+// «Байга дня»: одна трасса на всех в этот день, сложность — по уровню игрока
+export function dailyLevel(day, diff) {
+  const key = 'd' + day + '_' + diff;
+  if (LEVEL_CACHE.has(key)) return LEVEL_CACHE.get(key);
+  const L = genLevel(diff, 50000 + day, true);
+  LEVEL_CACHE.set(key, L);
+  return L;
+}
 
-function genLevel(n) {
+export const THEMES = ['day', 'gold', 'winter', 'dusk', 'day', 'night', 'morning', 'winter'];
+
+function genLevel(n, seedN = n, daily = false) {
   // уровень, который автопилот проходит плохо, перегенерируется с другим сидом
   let best = null;
   for (let v = 0; v < 12; v++) {
-    const L = genLevelOnce(n, v);
+    const L = genLevelOnce(n, v, seedN, daily);
     if (L.autoGot >= 12 + n) return L;
     if (!best || L.autoGot > best.autoGot) best = L;
   }
   return best;
 }
 
-function genLevelOnce(n, variant) {
-  const R = rng(n * 7919 + 13 + variant * 104729);
+function genLevelOnce(n, variant, seedN = n, daily = false) {
+  const R = rng(seedN * 7919 + 13 + variant * 104729);
   const pick = (arr) => arr[Math.floor(R() * arr.length)];
   const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
-  const boss = n % 5 === 0;
+  const boss = !daily && n % 5 === 0;
   const length = Math.round(360 + Math.min(n, 30) * 8 + (boss ? 60 : 0));
   const L = {
     n, boss, length,
     speed0: 12.5, speed1: 15 + Math.min(n, 25) * 0.1,
-    theme: boss ? 'dusk' : THEMES[(n - 1) % THEMES.length],
+    theme: daily ? 'night' : boss ? 'dusk' : THEMES[(n - 1) % THEMES.length],
+    daily,
     items: [], rival: 0, base: 40 + n * 10,
   };
   // что уже можно ставить на этом уровне
@@ -106,6 +123,8 @@ function genLevelOnce(n, variant) {
     for (const [t, wt] of w) { if ((r -= wt) < 0) { type = t; break; } }
     if (type === 'gate') {
       const g = makeGatePair(E, R, can, n);
+      // качели: ворота меняются местами — лови момент
+      if (!g.full && n >= 7 && R() < 0.22) g.swap = true;
       // засада: стая сторожит выгодную сторону ворот
       if (can.wolf && !g.full && R() < 0.28) {
         const vl = applyOp(E, g.left), vr = applyOp(E, g.right);
@@ -192,6 +211,12 @@ function makeGatePair(E, R, can, n) {
   else if (r < 0.88 && can.chest) { a = chest(); b = plus(); }
   else if (r < 0.94) return { full: n < 3 || R() < 0.5 ? plus() : (can.mult ? mult() : plus()) };
   else { a = minus(); b = can.div ? div() : minus(); }
+  // загадка: одна из сторон прячет настоящие ворота под «?»
+  if (n >= 3 && R() < 0.15) {
+    const pool = [mult(), plus(), minus(), can.div ? div() : minus()];
+    const real = pool[Math.floor(R() * pool.length)];
+    if (R() < 0.5) a = { op: '?', real }; else b = { op: '?', real };
+  }
   return R() < 0.5 ? { left: a, right: b } : { left: b, right: a };
 }
 
@@ -341,18 +366,21 @@ export class Run {
         if (front >= it.d) {
           it.done = true;
           const side = it.full ? 'full' : this.cx < 0 ? 'left' : 'right';
-          const g = it.full || it[side];
+          const ops = gateOpsAt(it, this.t);
+          const g = it.full || ops[side];
           it.hit = side;
+          it.hitOp = g;
           const before = this.count;
           if (g.op === '$') { this.coins += g.v; this.emit('chest', { v: g.v, x: this.cx, d: it.d }); }
           else {
             this.count = applyOp(this.count, g);
             this.sync(false, g.op === '+' || g.op === 'x' ? { x: side === 'left' ? -2.75 : side === 'right' ? 2.75 : this.cx, d: this.d } : null);
           }
-          this.emit('gate', { item: it, side, good: this.count >= before && g.op !== '/', delta: this.count - before, op: g, x: side === 'left' ? -2.75 : side === 'right' ? 2.75 : 0, d: it.d });
+          const shown = g.op === '?' ? g.real : g;
+          this.emit('gate', { item: it, side, good: this.count >= before && shown.op !== '/', delta: this.count - before, op: shown, mystery: g.op === '?', x: side === 'left' ? -2.75 : side === 'right' ? 2.75 : 0, d: it.d });
           if (!it.full) {
             const val = (q) => (q.op === '$' ? before + 0.5 : applyOp(before, q));
-            const mine = val(g), other = val(side === 'left' ? it.right : it.left);
+            const mine = val(g), other = val(side === 'left' ? ops.right : ops.left);
             if (mine >= other) {
               this.combo++;
               this.bestCombo = Math.max(this.bestCombo, this.combo);
@@ -627,8 +655,9 @@ export function autoTarget(run) {
     if (gate.full) want = run.cx;
     else {
       const pack = (side) => run.wolves.filter((w) => (side < 0 ? w.x < 0 : w.x >= 0) && w.d < gate.d && w.d > run.d - sh.b).length;
-      const val = (g, side) => (g.op === '$' ? run.count + 0.5 : applyOp(run.count, g)) - pack(side) * 1.5;
-      want = val(gate.left, -1) >= val(gate.right, 1) ? -2.6 : 2.6;
+      const val = (g, side) => (g.op === '$' ? run.count + 0.5 : g.op === '?' ? run.count * 1.15 + 2 : applyOp(run.count, g)) - pack(side) * 1.5;
+      const ops = gateOpsAt(gate, run.t + Math.max(0, gate.d - front) / Math.max(1, run.speed));
+      want = val(ops.left, -1) >= val(ops.right, 1) ? -2.6 : 2.6;
     }
   }
   // дикие кони — если по пути

@@ -28,7 +28,7 @@ const T = {
     hint_river: 'Река замедляет',
     hint_wolf: 'Волки! Каждый волк унесёт коня — обходи стаю',
     milestone: '{n} голов!', milestone100: 'Сотня!',
-    combo: 'Комбо ×{n}', golden: 'Алтын тұлпар!', music: 'Музыка', hint_golden: 'Золотой конь! Задень его — он стоит десятерых', stars: 'Звёзд: {n}', newBest: 'Новый рекорд!',
+    combo: 'Комбо ×{n}', daily_run: 'Байга дня', hint_mystery: 'Ворота «?» — сюрприз: может быть ×2, а может и ÷2', hint_swap: 'Эти ворота меняются местами — лови момент!', golden: 'Алтын тұлпар!', music: 'Музыка', hint_golden: 'Золотой конь! Задень его — он стоит десятерых', stars: 'Звёзд: {n}', newBest: 'Новый рекорд!',
     hint_clash: 'В конце — табун баая. Кого больше, тот и победил',
   },
   en: {
@@ -59,7 +59,7 @@ const T = {
     hint_river: 'The river slows you down',
     hint_wolf: 'Wolves! Each wolf takes a horse: steer around the pack',
     milestone: '{n} horses!', milestone100: 'A hundred!',
-    combo: 'Combo ×{n}', golden: 'Golden Tulpar!', music: 'Music', hint_golden: 'A golden horse! Touch it: it is worth ten', stars: 'Stars: {n}', newBest: 'New record!',
+    combo: 'Combo ×{n}', daily_run: 'Daily Race', hint_mystery: 'A «?» gate is a surprise: maybe ×2, maybe ÷2', hint_swap: 'These gates swap places: time your move!', golden: 'Golden Tulpar!', music: 'Music', hint_golden: 'A golden horse! Touch it: it is worth ten', stars: 'Stars: {n}', newBest: 'New record!',
     hint_clash: 'At the end waits the rival herd. The bigger herd wins',
   },
 };

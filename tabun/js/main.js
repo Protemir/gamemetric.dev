@@ -1,7 +1,7 @@
 // «Табун» — запуск, цикл, меню, ввод, итоги.
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
-import { level, Run, DT, autoTarget, HALF, reward, herdShape, opText } from './logic.js';
+import { level, dailyLevel, Run, DT, autoTarget, HALF, reward, herdShape, opText } from './logic.js';
 import { World } from './world.js';
 import { loadHorse, loadWolf, HERD_SETS, COATS } from './horses.js';
 import { initAudio, sfx, hooves, setSound, setMusic, music } from './audio.js';
@@ -27,7 +27,10 @@ let acc = 0;
 let peak = 0;
 let lastT = 0;
 let dragHintOn = false;
-let resultIn = 0;       // через сколько секунд игры показать итоги (0 — не ждём)
+let resultIn = 0;
+let daily = false;      // идёт «Байга дня»
+const dayIndex = () => { const d = new Date(); return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 864e5); };
+const dailyDiff = () => Math.max(4, Math.min(30, save.lvl + 2));       // через сколько секунд игры показать итоги (0 — не ждём)
 let shownHints = {};
 try { shownHints = JSON.parse(localStorage.getItem('tabun.hints') || '{}'); } catch { /* нет доступа */ }
 
@@ -88,7 +91,7 @@ function onResize() {
 
 // —— уровни ——
 function prepare() {
-  L = level(save.lvl);
+  L = daily ? dailyLevel(dayIndex(), dailyDiff()) : level(save.lvl);
   run = new Run(L, { start: S.startHerd(save), leader: S.leaderBonus(save) });
   for (const b of run.bodies) { b.x = run.cx + b.sx; b.d = run.d + b.sd; b.spawn = 1; }
   world.setLevel(L, run);
@@ -108,7 +111,7 @@ function startLevel() {
   while (mileIdx < MILES.length && run.count >= MILES[mileIdx]) mileIdx++;
   hideAll();
   $('hud').classList.remove('hidden');
-  $('progLvl').textContent = t('level') + ' ' + L.n;
+  $('progLvl').textContent = daily ? t('daily_run') : t('level') + ' ' + L.n;
   updateCoins();
   makeTags();
   if (save.lvl <= 2 && !AUTO) { dragHintOn = true; $('dragHint').classList.remove('hidden'); $('dragHint').querySelector('span').textContent = t('drag'); }
@@ -116,11 +119,12 @@ function startLevel() {
   sfx('click');
   sfx('whoosh');
   world.startIntro();
-  banner(L.boss ? t('boss') : t('level') + ' ' + L.n, 'intro');
+  banner(daily ? '🌙 ' + t('daily_run') : L.boss ? t('boss') : t('level') + ' ' + L.n, 'intro');
 }
 
 function showMenu() {
   state = 'menu';
+  daily = false;
   prepare();
   hideAll();
   $('menu').classList.remove('hidden');
@@ -135,11 +139,14 @@ function showMenu() {
   $('playBtn').textContent = t('play');
   $('coatsBtn').textContent = '🐎 ' + t('coats');
   $('aulInfo').textContent = t('aul', { n: S.yurts(save) });
+  const doneToday = save.dailyWin === S.dayKey();
+  $('dailyBtn').textContent = '🌙 ' + t('daily_run') + (doneToday ? ' ✓' : ' ×2');
+  $('dailyBtn').classList.toggle('done', doneToday);
   renderUps();
   updateCoins();
   clearLabels();
-  const daily = S.dailyState(save);
-  if (daily && save.played > 0) showDaily(daily);
+  const dayGift = S.dailyState(save);
+  if (dayGift && save.played > 0) showDaily(dayGift);
 }
 
 function hideAll() {
@@ -365,7 +372,8 @@ function handleEvents() {
       case 'gate': {
         const g = ev.op;
         if (g.op === '$') break;
-        const txt = ev.delta >= 0 ? (g.op === 'x' ? opText(g) : '+' + ev.delta) : String(ev.delta);
+        let txt = ev.delta >= 0 ? (g.op === 'x' ? opText(g) : '+' + ev.delta) : String(ev.delta);
+        if (ev.mystery) { txt = '? → ' + txt; sfx('chest'); }
         floatText(txt, ev.x, 5.2, ev.d, ev.good ? 'good huge' : 'bad huge');
         sfx(ev.good ? 'good' : 'bad', g.op === 'x' ? 6 : 0);
         if (!ev.good) buzz(60);
@@ -448,6 +456,8 @@ function checkUpcomingHints() {
     if (d - front > 45) break;
     if (d < front) continue;
     if (it.type === 'wild') showHint(it.golden ? 'golden' : 'wild');
+    else if (it.type === 'gate' && it.swap) showHint('swap');
+    else if (it.type === 'gate' && (it.left?.op === '?' || it.right?.op === '?')) showHint('mystery');
     else if (it.type === 'wolf') showHint('wolf');
     else if (it.type === 'pit') showHint('pit');
     else if (it.type === 'fence') showHint('fence');
@@ -459,13 +469,15 @@ function showResult() {
   if (state !== 'play') return;
   state = 'result';
   const res = run.result;
-  const got = reward(L, res, save.up.income);
+  const firstDaily = daily && res.win && save.dailyWin !== S.dayKey();
+  const got = reward(L, res, save.up.income) * (firstDaily ? 2 : 1);
   const coinsBefore = save.coins;
   save.coins += got;
   save.played++;
   save.best = Math.max(save.best, peak);
   let stars = 0, oldStars = 0;
-  if (res.win) {
+  if (res.win && daily) { save.dailyWin = S.dayKey(); }
+  else if (res.win) {
     stars = S.starsFor(res.mult);
     oldStars = Number(save.stars[L.n]) || 0;
     save.stars[L.n] = Math.max(oldStars, stars);
@@ -480,7 +492,7 @@ function showResult() {
   r.classList.toggle('win', res.win);
   $('resT').textContent = res.win ? t('win') : t('lose');
   $('resSub').textContent = res.win ? t('best', { n: peak }) : run.rival.count < run.rival.start ? t('rivalWon', { n: run.rival.count }) : t('lostWay');
-  $('resMult').textContent = res.win ? '×' + res.mult + (L.boss ? ' · ×2' : '') : '';
+  $('resMult').textContent = res.win ? '×' + res.mult + (L.boss || firstDaily ? ' · ×2' : '') : '';
   // проиграл, но хватает на улучшение — зовём в меню улучшаться
   const canUp = !res.win && ['herd', 'income', 'leader'].some((k) => save.up[k] < S.UPS[k].max && save.coins >= S.upCost(k, save.up[k]));
   r.dataset.up = canUp ? '1' : '';
@@ -564,6 +576,7 @@ function bindUI() {
   $('pauseBtn').onclick = () => { sfx('click'); pause(); };
   $('setBtn').onclick = () => { sfx('click'); showSettings(false); };
   $('coatsBtn').onclick = () => { sfx('click'); showCoats(); };
+  $('dailyBtn').onclick = () => { sfx('click'); daily = true; prepare(); startLevel(); };
   $('resNext').onclick = () => {
     sfx('click');
     if (run?.result?.win) showMenu();
@@ -629,7 +642,7 @@ window.__tabun = {
   start: startLevel, menu: showMenu, auto: autoTarget,
   setSave(s) { save = { ...save, ...s }; S.store(save); },
   layout() {
-    const sel = ['#pauseBtn', '#hudCoins', '#prog', '#setBtn', '#allGames', '#menuCoins', '#logo', '#lvlRow', '#playBtn', '#ups', '#coatsBtn', '#aulInfo', '#resT', '#resCoins', '#resNext', '#resMenu', '#hint'];
+    const sel = ['#pauseBtn', '#hudCoins', '#prog', '#setBtn', '#allGames', '#menuCoins', '#logo', '#lvlRow', '#playBtn', '#ups', '#coatsBtn', '#dailyBtn', '#aulInfo', '#resT', '#resCoins', '#resNext', '#resMenu', '#hint'];
     const rects = [];
     for (const s of sel) {
       const el = document.querySelector(s);

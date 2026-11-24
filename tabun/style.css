@@ -213,3 +213,11 @@ html.shot #hud, html.shot #hint, html.shot #dragHint, html.shot .float, html.sho
 .banner.clash { font-size: clamp(36px, 12vw, 64px); }
 
 .banner.gold { color: #ffe066; text-shadow: 0 4px 0 #a35a00, 0 8px 24px rgba(0,0,0,.35); }
+
+#dailyBtn { background: linear-gradient(180deg, #3b3f8f, #22245a); box-shadow: 0 0 0 2px rgba(255,220,120,.5) inset; }
+#dailyBtn.done { background: rgba(20,14,8,.45); box-shadow: none; opacity: .85; }
+#menuRow2 { flex-wrap: nowrap; }
+
+/* узкий экран: нижний ряд меню в одну строку */
+#aulInfo { white-space: nowrap; }
+@media (max-width: 400px) { #menuRow2 .pill { padding: 0 10px; font-size: 13px; gap: 4px; } #aulInfo { font-size: 11px; } }

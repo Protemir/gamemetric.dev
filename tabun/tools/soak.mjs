@@ -78,6 +78,35 @@ await sleep(200);
 ok(await ev('__tabun.save.music === false && JSON.parse(localStorage.getItem("tabun.save.v1")).music === false && document.getElementById("mMusic").textContent.length > 0'), 'музыка выключается и это сохраняется');
 await ev('(document.getElementById("mMusic").click(), document.getElementById("modal").classList.add("hidden"), 1)');
 
+// 4г) «Байга дня»: ночь, двойная награда только за первую победу дня
+const dailyRun = async () => {
+  await ev('(__tabun.menu(), document.getElementById("modal").classList.add("hidden"), 1)');
+  await sleep(200);
+  const c0 = await ev('__tabun.save.coins');
+  const lvl0 = await ev('__tabun.save.lvl');
+  await ev('(document.getElementById("dailyBtn").click(), 1)');
+  await sleep(300);
+  const info = await ev('({ st: __tabun.state, daily: !!__tabun.run.L.daily, theme: __tabun.run.L.theme })');
+  await ev(fast);
+  for (let k = 0; k < 40; k++) { await sleep(150); if (await ev('__tabun.state === "result"')) break; }
+  const r = await ev('({ win: __tabun.run.result?.win, mult: __tabun.run.result?.mult, coins: __tabun.run.result?.coins, n: __tabun.run.L.n, base: __tabun.run.L.base })');
+  const c1 = await ev('__tabun.save.coins');
+  const lvl1 = await ev('__tabun.save.lvl');
+  return { info, r, gain: c1 - c0, lvlSame: lvl0 === lvl1 };
+};
+const d1 = await dailyRun();
+const inc = await ev('__tabun.save.up.income');
+const expect1 = d1.r.win ? (Math.round(d1.r.base * d1.r.mult * (1 + inc * 0.1)) + d1.r.coins) * 2 : -1;
+ok(d1.info.st === 'play' && d1.info.daily && d1.info.theme === 'night', 'байга дня запускается ночью');
+ok(d1.r.win && d1.gain === expect1 && d1.lvlSame, 'первая победа дня — ×2 и уровень не сдвинулся: ' + JSON.stringify({ gain: d1.gain, expect1 }));
+await ev('(document.getElementById("resNext").click(), 1)');
+await sleep(300);
+ok(await ev('document.getElementById("dailyBtn").textContent.includes("✓")'), 'кнопка байги дня отмечена');
+const d2 = await dailyRun();
+ok(d2.r.win && d2.gain === expect1 / 2, 'повторная победа — без удвоения: ' + d2.gain);
+await ev('(document.getElementById("resNext").click(), 1)');
+await sleep(300);
+
 // 5) много уровней подряд: память GPU не растёт
 const mem = [];
 for (let i = 0; i < N; i++) {
