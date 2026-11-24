@@ -5,7 +5,7 @@ const listener = { x: 0, y: 0, z: 0, yaw: 0, indoor: false };
 
 export function initAudio() {
   if (ctx) {
-    if (ctx.state === 'suspended') ctx.resume();
+    if (ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume()?.catch?.(() => {});
     return;
   }
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -288,12 +288,16 @@ export function sfx(name, pos = null, opt = {}) {
       break;
     }
     case 'explode': {
-      const P = place(pos, 120);
+      // a sharp crack, the heavy body of the blast with a thump under it, then bits pattering down and a rumble
+      const P = place(pos, 140);
       if (!P) return;
       const d = out(P);
-      noise(d, t, 1.4, 'lowpass', 700, 0.8, 1.0, 0.004);
-      noise(d, t, 0.3, 'highpass', 1500, 0.5, 0.4);
-      tone(d, t, 0.9, 'sine', 90, 30, 1.0);
+      noise(d, t, 0.07, 'highpass', 900, 0.7, 0.9, 0.001);
+      noise(d, t, 1.7, 'lowpass', 650, 0.8, 1.1, 0.004);
+      tone(d, t, 1.1, 'sine', 75, 26, 1.1);
+      noise(d, t + 0.04, 0.8, 'bandpass', 2600, 1.1, 0.16);
+      for (let i = 0; i < 7; i++) noise(d, t + 0.3 + Math.random() * 0.9, 0.03, 'bandpass', 1800 + Math.random() * 3200, 4, 0.1 + Math.random() * 0.08);
+      noise(d, t + 0.15, opt.indoor ? 2.6 : 1.9, 'lowpass', 240, 0.7, opt.indoor ? 0.55 : 0.4, 0.05);
       break;
     }
     case 'flashbang': {

@@ -268,7 +268,7 @@ export class Brain {
         return;
       }
       if (this.maybeNade(L)) return;
-      if (!this.huntPt || Math.hypot(this.huntPt[0] - L.x, this.huntPt[1] - L.z) > 3) {
+      if ((!this.path && g.time > this.repathAt - 2.5) || !this.huntPt || Math.hypot(this.huntPt[0] - L.x, this.huntPt[1] - L.z) > 3) {
         this.huntPt = [L.x, L.z];
         this.setGoalPoint(L.x, L.z, L.y || 0);
       }
@@ -413,11 +413,16 @@ export class Brain {
     this.nadeAt = g.time + 10 + Math.random() * 10;
     if (!smoke && Math.random() < 0.5) return false;
     const yaw = yawTo(L.x - s.x, L.z - s.z);
-    s.yaw = yaw;
     // smoke lands about halfway, between the bot and the defenders
     const dd = smoke ? d * 0.55 : d;
-    const pitch = 0.22 + Math.min(0.35, dd / 60);
-    g.throwNade(s, kind, yaw, pitch, Math.min(15, 7 + dd * 0.45));
+    const pitch = 0.22 + Math.min(0.35, dd / 60), speed = Math.min(15, 7 + dd * 0.45);
+    // where it would really end up: a wall close ahead throws it back at our own feet,
+    // and an attacker's grenade must not land by a hostage
+    const [ex, , ez] = g.nadeArc(s, { kind, yaw, pitch, speed }).end;
+    if (kind !== 'smoke' && Math.hypot(ex - s.x, ez - s.z) < (kind === 'he' ? 7 : 6)) return false;
+    if (kind === 'he' && s.team === 'A' && g.hostages.some((h) => h.state !== 'dead' && h.state !== 'rescued' && Math.hypot(h.x - ex, h.z - ez) < 6)) return false;
+    s.yaw = yaw;
+    g.throwNade(s, kind, yaw, pitch, speed);
     if (kind === 'flash') this.lookAwayUntil = g.time + 1.9;
     return true;
   }

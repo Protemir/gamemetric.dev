@@ -588,10 +588,6 @@ window.addEventListener('keydown', (e) => {
     else if (!$('settings').hidden) $('s-back').click();
     else if (state === 'pause' && game && !$('pause').hidden && !game.over) {
       if (touchOnly) resume();
-      else {
-        $('pause').hidden = true;
-        $('click-to-play').hidden = false;
-      }
       return;
     }
   }
@@ -625,8 +621,11 @@ window.addEventListener('keydown', (e) => {
   if (map[e.code]) game.playerAction(map[e.code]);
   if (e.code === 'KeyB') openBuy();
 });
+for (const ev of ['pointerdown', 'touchend', 'keydown']) addEventListener(ev, () => initAudio(), { capture: true, passive: true });
 window.addEventListener('keyup', (e) => {
   input.keys.delete(e.code);
+  // macOS sends no keyup for keys let go while Cmd was down (a screenshot): drop them all with it
+  if (e.code === 'MetaLeft' || e.code === 'MetaRight') input.keys.clear();
   if (e.code === 'Tab') $('board').hidden = true;
 });
 window.addEventListener('blur', () => {
@@ -657,12 +656,21 @@ window.addEventListener('mousemove', (e) => {
   look.dx += e.movementX;
   look.dy += e.movementY;
 });
+let wheelSum = 0, wheelAt = 0;
 canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
   if (state !== 'play' || !game || !game.player.alive || buyOpen) return;
+  const now = performance.now();
+  if (now - wheelAt > 400) wheelSum = 0;
+  wheelSum += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
+  if (Math.abs(wheelSum) < 50 || now - wheelAt < 140) return;
+  wheelAt = now;
+  const down = wheelSum > 0;
+  wheelSum = 0;
   const p = game.player;
   const order = [1, 2, 3, 4, 5, 6].filter((n) => p.hasSlot(n));
   const i = order.indexOf(p.cur);
-  const n = order[(i + (e.deltaY > 0 ? 1 : -1) + order.length) % order.length];
+  const n = order[(i + (down ? 1 : -1) + order.length) % order.length];
   game.playerAction('slot' + n);
 });
 
@@ -791,6 +799,13 @@ const assetsReady = Promise.all([
     const m = location.hash.match(/room=([A-Z0-9]{4,8})/i);
     if (m && !PORTAL) openLobby(m[1].toUpperCase());
   });
+addEventListener('hashchange', () => {
+  const m = location.hash.match(/room=([A-Z0-9]{4,8})/i);
+  if (!m || PORTAL || game) return;
+  const code = m[1].toUpperCase();
+  if (net && net.code === code) return;
+  openLobby(code);
+});
 if (PORTAL) $('online').hidden = true;
 // the platform's own menu or an ad pauses a solo match
 onPortalHold(() => {
@@ -867,6 +882,13 @@ function openLobby(code) {
       hostSync();
     },
     onHostLeft: () => {
+      if (net && (!game || game.over)) {
+        // still in the lobby (or the match is over): the next one in becomes the host and the room carries on
+        if (game) backToLobby(false);
+        if (net.isHost) hostSync();
+        renderLobby();
+        return;
+      }
       // the match lives on the host's machine; without it everyone goes back to the menu
       if (net && !net.isHost) {
         toMenu();
@@ -1055,7 +1077,9 @@ function onNetMessage(from, m) {
       if (count < 5 && !(game && game.role === 'host' && !game.over)) lobby.teams[from] = m.team;
       hostSync();
     } else if (m.k === 'name') {
-      lobby.names[from] = String(m.name).slice(0, 16);
+      const nm = String(m.name ?? '').replace(/[^\p{L}\p{N} _.\-]/gu, '').trim().slice(0, 16);
+      if (!nm) return;
+      lobby.names[from] = nm;
       const s = game?.soldiers.find((o) => o.peer === from);
       if (s) {
         s.name = lobby.names[from];

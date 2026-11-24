@@ -120,7 +120,7 @@ export class NetGame {
       dk: g.dmKills ? [g.dmKills.A, g.dmKills.B] : null,
       r: g.round,
       S: g.soldiers.map((s) => [r2(s.x), r2(s.z), r2(s.feet), r3(s.yaw), r3(s.pitch), r2(s.crouchK), r2(s.vx), r2(s.vz), s.alive ? 1 : 0, Math.max(0, Math.round(s.hp)), Math.round(s.armor), KINDS.indexOf(s.kind), s.helmet ? 1 : 0, s.money, s.kills, s.deaths]),
-      H: g.hostages.map((h) => [r2(h.x), r2(h.z), r2(h.yaw), HSTATE.indexOf(h.state)]),
+      H: g.hostages.map((h) => [r2(h.x), r2(h.z), r2(h.yaw), HSTATE.indexOf(h.state), h.leader ? h.leader.id : -1]),
       sp: spotted,
       rs: g.rescued || 0,
     };
@@ -282,7 +282,8 @@ export class NetGame {
       return;
     }
     sfx(kind, [s.x, s.feet + 1.5, s.z], { indoor: g.map.isIndoor(s.x, s.z) });
-    g.fx.flash(mz[0], mz[1], mz[2], 0.45, 0.05);
+    if (s === g.specTarget && !s.scoped) g.vm.flashT = 0.05;
+    else g.fx.flash(mz[0], mz[1], mz[2], 0.45, 0.05);
     const eye = s.feet + s.eyeH();
     for (const e0 of ends || []) {
       const e = e0.map((v) => v / 100);
@@ -308,6 +309,7 @@ export class NetGame {
     switch (m.k) {
       case 's': {
         if (!g.round && Number.isFinite(m.r)) g.round = m.r;
+        if (Number.isFinite(m.r) && m.r < g.round) break;
         if (m.n != null) {
           if (m.n <= (this.lastSnap || 0)) break;
           this.lastSnap = m.n;
@@ -369,6 +371,7 @@ export class NetGame {
           h.tx = a[0] / 100;
           h.tz = a[1] / 100;
           h.ty = a[2] / 100;
+          h.leader = a[4] >= 0 ? g.soldiers[a[4]] || null : null;
           const st = HSTATE[a[3]];
           if (st !== h.state) {
             if (st === 'rescued') h.body.root.visible = false;
@@ -418,7 +421,7 @@ export class NetGame {
       case 'h': {
         const by = g.soldiers[m.by];
         if (by) g.hud.hurt(Math.atan2(-(by.x - me.x), -(by.z - me.z)) - me.yaw, m.d);
-        sfx('hurt');
+        if (g.once('hurt')) sfx('hurt');
         g.view.shake = Math.min(0.6, g.view.shake + m.d * 0.006);
         me.punchP += Math.min(0.05, m.d * 0.0012);
         break;
@@ -449,7 +452,7 @@ export class NetGame {
       case 'E': {
         const mine = m.w === me.team;
         g.result = { winner: m.w, why: m.why };
-        g.hud.banner(t(m.w === 'A' ? 'roundWinA' : 'roundWinB'), t(m.why), mine);
+        g.hud.banner(t(m.w === 'A' ? 'roundWinA' : 'roundWinB'), t(m.why) + g.mvpLine(), mine);
         sfx(mine ? 'win' : 'lose');
         break;
       }

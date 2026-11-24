@@ -34,9 +34,9 @@
  "isAccessibleForFree": true
 }
 </script>
-<link rel="stylesheet" href="style.css?v=b13dab23">
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=f8cdc5cf","./js/audio.js":"./js/audio.js?v=d7af4c16","./js/bots.js":"./js/bots.js?v=9b8ff810","./js/chickens.js":"./js/chickens.js?v=370b5353","./js/decor.js":"./js/decor.js?v=4f5739dd","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=09bd5e9b","./js/game.js":"./js/game.js?v=0a53535d","./js/glass.js":"./js/glass.js?v=49029896","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=a746ce60","./js/i18n.js":"./js/i18n.js?v=81e1d27a","./js/main.js":"./js/main.js?v=661bb81e","./js/map.js":"./js/map.js?v=1d19d7c0","./js/net.js":"./js/net.js?v=24db6619","./js/netgame.js":"./js/netgame.js?v=ab7df818","./js/people.js":"./js/people.js?v=83c1bd6d","./js/pool.js":"./js/pool.js?v=452932b4","./js/portal.js":"./js/portal.js?v=51fa5388","./js/props.js":"./js/props.js?v=f8c89cdb","./js/rank.js":"./js/rank.js?v=e24c53d4","./js/smoke.js":"./js/smoke.js?v=3f57e074","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=2623766c","./js/weapons.js":"./js/weapons.js?v=544e0c0c","./js/weather.js":"./js/weather.js?v=fcfe03e8"}}</script>
-<script type="module" src="./js/main.js?v=661bb81e"></script>
+<link rel="stylesheet" href="style.css?v=7ef54fda">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=f8cdc5cf","./js/audio.js":"./js/audio.js?v=e1c23fb2","./js/bots.js":"./js/bots.js?v=e2d68305","./js/chickens.js":"./js/chickens.js?v=370b5353","./js/decor.js":"./js/decor.js?v=4f5739dd","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=45d05e8c","./js/game.js":"./js/game.js?v=97f1d744","./js/glass.js":"./js/glass.js?v=49029896","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=65311ef4","./js/i18n.js":"./js/i18n.js?v=3a5f3080","./js/main.js":"./js/main.js?v=20f5f3af","./js/map.js":"./js/map.js?v=6fd4ad55","./js/net.js":"./js/net.js?v=3c0f35e2","./js/netgame.js":"./js/netgame.js?v=3d537120","./js/people.js":"./js/people.js?v=83c1bd6d","./js/pool.js":"./js/pool.js?v=452932b4","./js/portal.js":"./js/portal.js?v=51fa5388","./js/props.js":"./js/props.js?v=f8c89cdb","./js/rank.js":"./js/rank.js?v=e24c53d4","./js/smoke.js":"./js/smoke.js?v=b48919cd","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=2623766c","./js/weapons.js":"./js/weapons.js?v=544e0c0c","./js/weather.js":"./js/weather.js?v=fcfe03e8"}}</script>
+<script type="module" src="./js/main.js?v=20f5f3af"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -54,6 +54,7 @@
   <div id="crosshair"><i class="l"></i><i class="r"></i><i class="u"></i><i class="d"></i><i class="c"></i></div>
   <div id="hitmark" class="hitmark"><i></i><i></i><i></i><i></i></div>
   <div id="hurt-layer"></div>
+  <div id="nade-warn" hidden><b></b></div>
   <div id="vignette"></div>
   <div id="lowhp"></div>
   <div id="scope" hidden><div class="hole"></div><i class="sh"></i><i class="sv"></i></div>

@@ -411,3 +411,13 @@ body.touch label:has(#s-sens), body:not(.touch) label:has(#s-tsens) { display: n
 /* phones: "Гонка вооружений" and "Team deathmatch" fit their mode buttons */
 @media (max-width: 760px), (max-height: 520px) { .seg.modes b { font-size: 14px; } }
 @media (max-width: 420px) { .seg.modes b { font-size: 13px; } .seg.modes button { padding-left: 6px; padding-right: 6px; } }
+
+/* a grenade landed close: an icon on a ring round the crosshair, brighter the closer it is */
+#nade-warn { position: absolute; left: 50%; top: 50%; width: 230px; height: 230px; pointer-events: none; z-index: 2; }
+#nade-warn b { position: absolute; left: 50%; top: 0; margin-top: -21px; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; font: 400 22px/1 system-ui, sans-serif; background: rgba(24, 14, 8, 0.78); border: 2px solid rgba(255, 112, 40, calc(0.45 + var(--k, 0) * 0.55)); box-shadow: 0 0 calc(6px + var(--k, 0) * 22px) rgba(255, 90, 30, 0.85); animation: nade-pulse 0.4s ease-in-out infinite alternate; }
+@keyframes nade-pulse { to { filter: brightness(1.6); } }
+@media (max-height: 520px) { #nade-warn { width: 170px; height: 170px; } #nade-warn b { width: 34px; height: 34px; margin-top: -17px; font-size: 18px; } }
+
+/* long player names stay inside their team column */
+.lb-team { min-width: 0; }
+.lb-team li { overflow-wrap: anywhere; }

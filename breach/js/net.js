@@ -31,6 +31,13 @@ export class Net {
     this.name = name;
     this.id = myPeerId();
     this.h = h; // { onPeers(list), onMessage(from, msg), onLeave(peer), onHostLeft(), onStatus(text) }
+    // the network is back: try right away instead of waiting for the next retry
+    this.onOnline = () => {
+      if (this.closed || !this.ws || this.ws.readyState !== 3) return;
+      clearTimeout(this.retryT);
+      this.connect();
+    };
+    addEventListener('online', this.onOnline);
     this.peers = []; // [{peer, name, joined}]
     this.links = new Map(); // peer -> { pc, r, u, open, relay }
     this.hostId = null;
@@ -59,17 +66,17 @@ export class Net {
       this.h.onStatus?.('lost');
       // try again after a short pause (a phone switching networks, a sleepy tab); a full room gives up
       this.fails = (this.fails || 0) + 1;
-      if (this.fails > 40) {
-        this.h.onStatus?.('dead');
-        return;
-      }
-      setTimeout(() => !this.closed && this.connect(), 1500);
+      if (this.fails === 41) this.h.onStatus?.('dead');
+      clearTimeout(this.retryT);
+      this.retryT = setTimeout(() => !this.closed && this.connect(), this.fails > 40 ? 10000 : 1500);
     };
     ws.onerror = () => {};
   }
 
   close() {
     this.closed = true;
+    clearTimeout(this.retryT);
+    removeEventListener('online', this.onOnline);
     try {
       this.ws?.close(4001, 'bye');
     } catch {}

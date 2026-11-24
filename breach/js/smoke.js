@@ -47,6 +47,7 @@ export class Smokes {
       // a squat dome: wide on the floor, lower on top
       const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R * 0.85;
       const s = new THREE.Sprite(mats[i % 3]);
+      s.renderOrder = 3;
       let px = Math.cos(a) * r, pz = Math.sin(a) * r;
       // a puff behind a wall is pulled back towards the can
       for (let k = 0; k < 4 && !g.map.los(x, y + 0.6, z, x + px, y + 0.6, z + pz); k++) {

@@ -2,7 +2,56 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { spriteTexture } from './textures.js';
 
-const MAX_DECALS = 160, MAX_SPARKS = 400, MAX_TRACERS = 48, MAX_PUFFS = 40, MAX_SHELLS = 60, MAX_BLOOD = 70;
+const MAX_DECALS = 160, MAX_SPARKS = 500, MAX_TRACERS = 48, MAX_PUFFS = 80, MAX_SHELLS = 60, MAX_BLOOD = 70, MAX_SCORCH = 10, MAX_DEBRIS = 90;
+
+// a thick lumpy cloud for a blast: overlapping round blobs, solid in the middle
+function denseSmokeTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  for (let i = 0; i < 16; i++) {
+    const a = Math.random() * 6.28, d = Math.random() * 26, x = 64 + Math.cos(a) * d, y = 64 + Math.sin(a) * d, r = 22 + Math.random() * 18;
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    const v = 200 + Math.floor(Math.random() * 55);
+    gr.addColorStop(0, `rgba(${v},${v},${v},0.8)`);
+    gr.addColorStop(0.6, `rgba(${v},${v},${v},0.45)`);
+    gr.addColorStop(1, `rgba(${v},${v},${v},0)`);
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(x, y, r, 0, 7);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// the black star a grenade leaves on the floor: soot in the middle, streaks thrown outwards
+function scorchTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 60);
+  gr.addColorStop(0, 'rgba(8,7,6,0.92)');
+  gr.addColorStop(0.35, 'rgba(18,15,12,0.8)');
+  gr.addColorStop(0.7, 'rgba(30,26,22,0.35)');
+  gr.addColorStop(1, 'rgba(30,26,22,0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = 'rgba(10,9,8,0.55)';
+  g.lineCap = 'round';
+  for (let i = 0; i < 22; i++) {
+    const a = Math.random() * 6.28, r0 = 10 + Math.random() * 12, r1 = 34 + Math.random() * 26;
+    g.lineWidth = 1.5 + Math.random() * 4;
+    g.beginPath();
+    g.moveTo(64 + Math.cos(a) * r0, 64 + Math.sin(a) * r0);
+    g.lineTo(64 + Math.cos(a) * r1, 64 + Math.sin(a) * r1);
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 
 // a blood splat: a dark red blot with drops round it
 function bloodTexture() {
@@ -49,6 +98,7 @@ export class FX {
     sg.setAttribute('color', new THREE.BufferAttribute(this.spCol, 3));
     this.sparks = new THREE.Points(sg, new THREE.PointsMaterial({ size: 0.06, vertexColors: true, sizeAttenuation: true }));
     this.sparks.frustumCulled = false;
+    this.sparks.renderOrder = 4;
     scene.add(this.sparks);
     // tracers
     const tg = new THREE.BufferGeometry();
@@ -58,10 +108,13 @@ export class FX {
     tg.setAttribute('color', new THREE.BufferAttribute(this.trCol, 3));
     this.tracers = new THREE.LineSegments(tg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.tracers.frustumCulled = false;
+    this.tracers.renderOrder = 3;
     this.tr = [];
     scene.add(this.tracers);
     // puffs and flashes (sprites)
     const puffTex = spriteTexture('puff'), flashTex = spriteTexture('flash');
+    this.puffTex = puffTex;
+    this.denseTex = denseSmokeTexture();
     this.puffs = [];
     for (let i = 0; i < MAX_PUFFS; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false }));
@@ -70,9 +123,10 @@ export class FX {
       this.puffs.push({ s, life: 0 });
     }
     this.flashes = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 20; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
       s.visible = false;
+      s.renderOrder = 3;
       scene.add(s);
       this.flashes.push({ s, life: 0 });
     }
@@ -90,9 +144,33 @@ export class FX {
     this.blood.frustumCulled = false;
     this.bloodI = 0;
     scene.add(this.blood);
+    // grenade scorch marks on the floor
+    const scm = new THREE.MeshBasicMaterial({ map: scorchTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    this.scorch = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), scm, MAX_SCORCH);
+    this.scorch.count = 0;
+    this.scorch.frustumCulled = false;
+    this.scorchI = 0;
+    scene.add(this.scorch);
+    // bits of floor, plaster and casing thrown by a blast: little dark chunks that bounce and lie
+    this.debris = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0x3b342d }), MAX_DEBRIS);
+    this.debris.count = 0;
+    this.debris.frustumCulled = false;
+    this.db = [];
+    scene.add(this.debris);
+    // the shock wave: a pale ring of dust racing out over the floor
+    this.waves = [];
+    const rg = new THREE.RingGeometry(0.72, 1, 48).rotateX(-Math.PI / 2);
+    for (let i = 0; i < 3; i++) {
+      const w = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xe2d3b4, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+      w.visible = false;
+      w.renderOrder = 1;
+      scene.add(w);
+      this.waves.push({ w, life: 0 });
+    }
     this.m = new THREE.Matrix4();
     this._e = new THREE.Euler();
     this._one = new THREE.Vector3(1, 1, 1);
+    this._sc = new THREE.Vector3();
     this.q = new THREE.Quaternion();
     this.v = new THREE.Vector3();
     this.zAxis = new THREE.Vector3(0, 0, 1);
@@ -105,6 +183,11 @@ export class FX {
     this.bloodI = 0;
     this.decals.count = 0;
     this.decalI = 0;
+    this.scorch.count = 0;
+    this.scorchI = 0;
+    this.db.length = 0;
+    this.debris.count = 0;
+    for (const w of this.waves) (w.life = 0), (w.w.visible = false);
     this.sp.length = 0;
     this.tr.length = 0;
     for (const p of this.puffs) (p.life = 0), (p.s.visible = false);
@@ -189,28 +272,37 @@ export class FX {
         vx: nx * speed * Math.random() + (Math.random() - 0.5) * speed,
         vy: ny * speed * Math.random() + Math.random() * speed * 0.8,
         vz: nz * speed * Math.random() + (Math.random() - 0.5) * speed,
-        life: 0.25 + Math.random() * 0.35,
+        life: (0.25 + Math.random() * 0.35) * (speed > 8 ? 1.8 : 1),
         r: color[0], g: color[1], b: color[2],
       });
     }
   }
 
-  puff(x, y, z, color, size, life, vy = 0.4, opacity = 0.7) {
+  puff(x, y, z, color, size, life, vy = 0.4, opacity = 0.7, vx = 0, vz = 0, grow = 0.9, dense = false) {
     let p = this.puffs.find((q) => q.life <= 0);
     if (!p) p = this.puffs[Math.floor(Math.random() * this.puffs.length)];
     p.s.visible = true;
+    p.s.material.map = dense ? this.denseTex : this.puffTex;
+    p.s.material.rotation = dense ? Math.random() * 6.28 : 0;
     p.s.position.set(x, y, z);
     p.s.material.color.setRGB(color[0], color[1], color[2]);
     p.size = size;
     p.life = p.max = life;
     p.vy = vy;
+    p.vx = vx;
+    p.vz = vz;
+    p.grow = grow;
     p.op = opacity;
     p.s.scale.setScalar(size * 0.5);
   }
 
-  flash(x, y, z, size = 0.5, life = 0.05) {
+  flash(x, y, z, size = 0.5, life = 0.05, grow = 0, color = null) {
     let p = this.flashes.find((q) => q.life <= 0) || this.flashes[0];
     p.s.visible = true;
+    p.size = size;
+    p.grow = grow;
+    if (color) p.s.material.color.setRGB(color[0], color[1], color[2]);
+    else p.s.material.color.setRGB(1, 1, 1);
     p.s.position.set(x, y, z);
     p.s.scale.setScalar(size);
     p.s.material.rotation = Math.random() * 6;
@@ -318,14 +410,160 @@ export class FX {
       }
       const k = 1 - p.life / p.max;
       p.s.position.y += p.vy * dt;
-      p.s.scale.setScalar(p.size * (0.5 + k * 0.9));
-      p.s.material.opacity = p.op * (1 - k);
+      if (p.vx || p.vz) {
+        // dust thrown out by a blast slows down fast
+        const drag = Math.exp(-3.2 * dt);
+        p.vx *= drag;
+        p.vz *= drag;
+        p.s.position.x += p.vx * dt;
+        p.s.position.z += p.vz * dt;
+      }
+      p.s.scale.setScalar(p.size * ((p.s.material.map === this.denseTex ? 0.85 : 0.5) + k * (p.grow ?? 0.9)));
+      // a blast cloud stays thick for most of its life, then thins
+      p.s.material.opacity = p.op * (p.grow >= 1.4 ? 1 - k * k : 1 - k);
     }
     for (const p of this.flashes) {
       if (p.life <= 0) continue;
       p.life -= dt;
       if (p.life <= 0) p.s.visible = false;
-      else p.s.material.opacity = p.life / p.max;
+      else {
+        const k = p.life / p.max;
+        p.s.material.opacity = p.grow ? Math.pow(k, 0.6) : k;
+        if (p.grow) p.s.scale.setScalar(p.size * (1 + p.grow * (1 - k)));
+      }
     }
+    // shock waves
+    for (const q of this.waves) {
+      if (q.life <= 0) continue;
+      q.life -= dt;
+      if (q.life <= 0) {
+        q.w.visible = false;
+        continue;
+      }
+      const k = 1 - q.life / q.max;
+      q.w.scale.setScalar(0.4 + (q.r - 0.4) * (1 - (1 - k) * (1 - k)));
+      q.w.material.opacity = 0.5 * (1 - k);
+    }
+    // debris
+    let nd = 0;
+    for (let i = this.db.length - 1; i >= 0; i--) {
+      const p = this.db[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        this.db.splice(i, 1);
+        continue;
+      }
+      if (p.bounces < 2) {
+        p.vy -= 14 * dt;
+        const sp = Math.hypot(p.vx, p.vy, p.vz);
+        const hit = p.hit && sp > 0.01 ? p.hit(p.x, p.y, p.z, p.vx / sp, p.vy / sp, p.vz / sp, sp * dt + 0.03) : null;
+        if (hit) {
+          const dot = p.vx * hit.nx + p.vy * hit.ny + p.vz * hit.nz;
+          p.vx = (p.vx - 2 * dot * hit.nx) * 0.35;
+          p.vy = (p.vy - 2 * dot * hit.ny) * 0.35;
+          p.vz = (p.vz - 2 * dot * hit.nz) * 0.35;
+          // a floor met by the ray counts as a landing, so the chunk comes to rest
+          if (hit.ny > 0.5) p.bounces++;
+          continue;
+        }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.z += p.vz * dt;
+        p.rx += p.sx * dt;
+        p.ry += p.sy * dt;
+        const fy = (p.floor ? p.floor(p.x, p.z, p.y) : 0) + p.s * 0.5;
+        if (p.y < fy && p.vy < 0) {
+          p.y = fy;
+          p.vy = -p.vy * 0.3;
+          p.vx *= 0.45;
+          p.vz *= 0.45;
+          p.sx *= 0.4;
+          p.sy *= 0.4;
+          p.bounces++;
+        }
+      }
+    }
+    for (const p of this.db) {
+      const sc = p.s * Math.min(1, p.life * 2);
+      this.q.setFromEuler(this._e.set(p.rx, p.ry, 0));
+      this.m.compose(this.v.set(p.x, p.y, p.z), this.q, this._sc.set(sc, sc * 0.6, sc * 0.8));
+      this.debris.setMatrixAt(nd++, this.m);
+    }
+    this.debris.count = nd;
+    if (nd) this.debris.instanceMatrix.needsUpdate = true;
+  }
+
+  // A hand grenade going off: a white flash and a rolling fireball, a ring of dust racing over the floor,
+  // a black cloud climbing, embers and bits of floor flying, and a scorch mark left behind.
+  // o: { ground: floor height, water: in the pool, indoor: a ceiling above (the cloud spreads instead of climbing),
+  //      floor(x, z, y): floor height for the debris }
+  explosion(x, y, z, o = {}) {
+    const gy = o.ground ?? 0, R = () => Math.random() - 0.5;
+    if (o.water) y = Math.max(y, gy);
+    // a blast in the air leaves no mark and sends no ring over the floor
+    const low = y - gy < 0.7;
+    this.flash(x, y + 0.5, z, 7.5, 0.08, 0, [1, 0.97, 0.86]);
+    this.flash(x, y + 0.7, z, 3.4, 0.42, 1.6, [1, 0.7, 0.3]);
+    this.flash(x + R() * 0.8, y + 1.1, z + R() * 0.8, 2.8, 0.5, 1.5, [1, 0.48, 0.15]);
+    this.flash(x + R() * 0.8, y + 0.5, z + R() * 0.8, 2.4, 0.58, 1.3, [0.95, 0.34, 0.1]);
+    this.flash(x + R() * 0.6, y + 1.6, z + R() * 0.6, 2, 0.62, 1.4, [0.9, 0.3, 0.08]);
+    if (o.water) {
+      // a column of water instead of fire on the floor
+      for (let i = 0; i < 9; i++) this.puff(x + R() * 1.2, gy + 0.3 + Math.random() * 1.5, z + R() * 1.2, [0.88, 0.95, 1], 2.4 + Math.random(), 1.1 + Math.random() * 0.6, 2.6 + Math.random() * 2, 0.8, R() * 2, R() * 2, 1.1);
+      this.spark(x, gy + 0.2, z, 0, 1, 0, [0.85, 0.94, 1], 60, 9);
+    } else {
+      // the black cloud: climbs and spreads (under a ceiling it rolls out more than up)
+      const up = o.indoor ? 0.35 : 1;
+      for (let i = 0; i < 8; i++) {
+        const shade = 0.06 + Math.random() * 0.06;
+        this.puff(x + R() * 0.9, y + 0.6 + Math.random() * 0.9 * up, z + R() * 0.9, [shade, shade * 0.95, shade * 0.9], 3.2 + Math.random() * 1.8, 3 + Math.random() * 1.6, (0.7 + Math.random() * 0.8) * up, 0.95, R() * 1.4, R() * 1.4, 1.5, true);
+      }
+      // the dust ring hugging the floor
+      for (let i = 0; i < (low ? 12 : 0); i++) {
+        const a = (i / 12) * Math.PI * 2 + Math.random() * 0.4, sp = 5 + Math.random() * 3;
+        this.puff(x + Math.cos(a) * 0.4, gy + 0.35, z + Math.sin(a) * 0.4, [0.6, 0.54, 0.45], 2.2 + Math.random() * 0.9, 1.4 + Math.random() * 0.7, 0.18, 0.7, Math.cos(a) * sp, Math.sin(a) * sp, 1.3, true);
+      }
+      // embers and hot bits
+      this.spark(x, y + 0.25, z, 0, 1, 0, [1, 0.78, 0.4], 55, 12);
+      this.spark(x, y + 0.25, z, 0, 0.6, 0, [1, 0.48, 0.14], 35, 7);
+      // chunks of floor thrown out
+      for (let i = 0; i < 24; i++) {
+        if (this.db.length >= MAX_DEBRIS) this.db.shift();
+        const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 7;
+        this.db.push({
+          x: x + Math.cos(a) * 0.2, y: Math.max(y, gy) + 0.15, z: z + Math.sin(a) * 0.2,
+          vx: Math.cos(a) * sp, vy: 3 + Math.random() * 6 * (o.indoor ? 0.6 : 1), vz: Math.sin(a) * sp,
+          s: 0.05 + Math.random() * 0.08, rx: Math.random() * 6, ry: Math.random() * 6, sx: R() * 24, sy: R() * 24,
+          life: 4 + Math.random() * 3, bounces: 0, floor: o.floor, hit: o.hit,
+        });
+      }
+      // the scorch on the floor
+      if (low) this.scorchAt(x, gy, z);
+    }
+    if (!low) return;
+    this.wave(x, gy, z);
+  }
+
+  scorchAt(x, gy, z) {
+    {
+      this.q.setFromEuler(this._e.set(0, Math.random() * 6.28, 0));
+      const s = 2.6 + Math.random() * 0.9;
+      this.m.compose(this.v.set(x, gy + 0.012, z), this.q, this._sc.set(s, 1, s));
+      this.scorch.setMatrixAt(this.scorchI, this.m);
+      this.scorchI = (this.scorchI + 1) % MAX_SCORCH;
+      this.scorch.count = Math.min(MAX_SCORCH, this.scorch.count + 1);
+      this.scorch.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  // the shock wave
+  wave(x, gy, z) {
+    const q = this.waves.find((w) => w.life <= 0) || this.waves[0];
+    q.w.visible = true;
+    q.w.position.set(x, gy + 0.07, z);
+    q.life = q.max = 0.38;
+    q.r = 7;
+    q.w.scale.setScalar(0.4);
+    q.w.material.opacity = 0.5;
   }
 }

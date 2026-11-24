@@ -281,9 +281,38 @@ export class Hud {
     }, 450);
   }
 
+  // a live grenade or flashbang close by: a pulsing icon round the crosshair, on the side it lies
+  nadeWarn(game) {
+    const el = $('nade-warn'), p = game.player;
+    let best = null, bd = 8;
+    if (p.alive && !game.over)
+      for (const n of game.nades) {
+        // a teammate's grenade does not hurt us, but his flashbang blinds us all the same
+        if (n.kind === 'smoke' || (n.kind === 'he' && n.owner && n.owner !== p && n.owner.team === p.team)) continue;
+        const d = Math.hypot(n.x - p.x, n.z - p.z, (n.y - p.feet - 1) * 0.5);
+        if (d < bd) {
+          bd = d;
+          best = n;
+        }
+      }
+    if (!best) {
+      if (!el.hidden) el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const a = Math.atan2(-(best.x - p.x), -(best.z - p.z)) - p.yaw;
+    el.style.transform = `translate(-50%,-50%) rotate(${-a}rad)`;
+    const icon = el.firstChild;
+    icon.style.transform = `translateX(-50%) rotate(${a}rad)`;
+    el.style.setProperty('--k', (1 - bd / 8).toFixed(2));
+    const sym = best.kind === 'he' ? '💣' : '⚡';
+    if (icon.textContent !== sym) icon.textContent = sym;
+  }
+
   // ---------- per frame ----------
   update(game, now, settings, fps) {
     this.lowHealth(game.player.alive ? game.player.hp : 0);
+    this.nadeWarn(game);
     const p = game.player;
     this.drawRadar(game);
     // crosshair gap follows the real spread
@@ -393,7 +422,7 @@ export class Hud {
       pr.textContent = `${document.body.classList.contains('touch') ? '$' : 'B'} — ${t('buy')}`;
     } else pr.hidden = true;
     // freeze countdown
-    if (game.phase === 'freeze') this.center(`${t('round')} ${game.round} · ${t('freeze')} ${Math.ceil(game.phaseEnd - game.time)}`, 0.2);
+    if (game.phase === 'freeze' && performance.now() > (this.centerUntil || 0) - 150) this.center(`${t('round')} ${game.round} · ${t('freeze')} ${Math.ceil(game.phaseEnd - game.time)}`, 0.2);
     if (game.phase === 'wait') this.center(t('inMatch'), 0.2);
     // the buy menu closes itself when buying is no longer possible
     if (this.buyOpen && (!p.alive || !game.canBuy(p))) this.onBuyClosed?.();

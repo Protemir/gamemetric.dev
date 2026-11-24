@@ -1025,6 +1025,7 @@ export class GameMap {
       if (key === 'water') {
         mat.transparent = true;
         mat.opacity = 0.88;
+        mat.depthWrite = false;
       }
       const m = new THREE.Mesh(geo, mat);
       m.matrixAutoUpdate = false;
