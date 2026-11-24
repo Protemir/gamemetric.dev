@@ -210,6 +210,12 @@ export function sfx(name, arg = 0) {
     case 'achieve':
       [0, 7, 12, 16, 19, 24].forEach((s2, i) => tone(523 * Math.pow(2, s2 / 12), t + i * 0.07, 0.4, { type: 'triangle', vol: 0.1 }));
       break;
+    case 'whip':
+      // щелчок камчи: резкий хлопок и свист
+      noise(t, 0.07, { vol: 0.6, freq: 3500, type: 'highpass', q: 0.7 });
+      tone(2200, t, 0.12, { type: 'triangle', vol: 0.08, slide: 0.4 });
+      noise(t + 0.03, 0.4, { vol: 0.12, freq: 1800, type: 'bandpass', q: 3, slide: 2.5 });
+      break;
     case 'clash':
       noise(t, 0.12, { vol: 0.3, freq: 600 + Math.random() * 400, q: 1 });
       tone(70 + Math.random() * 30, t, 0.1, { vol: 0.2, slide: 0.7 });

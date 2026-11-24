@@ -463,6 +463,13 @@ function handleEvents() {
         popTag(herdTag);
         break;
       }
+      case 'whip':
+        banner(t('whip'), 'gold', t('whipSub'));
+        sfx('whip');
+        setTimeout(() => sfx('milestone'), 120);
+        flash('gold');
+        buzz([20, 30, 60]);
+        break;
       case 'golden':
         unlock('golden');
         flash('gold');
@@ -540,6 +547,7 @@ function checkUpcomingHints() {
     if (d - front > 45) break;
     if (d < front) continue;
     if (it.type === 'wild') showHint(it.golden ? 'golden' : 'wild');
+    else if (it.type === 'whip') showHint('whip');
     else if (it.type === 'gate' && it.swap) showHint('swap');
     else if (it.type === 'gate' && (it.left?.op === '?' || it.right?.op === '?')) showHint('mystery');
     else if (it.type === 'wolf') showHint('wolf');

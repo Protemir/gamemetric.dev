@@ -116,7 +116,7 @@ function genLevelOnce(n, variant, seedN = n, daily = false) {
   while (d < end) {
     const w = [
       ['gate', 55], ['wild', n === 1 ? 25 : 14],
-      ['rock', can.rock ? 10 : 0], ['pit', can.pit ? 11 : 0], ['wolf', can.wolf ? 13 : 0],
+      ['rock', can.rock ? 10 : 0], ['pit', can.pit ? 11 : 0], ['wolf', can.wolf ? 13 : 0], ['whip', n >= 3 ? 6 : 0],
       ['fence', can.fence ? 9 : 0], ['river', can.river ? 4 : 0],
     ].filter(([t, wt]) => wt > 0 && !(t === lastType && t !== 'gate'));
     let tot = w.reduce((s, x) => s + x[1], 0), r = R() * tot, type = 'gate';
@@ -148,6 +148,11 @@ function genLevelOnce(n, variant, seedN = n, daily = false) {
         E += Math.round(k * 0.8);
       }
       d += ri(24, 30);
+    } else if (type === 'whip') {
+      // золотая камча: 5 секунд «шабыта» — табун быстрее, дикие сбегаются, волки разбегаются
+      L.items.push({ type: 'whip', d, x: pick([-3, -1.5, 0, 1.5, 3]) });
+      E += 6;
+      d += ri(22, 28);
     } else if (type === 'wolf') {
       const k = ri(3, 4 + Math.min(6, Math.floor(n / 3)));
       L.items.push({ type: 'wolf', d, x: pick([-3, -1.5, 0, 1.5, 3]), n: k, seed: ri(1, 1e6) });
@@ -184,7 +189,7 @@ function genLevelOnce(n, variant, seedN = n, daily = false) {
   // соперник: столько, сколько набирает автопилот, умноженное на долю
   const start = 5 + Math.floor((n - 1) / 3);
   // два прогона с разной «случайностью» — уровень не должен держаться на одной удачной партии
-  const got = Math.min(simulate(L, { start, leader: 0, seed: 0 }), simulate(L, { start, leader: 0, seed: 1 }));
+  const got = Math.min(simulate(L, { start, leader: 0, seed: 0, ignoreWhip: true }), simulate(L, { start, leader: 0, seed: 1, ignoreWhip: true }));
   const ratio = boss ? 0.84 : Math.min(0.8, 0.45 + n * 0.025);
   L.rival = Math.max(3, Math.round(got * ratio));
   L.autoGot = got;
@@ -237,6 +242,7 @@ export class Run {
     this.wild = [];          // дикие кони на трассе
     this.rocks = [];
     this.wolves = [];        // волки: стоят, потом бегут наперерез; один волк — один конь
+    this.boostT = 0;         // «шабыт» от камчи, секунды
     this.events = [];
     this.coins = 0;
     this.lossAcc = 0;
@@ -350,7 +356,8 @@ export class Run {
   stepRun(dt, targetX) {
     const L = this.L;
     const inRiver = this.items.some((it) => it.type === 'river' && this.d > it.d0 - 2 && this.d < it.d1 + 2);
-    const base = L.speed0 + (L.speed1 - L.speed0) * this.progress;
+    if (this.boostT > 0) this.boostT = Math.max(0, this.boostT - dt);
+    const base = (L.speed0 + (L.speed1 - L.speed0) * this.progress) * (this.boostT > 0 ? 1.22 : 1);
     this.speed += ((inRiver ? base * 0.62 : base) - this.speed) * (1 - Math.exp(-dt * 4));
     const sh = this.shape;
     const lim = HALF - 0.4;
@@ -408,6 +415,12 @@ export class Run {
           }
         }
         if (it.active && this.d > it.d + 40) it.done = true;
+      } else if (it.type === 'whip') {
+        if (front >= it.d - 0.8 && this.bodies.some((b) => Math.abs(b.x - it.x) < 1.7 && Math.abs(b.d - it.d) < 1.8)) {
+          it.done = true; it.taken = true;
+          this.boostT = 5;
+          this.emit('whip', { x: it.x, d: it.d });
+        } else if (this.d - sh.b > it.d + 2) it.done = true;
       } else if (it.type === 'wolf') {
         if (!it.active && front > it.d - 65) {
           it.active = true;
@@ -443,10 +456,11 @@ export class Run {
       for (let w = this.wild.length - 1; w >= 0; w--) {
         const h = this.wild[w];
         if (h.d < this.d - sh.b - 25) { this.wild.splice(w, 1); continue; }
-        if (Math.abs(h.d - this.d) > sh.b + 2.5) continue;
+        const mag = this.boostT > 0;
+        if (Math.abs(h.d - this.d) > sh.b + (mag ? 9 : 2.5)) continue;
         for (const b of this.bodies) {
           const ddx = b.x - h.x, ddd = b.d - h.d;
-          if (ddx * ddx + ddd * ddd < 1.9) {
+          if (ddx * ddx + ddd * ddd < (mag ? 49 : 1.9)) {
             this.wild.splice(w, 1);
             this.count = Math.min(MAX_COUNT, this.count + (h.golden ? GOLDEN : 1));
             if (h.golden) { this.coins += 30; this.emit('golden', { x: h.x, d: h.d, n: GOLDEN }); this.sync(false, { x: h.x, d: h.d }); }
@@ -469,6 +483,16 @@ export class Run {
       const wf = this.wolves[w];
       if (wf.d < this.d - sh.b - 12) { this.wolves.splice(w, 1); continue; }
       const near = wf.d - front;
+      if (this.boostT > 0 && near < 40) {
+        // шабыт: волки в страхе разбегаются с дороги и не кусают
+        wf.run = true; wf.flee = true;
+        wf.vx = (wf.x >= this.cx ? 1 : -1) * 7; wf.vd = 1.5;
+        wf.x = clamp(wf.x + wf.vx * dt, -HALF - 14, HALF + 14);
+        wf.d += wf.vd * dt;
+        wf.near = 99;
+        continue;
+      }
+      if (wf.flee) continue;
       if (!wf.run && near < 24) { wf.run = true; if (!this.howled || this.t - this.howled > 3) { this.howled = this.t; this.emit('howl', { x: wf.x, d: wf.d }); } }
       if (!wf.run || !this.bodies.length) continue;
       let best = null, bd = 1e9;
@@ -526,6 +550,7 @@ export class Run {
 
     if (front >= this.finishD) {
       this.state = 'clash';
+      this.boostT = 0; // шабыт заканчивается на финише — иначе он «зависает» в схватке
       this.clashT = 0;
       if (this.leader > 0) {
         this.count = Math.min(MAX_COUNT, this.count + this.leader);
@@ -663,6 +688,9 @@ export function autoTarget(run) {
       want = val(ops.left, -1) >= val(ops.right, 1) ? -2.6 : 2.6;
     }
   }
+  // камча рядом — за ней
+  const whip = ahead.find((it) => it.type === 'whip' && it.d - front < 28 && it.d > front - 1);
+  if (whip && !run.ignoreWhip && (!gate || gate.d - front > 16)) want = whip.x;
   // дикие кони — если по пути
   const wild = run.wild.filter((w) => w.d > front - 2 && w.d - front < 25);
   if (wild.length && (!gate || gate.d - front > 22)) want = wild.reduce((s, w) => s + w.x, 0) / wild.length;
@@ -685,6 +713,7 @@ export function autoTarget(run) {
 
 export function simulate(L, opts = {}, policy = autoTarget) {
   const run = new Run(L, opts);
+  run.ignoreWhip = !!opts.ignoreWhip; // сложность считаем без камчи: камча — награда, а не обязанность
   let guard = 0;
   while (run.state !== 'clash' && run.state !== 'lose' && guard++ < 60 * 120) {
     run.step(DT, policy(run));

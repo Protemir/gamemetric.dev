@@ -785,6 +785,25 @@ export class World {
         root.add(m);
         o.panels[k] = { mesh: m, g, w, x };
       }
+    } else if (it.type === 'whip') {
+      // золотая камча: рукоять, плетёный хвост, кольцо и столб света
+      const gold = new THREE.MeshStandardMaterial({ color: '#ffc21a', emissive: '#a86a00', emissiveIntensity: 0.6, roughness: 0.35, metalness: 0.6 });
+      const wood = new THREE.MeshStandardMaterial({ color: '#6b3a1a', roughness: 0.7 });
+      const g = new THREE.Group();
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.55, 10), wood);
+      handle.position.y = -0.1;
+      const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.18, 0), new THREE.Vector3(0.25, 0.5, 0), new THREE.Vector3(0.05, 0.85, 0.1), new THREE.Vector3(-0.3, 1.05, 0), new THREE.Vector3(-0.15, 1.3, -0.1)]);
+      const lash = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.035, 6), gold);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.025, 8, 16), gold);
+      ring.position.y = 0.19; ring.rotation.x = Math.PI / 2;
+      g.add(handle, lash, ring);
+      g.scale.setScalar(1.6);
+      g.position.set(it.x, 1.0, -it.d);
+      root.add(g);
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 7, 20, 1, true).translate(0, 3.5, 0), new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      beam.position.set(it.x, 0, -it.d);
+      root.add(beam);
+      o.whip = g; o.beam = beam;
     } else if (it.type === 'pit') {
       const w = it.x1 - it.x0, l = it.d1 - it.d0;
       const seed = it.i * 31 + 7;
@@ -1120,6 +1139,13 @@ export class World {
       }
       if (o.panels) for (const p of Object.values(o.panels)) if (p.fade !== undefined && p.fade > 0) { p.fade -= dt * 2.5; p.mesh.material.opacity = Math.max(0, p.fade); }
       if (o.mat) o.mat.uniforms.t.value = t;
+      if (o.whip) {
+        o.root.visible = !it.done;
+        o.whip.rotation.y = t * 2.2;
+        o.whip.position.y = 1.0 + Math.sin(t * 3) * 0.18;
+        o.beam.material.opacity = 0.16 + Math.sin(t * 5) * 0.06;
+        if (!it.done && Math.random() < dt * 20) this.sparks.emit(it.x + (Math.random() - 0.5) * 1.2, 0.3 + Math.random() * 2.5, -it.d + (Math.random() - 0.5) * 1.2, 0, 1.5, 0, this.goldCol, 0.8, 0.2, 0.05, -0.5, 1);
+      }
       if (it.type === 'gate' && it.swap && !it.done) {
         const ops = gateOpsAt(it, run.t);
         for (const p of Object.values(o.panels)) {
@@ -1149,6 +1175,13 @@ export class World {
     for (const [rk, obj] of this.rockObjs) if (!live.has(rk)) { this.levelGroup.remove(obj); this.rockObjs.delete(rk); }
     this.shadows.count = sh;
 
+    if (run.boostT > 0 && !menu) {
+      this.boost = Math.max(this.boost, 0.55);
+      if (run.bodies.length) for (let k = 0; k < Math.ceil(dt * 40); k++) {
+        const b = run.bodies[Math.floor(Math.random() * run.bodies.length)];
+        this.sparks.emit(b.x + (Math.random() - 0.5), 0.4 + Math.random() * 1.6, -b.d, (Math.random() - 0.5) * 2, 1 + Math.random() * 2, 3, this.goldCol, 0.6, 0.18, 0.05, 0, 1);
+      }
+    }
     // следы и брызги
     this.windU.value = t;
     if (running && !menu && run.bodies.length && this.prints) {
@@ -1278,6 +1311,9 @@ export class World {
       const c = ev.kind === 'fall' ? new THREE.Color('#3a2a1a') : this.dustColor();
       for (let i = 0; i < 5; i++) this.dust.emit(ev.x, 0.3, -ev.d, (Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3, c, 0.9, 1, 3, 0, 0.8);
       if (ev.kind === 'hit' || ev.kind === 'bump') this.shake = Math.max(this.shake, 0.25);
+    } else if (ev.type === 'whip') {
+      for (let i = 0; i < 90; i++) this.sparks.emit(ev.x, 1.6, -ev.d, (Math.random() - 0.5) * 9, 2 + Math.random() * 7, (Math.random() - 0.5) * 9, i % 3 ? this.goldCol : this._white || (this._white = new THREE.Color('#fff6d0')), 1.2, 0.3, 0.1, 8, 1);
+      this.shake = Math.max(this.shake, 0.25);
     } else if (ev.type === 'bite') {
       const c = new THREE.Color('#8a3a2a');
       for (let i = 0; i < 8; i++) this.dust.emit(ev.x, 0.5, -ev.d, (Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3, i % 2 ? c : this.dustColor(), 0.8, 0.8, 2.4, 0, 0.9);
