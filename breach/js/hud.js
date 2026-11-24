@@ -319,8 +319,37 @@ export class Hud {
     if (icon.textContent !== sym) icon.textContent = sym;
   }
 
+  // the freeze cam card: who killed us, with what, how much health they have left
+  killCard(p, by) {
+    const el = $('killcard');
+    el.className = by.team === 'A' ? 'ta' : 'tb';
+    el.querySelector('.kc-name').textContent = by.name;
+    const w = WEAPONS[p.killWeapon]?.name[lang] || '';
+    el.querySelector('.kc-gun').textContent = w + (p.killHead ? ` · ${t('kcHead')}` : '');
+    const hp = by.alive ? Math.max(1, Math.ceil(by.hp)) : 0;
+    el.querySelector('.kc-hp i').style.width = `${hp}%`;
+    el.querySelector('.kc-hp em').textContent = by.alive ? `${hp} HP` : '☠';
+    el.hidden = false;
+    document.body.classList.add('freezecam');
+    this.kcOn = true;
+  }
+  hideKillCard() {
+    if (!this.kcOn) return;
+    this.kcOn = false;
+    $('killcard').hidden = true;
+    document.body.classList.remove('freezecam');
+  }
+
   // ---------- per frame ----------
   update(game, now, settings, fps) {
+    if (this.kcOn && (game.player.alive || game.player.camSkip || game.player.cardSkip || game.specTarget || game.over)) this.hideKillCard();
+    if (this.kcOn) {
+      const p = game.player, cd = game.mode === 'dm' && p.respawnAt ? `${t('respawn')} ${Math.max(0, Math.ceil(p.respawnAt - game.time))}` : '';
+      const el = $('killcard');
+      el.classList.toggle('cd', !!cd);
+      const sk = el.querySelector('.kc-skip'), txt = cd || t('kcSkip');
+      if (sk.textContent !== txt) sk.textContent = txt;
+    }
     this.lowHealth(game.player.alive ? game.player.hp : 0);
     this.nadeWarn(game);
     const p = game.player;
@@ -411,7 +440,8 @@ export class Hud {
     $('hostages').innerHTML = game.hostages.map((h) => `<i class="h-${h.state}"></i>`).join('');
     // spectate / respawn
     const spec = $('spec');
-    if (!p.alive) {
+    // the freeze cam card stands in that spot while it is up
+    if (!p.alive && !this.kcOn) {
       spec.hidden = false;
       if (game.mode === 'dm' && p.respawnAt) spec.textContent = `${t('respawn')} ${Math.max(0, Math.ceil(p.respawnAt - game.time))}`;
       else spec.textContent = game.specTarget ? `${t('spectating')}: ${game.specTarget.name}` : t('youDied');

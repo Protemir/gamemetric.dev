@@ -683,9 +683,16 @@ export class Game {
     } else {
       const w = WEAPONS[item];
       if (s.slots[w.slot] === item) {
-        // buying the same gun again refills it
+        // buying the same gun again refills it (and costs nothing to find out it is already full)
+        const a = s.ammo[item];
+        if (a && a.mag >= w.mag && a.res >= w.reserve) return 'have';
         s.ammo[item] = { mag: w.mag, res: w.reserve };
-      } else this.giveWeapon(s, item);
+      } else {
+        // the gun it replaces goes on the floor, like in CS, instead of vanishing
+        const old = s.slots[w.slot];
+        if (old && !free && this.role !== 'client') this.dropOld(s, old);
+        this.giveWeapon(s, item);
+      }
       s.switchSlot(w.slot, false);
     }
     if (!free) s.money -= price;
@@ -776,7 +783,7 @@ export class Game {
     }
     const mine = winner === this.player.team;
     this.result = { winner, why };
-    this.hud.banner(t(winner === 'A' ? 'roundWinA' : 'roundWinB'), t(why) + this.mvpLine(), mine);
+    this.hud.banner(t(winner === 'A' ? 'roundWinA' : 'roundWinB'), t(why) + this.mvpLine(winner), mine);
     sfx(mine ? 'win' : 'lose');
     this.nh?.onEnd(winner, why);
     if (this.score[winner] >= WIN_ROUNDS) {
@@ -839,7 +846,11 @@ export class Game {
       const goal = this.variant ? VARIANT[this.variant].kills : DM_KILLS;
       const done = this.dmKills.A >= goal || this.dmKills.B >= goal || this.time >= this.phaseEnd;
       if (done && !this.over && this.role !== 'client') {
-        const w = this.dmKills.A === this.dmKills.B ? 'draw' : this.dmKills.A > this.dmKills.B ? 'A' : 'B';
+        let w = this.dmKills.A === this.dmKills.B ? 'draw' : this.dmKills.A > this.dmKills.B ? 'A' : 'B';
+        if (this.variant === 'gun') {
+          const top = (team) => Math.max(0, ...this.soldiers.filter((s) => s.team === team).map((s) => s.gunLevel || 0));
+          if (top('A') !== top('B')) w = top('A') > top('B') ? 'A' : 'B';
+        }
         this.finishMatch(w);
       }
       return;
@@ -1282,6 +1293,10 @@ export class Game {
     o.feet = this.map.groundAt(o.x, o.z, o.radius * 0.9, Math.max(0, o.feet));
     o.vy = 0;
     o.killer = by;
+    o.killWeapon = weapon;
+    o.killHead = !!head;
+    o.fc = null;
+    o.camSkip = o.cardSkip = false;
     o.deadAt = this.time;
     this.lastAnyKill = this.time;
     o.deathFeet = o.feet;
@@ -1295,7 +1310,7 @@ export class Game {
     o.nb = null;
     if (this.role !== 'client') this.dropFrom(o);
     this.nh?.onKill(o, by, weapon, head, dx, dz);
-    for (const h of this.hostages) if (h.leader === o) {
+    for (const h of this.hostages) if (h.leader === o && h.state === 'follow') {
       h.leader = null;
       h.state = 'idle';
     }
@@ -1342,7 +1357,7 @@ export class Game {
     }
     if (o.isPlayer) {
       this.streak = 0;
-      this.hud.center(by && by !== o ? `${t('killedBy')} ${by.name}${by.alive ? ` · ${Math.max(1, Math.ceil(by.hp))} HP` : ''}` : t('youDied'), 2.5);
+      this.hud.center(by && by !== o ? `${t('killedBy')} ${by.name}${by.alive ? ` · ${Math.max(1, Math.ceil(by.hp))} HP` : ''}` : t('youDied'), by && by !== o ? 1.2 : 2.5);
       this.vm.mesh.visible = false;
     }
   }
@@ -1358,7 +1373,7 @@ export class Game {
     s.body.root.visible = false;
     s.nb = null;
     if (this.role !== 'client') this.dropFrom(s);
-    for (const h of this.hostages) if (h.leader === s) {
+    for (const h of this.hostages) if (h.leader === s && h.state === 'follow') {
       h.leader = null;
       h.state = 'idle';
     }
@@ -1467,9 +1482,9 @@ export class Game {
   }
 
   // "MVP: name, 3 kills" for the round banner
-  mvpLine() {
+  mvpLine(team) {
     let best = null;
-    for (const s of this.soldiers) if ((s.roundKills || 0) > 0 && (!best || s.roundKills > best.roundKills)) best = s;
+    for (const s of this.soldiers) if ((!team || s.team === team) && (s.roundKills || 0) > 0 && (!best || s.roundKills > best.roundKills)) best = s;
     return best ? ` · MVP: ${best.name} (${best.roundKills})` : '';
   }
 
@@ -1767,6 +1782,7 @@ export class Game {
         const cx = Math.floor(h.x), cz = Math.floor(h.z);
         if (this.phase === 'live' && cx >= R.x0 && cx <= R.x1 && cz >= R.z0 && cz <= R.z1) {
           h.state = 'rescued';
+          h.leader = null;
           h.body.root.visible = false;
           this.rescued++;
           L.money = Math.min(16000, L.money + 1000);
@@ -2424,6 +2440,11 @@ export class Game {
   playerAction(a) {
     const p = this.player;
     if (!p.alive) {
+      if ((a === 'fire' || a === 'next') && p.fc && !p.camSkip && !p.cardSkip && this.time - p.deadAt < 4.4) {
+        if (this.mode === 'dm' && p.respawnAt) p.cardSkip = true;
+        else p.camSkip = true;
+        return;
+      }
       if (a === 'fire' || a === 'next') this.nextSpectate();
       return;
     }
@@ -2532,21 +2553,30 @@ export class Game {
     }
   }
 
+  // a gun put down at someone's feet (swapped for another, or replaced by a bought one)
+  dropOld(s, old) {
+    const a = s.ammo[old] || { mag: WEAPONS[old].mag, res: WEAPONS[old].reserve };
+    let px = s.x - Math.sin(s.yaw) * 0.4, pz = s.z - Math.cos(s.yaw) * 0.4;
+    const pc = this.map.cellAt(px, pz);
+    if (pc < 0 || this.map.h[pc] > s.feet + 0.45) (px = s.x), (pz = s.z);
+    if (a.mag + a.res > 0) {
+      const nd = this.makeDrop(old, px, pz, a.mag, a.res, null, s.yaw + 1.3, s.feet);
+      this.nh?.onDrop(nd);
+    }
+    // the same cap as for the guns of the fallen
+    while (this.drops.length > 24) {
+      const o = this.drops[0];
+      this.removeDrop(o);
+      this.nh?.onUndrop(o.id);
+    }
+  }
+
   pickDrop(s, d, swap) {
     const w = WEAPONS[d.kind], slot = w.slot, old = s.slots[slot];
     if (old && !swap) return;
     this.removeDrop(d);
     this.nh?.onUndrop(d.id);
-    if (old) {
-      const a = s.ammo[old] || { mag: WEAPONS[old].mag, res: WEAPONS[old].reserve };
-      let px = s.x - Math.sin(s.yaw) * 0.4, pz = s.z - Math.cos(s.yaw) * 0.4;
-      const pc = this.map.cellAt(px, pz);
-      if (pc < 0 || this.map.h[pc] > s.feet + 0.45) (px = s.x), (pz = s.z);
-      if (a.mag + a.res > 0) {
-        const nd = this.makeDrop(old, px, pz, a.mag, a.res, null, s.yaw + 1.3, s.feet);
-        this.nh?.onDrop(nd);
-      }
-    }
+    if (old) this.dropOld(s, old);
     s.slots[slot] = d.kind;
     s.ammo[d.kind] = { mag: d.mag, res: d.res };
     if (s.remote) {
@@ -2609,6 +2639,57 @@ export class Game {
     return null;
   }
 
+  // The freeze cam, like in CS: after the fall the camera flies to the one who killed us,
+  // stops a couple of metres from their face and holds there (washed-out colours, a shutter click, a card).
+  // Only with a clear line of sight to them: it never flies through walls.
+  freezeCam(p, v, dt) {
+    const by = p.killer, t = this.time - p.deadAt;
+    if (!by || by === p || p.camSkip || t < 0.6 || this.over || this.opts.preview) return false;
+    let fc = p.fc;
+    // where to look: their head, or their body where it fell ("to the moon" bodies: where they died)
+    const headY = () => (by.alive ? by.feet + by.eyeH() - 0.1 : (by.flyVy ? by.deathFeet ?? by.feet : by.feet) + 0.4);
+    if (!fc) {
+      const hx = by.x, hy = headY(), hz = by.z;
+      const dx = v.x - hx, dz = v.z - hz, d = Math.hypot(dx, dz);
+      // no clear flight: at least stand back up to eye height, so a table does not hide them
+      let tx = v.x, ty = (p.deathFeet ?? p.feet) + 1.55, tz = v.z;
+      if (d > 3 && this.map.los(v.x, v.y, v.z, hx, hy, hz) && this.map.los(v.x, hy, v.z, hx, hy, hz)) {
+        const ux = dx / d, uz = dz / d;
+        const hit = this.map.raycast(hx, hy, hz, ux, 0, uz, 2.6);
+        // too tight in front of them (a door frame, a pillar): stay put rather than end up in the wall
+        if (!hit || hit.t >= 1.3) {
+          const k = Math.min(2.2, hit ? hit.t - 0.4 : 2.2);
+          tx = hx + ux * k;
+          ty = hy + 0.12;
+          tz = hz + uz * k;
+        }
+      }
+      fc = p.fc = { ex: v.x, ey: v.y, ez: v.z, tx, ty, tz, yaw: v.yaw, pitch: v.pitch, roll: v.roll || 0, shot: false };
+    }
+    const u = Math.min(1, (t - 0.6) / 0.7), e = u * u * (3 - 2 * u);
+    v.x = fc.ex + (fc.tx - fc.ex) * e;
+    v.y = fc.ey + (fc.ty - fc.ey) * e;
+    v.z = fc.ez + (fc.tz - fc.ez) * e;
+    // eyes on the killer (on their body if they have fallen since); once they walk out of sight or right
+    // up to the lens, the picture simply stays as it is
+    const hy = headY(), lx = by.x - v.x, ly = hy - v.y, lz = by.z - v.z;
+    const seen = u < 1 || (Math.hypot(lx, lz) > 1 && this.map.los(v.x, v.y, v.z, by.x, hy, by.z));
+    const k = seen ? Math.min(1, dt * (u < 1 ? 9 : 3)) : 0;
+    fc.yaw += angDiff(fc.yaw, Math.atan2(-lx, -lz)) * k;
+    fc.pitch += (Math.atan2(ly, Math.hypot(lx, lz)) - fc.pitch) * k;
+    v.yaw = fc.yaw;
+    v.pitch = Math.max(-1.2, Math.min(1.2, fc.pitch));
+    fc.roll *= 1 - Math.min(1, dt * 5);
+    v.roll = fc.roll;
+    v.yawPunch = 0;
+    if (u >= 1 && !fc.shot) {
+      fc.shot = true;
+      sfx('shutter');
+      this.hud.killCard?.(p, by);
+    }
+    return true;
+  }
+
   nextSpectate() {
     const mates = this.soldiers.filter((s) => s.alive && s.team === this.player.team && !s.isPlayer);
     const pool = mates.length ? mates : this.soldiers.filter((s) => s.alive);
@@ -2623,7 +2704,7 @@ export class Game {
     const v = this.view;
     let src = p;
     if (!p.alive) {
-      if ((this.mode === 'hostage' || !p.respawnAt) && this.time - p.deadAt > 2) {
+      if ((this.mode === 'hostage' || !p.respawnAt) && this.time - p.deadAt > (p.fc ? (p.camSkip ? 0 : 4.4) : 2)) {
         if (!this.spec || !this.spec.alive) {
           this.spec = null;
           this.nextSpectate();
@@ -2667,6 +2748,7 @@ export class Game {
       } else v.roll = 0;
       v.stepUp = (v.stepUp || 0) * Math.exp(-dt * 14);
       v.y = eyeY - v.stepUp;
+      if (!p.alive) this.freezeCam(p, v, dt);
     } else {
       // spectate a teammate through their eyes: the camera sits exactly in their head
       // (a lagging camera ended up behind it and showed their own body twitching in front of the lens)
@@ -2875,6 +2957,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    this.hud?.hideKillCard?.();
     this.glass.dispose();
     if (this.fun.talk) window.speechSynthesis?.cancel();
     if (!this.opts.preview) setQuack(false);

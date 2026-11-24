@@ -34,9 +34,9 @@
  "isAccessibleForFree": true
 }
 </script>
-<link rel="stylesheet" href="style.css?v=18cef263">
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=f8cdc5cf","./js/audio.js":"./js/audio.js?v=e1c23fb2","./js/bots.js":"./js/bots.js?v=f6a393d9","./js/chickens.js":"./js/chickens.js?v=370b5353","./js/decor.js":"./js/decor.js?v=4f5739dd","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=80f030a4","./js/game.js":"./js/game.js?v=798184a3","./js/glass.js":"./js/glass.js?v=49029896","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=3fc6a7dd","./js/i18n.js":"./js/i18n.js?v=63fd1e25","./js/main.js":"./js/main.js?v=9ae2e1e0","./js/map.js":"./js/map.js?v=a47da4ab","./js/net.js":"./js/net.js?v=67be16a0","./js/netgame.js":"./js/netgame.js?v=a543f1f4","./js/people.js":"./js/people.js?v=83c1bd6d","./js/pool.js":"./js/pool.js?v=452932b4","./js/portal.js":"./js/portal.js?v=dd2b6f17","./js/props.js":"./js/props.js?v=f8c89cdb","./js/rank.js":"./js/rank.js?v=e24c53d4","./js/smoke.js":"./js/smoke.js?v=b48919cd","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=9c5e459c","./js/weapons.js":"./js/weapons.js?v=544e0c0c","./js/weather.js":"./js/weather.js?v=25ab4afb"}}</script>
-<script type="module" src="./js/main.js?v=9ae2e1e0"></script>
+<link rel="stylesheet" href="style.css?v=d58b1037">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","./js/actors.js":"./js/actors.js?v=f8cdc5cf","./js/audio.js":"./js/audio.js?v=39306ce5","./js/bots.js":"./js/bots.js?v=f6a393d9","./js/chickens.js":"./js/chickens.js?v=370b5353","./js/decor.js":"./js/decor.js?v=4f5739dd","./js/fireplace.js":"./js/fireplace.js?v=8066b095","./js/fx.js":"./js/fx.js?v=80f030a4","./js/game.js":"./js/game.js?v=8a23adbb","./js/glass.js":"./js/glass.js?v=49029896","./js/guns.js":"./js/guns.js?v=9f2e1584","./js/hud.js":"./js/hud.js?v=afd002ba","./js/i18n.js":"./js/i18n.js?v=19c3ad06","./js/main.js":"./js/main.js?v=2d39160b","./js/map.js":"./js/map.js?v=a47da4ab","./js/net.js":"./js/net.js?v=67be16a0","./js/netgame.js":"./js/netgame.js?v=90ecadac","./js/people.js":"./js/people.js?v=83c1bd6d","./js/pool.js":"./js/pool.js?v=452932b4","./js/portal.js":"./js/portal.js?v=dd2b6f17","./js/props.js":"./js/props.js?v=f8c89cdb","./js/rank.js":"./js/rank.js?v=e24c53d4","./js/smoke.js":"./js/smoke.js?v=b48919cd","./js/textures.js":"./js/textures.js?v=d3a717af","./js/touch.js":"./js/touch.js?v=9c5e459c","./js/weapons.js":"./js/weapons.js?v=544e0c0c","./js/weather.js":"./js/weather.js?v=25ab4afb"}}</script>
+<script type="module" src="./js/main.js?v=2d39160b"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -55,6 +55,7 @@
   <div id="hitmark" class="hitmark"><i></i><i></i><i></i><i></i></div>
   <div id="hurt-layer"></div>
   <div id="nade-warn" hidden><b></b></div>
+  <div id="killcard" hidden><small data-t="killedBy"></small><b class="kc-name"></b><span class="kc-gun"></span><div class="kc-hp"><i></i><em></em></div><small class="kc-skip" data-t="kcSkip"></small></div>
   <div id="vignette"></div>
   <div id="lowhp"></div>
   <div id="scope" hidden><div class="hole"></div><i class="sh"></i><i class="sv"></i></div>

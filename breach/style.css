@@ -436,3 +436,22 @@ body.touch label:has(#s-sens), body:not(.touch) label:has(#s-tsens) { display: n
 .seg.swatch button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .field > .seg { grid-column: 2 / 4; }
 .field > .seg.small button { min-width: 0; padding-left: 4px; padding-right: 4px; }
+
+/* the freeze cam: colours washed out, a dark frame, and the killer's card */
+body.freezecam #view { filter: saturate(0.3) contrast(1.15) brightness(0.92); }
+body.freezecam #hud::before { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px rgba(0, 0, 0, 0.75); animation: fc-in 0.25s ease-out; }
+@keyframes fc-in { from { background: rgba(255, 255, 255, 0.55); } to { background: transparent; } }
+#killcard { position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%); min-width: 250px; padding: 12px 22px 10px; border-radius: 12px; background: rgba(10, 12, 16, 0.82); border: 1px solid rgba(255, 255, 255, 0.12); border-top: 3px solid #e05a4a; display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; z-index: 3; animation: kc-in 0.3s cubic-bezier(0.2, 1.4, 0.4, 1); }
+#killcard.ta { border-top-color: #4aa3ff; }
+#killcard small { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #aab; }
+#killcard .kc-name { font-size: 26px; line-height: 1.1; }
+#killcard.ta .kc-name { color: #7cc0ff; }
+#killcard.tb .kc-name { color: #ff8a7a; }
+#killcard .kc-gun { font-size: 14px; color: #dde; }
+#killcard .kc-hp { position: relative; width: 100%; height: 16px; margin-top: 4px; border-radius: 8px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+#killcard .kc-hp i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #3fbf6a, #8fe06a); }
+#killcard .kc-hp em { position: relative; display: block; text-align: center; font: 700 11px/16px var(--mono, monospace); font-style: normal; color: #fff; text-shadow: 0 1px 2px #000; }
+#killcard .kc-skip { margin-top: 3px; font-size: 10px; letter-spacing: 0.06em; color: #889; text-transform: none; }
+@keyframes kc-in { from { opacity: 0; transform: translate(-50%, 18px) scale(0.92); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+@media (max-height: 520px) { #killcard { bottom: 92px; min-width: 200px; padding: 5px 14px 5px; gap: 1px; } #killcard small:first-child, #killcard:not(.cd) .kc-skip { display: none; } #killcard .kc-name { font-size: 18px; } #killcard .kc-gun { font-size: 12px; } #killcard .kc-hp { height: 13px; margin-top: 2px; } #killcard .kc-hp em { line-height: 13px; } }
+#killcard.cd .kc-skip { color: #f2b13a; font-size: 12px; letter-spacing: 0.04em; }

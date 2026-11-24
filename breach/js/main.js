@@ -588,6 +588,7 @@ function doBuy(item) {
   } else {
     sfx('deny');
     if (r === 'money') hud.center(t('noMoney'), 1.2);
+    if (r === 'have') hud.center(t('haveIt'), 1.2);
     if (r === 'time') {
       hud.center(t('buyClosed'), 1.2);
       closeBuy();

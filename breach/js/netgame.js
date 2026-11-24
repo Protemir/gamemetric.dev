@@ -99,7 +99,8 @@ export class NetGame {
       if (T >= this.sendAt) {
         this.sendAt = T + 0.033;
         const p = g.player;
-        if (p.alive) this.net.toHost({ k: 'p', r: this.g.round, x: r2(p.x), z: r2(p.z), f: r2(p.feet), y: r3(p.yaw), p: r3(p.pitch), c: r2(p.crouchK), vx: r2(p.vx), vz: r2(p.vz), w: KINDS.indexOf(p.kind) }, false);
+        const am = p.ammo[p.kind];
+        if (p.alive) this.net.toHost({ k: 'p', r: this.g.round, a: am ? [am.mag, am.res] : null, x: r2(p.x), z: r2(p.z), f: r2(p.feet), y: r3(p.yaw), p: r3(p.pitch), c: r2(p.crouchK), vx: r2(p.vx), vz: r2(p.vz), w: KINDS.indexOf(p.kind) }, false);
       }
     }
   }
@@ -139,6 +140,11 @@ export class NetGame {
           const n0 = (v) => (Number.isFinite(v) ? v / 100 : 0);
           pushSample(s, { t: now(), x: m.x / 100, z: m.z / 100, f: m.f / 100, y: m.y / 1000, p: m.p / 1000, c: Math.max(0, Math.min(1, n0(m.c))), vx: n0(m.vx), vz: n0(m.vz) });
         }
+        {
+          const k = KINDS[m.w], w = WEAPONS[k];
+          if (w && s.ammo[k] && Array.isArray(m.a) && m.a.every(Number.isFinite))
+            s.ammo[k] = { mag: Math.max(0, Math.min(w.mag, m.a[0] | 0)), res: Math.max(0, Math.min((w.reserve || 0) * 2, m.a[1] | 0)) };
+        }
         if (KINDS[m.w] && s.netKind !== KINDS[m.w]) {
           s.netKind = KINDS[m.w];
           s.body.setGun(s.netKind);
@@ -161,6 +167,7 @@ export class NetGame {
           const target = tid >= 100 ? g.hostages[tid - 100] : g.soldiers[tid];
           if (!target || !Number.isFinite(dmg) || dmg <= 0 || !Number.isFinite(dx) || !Number.isFinite(dz)) continue;
           if (target.alive === false || target.state === 'dead') continue;
+          if (tid < 100 ? target.team === s.team : s.team === 'B') continue;
           g.damage(target, Math.min(500, dmg), PARTS[part] || 'body', s, kind, dx, dz, Number.isFinite(pen) ? Math.max(0, Math.min(1, pen)) : 0.6);
         }
         for (const o of g.soldiers) if (o.brain && o.alive) o.brain.hearShot(s.x, s.z, s);
@@ -465,7 +472,7 @@ export class NetGame {
       case 'E': {
         const mine = m.w === me.team;
         g.result = { winner: m.w, why: m.why };
-        g.hud.banner(t(m.w === 'A' ? 'roundWinA' : 'roundWinB'), t(m.why) + g.mvpLine(), mine);
+        g.hud.banner(t(m.w === 'A' ? 'roundWinA' : 'roundWinB'), t(m.why) + g.mvpLine(m.w), mine);
         sfx(mine ? 'win' : 'lose');
         break;
       }
@@ -502,6 +509,7 @@ export class NetGame {
           if (m.r === 'money') g.hud.center(t('noMoney'), 1.2);
           else if (m.r === 'time') g.hud.center(t('buyClosed'), 1.2);
           else if (m.r === 'zone') g.hud.center(t('buyZone'), 1.2);
+          else if (m.r === 'have') g.hud.center(t('haveIt'), 1.2);
         }
         break;
       }

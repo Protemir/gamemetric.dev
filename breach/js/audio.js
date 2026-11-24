@@ -330,6 +330,14 @@ export function sfx(name, pos = null, opt = {}) {
       tone(d, t, 0.15, 'square', 220, 180, 0.07);
       break;
     }
+    case 'shutter': {
+      // a camera shutter: two dry clicks and a short whirr
+      const d = out({ gain: 1, pan: 0 });
+      noise(d, t, 0.025, 'bandpass', 5200, 3, 0.5);
+      noise(d, t + 0.07, 0.03, 'bandpass', 3600, 3, 0.45);
+      tone(d, t + 0.01, 0.12, 'sawtooth', 220, 140, 0.03);
+      break;
+    }
     case 'click': {
       const d = out({ gain: 1, pan: 0 });
       tone(d, t, 0.04, 'square', 1500, 1500, 0.04);
