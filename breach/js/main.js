@@ -11,7 +11,7 @@ import { NetGame } from './netgame.js';
 import { BOT_NAMES } from './i18n.js';
 import { WEAPONS } from './weapons.js';
 import { setupTouch } from './touch.js';
-import { PORTAL, portalReady, portalGameplay, portalInterstitial, onPortalMute, onPortalPause } from './portal.js';
+import { PORTAL, portalReady, portalGameplay, portalInterstitial, onPortalMute, onPortalPause, track } from './portal.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -223,13 +223,16 @@ $('p-settings').onclick = () => {
 $('p-resume').onclick = () => resume();
 $('p-quit').onclick = () => {
   if (net?.isHost && game && !game.over && net.peers.length > 1 && !confirm(t('hostQuitAsk'))) return;
+  if (game && !game.over) game.tele('quit');
   toMenu();
 };
 $('mo-menu').onclick = () => {
+  if (game) game.tele('after_match', { next: 'menu' });
   portalInterstitial();
   net ? backToLobby(true) : toMenu();
 };
 $('mo-again').onclick = () => {
+  if (game) game.tele('after_match', { next: 'again' });
   portalInterstitial();
   startGame();
 };
@@ -269,7 +272,11 @@ function startGame(online) {
       // the host's first round goes out now; a client plays back what arrived while it was loading
       if (online.role === 'host') game.nh.onRound(true);
       else for (const m of pending.splice(0)) game.nh.onClientMessage(m);
-    } else game = new Game(renderer, { team: settings.team, mode: settings.mode, diff: settings.diff, fun: settings.fun }, hud);
+    } else {
+      game = new Game(renderer, { team: settings.team, mode: settings.mode, diff: settings.diff, fun: settings.fun }, hud);
+      const fun = Object.keys(settings.fun || {}).filter((k) => settings.fun[k]);
+      track('match_start', { mode: settings.mode, diff: settings.diff, side: settings.team, fun: fun.join(',') || 'none', touch: touchOnly ? 1 : 0 });
+    }
     hud.attach(game);
     $('mo-menu').textContent = t(online ? 'backToLobby' : 'menu');
     applySize();
@@ -466,6 +473,10 @@ else if (!q.has('mouse') && (mobileUA || !matchMedia('(any-pointer: fine)').matc
     },
     { once: true, capture: true },
   );
+// the page closed in the middle of a match: where it happened
+addEventListener('pagehide', () => {
+  if (state === 'play' && game && !game.over) game.tele('leave');
+});
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     rainSound(false);

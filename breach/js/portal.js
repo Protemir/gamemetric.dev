@@ -120,6 +120,22 @@ export function onPortalMute(fn) {
   tell();
 }
 
+// Custom events for the Playgama dashboard (Bridge analytics): which mode people pick, how far they get
+// (first kill, first death, rounds, the match result), and whether they quit, play again or close the page.
+// Every event carries min: minutes since the page opened. Nothing is sent anywhere else, and nothing at all
+// outside Playgama (on gamemetric.dev and CrazyGames this does nothing).
+const opened = performance.now();
+export function track(name, params = {}) {
+  if (!bridge) return;
+  try {
+    if (!bridge.analytics || !bridge.analytics.send) return;
+    const r = bridge.analytics.send(name, { ...params, min: Math.floor((performance.now() - opened) / 60000) });
+    if (r && r.catch) r.catch(() => {});
+  } catch {
+    /* counting never breaks the game */
+  }
+}
+
 // fn() when the platform pauses the game (its own menu)
 export function onPortalPause(fn) {
   if (!bridge) return;

@@ -8,7 +8,7 @@ import { Rain } from './weather.js';
 import { Smokes } from './smoke.js';
 import { Fireplace } from './fireplace.js';
 import { PoolToys } from './pool.js';
-import { portalHappy } from './portal.js';
+import { portalHappy, track } from './portal.js';
 import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
@@ -749,6 +749,7 @@ export class Game {
   endRound(winner, why) {
     if (this.phase === 'end') return;
     this.phase = 'end';
+    this.tele('round_end', { result: winner === this.player.team ? 'win' : 'lose', why });
     if (why === 'elim') this.slowMo();
     this.phaseEnd = this.time + 5;
     this.score[winner]++;
@@ -850,9 +851,27 @@ export class Game {
     }
   }
 
+  // a dashboard event about this match (portal builds only; never for the menu's backdrop or online play)
+  tele(name, extra = {}) {
+    if (this.opts.preview || this.role !== 'solo') return;
+    const p = this.player;
+    track(name, {
+      mode: this.opts.mode,
+      round: this.round,
+      kills: p ? p.kills : 0,
+      deaths: p ? p.deaths : 0,
+      sec: Math.round(this.time),
+      ...extra,
+    });
+  }
+
   finishMatch(winner) {
     if (this.over) return;
     this.over = true;
+    this.tele('match_end', {
+      result: winner === 'draw' ? 'draw' : winner === this.player.team ? 'win' : 'lose',
+      score: this.mode === 'dm' ? (this.dmKills ? this.dmKills.A + '-' + this.dmKills.B : '') : this.score.A + '-' + this.score.B,
+    });
     if (!this.opts.preview && winner === this.player.team) portalHappy();
     if (this.time - (this.lastAnyKill ?? -9) < 0.3 && this.phase !== 'end') this.slowMo();
     for (const n of this.nades) this.dropNade(n);
@@ -1200,9 +1219,11 @@ export class Game {
       h.leader = null;
       h.state = 'idle';
     }
+    if (o.isPlayer && o.deaths === 1) this.tele('first_death', { by: weapon || '' });
     if (by && by !== o) {
       if (by.team !== o.team) {
         by.kills++;
+        if (by.isPlayer && by.kills === 1) this.tele('first_kill', { weapon: weapon || '' });
         by.money = Math.min(16000, by.money + (WEAPONS[weapon]?.reward ?? 300));
         if (this.mode === 'dm' && this.role !== 'client') this.dmKills[by.team]++;
       }
