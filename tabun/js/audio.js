@@ -216,6 +216,10 @@ export function sfx(name, arg = 0) {
       tone(2200, t, 0.12, { type: 'triangle', vol: 0.08, slide: 0.4 });
       noise(t + 0.03, 0.4, { vol: 0.12, freq: 1800, type: 'bandpass', q: 3, slide: 2.5 });
       break;
+    case 'raid':
+      // свист конокрадов: два коротких посвиста
+      for (const [f, dl] of [[1800, 0], [2300, 0.18]]) tone(f, t + dl, 0.16, { type: 'sine', vol: 0.09, slide: 1.4 });
+      break;
     case 'clash':
       noise(t, 0.12, { vol: 0.3, freq: 600 + Math.random() * 400, q: 1 });
       tone(70 + Math.random() * 30, t, 0.1, { vol: 0.2, slide: 0.7 });

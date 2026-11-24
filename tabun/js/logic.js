@@ -116,7 +116,7 @@ function genLevelOnce(n, variant, seedN = n, daily = false) {
   while (d < end) {
     const w = [
       ['gate', 55], ['wild', n === 1 ? 25 : 14],
-      ['rock', can.rock ? 10 : 0], ['pit', can.pit ? 11 : 0], ['wolf', can.wolf ? 13 : 0], ['whip', n >= 3 ? 6 : 0],
+      ['rock', can.rock ? 10 : 0], ['pit', can.pit ? 11 : 0], ['wolf', can.wolf ? 13 : 0], ['whip', n >= 3 ? 6 : 0], ['raid', n >= 6 ? 7 : 0],
       ['fence', can.fence ? 9 : 0], ['river', can.river ? 4 : 0],
     ].filter(([t, wt]) => wt > 0 && !(t === lastType && t !== 'gate'));
     let tot = w.reduce((s, x) => s + x[1], 0), r = R() * tot, type = 'gate';
@@ -148,6 +148,12 @@ function genLevelOnce(n, variant, seedN = n, daily = false) {
         E += Math.round(k * 0.8);
       }
       d += ri(24, 30);
+    } else if (type === 'raid') {
+      // барымта: конокрады проносятся поперёк дороги, каждый уводит до трёх коней
+      if (lastType === 'fence' || lastType === 'pit') d += 12;
+      L.items.push({ type: 'raid', d, dir: R() < 0.5 ? -1 : 1, n: n >= 12 ? 3 : 2 });
+      E = Math.round(E * 0.92);
+      d += 32;
     } else if (type === 'whip') {
       // золотая камча: 5 секунд «шабыта» — табун быстрее, дикие сбегаются, волки разбегаются
       L.items.push({ type: 'whip', d, x: pick([-3, -1.5, 0, 1.5, 3]) });
@@ -192,6 +198,10 @@ function genLevelOnce(n, variant, seedN = n, daily = false) {
   const got = Math.min(simulate(L, { start, leader: 0, seed: 0, ignoreWhip: true }), simulate(L, { start, leader: 0, seed: 1, ignoreWhip: true }));
   const ratio = boss ? 0.84 : Math.min(0.8, 0.45 + n * 0.025);
   L.rival = Math.max(3, Math.round(got * ratio));
+  // выбросы сложности: «небрежный» игрок (каждый пятый выбор ворот неверный, рука запаздывает) должен иметь шанс
+  const sl = [0, 1, 2].map((k) => simulate(L, { start, leader: 0, seed: k, ignoreWhip: true }, sloppyPolicy(n * 100 + k))).sort((a, b) => a - b)[1];
+  if (sl > 0) L.rival = Math.max(3, Math.min(L.rival, Math.round(sl * (boss ? 1.05 : 0.95))));
+  L.sloppyGot = sl;
   L.autoGot = got;
   L.variant = variant;
   return L;
@@ -243,6 +253,7 @@ export class Run {
     this.rocks = [];
     this.wolves = [];        // волки: стоят, потом бегут наперерез; один волк — один конь
     this.boostT = 0;         // «шабыт» от камчи, секунды
+    this.raiders = [];       // конокрады на дороге
     this.events = [];
     this.coins = 0;
     this.lossAcc = 0;
@@ -334,6 +345,7 @@ export class Run {
   ghostStep(g, dt) {
     g.t += dt;
     if (g.kind === 'fall') { g.vy -= 22 * dt; g.y += g.vy * dt; g.d += g.vd * dt; g.rot += dt * 2.5; }
+    else if (g.kind === 'stolen') { g.x += g.vx * dt; }
     else if (g.kind === 'hit' || g.kind === 'bump' || g.kind === 'clash' || g.kind === 'wolf') {
       g.vy -= 20 * dt; g.y = Math.max(0, g.y + g.vy * dt); g.x += g.vx * dt; g.d += g.vd * dt; g.rot += dt * 7;
       if (g.y === 0) { g.vx *= 0.9; g.vd *= 0.9; }
@@ -415,6 +427,14 @@ export class Run {
           }
         }
         if (it.active && this.d > it.d + 40) it.done = true;
+      } else if (it.type === 'raid') {
+        const lead = ((HALF + 5) / 9) * this.speed;
+        if (!it.active && front > it.d - lead) {
+          it.active = true;
+          for (let k = 0; k < it.n; k++) this.raiders.push({ id: this.nextId++, x: -it.dir * (HALF + 5 + k * 3.2), d: it.d + k * 1.6, dir: it.dir, stolen: 0, phase: k * 0.37 });
+          this.emit('raid', { d: it.d, dir: it.dir });
+        }
+        if (it.active && this.d - sh.b > it.d + 8) it.done = true;
       } else if (it.type === 'whip') {
         if (front >= it.d - 0.8 && this.bodies.some((b) => Math.abs(b.x - it.x) < 1.7 && Math.abs(b.d - it.d) < 1.8)) {
           it.done = true; it.taken = true;
@@ -515,6 +535,22 @@ export class Run {
       }
     }
 
+    // конокрады: проносятся поперёк, уводят коней, которых задели (до трёх на каждого)
+    for (let r = this.raiders.length - 1; r >= 0; r--) {
+      const rd = this.raiders[r];
+      rd.x += rd.dir * 9 * dt;
+      if (Math.abs(rd.x) > HALF + 16) { this.raiders.splice(r, 1); continue; }
+      if (rd.stolen >= 3 || Math.abs(rd.d - this.d) > sh.b + 3) continue;
+      for (let i = this.bodies.length - 1; i >= 0 && rd.stolen < 3; i--) {
+        const b = this.bodies[i];
+        if (Math.abs(b.x - rd.x) < 1.3 && Math.abs(b.d - rd.d) < 1.7) {
+          rd.stolen++;
+          this.kill(i, 'stolen', { vx: rd.dir * 9, vd: 0, off: rd.stolen }, 1);
+          if (rd.stolen === 1) this.emit('stolen', { x: b.x, d: b.d });
+        }
+      }
+    }
+
     // валуны
     for (let r = this.rocks.length - 1; r >= 0; r--) {
       const rk = this.rocks[r];
@@ -551,6 +587,7 @@ export class Run {
     if (front >= this.finishD) {
       this.state = 'clash';
       this.boostT = 0; // шабыт заканчивается на финише — иначе он «зависает» в схватке
+      this.raiders = []; this.rocks = []; // кто не успел проскочить до финиша — не замирает посреди байги
       this.clashT = 0;
       if (this.leader > 0) {
         this.count = Math.min(MAX_COUNT, this.count + this.leader);
@@ -670,7 +707,7 @@ export function autoTarget(run) {
   const fence = ahead.find((it) => it.type === 'fence' && it.d - front < 28 && it.d > run.d - sh.b);
   if (fence) return (fence.g0 + fence.g1) / 2;
   // 2) валун: держаться той стороны, откуда он прикатился
-  const rock = run.rocks.find((r) => r.d > run.d - sh.b - 1 && r.d - front < 22);
+  const rock = run.rocks.find((r) => r.d > run.d - sh.b - 1 && r.d - front < 22) || run.raiders.find((r) => r.d > run.d - sh.b - 1 && r.d - front < 22 && Math.abs(r.x) < HALF + 3);
   let avoid = null;
   if (rock) {
     const passed = rock.dir > 0 ? rock.x > run.cx : rock.x < run.cx;
@@ -709,6 +746,21 @@ export function autoTarget(run) {
     if (wantIn) want = left > right ? (-HALF + pit.x0) / 2 : (pit.x1 + HALF) / 2;
   }
   return want;
+}
+
+// «небрежный» игрок для баланса: автопилот с запаздыванием и ошибкой в каждом пятом выборе
+export function sloppyPolicy(seed) {
+  const R = rng(seed);
+  let last = 0, wrong = false, gateSeen = -1;
+  return (run) => {
+    run.ignoreWhip = true;
+    let x = autoTarget(run);
+    const g = run.items.find((it) => it.type === 'gate' && !it.done);
+    if (g && g.i !== gateSeen) { gateSeen = g.i; wrong = R() < 0.2; }
+    if (wrong && g && !g.full) x = -x;
+    last += (x - last) * 0.08;
+    return last;
+  };
 }
 
 export function simulate(L, opts = {}, policy = autoTarget) {

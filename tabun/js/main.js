@@ -443,8 +443,10 @@ function checkMilestone() {
 // —— события забега ——
 let lastLossSfx = 0, lastClashSfx = 0, lastRecruitSfx = 0;
 const recruitAcc = { n: 0, t: 0, x: 0, d: 0 };
+const stolenAcc = { n: 0, t: 0, x: 0, d: 0 };
 function flushRecruits(now) {
   if (recruitAcc.n && now - recruitAcc.t > 350) { floatText('+' + recruitAcc.n, recruitAcc.x, 2.4, recruitAcc.d, 'good huge'); recruitAcc.n = 0; }
+  if (stolenAcc.n && now - stolenAcc.t > 400) { floatText('−' + stolenAcc.n, stolenAcc.x, 5.4, stolenAcc.d, 'bad huge'); stolenAcc.n = 0; }
 }
 function handleEvents() {
   const now = performance.now();
@@ -463,6 +465,14 @@ function handleEvents() {
         popTag(herdTag);
         break;
       }
+      case 'raid':
+        sfx('raid');
+        showHint('raid');
+        break;
+      case 'stolen':
+        sfx('hit');
+        buzz(40);
+        break;
       case 'whip':
         banner(t('whip'), 'gold', t('whipSub'));
         sfx('whip');
@@ -492,8 +502,9 @@ function handleEvents() {
         popTag(herdTag);
         break;
       case 'loss':
-        if (ev.kind !== 'wolf' && now - lastLossSfx > 120) { sfx(ev.kind === 'fall' ? 'fall' : 'hit'); lastLossSfx = now; buzz(20); }
-        if (ev.n > 0) floatText('−' + ev.n, ev.x, 1.8, ev.d, 'bad');
+        if (ev.kind !== 'wolf' && ev.kind !== 'stolen' && now - lastLossSfx > 120) { sfx(ev.kind === 'fall' ? 'fall' : 'hit'); lastLossSfx = now; buzz(20); }
+        if (ev.kind === 'stolen') { if (!stolenAcc.n) stolenAcc.t = now; stolenAcc.n += ev.n; stolenAcc.x = ev.x; stolenAcc.d = ev.d; }
+        else if (ev.n > 0) floatText('−' + ev.n, ev.x, 1.8, ev.d, 'bad');
         break;
       case 'rock': sfx('rock'); showHint('rock'); break;
       case 'wolves': showHint('wolf'); break;

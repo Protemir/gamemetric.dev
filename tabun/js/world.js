@@ -269,6 +269,9 @@ export class World {
       { r: this.makeRider({ hue: 100, sat: 0.45, noFlag: true }), side: 1, coat: 'black', ph: 0.13 },
     ];
     for (const h of this.herders) this.scene.add(h.r);
+    // конокрады: тёмные кафтаны, без знамён
+    this.raiderRiders = [0, 1, 2].map(() => { const r = this.makeRider({ hue: 15, sat: 0.12, noFlag: true }); this.scene.add(r); return r; });
+    this.raidCol = new THREE.Color('#2b1d14');
     this.rivalRider = this.makeRider({ chapan: '#2a2440', trim: '#9aa0b0', hat: '#3a3030', flag: '#1f1f2e', hue: 232, sat: 0.38 });
     this.scene.add(this.rivalRider);
     this.rivalLeaderCol = new THREE.Color('#1c1614');
@@ -1040,6 +1043,25 @@ export class World {
       else h.r.position.set(hx, 1.3, -hd);
       h.r.scale.setScalar(1.08 / 1.3);
     }
+    // конокрады проносятся поперёк дороги
+    this.raiderRiders.forEach((r) => { r.visible = false; });
+    (run.raiders || []).forEach((rd, k) => {
+      const yaw = -rd.dir * Math.PI / 2;
+      m4.compose(v.set(rd.x, 0, -rd.d), q.setFromEuler(e.set(0, yaw, 0)), s.set(1.1, 1.1, 1.1));
+      const ph = rd.phase + t * 1.6;
+      this.gallop.add(ph, m4, this.raidCol);
+      shadow(rd.x, -rd.d, 1.1);
+      const R = this.raiderRiders[k % 3];
+      if (!R) return;
+      R.visible = true;
+      const sk = this.seat(this.gallop, ph);
+      const cs = Math.cos(yaw), sn = Math.sin(yaw);
+      if (sk) R.position.set(rd.x + (sk.x * cs + sk.z * sn) * 1.1, sk.y * 1.1, -rd.d + (-sk.x * sn + sk.z * cs) * 1.1);
+      else R.position.set(rd.x, 1.4, -rd.d);
+      R.rotation.set(0, yaw, 0);
+      R.scale.setScalar(1.1 / 1.3);
+      if (Math.random() < dt * 25) this.dust.emit(rd.x - rd.dir * 0.8, 0.3, -rd.d, -rd.dir * 2, 1, 0, this.dustColor(), 1, 0.8, 2.6, 0, 0.7);
+    });
     // волки
     let rc = 0;
     for (const w of run.wolves || []) {
@@ -1105,6 +1127,13 @@ export class World {
         m4.compose(v.set(g.x, 0, -g.d), q.setFromEuler(e.set(0, Math.PI + (g.phase - 0.5) * 0.8, 0)), s.set(1, 1, 1));
         this.idle.add(g.phase + t * 0.4, m4, col);
         shadow(g.x, -g.d);
+        continue;
+      }
+      if (g.kind === 'stolen') {
+        const fade = g.t > 1.1 ? Math.max(0, 1 - (g.t - 1.1) / 0.5) : 1;
+        if (fade <= 0) continue;
+        m4.compose(v.set(g.x - Math.sign(g.vx) * (1.6 + (g.off || 1) * 1.4), 0, -g.d + ((g.off || 1) - 2) * 0.9), q.setFromEuler(e.set(0, -Math.sign(g.vx) * Math.PI / 2, 0)), s.set(fade, fade, fade));
+        this.gallop.add(g.phase + t * 1.6, m4, col);
         continue;
       }
       if (g.kind === 'poof') {
