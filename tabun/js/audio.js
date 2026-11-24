@@ -76,7 +76,7 @@ export function music(mode) {
 }
 
 export function initAudio() {
-  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  if (ctx) { if (ctx.state !== 'running') ctx.resume().catch(() => {}); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
@@ -111,6 +111,7 @@ function tone(freq, t0, dur, { type = 'sine', vol = 0.3, slide = 0, attack = 0.0
 function noise(t0, dur, { vol = 0.3, freq = 800, q = 1, type = 'lowpass', slide = 0 } = {}) {
   const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
   s.buffer = noiseBuf;
+  s.loop = true;
   f.type = type; f.frequency.setValueAtTime(freq, t0); f.Q.value = q;
   if (slide) f.frequency.exponentialRampToValueAtTime(Math.max(40, freq * slide), t0 + dur);
   g.gain.setValueAtTime(vol, t0);

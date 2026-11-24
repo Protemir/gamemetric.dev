@@ -35,7 +35,8 @@ let lastT = 0;
 let dragHintOn = false;
 let resultIn = 0;
 let daily = false;      // идёт «Байга дня»
-const dayIndex = () => { const d = new Date(); return Math.round(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 864e5); };
+let dailyKey = null;    // день, к которому относится текущая байга
+const dayIndex = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5; };
 const dailyDiff = () => {
   // одна трасса на весь день: сложность запоминается при первом открытии дня
   const day = dayIndex();
@@ -107,6 +108,7 @@ function onResize() {
 // —— уровни ——
 function prepare() {
   L = daily ? dailyLevel(dayIndex(), dailyDiff()) : level(curLvl());
+  dailyKey = daily ? S.dayKey() : null; // заезд, начатый до полуночи, засчитывается своему дню
   run = new Run(L, { start: S.startHerd(save), leader: S.leaderBonus(save) });
   for (const b of run.bodies) { b.x = run.cx + b.sx; b.d = run.d + b.sd; b.spawn = 1; }
   world.setLevel(L, run);
@@ -138,6 +140,8 @@ function startLevel() {
 }
 
 function showMenu() {
+  // уровень из ссылки снимается, когда из итогов вернулись в меню (на старте — остаётся)
+  if (state === 'result' || state === 'pause') levelOverride = null;
   state = 'menu';
   daily = false;
   prepare();
@@ -584,23 +588,24 @@ function showResult() {
   if (state !== 'play') return;
   state = 'result';
   const res = run.result;
-  const firstDaily = daily && res.win && save.dailyWin !== S.dayKey();
-  const got = reward(L, res, save.up.income) * (firstDaily ? 2 : 1);
+  const firstDaily = daily && res.win && save.dailyWin !== dailyKey;
+  const rL = levelOverride !== null && !daily ? { ...L, base: Math.min(L.base, 40 + save.lvl * 10) } : L; // ?level не печатает деньги
+  const got = reward(rL, res, save.up.income) * (firstDaily ? 2 : 1);
   const coinsBefore = save.coins;
   save.coins += got;
   save.played++;
   save.best = Math.max(save.best, peak);
   let stars = 0, oldStars = 0;
-  if (res.win && daily) { save.dailyWin = S.dayKey(); stars = S.starsFor(res.mult); }
+  if (res.win && daily) { if (save.dailyWin !== S.dayKey()) save.dailyWin = dailyKey; stars = S.starsFor(res.mult); }
   else if (res.win) {
     stars = S.starsFor(res.mult);
     oldStars = Number(save.stars[L.n]) || 0;
-    save.stars[L.n] = Math.max(oldStars, stars);
+    if (levelOverride === null) save.stars[L.n] = Math.max(oldStars, stars);
     if (levelOverride === null) save.lvl++; // уровень из ссылки не двигает настоящий прогресс
   }
   S.store(save);
   if (res.win) {
-    if (stars === 3) unlock('stars3');
+    if (stars === 3 && !daily && levelOverride === null) unlock('stars3');
     if (!run.lostAny) unlock('noloss');
     if (L.boss) unlock('boss');
     if (daily) unlock('daily');
@@ -610,7 +615,7 @@ function showResult() {
   // за достижения на итогах тоже начислено — показываем общую сумму, иначе счётчик «прыгает»
   const gained = save.coins - coinsBefore;
   const achBonus = gained - got;
-  if (levelOverride !== null) levelOverride = null;
+  if (levelOverride !== null && res.win && !daily) levelOverride = null;
   lastShare = { win: res.win, mult: res.mult, stars, peak, n: L.n, daily, boss: L.boss };
   $('resShare').classList.toggle('hidden', !res.win);
   $('hud').classList.add('result-mode');
@@ -643,6 +648,7 @@ function showResult() {
   if (res.win) for (let i = 1; i <= stars; i++) setTimeout(() => sfx('step', i * 2), 250 + i * 220);
   // монеты летят в счётчик
   if (gained > 0) setTimeout(() => flyCoins(Math.min(12, 4 + Math.round(gained / 60)), coinsBefore, gained), 400);
+  setTimeout(() => { if (state === 'result') level(curLvl()); }, 900);
   if (AUTO) setTimeout(() => { if (state === 'result') { showMenu(); setTimeout(startLevel, 300); } }, 1200);
 }
 
@@ -716,19 +722,21 @@ async function shareCard() {
 // —— ввод ——
 function bindInput() {
   const st = $('stage');
+  document.addEventListener('pointerdown', () => initAudio(), { capture: true });
   st.addEventListener('pointerdown', (e) => {
     if (state !== 'play') return;
     if (e.target.closest('button')) return;
     initAudio();
+    if (drag) return; // второй палец не перехватывает управление
     drag = { x: e.clientX, cx: targetX, id: e.pointerId };
   });
   window.addEventListener('pointermove', (e) => {
-    if (!drag || state !== 'play') return;
+    if (!drag || state !== 'play' || e.pointerId !== drag.id) return;
     const w = Math.min(window.innerWidth, 640);
     targetX = clampX(drag.cx + ((e.clientX - drag.x) / w) * 13);
     if (dragHintOn && Math.abs(e.clientX - drag.x) > 25) { dragHintOn = false; $('dragHint').classList.add('hidden'); }
   });
-  const up = () => { drag = null; };
+  const up = (e) => { if (!drag || e.pointerId === drag.id) drag = null; };
   window.addEventListener('pointerup', up);
   window.addEventListener('pointercancel', up);
   window.addEventListener('keydown', (e) => {

@@ -109,6 +109,24 @@ async function page(query, { pre = '', w = 390, h = 844, until = '!!window.__tab
   ok(!p.errors.length, 'ошибок нет ' + p.errors.slice(0, 2).join(' | '));
   p.b.close();
 }
+// з) два пальца: ведёт первый, второй не перехватывает
+{
+  const p = await page('lang=ru&level=2');
+  await p.b.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await sleep(500);
+  const T = (type, pts) => p.b.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+  await T('touchStart', [{ x: 195, y: 600, id: 1 }]);
+  await T('touchStart', [{ x: 195, y: 600, id: 1 }, { x: 100, y: 500, id: 2 }]);
+  await T('touchMove', [{ x: 195, y: 600, id: 1 }, { x: 380, y: 500, id: 2 }]);
+  await sleep(300);
+  const afterB = await p.ev('__tabun.run.cx');
+  await T('touchMove', [{ x: 330, y: 600, id: 1 }, { x: 380, y: 500, id: 2 }]);
+  await sleep(500);
+  const afterA = await p.ev('__tabun.run.cx');
+  await T('touchEnd', []);
+  ok(Math.abs(afterB) < 0.6 && afterA > 2, 'два пальца: второй не уводит табун (' + afterB.toFixed(2) + '), первый ведёт (' + afterA.toFixed(2) + ')');
+  p.b.close();
+}
 srv.close();
 console.log(fails ? `\n${fails} проблем` : '\nвсё чисто');
 process.exit(fails ? 1 : 0);

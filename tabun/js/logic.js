@@ -85,8 +85,11 @@ function genLevel(n, seedN = n, daily = false) {
   let best = null;
   for (let v = 0; v < 12; v++) {
     const L = genLevelOnce(n, v, seedN, daily);
-    if (L.autoGot >= 12 + Math.min(n, 30)) return L; // порог не растёт после 30-го — иначе высокие уровни перебирают все варианты впустую
-    if (!best || L.autoGot > best.autoGot) best = L;
+    // порог не растёт после 30-го — иначе высокие уровни перебирают все варианты впустую;
+    // и «небрежный» игрок должен доносить табун до финала, иначе уровень — непроходимый выброс
+    if (L.autoGot >= 12 + Math.min(n, 30) && L.sloppyGot > 0) return L;
+    const score = (x) => (x.sloppyGot > 0 ? 1e6 : 0) + x.autoGot;
+    if (!best || score(L) > score(best)) best = L;
   }
   return best;
 }
@@ -201,6 +204,7 @@ function genLevelOnce(n, variant, seedN = n, daily = false) {
   // выбросы сложности: «небрежный» игрок (каждый пятый выбор ворот неверный, рука запаздывает) должен иметь шанс
   const sl = [0, 1, 2].map((k) => simulate(L, { start, leader: 0, seed: k, ignoreWhip: true }, sloppyPolicy(n * 100 + k))).sort((a, b) => a - b)[1];
   if (sl > 0) L.rival = Math.max(3, Math.min(L.rival, Math.round(sl * (boss ? 1.05 : 0.95))));
+  else L.rival = Math.max(3, Math.round(L.rival * 0.6)); // небрежный не доехал — соперник заметно слабее
   L.sloppyGot = sl;
   L.autoGot = got;
   L.variant = variant;
@@ -632,12 +636,13 @@ export class Run {
         this.trimFront(rv.bodies, Math.min(rv.count, this.cap), -1, 'clash-r');
         this.emit('clash-tick', { n, d: rFront });
       }
-      if (this.count <= 0) return this.lose();
       if (rv.count <= 0) {
         this.state = 'ladder';
         this.emit('clash-won', { left: this.count });
         this.sync();
+        return;
       }
+      if (this.count <= 0) return this.lose();
     }
   }
 

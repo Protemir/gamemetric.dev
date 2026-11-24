@@ -611,6 +611,7 @@ export class World {
   clearLevel() {
     const G = this.levelGroup;
     G.traverse((o) => {
+      if (o.isInstancedMesh) o.dispose(); // буферы матриц и цветов экземпляров — иначе утечка видеопамяти
       if (o.geometry && !o.userData.shared) o.geometry.dispose();
       if (o.material && !o.userData.sharedMat) {
         const ms = Array.isArray(o.material) ? o.material : [o.material];
@@ -725,7 +726,7 @@ export class World {
 
   // свой аул у старта: юрта за каждые три улучшения
   setAul(n) {
-    if (this.aul) { this.levelGroup.remove(this.aul); }
+    if (this.aul) { this.levelGroup.remove(this.aul); this.aul.traverse((o) => { if (o.geometry && !o.userData.shared) o.geometry.dispose(); }); }
     const g = new THREE.Group();
     const spots = [[-11, 4], [-17, -2], [-13, -10], [-21, 7], [-23, -7], [-18, 15], [-28, 0], [-27, 12], [-31, -10], [-12, 16], [-35, 6], [-34, -18]];
     for (let i = 0; i < Math.min(n, spots.length); i++) {
@@ -1230,7 +1231,7 @@ export class World {
         m4.compose(v.set(b.x + (Math.random() - 0.5) * 0.3, 0.022, -b.d + 0.6), q.setFromEuler(e.set(0, (Math.random() - 0.5) * 0.4, 0)), s.set(1, 1, 1));
         this.prints.setMatrixAt(this.printN, m4);
         this.printN = (this.printN + 1) % 700;
-        this.prints.count = Math.max(this.prints.count, this.printN);
+        this.prints.count = Math.min(700, Math.max(this.prints.count, this.printN === 0 ? 700 : this.printN));
       }
       this.prints.instanceMatrix.needsUpdate = true;
     }

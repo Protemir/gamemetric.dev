@@ -343,3 +343,7 @@ html.shot #hud, html.shot #hint, html.shot #dragHint, html.shot .float, html.sho
 
 /* логотип — по ширине текста, а не на весь экран */
 #logo { width: fit-content; max-width: 100%; margin-left: auto; margin-right: auto; }
+
+/* тост достижения не закрывает подсказку о препятствии */
+@media (max-width: 560px) { #toast { top: calc(156px + var(--safe-t)); } }
+@media (max-height: 460px) { #toast { top: auto; bottom: calc(14px + var(--safe-b)); } }
