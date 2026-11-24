@@ -350,7 +350,9 @@ function placeTags() {
     const clash = run.state === 'clash';
     const p = world.project(clash ? -3.2 : run.cx * 0.9, 3.4, run.d + sh.b * (clash ? 0.2 : 0.6));
     herdTag.style.display = '';
-    herdTag.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
+    // счётчик не уходит за край экрана (кинокамера на байге, узкий телефон)
+    const hx = Math.max(56, Math.min(innerWidth - 56, p.x)), hy = Math.max(110, Math.min(innerHeight - 40, p.y));
+    herdTag.style.transform = `translate(${hx}px, ${hy}px) translate(-50%, -100%)`;
     if (herdTag._n !== run.count) { herdTag._n = run.count; herdTag.textContent = run.count; herdTag.style.fontSize = Math.round(24 + Math.min(18, Math.log2(Math.max(1, run.count)) * 1.8)) + 'px'; }
   } else herdTag.style.display = 'none';
   const rv = run.rival;
@@ -358,7 +360,8 @@ function placeTags() {
   const showR = rv.count > 0 && (run.state === 'clash' || rv.d - run.d < 90) && rp.vis;
   rivalTag.style.display = showR ? '' : 'none';
   if (showR) {
-    rivalTag.style.transform = `translate(${rp.x}px, ${rp.y}px) translate(-50%, -100%)`;
+    const rx = Math.max(56, Math.min(innerWidth - 56, rp.x)), ry = Math.max(110, Math.min(innerHeight - 40, rp.y));
+    rivalTag.style.transform = `translate(${rx}px, ${ry}px) translate(-50%, -100%)`;
     if (rivalTag._n !== rv.count) { rivalTag._n = rv.count; rivalTag.textContent = rv.count; }
   }
 }
@@ -389,7 +392,8 @@ function unlock(id) {
 }
 function pumpToast() {
   // на итогах не мешаем — покажем в меню
-  if (toastBusy || !toastQ.length || state === 'result') return;
+  // во время схватки, лестницы и итогов не мешаем — покажем в меню или в обычной скачке
+  if (toastBusy || !toastQ.length || state === 'result' || (state === 'play' && run && run.state !== 'run')) return;
   toastBusy = true;
   const a = toastQ.shift();
   const el = $('toast');

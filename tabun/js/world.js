@@ -237,6 +237,24 @@ export class World {
     this.wolfBite = assets.wolf.bite ? new HorsePool(assets.wolf.bite, wm, 40, this.scene) : null;
     this.boost = 0;
     {
+      // следы копыт: кольцевой буфер отпечатков на дороге
+      const pt = canvasTex(64, 64, (g, w) => {
+        // два отпечатка подковы: тёмная дуга и вдавленная середина
+        for (const [x, y] of [[20, 20], [44, 44]]) {
+          g.fillStyle = 'rgba(30,18,8,0.32)'; g.beginPath(); g.ellipse(x, y, 10, 12, 0, 0, Math.PI * 2); g.fill();
+          g.strokeStyle = 'rgba(25,14,6,0.85)'; g.lineWidth = 4; g.beginPath(); g.arc(x, y + 1, 8, Math.PI * 1.15, Math.PI * 1.85 + Math.PI, false); g.stroke();
+        }
+      }, { srgb: false });
+      this.prints = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.95, 0.95).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: pt, transparent: true, depthWrite: false, color: '#ffffff' }), 700);
+      this.prints.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.prints.frustumCulled = false;
+      this.prints.renderOrder = 1;
+      this.prints.count = 0;
+      this.printN = 0;
+      this.printAcc = 0;
+      this.scene.add(this.prints);
+    }
+    {
       const N = 90;
       this.streakSeed = Float32Array.from({ length: N * 3 }, () => Math.random());
       const g = new THREE.BufferGeometry();
@@ -571,6 +589,7 @@ export class World {
     this.dust.clear(); this.sparks.clear();
     this.rearT = -1;
     this.boost = 0;
+    if (this.prints) { this.prints.count = 0; this.printN = 0; }
     this.fireworks = [];
     this.camPos.set(0, 9, 14);
     this.camLook.set(0, 0, -12);
@@ -597,6 +616,17 @@ export class World {
     const tg2 = tuftGeo.clone().rotateY(Math.PI / 2);
     const merged = mergeTwo(tuftGeo, tg2);
     const tuftMat = new THREE.MeshBasicMaterial({ alphaMap: this.tuftTex, alphaTest: 0.35, side: THREE.DoubleSide, color: '#e6e0c8' });
+    this.windU = this.windU || { value: 0 };
+    const windU = this.windU;
+    tuftMat.onBeforeCompile = (sh) => {
+      sh.uniforms.uWind = windU;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uWind;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+  { float hgt = max(position.y, 0.0);
+    vec2 wp = vec2(instanceMatrix[3].x, instanceMatrix[3].z);
+    float w = sin(uWind * 1.6 + wp.x * 0.25 + wp.y * 0.18) * 0.6 + sin(uWind * 3.1 + wp.y * 0.5) * 0.25;
+    transformed.x += w * 0.28 * hgt; transformed.z += w * 0.12 * hgt; }`);
+    };
     const N = 1300;
     const gc = this.theme.snow ? new THREE.Color('#b9b090') : new THREE.Color(this.theme.grass);
     const tc = [gc.clone().multiplyScalar(1.2), gc.clone().lerp(new THREE.Color('#f0e2a0'), 0.45), gc.clone().lerp(new THREE.Color('#e8d890'), 0.25), gc.clone().multiplyScalar(0.85), gc.clone().lerp(new THREE.Color('#fff4cc'), 0.6)];
@@ -1091,6 +1121,28 @@ export class World {
     for (const [rk, obj] of this.rockObjs) if (!live.has(rk)) { this.levelGroup.remove(obj); this.rockObjs.delete(rk); }
     this.shadows.count = sh;
 
+    // следы и брызги
+    this.windU.value = t;
+    if (running && !menu && run.bodies.length && this.prints) {
+      const river = run.items.find((it) => it.type === 'river' && run.d > it.d0 - 3 && run.d < it.d1 + 3);
+      this.printAcc += dt * Math.min(60, 10 + run.bodies.length * 0.4);
+      while (this.printAcc > 1) {
+        this.printAcc--;
+        const b = run.bodies[Math.floor(Math.random() * run.bodies.length)];
+        if (river && b.d > river.d0 && b.d < river.d1) {
+          // брод: брызги вместо следов
+          const wc = this._wc || (this._wc = new THREE.Color('#dff2ff'));
+          for (let k = 0; k < 3; k++) this.dust.emit(b.x + (Math.random() - 0.5) * 0.6, 0.3, -b.d, (Math.random() - 0.5) * 2.4, 2.5 + Math.random() * 2.5, (Math.random() - 0.5) * 1.5, wc, 0.7, 0.35, 1.1, 9, 0.9);
+          continue;
+        }
+        if (Math.abs(b.x) > HALF - 0.2) continue;
+        m4.compose(v.set(b.x + (Math.random() - 0.5) * 0.3, 0.022, -b.d + 0.6), q.setFromEuler(e.set(0, (Math.random() - 0.5) * 0.4, 0)), s.set(1, 1, 1));
+        this.prints.setMatrixAt(this.printN, m4);
+        this.printN = (this.printN + 1) % 700;
+        this.prints.count = Math.max(this.prints.count, this.printN);
+      }
+      this.prints.instanceMatrix.needsUpdate = true;
+    }
     // пыль из-под копыт
     if (running && !menu && run.bodies.length) {
       this.emitAcc += dt * Math.min(70, 12 + run.bodies.length * 0.6);
@@ -1254,12 +1306,20 @@ export class World {
     } else if (run.state === 'ladder' || run.state === 'win') {
       dist = 15; hgt = 11; cd = run.d + 2;
     }
+    const cine = run.state === 'clash' && !menu && !this.camOverride;
     if (menu) { dist = 13; hgt = 6.5; cx = 3.5; cd = run.d - 2; }
     if (this.camOverride) { dist = this.camOverride.dist; hgt = this.camOverride.hgt; }
     // поле зрения: ширина трассы должна влезать
     const aspect = this.camera.aspect || 1;
     const look = new THREE.Vector3(cx * 0.8, 0.6, -(cd + 10 + sh.b * 0.4));
     const pos = new THREE.Vector3(cx, hgt, -(cd - dist));
+    if (cine) {
+      const rsh = herdShape(Math.max(1, Math.min(run.rival.count, run.cap)));
+      const off = 11 + (sh.b + rsh.b) * 0.45;
+      const portrait = aspect < 0.8;
+      look.set(0, 1.2, -(cd + 4));
+      pos.set(off * (portrait ? 0.45 : 0.85), 5 + off * 0.25, -(cd - off * (portrait ? 0.95 : 0.6)));
+    }
     if (menu) {
       // телефон стоя: вожак ближе к центру, правую колонку кнопок не задевает
       if (aspect < 0.8) { look.set(-0.4, 1.25, -(cd + 1.5)); pos.set(2.4, 2.7, -(cd + 11.5)); }
