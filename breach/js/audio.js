@@ -330,6 +330,45 @@ export function sfx(name, pos = null, opt = {}) {
       tone(d, t, 0.15, 'square', 220, 180, 0.07);
       break;
     }
+    case 'beep': {
+      // the planted bomb: a short electronic beep, heard across the house
+      const P = place(pos, 45);
+      if (!P) return;
+      tone(out(P), t, 0.07, 'sine', opt.high ? 2350 : 1950, opt.high ? 2350 : 1950, 0.32);
+      break;
+    }
+    case 'plantKey': {
+      // keys tapped on the bomb's pad while planting
+      const P = place(pos, 22);
+      if (!P) return;
+      const f = [1180, 1320, 990, 1480][Math.floor(Math.random() * 4)];
+      tone(out(P), t, 0.06, 'square', f, f, 0.09);
+      break;
+    }
+    case 'defusing': {
+      // wire cutters and fiddling
+      const P = place(pos, 22);
+      if (!P) return;
+      const d = out(P);
+      noise(d, t, 0.03, 'bandpass', 4200, 4, 0.3);
+      noise(d, t + 0.09, 0.025, 'bandpass', 3000, 4, 0.22);
+      break;
+    }
+    case 'planted': {
+      // everyone hears it: a two-note alarm
+      const d = out({ gain: 1, pan: 0 });
+      tone(d, t, 0.16, 'square', 880, 880, 0.08);
+      tone(d, t + 0.18, 0.16, 'square', 660, 660, 0.08);
+      tone(d, t + 0.36, 0.3, 'square', 880, 880, 0.08);
+      break;
+    }
+    case 'defused': {
+      const P = pos ? place(pos, 60) || { gain: 0.5, pan: 0 } : { gain: 1, pan: 0 };
+      const d = out(P);
+      tone(d, t, 0.12, 'sine', 1500, 1500, 0.2);
+      tone(d, t + 0.14, 0.4, 'sine', 900, 600, 0.2);
+      break;
+    }
     case 'shutter': {
       // a camera shutter: two dry clicks and a short whirr
       const d = out({ gain: 1, pan: 0 });

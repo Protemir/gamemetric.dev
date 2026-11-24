@@ -45,7 +45,7 @@ try {
   };
   one('quality', ['auto', '1', '0.75', '0.5']);
   one('team', ['A', 'B']);
-  one('mode', ['hostage', 'dm', 'gun', 'knife', 'zombie']);
+  one('mode', ['hostage', 'bomb', 'dm', 'gun', 'knife', 'zombie']);
   one('diff', ['easy', 'normal', 'hard']);
   one('skin', ['none', 'gold', 'red', 'arctic', 'neon']);
   one('xh', ['cross', 'dot', 'circle', 'tee']);

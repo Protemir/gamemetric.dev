@@ -4,6 +4,7 @@ import { WEAPONS, GEAR } from './weapons.js';
 import { t, lang } from './i18n.js';
 import { levelOf, rankName, medalsOf, xpOf, award } from './rank.js';
 import { sfx } from './audio.js';
+import { SITES, PLANT_T, DEFUSE_T } from './bomb.js';
 
 const $ = (id) => document.getElementById(id);
 const S = 3; // radar pixels per metre
@@ -342,6 +343,16 @@ export class Hud {
 
   // ---------- per frame ----------
   update(game, now, settings, fps) {
+    {
+      const b = game.bomb, bar = $('bomb-bar');
+      const on = !!b && b.who === game.player && b.prog > 0 && game.player.alive;
+      if (bar.hidden === on) bar.hidden = !on;
+      if (on) {
+        const lbl = t(b.planted ? 'defusing' : 'planting');
+        if (bar.firstChild.textContent !== lbl) bar.firstChild.textContent = lbl;
+        bar.querySelector('s').style.width = `${Math.min(100, (b.prog / (b.planted ? DEFUSE_T : PLANT_T)) * 100).toFixed(1)}%`;
+      }
+    }
     if (this.kcOn && (game.player.alive || game.player.camSkip || game.player.cardSkip || game.specTarget || game.over)) this.hideKillCard();
     if (this.kcOn) {
       const p = game.player, cd = game.mode === 'dm' && p.respawnAt ? `${t('respawn')} ${Math.max(0, Math.ceil(p.respawnAt - game.time))}` : '';
@@ -430,14 +441,18 @@ export class Hud {
       $('sc-a').textContent = game.score.A;
       $('sc-b').textContent = game.score.B;
       const left = Math.max(0, game.phaseEnd - game.time);
-      $('timer').textContent = game.phase === 'end' ? '—' : fmt(left);
+      const planted = game.bomb?.planted && game.phase === 'live';
+      $('timer').textContent = planted ? '💣' : game.phase === 'end' ? '—' : fmt(left);
       $('timer').classList.toggle('freeze', game.phase === 'freeze');
-      $('timer').classList.toggle('low', game.phase === 'live' && left < 15);
+      $('timer').classList.toggle('low', planted || (game.phase === 'live' && left < 15));
     }
     const dots = (team) => game.soldiers.filter((s) => s.team === team).map((s) => `<i class="${s.alive ? '' : 'dead'}${s.isPlayer ? ' me' : ''}"></i>`).join('');
     $('alive-a').innerHTML = dots('A');
     $('alive-b').innerHTML = dots('B');
-    $('hostages').innerHTML = game.hostages.map((h) => `<i class="h-${h.state}"></i>`).join('');
+    const bo = game.bomb;
+    const showBomb = bo && (p.team === 'A' || !['carried', 'dropped'].includes(bo.state));
+    const hh = bo ? (showBomb ? `<b class="bomb-st ${bo.state}${bo.carrier === p ? ' mine' : ''}">💣</b>` : '') : game.hostages.map((h) => `<i class="h-${h.state}"></i>`).join('');
+    if (this.hostHtml !== hh) $('hostages').innerHTML = this.hostHtml = hh;
     // spectate / respawn
     const spec = $('spec');
     // the freeze cam card stands in that spot while it is up
@@ -450,8 +465,13 @@ export class Hud {
     const nh = game.nearHostage();
     const pr = $('prompt');
     // a grenade with the pin out: nothing under the crosshair but the arc
+    const bm = game.bomb;
+    const bombHint = !!bm?.canUse(p);
     if (p.pinAt) pr.hidden = true;
-    else if (nh) {
+    else if (bombHint) {
+      pr.hidden = false;
+      pr.textContent = t((bm.planted ? 'defuseHint' : 'plantHint') + (document.body.classList.contains('touch') ? 'T' : ''));
+    } else if (nh) {
       pr.hidden = false;
       pr.textContent = nh.leader === p ? t('pressEstop') : nh.state === 'idle' ? t('pressE') : '';
       if (!pr.textContent) pr.hidden = true;
@@ -517,6 +537,34 @@ export class Hud {
       g.fill();
     };
     for (const h of game.hostages) if (h.state === 'idle' || h.state === 'follow') dot(h.x, h.z, '#ffd23f', 3);
+    const bomb = game.bomb;
+    if (bomb) {
+      g.font = '900 15px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      for (const st of SITES) {
+        const px = (st.cx - v.x) * S, pz = (st.cz - v.z) * S;
+        g.strokeStyle = 'rgba(255, 150, 40, 0.55)';
+        g.lineWidth = 1.5;
+        g.strokeRect((st.x0 - v.x) * S, (st.z0 - v.z) * S, (st.x1 + 1 - st.x0) * S, (st.z1 + 1 - st.z0) * S);
+        g.save();
+        g.translate(px, pz);
+        g.rotate(-v.yaw);
+        g.fillStyle = 'rgba(255, 170, 60, 0.95)';
+        g.fillText(st.name, 0, 0);
+        g.restore();
+      }
+      const blink = Math.floor(game.time * 4) % 2 === 0;
+      if (bomb.planted) dot(bomb.x, bomb.z, blink ? '#ff3030' : '#ffb020', 4);
+      else if (bomb.state === 'dropped' && me.team === 'A') dot(bomb.x, bomb.z, '#ffb020', 3.6);
+      else if (bomb.state === 'carried' && me.team === 'A' && bomb.carrier && bomb.carrier !== me && bomb.carrier.alive) {
+        g.strokeStyle = '#ffb020';
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc((bomb.carrier.x - v.x) * S, (bomb.carrier.z - v.z) * S, 6, 0, Math.PI * 2);
+        g.stroke();
+      }
+    }
     for (const s of game.soldiers) {
       if (!s.alive || s === game.specTarget || (s.isPlayer && !game.specTarget)) continue;
       if (s.team === me.team) dot(s.x, s.z, s.team === 'A' ? '#5aa9ff' : '#ff6a5a');

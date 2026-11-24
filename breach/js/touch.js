@@ -77,6 +77,11 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
           input.jumpTap = true;
         }
         else if (a === 'crouch') input.touch.crouch = !input.touch.crouch;
+        else if (a === 'use') {
+          // held: plants or defuses the bomb; a tap still picks up and leads
+          input.touch.use = true;
+          actions.tap(a);
+        }
         else if (a === 'score') actions.board(true);
         else actions.tap(a);
       }
@@ -112,6 +117,7 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
         o.el.classList.remove('on');
         if (o.a === 'fire') input.fire = false;
         else if (o.a === 'jump') input.touch.jump = false;
+        else if (o.a === 'use') input.touch.use = false;
         else if (o.a === 'score') actions.board(false);
       }
     }
@@ -141,6 +147,7 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
         }
         input.fire = false;
         input.touch.jump = false;
+        input.touch.use = false;
       } else if (!on) {
         for (const o of owners.values()) {
           if (o.kind !== 'btn') continue;
@@ -150,6 +157,7 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
         input.fire = false;
         input.stick.x = input.stick.y = 0;
         input.touch.jump = false;
+        input.touch.use = false;
         input.touch.crouch = false;
         stick.hidden = true;
         stickId = null;
@@ -165,7 +173,7 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
       const p = g.player;
       btnBuy.hidden = !(p.alive && g.canBuy(p) && g.phase !== 'end');
       btnNade.hidden = !(p.alive && (p.he > 0 || p.flash > 0 || p.smoke > 0));
-      btnUse.classList.toggle('lit', !!(g.nearHostage() || g.nearDrop(p)));
+      btnUse.classList.toggle('lit', !!(g.nearHostage() || g.nearDrop(p) || g.bomb?.canUse(p)));
       btnAlt.hidden = !(p.alive && (p.kind === 'knife' || p.kind === 'sniper' || p.kind === 'scout'));
     },
     label() {

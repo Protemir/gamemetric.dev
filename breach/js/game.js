@@ -9,6 +9,7 @@ import { Rain } from './weather.js';
 import { Smokes } from './smoke.js';
 import { Fireplace } from './fireplace.js';
 import { PoolToys } from './pool.js';
+import { Bomb } from './bomb.js';
 import { portalHappy, track } from './portal.js';
 import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
@@ -338,6 +339,7 @@ export class Game {
     }
     }
     this.hostages = this.mode === 'hostage' ? this.map.hostageSpots.map(([x, z]) => new Hostage(this, x, z)) : [];
+    this.bomb = this.mode === 'bomb' && !opts.preview ? new Bomb(this) : null;
     if (this.mode !== 'hostage') this.map.rescueMesh.visible = false;
     this.nades = [];
     this.drops = [];
@@ -371,6 +373,7 @@ export class Game {
   // an online client gets the round from the host
   applyRound(m) {
     this.round = m.r;
+    this.bomb?.reset();
     this.fx.clear();
     this.smokes?.clear();
     this.clearDrops();
@@ -761,6 +764,10 @@ export class Game {
     } else {
       this.hud.center(`${t('round')} ${this.round}`, 2);
     }
+    if (this.bomb) {
+      this.bomb.reset();
+      if (this.role !== 'client') this.bomb.start();
+    }
     this.hud.onRound?.();
     if (!this.preview) sfx('start');
     this.nh?.onRound(first);
@@ -859,7 +866,7 @@ export class Game {
       this.phase = 'live';
       this.liveAt = this.time;
       this.phaseEnd = this.time + ROUND;
-      this.hud.center(t(this.player.team === 'A' ? 'goA' : 'goB'), 2);
+      this.hud.center(t((this.bomb ? 'goBomb' : 'go') + (this.player.team === 'A' ? 'A' : 'B')), 2);
       sfx('start');
     } else if (this.phase === 'live') {
       const aliveA = this.soldiers.some((s) => s.alive && s.team === 'A');
@@ -869,9 +876,10 @@ export class Game {
         if (this.hostages.every((h) => h.state === 'rescued')) this.endRound('A', 'rescued');
         else this.endRound('B', 'hostagesDead');
       }
-      else if (!aliveA) this.endRound('B', 'elim');
+      else if (!aliveA && !this.bomb?.planted) this.endRound('B', 'elim');
       else if (!aliveB) this.endRound('A', 'elim');
-      else if (this.time >= this.phaseEnd) this.endRound('B', 'timeOut');
+      // with the bomb planted the clock no longer counts: it is defused or it goes off
+      else if (!this.bomb?.planted && this.time >= this.phaseEnd) this.endRound('B', 'timeOut');
     } else if (this.phase === 'end' && this.time >= this.phaseEnd) {
       if (this.matchWinner) this.finishMatch(this.matchWinner);
       else this.startRound();
@@ -2239,6 +2247,7 @@ export class Game {
     }
     this.time += dt;
     const p = this.player;
+    p.useHeld = p.alive && !!(input?.keys?.has?.('KeyE') || input?.touch?.use);
     const frozen = this.phase === 'freeze' || this.over;
     // player intent
     if (p.alive) {
@@ -2422,6 +2431,7 @@ export class Game {
     }
     if (this.role !== 'client') this.drown(dt);
     this.updateHostages(dt);
+    this.bomb?.update(dt);
     this.updateDrops();
     if (!this.over) this.chickens.update(dt);
     if (this.mode === 'dm' && this.time > (this.flockAt || 0)) {
@@ -2476,6 +2486,7 @@ export class Game {
         sfx('click');
       }
     } else if (a === 'use') {
+      if (this.bomb?.canUse(p)) return;
       // a gun on the floor nearer than any hostage: swap for it
       const d = this.nearDrop(p);
       const h = this.nearHostage();
@@ -2978,6 +2989,7 @@ export class Game {
       }
     }
     this.rain?.dispose();
+    this.bomb?.dispose();
     this.chickens?.dispose();
     this.fx?.dispose();
     this.envRT?.dispose();

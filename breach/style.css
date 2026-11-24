@@ -455,3 +455,15 @@ body.freezecam #hud::before { content: ''; position: absolute; inset: 0; pointer
 @keyframes kc-in { from { opacity: 0; transform: translate(-50%, 18px) scale(0.92); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
 @media (max-height: 520px) { #killcard { bottom: 92px; min-width: 200px; padding: 5px 14px 5px; gap: 1px; } #killcard small:first-child, #killcard:not(.cd) .kc-skip { display: none; } #killcard .kc-name { font-size: 18px; } #killcard .kc-gun { font-size: 12px; } #killcard .kc-hp { height: 13px; margin-top: 2px; } #killcard .kc-hp em { line-height: 13px; } }
 #killcard.cd .kc-skip { color: #f2b13a; font-size: 12px; letter-spacing: 0.04em; }
+
+/* bomb mode: the bomb in the top bar, and the planting / defusing bar */
+.bomb-st { font-size: 15px; line-height: 1; filter: grayscale(0.4); opacity: 0.8; }
+.bomb-st.mine { filter: none; opacity: 1; text-shadow: 0 0 8px rgba(255, 170, 40, 0.9); }
+.bomb-st.planted { filter: none; opacity: 1; animation: bomb-blink 0.5s steps(2) infinite; }
+.bomb-st.defused { filter: hue-rotate(90deg); opacity: 1; }
+.bomb-st.exploded { opacity: 0.3; }
+@keyframes bomb-blink { 50% { opacity: 0.35; } }
+#bomb-bar { position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); width: 230px; text-align: center; pointer-events: none; zoom: var(--ui); }
+#bomb-bar span { display: block; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #ffd27a; text-shadow: 0 1px 3px #000; margin-bottom: 4px; }
+#bomb-bar i { display: block; height: 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.25); overflow: hidden; }
+#bomb-bar s { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #f2b13a, #ff7a2a); }

@@ -96,6 +96,14 @@ export class NetGame {
         h.z += (h.tz - h.z) * 0.25;
         h.yaw = lerpAngle(h.yaw, h.ty, 0.25);
       }
+      if (g.bomb) {
+        const on = !!g.player.useHeld && g.player.alive;
+        if (on !== this.useSent || (on && T >= (this.useAt || 0))) {
+          this.useSent = on;
+          this.useAt = T + 0.5;
+          this.net.toHost({ k: 'hold', on });
+        }
+      }
       if (T >= this.sendAt) {
         this.sendAt = T + 0.033;
         const p = g.player;
@@ -124,6 +132,7 @@ export class NetGame {
       H: g.hostages.map((h) => [r2(h.x), r2(h.z), r2(h.yaw), HSTATE.indexOf(h.state), h.leader ? h.leader.id : -1]),
       sp: spotted,
       rs: g.rescued || 0,
+      bo: g.bomb ? g.bomb.net() : undefined,
     };
   }
 
@@ -206,6 +215,9 @@ export class NetGame {
         this.net.send(from, { k: 'L', r, item: m.item, L: loadoutOf(s) });
         break;
       }
+      case 'hold':
+        s.useHeld = !!m.on && s.alive;
+        break;
       case 'snd':
         this.net.broadcast({ k: 'snd', id: s.id, n: m.n }, true, from);
         if (m.n === 'reload') sfx('reload', [s.x, 1.2, s.z], { dur: 2 });
@@ -334,6 +346,7 @@ export class NetGame {
           if (m.n <= (this.lastSnap || 0)) break;
           this.lastSnap = m.n;
         }
+        if (m.bo && g.bomb) g.bomb.applyNet(m.bo);
         this.lastSnapT = now();
         this.quietShown = false;
         const prevPhase = g.phase;
@@ -344,7 +357,7 @@ export class NetGame {
         g.score.B = m.sc[1];
         if (m.dk) g.dmKills = { A: m.dk[0], B: m.dk[1] };
         g.rescued = m.rs;
-        if (prevPhase === 'freeze' && g.phase === 'live') g.hud.center(t(me.team === 'A' ? 'goA' : 'goB'), 2);
+        if (prevPhase === 'freeze' && g.phase === 'live') g.hud.center(t((g.bomb ? 'goBomb' : 'go') + (me.team === 'A' ? 'A' : 'B')), 2);
         const T = now();
         m.S.forEach((a, i) => {
           const s = g.soldiers[i];

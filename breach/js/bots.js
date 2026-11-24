@@ -45,6 +45,7 @@ export class Brain {
     this.hurtBy = null;
     this.hurtAt = -9;
     this.glanceAt = 0;
+    this.spot = this.guardPt = this.bombKey = null;
     this.nadeAt = this.g.time + 8 + Math.random() * 20;
     this.waitUntil = 0;
   }
@@ -111,7 +112,11 @@ export class Brain {
       this.goal = { type: 'hunt' };
       return;
     }
-    if (s.team === 'A') {
+    if (s.team === 'A' && g.bomb) {
+      this.goal = { type: 'bomb' };
+      this.spot = null;
+      this.waitUntil = (g.phase === 'freeze' ? g.liveAt : g.time) + Math.random() * 2.5;
+    } else if (s.team === 'A') {
       const route = map.routes[Math.floor(Math.random() * map.routes.length)];
       this.goal = { type: 'route', pts: route.slice(), i: 0 };
       // some wait a moment so they do not all arrive in a line
@@ -216,6 +221,7 @@ export class Brain {
   // ---------- main loop ----------
   update(dt) {
     const s = this.s, g = this.g, inp = s.in;
+    s.useHeld = false;
     inp.f = 0;
     inp.s = 0;
     inp.jump = false;
@@ -256,7 +262,8 @@ export class Brain {
     if (g.mode === 'hostage' && s.team === 'A' && s.smoke > 0 && this.entrySmoke !== g.round && g.phase === 'live' && this.path && g.time >= s.switchUntil && !g.map.isIndoor(s.x, s.z)) this.entrySmokeTry();
 
     // last known enemy position
-    if (this.lastKnown && g.time - this.lastKnown.t < (this.lastKnown.heard ? 4 : 6) && this.goal?.type !== 'escort') {
+    const bombJob = g.bomb && (g.bomb.carrier === s || (s.team === 'B' && g.bomb.planted));
+    if (this.lastKnown && !bombJob && g.time - this.lastKnown.t < (this.lastKnown.heard ? 4 : 6) && this.goal?.type !== 'escort') {
       const L = this.lastKnown;
       const d = Math.hypot(L.x - s.x, L.z - s.z);
       if (L.stay === undefined) L.stay = Math.random() < 0.75;
@@ -436,6 +443,7 @@ export class Brain {
       this.applyLook(dt, s.yaw, 0);
       return;
     }
+    if (g.bomb && this.bombGoal(dt)) return;
     if (G.type === 'hunt') {
       if (!this.path || g.time > this.repathAt || this.pi >= this.path.length) {
         const e = g.guessEnemy(s);
@@ -546,6 +554,82 @@ export class Brain {
       }
       return;
     }
+  }
+
+  // Bomb mode. Attackers: the carrier takes it to the site and plants, the nearest picks up a dropped one,
+  // the rest go with it and then guard the planted bomb. Guards: hold as usual until it is planted, then defuse.
+  bombGoal(dt) {
+    const s = this.s, g = this.g, b = g.bomb;
+    const go = (x, z, y = 0) => {
+      const key = x.toFixed(1) + ',' + z.toFixed(1);
+      if (this.bombKey !== key || g.time > this.repathAt || (!this.path && g.time > (this.noPathAt || 0))) {
+        this.bombKey = key;
+        this.setGoalPoint(x, z, y);
+        if (!this.path) this.noPathAt = g.time + 1.5;
+      }
+      this.follow(dt, false);
+    };
+    // standing on the spot: look out the way enemies would come, glancing about
+    const watch = (cx, cz) => {
+      if (g.time > this.glanceAt) {
+        this.glanceAt = g.time + 1.5 + Math.random() * 2.5;
+        this.glance = (Math.random() - 0.5) * 2.4;
+      }
+      this.applyLook(dt, yawTo(s.x - cx, s.z - cz) + (this.glance || 0), 0);
+    };
+    if (s.team === 'B') {
+      if (!b.planted) return false;
+      if (b.near(s, 1.1)) {
+        s.useHeld = true;
+        s.in.crouch = true;
+        this.applyLook(dt, yawTo(b.x - s.x, b.z - s.z), -0.9);
+      } else go(b.x, b.z, b.y);
+      return true;
+    }
+    if (b.state === 'dropped') {
+      let near = null, nd = 1e9;
+      for (const o of g.soldiers)
+        if (o.alive && o.brain && o.team === 'A') {
+          const d = Math.hypot(o.x - b.x, o.z - b.z);
+          if (d < nd) (nd = d), (near = o);
+        }
+      if (near === s) {
+        go(b.x, b.z, b.y);
+        return true;
+      }
+    }
+    if (b.state === 'carried' && b.carrier === s) {
+      this.spot ||= b.plantSpot();
+      if (Math.hypot(this.spot[0] - s.x, this.spot[1] - s.z) < 0.6) {
+        s.useHeld = true;
+        s.in.crouch = true;
+        watch(this.spot[0], this.spot[1] - 0.01);
+      } else go(this.spot[0], this.spot[1]);
+      return true;
+    }
+    if (b.planted) {
+      // guard it from a few metres away
+      if (!this.guardPt || this.guardSite !== b.site) {
+        this.guardSite = b.site;
+        this.guardPt = b.plantSpot(b.site);
+      }
+      if (Math.hypot(this.guardPt[0] - s.x, this.guardPt[1] - s.z) > 0.8) go(this.guardPt[0], this.guardPt[1]);
+      else watch(b.x, b.z);
+      return true;
+    }
+    if (b.state === 'carried' || b.state === 'dropped') {
+      // go with the bomb to the site and cover it
+      if (!this.spot || this.spotSite !== b.target) {
+        this.spotSite = b.target;
+        this.spot = b.plantSpot();
+      }
+      if (Math.hypot(this.spot[0] - s.x, this.spot[1] - s.z) > 1) go(this.spot[0], this.spot[1]);
+      else watch(b.x || this.spot[0], b.z || this.spot[1] - 0.01);
+      return true;
+    }
+    // defused or blown up: the round is over anyway
+    this.goal = { type: 'hunt' };
+    return false;
   }
 
   // walk the path; look where we go (or at lookYaw)
