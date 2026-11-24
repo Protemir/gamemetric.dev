@@ -96,7 +96,7 @@ function prepare() {
 }
 
 function startLevel() {
-  if (state === 'play' || state === 'loading') return;
+  if (state === 'play') return;
   initAudio();
   resultIn = 0;
   if (state !== 'menu' || !run) prepare();
