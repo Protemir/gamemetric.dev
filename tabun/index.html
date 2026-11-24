@@ -24,7 +24,7 @@
 </script>
 <link rel="preload" href="fonts/russo-one-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/rubik-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="models/horse.glb" as="fetch" crossorigin>
+<link rel="preload" href="models/warhorse.glb" as="fetch" crossorigin>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 <link rel="modulepreload" href="./vendor/three.module.js">
 <link rel="modulepreload" href="./vendor/three.core.js">
@@ -37,6 +37,7 @@
 
   <div id="labels"></div>
   <div id="flash"></div>
+  <div id="toast" class="hidden"></div>
 
   <!-- игра -->
   <div id="hud" class="hidden">
@@ -51,15 +52,22 @@
   <div id="menu" class="hidden">
     <div class="topbar">
       <button id="setBtn" class="iconbtn" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.6 5.1-1.7-.4a7 7 0 0 1-.6 1.5l1 1.5-1.8 1.8-1.5-1a7 7 0 0 1-1.5.6l-.4 1.7h-2.6l-.4-1.7a7 7 0 0 1-1.5-.6l-1.5 1-1.8-1.8 1-1.5a7 7 0 0 1-.6-1.5l-1.7-.4v-2.6l1.7-.4a7 7 0 0 1 .6-1.5l-1-1.5 1.8-1.8 1.5 1a7 7 0 0 1 1.5-.6l.4-1.7h2.6l.4 1.7a7 7 0 0 1 1.5.6l1.5-1 1.8 1.8-1 1.5c.3.5.5 1 .6 1.5l1.7.4z"/></svg></button>
+      <button id="achBtn" class="iconbtn" aria-label="Achievements"><svg viewBox="0 0 24 24"><path d="M7 3h10v3h3v2a5 5 0 0 1-4.6 5A5 5 0 0 1 13 15.9V18h3v3H8v-3h3v-2.1A5 5 0 0 1 8.6 13 5 5 0 0 1 4 8V6h3zm0 5V8H6a3 3 0 0 0 1 2.2zm10 0v2.2A3 3 0 0 0 18 8z"/></svg></button>
       <a id="allGames" href="/" class="pill"></a>
+      <div class="spacer"></div>
+      <div id="starTotal" class="pill stars disp"></div>
       <div class="coins" id="menuCoins"><span class="coin"></span><b>0</b></div>
     </div>
-    <div id="logo"><h1 class="disp" id="logoT"></h1><p id="logoS"></p></div>
-    <div id="menuBottom">
-      <div id="lvlRow"><span id="lvlName" class="disp"></span><span id="bossTag" class="hidden"></span><span id="starTotal" class="disp"></span></div>
-      <button id="playBtn" class="big disp"></button>
+    <div id="logo"><h1 class="disp" id="logoT"></h1><div class="orn" aria-hidden="true"></div><p id="logoS"></p></div>
+    <div id="rail">
+      <button id="dailyBtn" class="railbtn night"><svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/><circle cx="17.5" cy="5" r="1.2"/><circle cx="20.5" cy="9" r=".8"/></svg><span class="lbl"></span><b class="badge">×2</b></button>
+      <button id="coatsBtn" class="railbtn"><svg viewBox="0 0 24 24"><path d="M4 20c.6-4.4 3-7 6.6-7.6l3.6-4.2-1-2.2 2.2.6 1.6-1.6.4 2.6c2 1.2 3.2 3.4 3 6l-2 .4-1.4-2.4-3.6 3.4.8 5H12l-.8-3.4-3.4 1L7 20z"/></svg><span class="lbl"></span></button>
+    </div>
+    <div id="menuBottom" class="glass">
+      <div id="lvlRow"><div id="path"></div><span id="lvlName" class="hidden"></span><span id="bossTag" class="hidden"></span></div>
+      <button id="playBtn" class="big disp"><span class="pl"></span><small class="sub"></small></button>
+      <div class="upsHead"><span id="upsTitle"></span><span id="aulInfo"></span></div>
       <div id="ups"></div>
-      <div id="menuRow2"><button id="coatsBtn" class="pill"></button><button id="dailyBtn" class="pill"></button><span id="aulInfo"></span></div>
     </div>
   </div>
 
@@ -71,7 +79,7 @@
       <div id="resStars"></div>
       <div id="resMult" class="disp"></div>
       <div id="resCoins" class="disp"><span class="coin"></span><b>+0</b></div>
-      <div class="row"><button id="resMenu" class="pill"></button><button id="resNext" class="big disp"></button></div>
+      <div class="row"><button id="resMenu" class="pill"></button><button id="resNext" class="big disp"></button><button id="resShare" class="pill share hidden"><svg viewBox="0 0 24 24"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.8-3.4a3 3 0 0 0 0-1.6l6.8-3.4A3 3 0 1 0 15 7l-6.8 3.4a3 3 0 1 0 0 3.2L15 17a3 3 0 1 0 3-1z"/></svg><span></span></button></div>
     </div>
   </div>
 

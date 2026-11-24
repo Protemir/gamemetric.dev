@@ -6,3 +6,5 @@ wolf.glb  — "Wolf"    https://poly.pizza/m/P1gU3Qkr9r
 Звук / Sound: sounds/horse-neigh.mp3 — Joseph SARDIN / BigSoundBank, CC0 (см. sounds/SOURCES.txt)
 Шрифты / Fonts: Russo One, Rubik — SIL Open Font License
 three.js — MIT License, см. vendor/LICENSE
+warhorse.glb, warhorse-lo.glb — «Warhorse Lite» by Literock Studios (literock-studios.itch.io), бесплатная лицензия: можно использовать в играх, нельзя распространять файл отдельно. Упрощённая копия сделана нами.
+rider.glb — персонаж Mixamo (Adobe), лицензия Mixamo позволяет использовать в играх.

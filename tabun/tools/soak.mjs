@@ -94,6 +94,8 @@ const dailyRun = async () => {
   const lvl1 = await ev('__tabun.save.lvl');
   return { info, r, gain: c1 - c0, lvlSame: lvl0 === lvl1 };
 };
+// все достижения уже открыты — чтобы награда за них не путала счёт
+await ev('(__tabun.setSave({ ach: Object.fromEntries("herd100 herd300 herd999 combo5 golden lucky stars3 noloss boss daily lvl10 lvl25".split(" ").map((k) => [k, 1])) }), 1)');
 const d1 = await dailyRun();
 const inc = await ev('__tabun.save.up.income');
 const expect1 = d1.r.win ? (Math.round(d1.r.base * d1.r.mult * (1 + inc * 0.1)) + d1.r.coins) * 2 : -1;
@@ -106,6 +108,26 @@ const d2 = await dailyRun();
 ok(d2.r.win && d2.gain === expect1 / 2, 'повторная победа — без удвоения: ' + d2.gain);
 await ev('(document.getElementById("resNext").click(), 1)');
 await sleep(300);
+
+// 4д) достижения: сотня в забеге → тост и +100 ₸; витрина; «Поделиться» без ошибок
+await ev('(__tabun.setSave({ ach: {} }), __tabun.menu(), document.getElementById("modal").classList.add("hidden"), __tabun.start(), 1)');
+await sleep(400);
+const cA = await ev('__tabun.save.coins');
+await ev('(() => { const r = __tabun.run; r.count = 120; r.sync(); return 1; })()');
+await sleep(500);
+const ac = await ev('({ got: !!__tabun.save.ach.herd100, toast: !document.getElementById("toast").classList.contains("hidden"), coins: __tabun.save.coins })');
+ok(ac.got && ac.toast && ac.coins === cA + 100, 'сотня: достижение, тост и +100 ₸ ' + JSON.stringify(ac));
+await ev(fast);
+for (let k = 0; k < 40; k++) { await sleep(150); if (await ev('__tabun.state === "result"')) break; }
+ok(await ev('!document.getElementById("resShare").classList.contains("hidden") === !!__tabun.run.result.win'), 'кнопка «Поделиться» только при победе');
+await ev('(document.getElementById("resShare").click(), 1)');
+await sleep(800);
+await ev('(document.getElementById("resNext").click(), 1)');
+await sleep(300);
+await ev('(document.getElementById("achBtn").click(), 1)');
+await sleep(300);
+ok(await ev('document.querySelectorAll(".achs .ach").length === 12 && document.querySelectorAll(".achs .ach.got").length === Object.keys(__tabun.save.ach).length'), 'витрина: 12 строк, открытые отмечены');
+await ev('(document.getElementById("modal").classList.add("hidden"), 1)');
 
 // 5) много уровней подряд: память GPU не растёт
 const mem = [];

@@ -1,11 +1,11 @@
 // Сохранение «Табуна» в localStorage. Если хранилища нет — играем без сохранения.
 const KEY = 'tabun.save.v1';
-const DEF = { lvl: 1, coins: 0, up: { herd: 0, income: 0, leader: 0 }, sets: ['steppe'], set: 'steppe', sound: true, daily: { last: '', streak: 0 }, best: 0, played: 0, stars: {}, music: true };
+const DEF = { lvl: 1, coins: 0, up: { herd: 0, income: 0, leader: 0 }, sets: ['steppe'], set: 'steppe', sound: true, daily: { last: '', streak: 0 }, best: 0, played: 0, stars: {}, music: true, ach: {} };
 
 export function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (s && typeof s === 'object') return { ...DEF, ...s, up: { ...DEF.up, ...(s.up || {}) }, daily: { ...DEF.daily, ...(s.daily || {}) }, stars: s.stars && typeof s.stars === 'object' ? s.stars : {}, sets: Array.isArray(s.sets) && s.sets.length ? s.sets : ['steppe'] };
+    if (s && typeof s === 'object') return { ...DEF, ...s, up: { ...DEF.up, ...(s.up || {}) }, daily: { ...DEF.daily, ...(s.daily || {}) }, stars: s.stars && typeof s.stars === 'object' ? s.stars : {}, ach: s.ach && typeof s.ach === 'object' ? s.ach : {}, sets: Array.isArray(s.sets) && s.sets.length ? s.sets : ['steppe'] };
   } catch { /* испорчено или нет доступа */ }
   return structuredClone(DEF);
 }

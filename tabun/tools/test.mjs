@@ -36,12 +36,17 @@ for (const [W, H] of SIZES) {
     });
     await b.send('Runtime.enable');
     await b.send('Page.enable');
-    await b.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: W < 600 || H < 600 });
+    const mob = W < 600 || H < 600;
+    await b.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: mob ? 3 : 1, mobile: mob });
+    if (mob) {
+      await b.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+      await b.send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36', platform: 'Android' });
+    }
     await b.send('Page.navigate', { url: `${srv.url}/tabun/?lang=${lang}&menu` });
     for (let k = 0; k < 100; k++) { await sleep(200); try { if (await b.evaluate('!!window.__tabun?.run && __tabun.state==="menu"')) break; } catch { /* */ } }
     // монеты, чтобы кнопки были «богатые» и «бедные»
     await b.evaluate('(__tabun.setSave({coins: 12345, played: 3}), __tabun.menu(), 1)');
-    await sleep(600);
+    await sleep(1500); // дождаться въезда логотипа и панели (анимации 0,5–0,7 с)
     const check = async (label) => {
       const r = await b.evaluate('__tabun.layout()');
       const tag = `${W}x${H} ${lang} ${label}`;

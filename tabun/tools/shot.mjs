@@ -19,9 +19,14 @@ b.on((m) => {
 });
 await b.send('Runtime.enable');
 await b.send('Page.enable');
-const mobile = W < H && W < 600;
-await b.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile });
-if (mobile) await b.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+// режим телефона: короткая сторона меньше 600 — мобильный user-agent, тач, плотность экрана как у телефона (DPR=3 по умолчанию)
+const mobile = Math.min(W, H) < 600;
+const DPR = Number(process.env.DPR || (mobile ? 3 : 1));
+await b.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: DPR, mobile, screenOrientation: W > H ? { type: 'landscapePrimary', angle: 90 } : { type: 'portraitPrimary', angle: 0 } });
+if (mobile) {
+  await b.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await b.send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36', platform: 'Android' });
+}
 await b.send('Page.navigate', { url: `${srv.url}/tabun/?${query}` });
 for (let k = 0; k < 100; k++) {
   await sleep(200);
@@ -38,6 +43,14 @@ for (const s of steps) {
   if (cmd === 'wait') await sleep(Number(arg));
   else if (cmd === 'js') console.log('js>', JSON.stringify(await b.evaluate(arg)));
   else if (cmd === 'shot') await shoot(arg);
+  else if (cmd === 'tdrag') { // свайп пальцем
+    const [x0, x1, y, ms] = arg.split(',').map(Number);
+    await b.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y }] });
+    const n = Math.max(2, Math.round(ms / 16));
+    for (let i = 1; i <= n; i++) { await b.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + ((x1 - x0) * i) / n, y }] }); await sleep(16); }
+    await b.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
+  else if (cmd === 'tap') { const [x, y] = arg.split(',').map(Number); await b.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await sleep(60); await b.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); }
   else if (cmd === 'drag') {
     const [x0, x1, y, ms] = arg.split(',').map(Number);
     await b.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x0, y, button: 'left', clickCount: 1 });

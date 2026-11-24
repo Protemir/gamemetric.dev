@@ -1,7 +1,9 @@
 // «Табун» — сцена: небо, степь, трасса, ворота, препятствия, финал, пыль, камера.
 import * as THREE from 'three';
 import { HALF, LADDER, herdShape, opText, isGood, gateOpsAt } from './logic.js';
-import { HorsePool, horseMaterial, COATS, HERD_SETS, WILD_COATS, RIVAL_COATS } from './horses.js';
+import { makeSeatedRider } from './riderreal.js';
+import { LodPool, HorsePool, horseMaterial, COATS, HERD_SETS, WILD_COATS, RIVAL_COATS, HORSE_H } from './horses.js';
+const HORSE_TINT = 1; // масть × яркость текстуры: подбор под текстуру Warhorse
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -11,6 +13,7 @@ export const THEME = {
   day: { top: '#3f86d8', hor: '#d6e8f2', sun: '#fff2d6', sunI: 2.2, hemi: ['#d8ecff', '#7d6a3a', 1.15], fog: '#d6e4e6', grass: '#9fbf55', dirt: '#c9a874', mount: '#8aa3b8', sunDir: [0.35, 0.8, 0.45] },
   gold: { top: '#4f7fc4', hor: '#f3d29a', sun: '#ffd79a', sunI: 2.3, hemi: ['#ffe7c4', '#6b5330', 1.05], fog: '#ead2a6', grass: '#c9b550', dirt: '#d0a36a', mount: '#a49aa6', sunDir: [-0.6, 0.45, 0.35] },
   dusk: { top: '#3a5aa0', hor: '#f6c08e', sun: '#ffd2a6', sunI: 1.8, hemi: ['#ffe8d6', '#8a7a5c', 1.45], fog: '#ecc29c', grass: '#bdb25c', dirt: '#c99c6a', mount: '#8c84a4', sunDir: [0.55, 0.32, 0.6] },
+  storm: { top: '#3b4352', hor: '#a3abb5', sun: '#e2e8f0', sunI: 1.15, hemi: ['#ccd6e2', '#4d4c44', 1.4], fog: '#8f98a3', grass: '#93ac6a', dirt: '#a68f6e', mount: '#5d6878', sunDir: [0.3, 0.7, 0.3], storm: true },
   night: { top: '#081028', hor: '#2b3c6e', sun: '#c9d8ff', sunI: 1.5, hemi: ['#7e93d0', '#2a2a3a', 1.35], fog: '#1f2c55', grass: '#7f9a78', dirt: '#a8967e', mount: '#2c3862', sunDir: [-0.5, 0.2, -0.8], night: true },
   winter: { top: '#6f97c4', hor: '#e8eef4', sun: '#fff6ea', sunI: 2.0, hemi: ['#eef4ff', '#9aa6b0', 1.35], fog: '#e6edf2', grass: '#f4f6f8', dirt: '#cfc6b8', mount: '#a9bcd2', sunDir: [0.4, 0.5, 0.5], snow: true },
   morning: { top: '#5d93d6', hor: '#f4e2cf', sun: '#fff0dc', sunI: 2.1, hemi: ['#e4efff', '#6d6440', 1.1], fog: '#e6e2d8', grass: '#a3c062', dirt: '#c7a679', mount: '#93a7c2', sunDir: [-0.4, 0.55, -0.5] },
@@ -159,18 +162,49 @@ export class World {
       this.sky.add(this.moon);
       this.torchLight = new THREE.PointLight('#ffb060', 0, 40, 1.6);
       this.scene.add(this.torchLight);
+      // гроза: косой дождь отрезками и молния
+      const RN = 700;
+      this.rainPos = new Float32Array(RN * 6);
+      this.rainSeed = new Float32Array(RN * 3);
+      for (let i = 0; i < RN; i++) { this.rainSeed[i * 3] = Math.random(); this.rainSeed[i * 3 + 1] = Math.random(); this.rainSeed[i * 3 + 2] = Math.random(); }
+      const rg = new THREE.BufferGeometry();
+      rg.setAttribute('position', new THREE.BufferAttribute(this.rainPos, 3).setUsage(THREE.DynamicDrawUsage));
+      this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: '#d4deec', transparent: true, opacity: 0.55, fog: false, depthWrite: false }));
+      this.rain.frustumCulled = false;
+      this.rain.visible = false;
+      this.scene.add(this.rain);
+      this.bolt = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: '#f4f8ff', fog: false, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      this.bolt.frustumCulled = false;
+      this.bolt.visible = false;
+      this.scene.add(this.bolt);
+      this.boltT = 2.5;
+      this.flashK = 0;
     }
     this.buildMountains();
     this.buildGround();
     this.buildTextures();
 
-    const hm = horseMaterial();
+    // реалистичные кони — свой материал с текстурами; волки — прежний
+    const real = !!assets.horse.textured;
+    const hm = real ? assets.horse.material : horseMaterial();
+    const toy = real ? horseMaterial() : hm;
+    const TK = real ? HORSE_TINT : 1;
     this.horseMat = hm;
-    this.gallop = new HorsePool(assets.horse.gallop, hm, 420, this.scene);
-    this.idle = new HorsePool(assets.horse.idle, hm, 260, this.scene);
-    this.eat = new HorsePool(assets.horse.eat, hm, 120, this.scene);
-    this.wolfRun = new HorsePool(assets.wolf.run, hm, 90, this.scene);
-    this.wolfStalk = new HorsePool(assets.wolf.stalk, hm, 90, this.scene);
+    this.gallop = new HorsePool(assets.horse.gallop, hm, 420, this.scene, TK);
+    this.idle = new HorsePool(assets.horse.idle, hm, 260, this.scene, TK);
+    this.eat = new HorsePool(assets.horse.eat, hm, 120, this.scene, TK);
+    // дальние кони — упрощённая модель
+    this.loPools = [];
+    if (assets.horse.gallopLo) {
+      const gl = new HorsePool(assets.horse.gallopLo, hm, 700, this.scene, TK);
+      const il = new HorsePool(assets.horse.idleLo, hm, 500, this.scene, TK);
+      this.loPools.push(gl, il);
+      this.gallop = new LodPool(this.gallop, gl, this.camera);
+      this.idle = new LodPool(this.idle, il, this.camera);
+      this.eat = new LodPool(this.eat, il, this.camera);
+    }
+    this.wolfRun = new HorsePool(assets.wolf.run, toy, 90, this.scene);
+    this.wolfStalk = new HorsePool(assets.wolf.stalk, toy, 90, this.scene);
     this.wolfCols = ['#3e4144', '#4d4f4f', '#36332f', '#57534c'].map((c) => new THREE.Color(c));
     // красные круги под волками — видно издалека
     const ringTex = canvasTex(64, 64, (g, w) => {
@@ -186,7 +220,7 @@ export class World {
     this.leaderCol = new THREE.Color('#f4efe6');
     this.rider = this.makeRider();
     this.scene.add(this.rider);
-    this.rivalRider = this.makeRider({ chapan: '#2a2440', trim: '#9aa0b0', hat: '#3a3030', flag: '#1f1f2e' });
+    this.rivalRider = this.makeRider({ chapan: '#2a2440', trim: '#9aa0b0', hat: '#3a3030', flag: '#1f1f2e', hue: 232, sat: 0.38 });
     this.scene.add(this.rivalRider);
     this.rivalLeaderCol = new THREE.Color('#1c1614');
     this.goldCol = new THREE.Color('#ffc21a');
@@ -226,6 +260,9 @@ export class World {
     const L = (c) => new THREE.MeshLambertMaterial({ color: c });
     const chapan = L(o.chapan || '#b5302a'), trim = L(o.trim || '#e3b04b'), skin = L('#d9a882'), boot = L('#2a1a10'), hat = L(o.hat || '#f2ece0'), hatBrim = L('#1c1410'), pole = L('#5a3a20');
     const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
+    const realRider = this.assets.riderProto;
+    if (realRider) g.add(makeSeatedRider(realRider, 0.78 * HORSE_H * 1.3, o.hue ?? 2, o.sat ?? 0.78));
+    if (!realRider) {
     add(new THREE.CylinderGeometry(0.17, 0.24, 0.62, 10), chapan, 0, 0.31, 0);          // корпус
     add(new THREE.TorusGeometry(0.21, 0.035, 6, 16), trim, 0, 0.12, 0, Math.PI / 2);     // пояс
     add(new THREE.SphereGeometry(0.13, 12, 10), skin, 0, 0.75, -0.02);                   // голова
@@ -235,6 +272,7 @@ export class World {
       add(new THREE.BoxGeometry(0.11, 0.5, 0.13), chapan, sx * 0.22, -0.12, -0.05, 0.5, 0, sx * 0.25); // ноги
       add(new THREE.BoxGeometry(0.12, 0.12, 0.2), boot, sx * 0.3, -0.36, -0.2);
       add(new THREE.BoxGeometry(0.09, 0.42, 0.1), chapan, sx * 0.23, 0.36, -0.12, -0.9, 0, sx * 0.15); // руки вперёд
+    }
     }
     // знамя
     const flagTex = (() => {
@@ -282,6 +320,13 @@ export class World {
   }
 
   startIntro() { this.intro = 1.6; }
+
+  // точка седла в том кадре, который сейчас рисует пул (у реалистичного коня она запечена)
+  seat(pool, phase) {
+    const s = pool.frames.sock;
+    if (!s) return null;
+    return s[Math.floor((((phase % 1) + 1) % 1) * pool.frames.length) % pool.frames.length];
+  }
 
   coat(key) { return this.coatCache[key] || (this.coatCache[key] = new THREE.Color(COATS[key])); }
 
@@ -454,6 +499,10 @@ export class World {
       if (o) { G.add(o.root); this.items.push(o); }
     }
     this.buildFinish(run);
+    this.hemiBase = T.hemi[2];
+    this.rain.visible = !!T.storm;
+    this.boltT = 2 + Math.random() * 2;
+    this.flashK = 0;
     // ночь: звёзды, луна, факелы вдоль дороги
     const night = !!T.night;
     this.stars.visible = night;
@@ -820,6 +869,7 @@ export class World {
     const t = this.time;
     const m4 = this.m4, q = this.q, e = this.e, v = this.v3, s = this.s3;
     this.gallop.begin(); this.idle.begin(); this.eat.begin(); this.wolfRun.begin(); this.wolfStalk.begin();
+    for (const p of this.loPools) p.begin();
     let sh = 0;
     const shadow = (x, z, sc = 1) => {
       if (sh >= 900) return;
@@ -851,9 +901,13 @@ export class World {
       const R = this.rider;
       R.visible = true;
       const gal = running && !menu;
-      const bob = gal ? Math.abs(Math.sin((0.37 + t * gallopRate) * Math.PI * 2 / 1)) * 0.09 : 0;
-      R.position.set(lx, 1.55 + bob, -ld + 0.12);
-      R.rotation.set(gal ? -0.12 : 0, 0, 0);
+      const sk = this.seat(gal ? this.gallop : this.idle, gal ? 0.37 + t * gallopRate : 0.2 + t * 0.4);
+      if (sk) { R.position.set(lx + sk.x * 1.3, sk.y * 1.3, -ld + sk.z * 1.3); R.rotation.set(0, 0, 0); }
+      else {
+        const bob = gal ? Math.abs(Math.sin((0.37 + t * gallopRate) * Math.PI * 2 / 1)) * 0.09 : 0;
+        R.position.set(lx, 1.55 + bob, -ld + 0.12);
+        R.rotation.set(gal ? -0.12 : 0, 0, 0);
+      }
       // полотнище полощется
       const f = R.userData.flag, base = R.userData.flagBase, arr = f.geometry.attributes.position.array;
       for (let i = 0; i < arr.length; i += 3) { const x = base[i]; arr[i + 2] = base[i + 2] + Math.sin(t * (gal ? 11 : 4) - x * 5) * x * 0.22; }
@@ -907,8 +961,12 @@ export class World {
       shadow(0, -rd, sc);
       RR.visible = true;
       RR.scale.setScalar(sc / 1.3);
-      RR.position.set(0, 1.55 * (sc / 1.3) + (rivalRun ? Math.abs(Math.sin((0.11 + t * gallopRate) * Math.PI * 2)) * 0.09 : 0), -rd - 0.12);
-      RR.rotation.set(rivalRun ? 0.12 : 0, Math.PI, 0);
+      const rsk = this.seat(rivalRun ? this.gallop : this.idle, rivalRun ? 0.11 + t * gallopRate : 0.6 + t * 0.4);
+      if (rsk) { RR.position.set(-rsk.x * sc, rsk.y * sc, -rd - rsk.z * sc); RR.rotation.set(0, Math.PI, 0); }
+      else {
+        RR.position.set(0, 1.55 * (sc / 1.3) + (rivalRun ? Math.abs(Math.sin((0.11 + t * gallopRate) * Math.PI * 2)) * 0.09 : 0), -rd - 0.12);
+        RR.rotation.set(rivalRun ? 0.12 : 0, Math.PI, 0);
+      }
       const f = RR.userData.flag, base = RR.userData.flagBase, arr = f.geometry.attributes.position.array;
       for (let i = 0; i < arr.length; i += 3) { const x = base[i]; arr[i + 2] = base[i + 2] + Math.sin(t * (rivalRun ? 11 : 3) - x * 5) * x * 0.2; }
       f.geometry.attributes.position.needsUpdate = true;
@@ -937,6 +995,7 @@ export class World {
       if (g.y < 1) shadow(g.x, -g.d, fade);
     }
     this.gallop.end(); this.idle.end(); this.eat.end(); this.wolfRun.end(); this.wolfStalk.end();
+    for (const p of this.loPools) p.end();
     this.shadows.count = sh;
     this.shadows.instanceMatrix.needsUpdate = true;
 
@@ -1002,6 +1061,47 @@ export class World {
     }
     if (this.torches) this.torches.material.size = 1.5 + Math.sin(t * 17) * 0.12 + Math.sin(t * 7.3) * 0.1;
     if (this.torchLight.intensity > 0) this.torchLight.position.set(run.cx, 7, -(run.d + 2));
+    // гроза: дождь вокруг камеры, молнии с громом
+    if (this.theme?.storm) {
+      const P = this.rainPos, S = this.rainSeed, n = S.length / 3, cx = this.camera.position.x, cz = this.camera.position.z;
+      for (let i = 0; i < n; i++) {
+        const y = 24 - ((S[i * 3 + 1] * 24 + t * 26) % 24);
+        const x = cx + (S[i * 3] - 0.5) * 46 + y * 0.18, z = cz - 4 - S[i * 3 + 2] * 46;
+        P[i * 6] = x; P[i * 6 + 1] = y; P[i * 6 + 2] = z;
+        P[i * 6 + 3] = x - 0.18; P[i * 6 + 4] = y - 1.0; P[i * 6 + 5] = z;
+      }
+      this.rain.geometry.attributes.position.needsUpdate = true;
+      if (!menu) this.boltT -= dt;
+      if (this.boltT <= 0) {
+        this.boltT = 4 + Math.random() * 5;
+        // ломаная от тучи к земле далеко впереди
+        const pts = [];
+        let x = this.camLook.x + (Math.random() < 0.5 ? -1 : 1) * (18 + Math.random() * 40), y = 42, z = this.camLook.z - 70 - Math.random() * 50;
+        while (y > 0) {
+          const nx = x + (Math.random() - 0.5) * 9, ny = y - 3 - Math.random() * 5, nz = z + (Math.random() - 0.5) * 4;
+          pts.push(x, y, z, nx, Math.max(0, ny), nz);
+          if (Math.random() < 0.25) pts.push(nx, ny, nz, nx + (Math.random() - 0.5) * 12, ny - 6, nz);
+          x = nx; y = ny; z = nz;
+        }
+        this.bolt.geometry.dispose();
+        this.bolt.geometry = new THREE.BufferGeometry();
+        // отрезки → ленты шириной в метры (линии WebGL всегда в 1 пиксель и вдали пропадают)
+        const tri = [];
+        for (let i = 0; i < pts.length; i += 6) {
+          const ax = pts[i], ay = pts[i + 1], az = pts[i + 2], bx = pts[i + 3], by = pts[i + 4], bz = pts[i + 5];
+          const dx = bx - ax, dy = by - ay, L2 = Math.hypot(dx, dy) || 1, w = 0.35;
+          const ox = (-dy / L2) * w, oy = (dx / L2) * w;
+          tri.push(ax - ox, ay - oy, az, ax + ox, ay + oy, az, bx + ox, by + oy, bz, ax - ox, ay - oy, az, bx + ox, by + oy, bz, bx - ox, by - oy, bz);
+        }
+        this.bolt.geometry.setAttribute('position', new THREE.Float32BufferAttribute(tri, 3));
+        this.boltLife = 0.32;
+        this.flashK = 1;
+        this.onThunder?.();
+      }
+      if (this.boltLife > 0) { this.boltLife -= dt; this.bolt.visible = this.boltLife > 0 && (this.boltLife > 0.2 || this.boltLife < 0.1); } else this.bolt.visible = false;
+      if (this.flashK > 0) this.flashK = Math.max(0, this.flashK - dt * 3.5);
+      this.hemi.intensity = this.hemiBase * (1 + this.flashK * 2.2);
+    } else { this.bolt.visible = false; if (this.hemiBase) this.hemi.intensity = this.hemiBase; }
     // снегопад на зимних уровнях
     if (this.theme?.snow) {
       this.snowAcc = (this.snowAcc || 0) + dt * 120;
@@ -1107,7 +1207,11 @@ export class World {
     const aspect = this.camera.aspect || 1;
     const look = new THREE.Vector3(cx * 0.8, 0.6, -(cd + 10 + sh.b * 0.4));
     const pos = new THREE.Vector3(cx, hgt, -(cd - dist));
-    if (menu) { look.set(-1.5, 1.0, -(cd - 1)); pos.set(6.5, 3.4, -(cd + 10)); }
+    if (menu) {
+      // телефон стоя: вожак ближе к центру, правую колонку кнопок не задевает
+      if (aspect < 0.8) { look.set(-0.4, 1.25, -(cd + 1.5)); pos.set(2.4, 2.7, -(cd + 11.5)); }
+      else { look.set(-1.5, 1.0, -(cd - 1)); pos.set(6.5, 3.4, -(cd + 10)); }
+    }
     if (this.intro > 0) this.intro -= dt;
     const k = 1 - Math.exp(-dt * (menu ? 2 : this.intro > 0 ? 1.4 : 4));
     this.camPos.lerp(pos, k);

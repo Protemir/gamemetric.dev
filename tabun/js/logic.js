@@ -100,7 +100,7 @@ function genLevelOnce(n, variant, seedN = n, daily = false) {
   const L = {
     n, boss, length,
     speed0: 12.5, speed1: 15 + Math.min(n, 25) * 0.1,
-    theme: daily ? 'night' : boss ? 'dusk' : THEMES[(n - 1) % THEMES.length],
+    theme: daily ? 'night' : boss ? 'storm' : THEMES[(n - 1) % THEMES.length],
     daily,
     items: [], rival: 0, base: 40 + n * 10,
   };
@@ -301,6 +301,7 @@ export class Run {
     this.lossAcc += w;
     const k = Math.floor(this.lossAcc + 1e-6);
     this.lossAcc -= k;
+    this.lostAny = true;
     this.count = Math.max(0, this.count - k);
     this.bodies.splice(i, 1);
     this.ghost(b, kind, extra);
@@ -377,6 +378,7 @@ export class Run {
             this.sync(false, g.op === '+' || g.op === 'x' ? { x: side === 'left' ? -2.75 : side === 'right' ? 2.75 : this.cx, d: this.d } : null);
           }
           const shown = g.op === '?' ? g.real : g;
+          if (this.count < before) this.lostAny = true;
           this.emit('gate', { item: it, side, good: this.count >= before && shown.op !== '/', delta: this.count - before, op: shown, mystery: g.op === '?', x: side === 'left' ? -2.75 : side === 'right' ? 2.75 : 0, d: it.d });
           if (!it.full) {
             const val = (q) => (q.op === '$' ? before + 0.5 : applyOp(before, q));

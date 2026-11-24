@@ -203,6 +203,13 @@ export function sfx(name, arg = 0) {
     case 'whoosh':
       noise(t, 0.6, { vol: 0.14, freq: 600, type: 'bandpass', q: 0.8, slide: 3 });
       break;
+    case 'thunder':
+      noise(t, 0.25, { vol: 0.35, freq: 2200, type: 'bandpass', q: 0.6, slide: 0.3 });
+      noise(t + 0.05, 2.8, { vol: 0.5, freq: 160, q: 0.7, slide: 0.5 });
+      break;
+    case 'achieve':
+      [0, 7, 12, 16, 19, 24].forEach((s2, i) => tone(523 * Math.pow(2, s2 / 12), t + i * 0.07, 0.4, { type: 'triangle', vol: 0.1 }));
+      break;
     case 'clash':
       noise(t, 0.12, { vol: 0.3, freq: 600 + Math.random() * 400, q: 1 });
       tone(70 + Math.random() * 30, t, 0.1, { vol: 0.2, slide: 0.7 });

@@ -4,13 +4,17 @@ import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
 import { level, dailyLevel, Run, DT, autoTarget, HALF, reward, herdShape, opText } from './logic.js';
 import { World } from './world.js';
 import { loadHorse, loadWolf, HERD_SETS, COATS } from './horses.js';
+import { loadRealHorse } from './realhorse.js';
+import { loadRiderProto } from './riderreal.js';
 import { initAudio, sfx, hooves, setSound, setMusic, music } from './audio.js';
 import { t, detectLang, setLang, getLang } from './i18n.js';
 import * as S from './save.js';
+import { ACH, achById } from './ach.js';
 
 const $ = (id) => document.getElementById(id);
 const P = new URLSearchParams(location.search);
 const AUTO = P.has('auto');
+const TOY = P.has('toy'); // ?toy — прежние мультяшные кони
 const PORTAL = window.top !== window.self || P.has('portal');
 if (P.has('shot')) document.documentElement.classList.add('shot');
 detectLang();
@@ -46,12 +50,13 @@ async function boot() {
   setLoad(0.05);
   const loader = new GLTFLoader();
   let done = 0;
-  const tick = () => setLoad(0.1 + (++done / 5) * 0.85);
-  const [horse, rock, bush, wolf] = await Promise.all([
-    loadHorse('models/horse.glb').then((h) => { tick(); return h; }),
+  const tick = () => setLoad(0.1 + (++done / 6) * 0.85);
+  const [horse, rock, bush, wolf, riderProto] = await Promise.all([
+    (TOY ? loadHorse('models/horse.glb') : loadRealHorse('models/warhorse.glb', 'models/warhorse-lo.glb')).then((h) => { tick(); return h; }),
     loader.loadAsync('models/rock.glb').then((g) => { tick(); return g; }),
     loader.loadAsync('models/bush.glb').then((g) => { tick(); return g; }),
     loadWolf('models/wolf.glb').then((w) => { tick(); return w; }),
+    (TOY ? Promise.resolve(null) : loadRiderProto('models/rider.glb')).then((r) => { tick(); return r; }),
     document.fonts.load("400 40px 'Russo One'").then(tick, tick),
   ]);
   const norm = (scene, base) => {
@@ -64,13 +69,14 @@ async function boot() {
     return { g, size };
   };
   const r = norm(rock.scene, false), b = norm(bush.scene, true);
-  const assets = { horse, rock: r.g, rockScale: 1 / Math.max(r.size.x, r.size.y, r.size.z), bush: b.g, bushScale: 1.1 / b.size.y, wolf };
+  const assets = { horse, rock: r.g, rockScale: 1 / Math.max(r.size.x, r.size.y, r.size.z), bush: b.g, bushScale: 1.1 / b.size.y, wolf, riderProto };
   world = new World($('gl'), assets);
   // телефон может отобрать WebGL при сворачивании — не даём экрану остаться чёрным
   $('gl').addEventListener('webglcontextlost', (e) => { e.preventDefault(); pause(); });
   $('gl').addEventListener('webglcontextrestored', () => location.reload());
   world.setHerdSet(save.set);
   world.onBoom = () => sfx('boom');
+  world.onThunder = () => { flash('white'); setTimeout(() => sfx('thunder'), 350 + Math.random() * 700); buzz(30); };
   setSound(save.sound);
   setMusic(save.music !== false);
   onResize();
@@ -136,11 +142,17 @@ function showMenu() {
   $('starTotal').textContent = '★ ' + S.totalStars(save);
   $('bossTag').textContent = t('boss');
   $('bossTag').classList.toggle('hidden', !L.boss);
-  $('playBtn').textContent = t('play');
-  $('coatsBtn').textContent = '🐎 ' + t('coats');
+  $('playBtn').querySelector('.pl').textContent = t('play');
+  $('playBtn').querySelector('.sub').textContent = L.boss ? '⚡ ' + t('boss') + ' · ' + t('level') + ' ' + save.lvl : t('level') + ' ' + save.lvl;
+  $('upsTitle').textContent = t('upsTitle');
+  renderPath();
+  $('coatsBtn').querySelector('.lbl').textContent = t('coats');
   $('aulInfo').textContent = t('aul', { n: S.yurts(save) });
+  renderAchBadge();
+  setTimeout(pumpToast, 600);
   const doneToday = save.dailyWin === S.dayKey();
-  $('dailyBtn').textContent = '🌙 ' + t('daily_run') + (doneToday ? ' ✓' : ' ×2');
+  $('dailyBtn').querySelector('.lbl').textContent = t('daily_short');
+  $('dailyBtn').querySelector('.badge').textContent = doneToday ? '✓' : '×2';
   $('dailyBtn').classList.toggle('done', doneToday);
   renderUps();
   updateCoins();
@@ -156,11 +168,26 @@ function hideAll() {
   $('hint').classList.add('hidden');
 }
 
+// —— дорожка уровней над кнопкой «Скакать» ——
+function renderPath() {
+  const box = $('path');
+  const cur = save.lvl, from = Math.max(1, cur - 2);
+  let h = '';
+  for (let n = from; n < from + 5; n++) {
+    const st = n < cur ? 'done' : n === cur ? 'cur' : 'next';
+    const boss = n % 5 === 0;
+    const stars = Number(save.stars[n]) || 0;
+    h += (n > from ? '<s class="' + (n <= cur ? 'done' : '') + '"></s>' : '') +
+      '<span class="node ' + st + (boss ? ' boss' : '') + '"><b>' + (boss ? '⚡' : n) + '</b>' + (st === 'done' && stars ? '<em>' + '★'.repeat(stars) + '</em>' : '') + '</span>';
+  }
+  box.innerHTML = h;
+}
+
 // —— улучшения ——
 const UP_ICONS = {
-  herd: '<svg viewBox="0 0 40 40" class="ic"><circle cx="20" cy="20" r="19" fill="#ffd772"/><path d="M9 27c1-6 5-9 10-9l5-5 3 1-1 4c3 1 5 4 5 9h-3l-1-4-6 1-2 4h-3l1-5-4 1-1 3z" fill="#7a4a22"/></svg>',
-  income: '<svg viewBox="0 0 40 40" class="ic"><circle cx="20" cy="20" r="19" fill="#bfe8a6"/><circle cx="20" cy="21" r="10" fill="#ffcf3a" stroke="#d98a10" stroke-width="2"/><text x="20" y="26" font-size="13" text-anchor="middle" fill="#8a4a00" font-family="Russo One">₸</text><path d="M28 9l4 4-4 4" stroke="#2fa847" stroke-width="3" fill="none"/></svg>',
-  leader: '<svg viewBox="0 0 40 40" class="ic"><circle cx="20" cy="20" r="19" fill="#ffb3a8"/><path d="M11 15l4 4 5-7 5 7 4-4-2 12H13z" fill="#e0393e" stroke="#8f1418" stroke-width="1.5"/></svg>',
+  herd: '<svg viewBox="0 0 40 40" class="ic"><defs><linearGradient id="g-herd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd977"/><stop offset="1" stop-color="#e09a1c"/></linearGradient></defs><circle cx="20" cy="20" r="19" fill="url(#g-herd)"/><path d="M9 29c1-6 5-9 10-9l5-6 3 1-1 4c3 1 5 4 5 10h-3l-1-4-6 1-2 4h-3l1-5-4 1-1 3z" fill="#4a2a10"/></svg>',
+  income: '<svg viewBox="0 0 40 40" class="ic"><defs><linearGradient id="g-inc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fe38a"/><stop offset="1" stop-color="#3fa84f"/></linearGradient></defs><circle cx="20" cy="20" r="19" fill="url(#g-inc)"/><circle cx="20" cy="21" r="10" fill="#ffcf3a" stroke="#d98a10" stroke-width="2"/><text x="20" y="26" font-size="13" text-anchor="middle" fill="#8a4a00" font-family="Russo One">₸</text><path d="M28 9l4 4-4 4" stroke="#2fa847" stroke-width="3" fill="none"/></svg>',
+  leader: '<svg viewBox="0 0 40 40" class="ic"><defs><linearGradient id="g-lead" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9a8a"/><stop offset="1" stop-color="#d6342c"/></linearGradient></defs><circle cx="20" cy="20" r="19" fill="url(#g-lead)"/><path d="M11 15l4 4 5-7 5 7 4-4-2 12H13z" fill="#e0393e" stroke="#8f1418" stroke-width="1.5"/></svg>',
 };
 function renderUps() {
   const box = $('ups');
@@ -173,7 +200,8 @@ function renderUps() {
     el.className = 'up' + (!max && save.coins < cost ? ' poor' : '');
     const name = key === 'herd' ? t('upHerd') : key === 'income' ? t('upIncome') : t('upLeader');
     const desc = key === 'herd' ? t('upHerdD') : key === 'income' ? t('upIncomeD') : t('upLeaderD', { n: 3 });
-    el.innerHTML = `${UP_ICONS[key]}<div class="nm">${name}</div><div class="lv" title="${desc}">${t('lvl', { n: lvl + 1 })}</div><button class="buy">${max ? t('max') : `<span class="coin"></span>${cost}`}</button>`;
+    const pips = Array.from({ length: 5 }, (_, i) => `<i class="${i < lvl % 5 || (lvl && lvl % 5 === 0 && lvl >= 5 && false) ? 'on' : ''}"></i>`).join('');
+    el.innerHTML = `<div class="top">${UP_ICONS[key]}<div><div class="nm">${name}</div><div class="lv">${t('lvl', { n: lvl + 1 })}</div></div></div><div class="ds">${desc}</div><div class="pips">${pips}</div><button class="buy">${max ? t('max') : `<span class="coin"></span>${cost}`}</button>`;
     el.querySelector('.buy').addEventListener('click', () => {
       if (max || save.coins < cost) { sfx('bad'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); return; }
       save.coins -= cost;
@@ -342,6 +370,50 @@ function flash(kind) {
   f.className = kind;
 }
 
+// —— достижения ——
+const toastQ = [];
+let toastBusy = false;
+function unlock(id) {
+  if (!save.ach) save.ach = {};
+  if (save.ach[id]) return;
+  const a = achById(id);
+  if (!a) return;
+  save.ach[id] = 1;
+  save.coins += a.r;
+  S.store(save);
+  toastQ.push(a);
+  pumpToast();
+  updateCoins();
+  renderAchBadge();
+}
+function pumpToast() {
+  // на итогах не мешаем — покажем в меню
+  if (toastBusy || !toastQ.length || state === 'result') return;
+  toastBusy = true;
+  const a = toastQ.shift();
+  const el = $('toast');
+  const [name] = a[getLang()] || a.en;
+  el.innerHTML = '<b>🏆</b><span><i>' + t('achGot') + '</i>' + name + '</span><em>+' + a.r + ' ₸</em>';
+  el.classList.remove('hidden', 'go');
+  void el.offsetWidth;
+  el.classList.add('go');
+  sfx('achieve');
+  setTimeout(() => { el.classList.add('hidden'); toastBusy = false; pumpToast(); }, 2900);
+}
+function renderAchBadge() {
+  const n = Object.keys(save.ach || {}).length;
+  $('achBtn').dataset.n = n + '/' + ACH.length;
+}
+function showAch() {
+  const rows = ACH.map((a) => {
+    const got = save.ach?.[a.id];
+    const [name, desc] = a[getLang()] || a.en;
+    return '<div class="ach' + (got ? ' got' : '') + '"><b>' + (got ? '🏆' : '🔒') + '</b><div><div class="an">' + name + '</div><div class="ad">' + desc + '</div></div><span>+' + a.r + ' ₸</span></div>';
+  }).join('');
+  modal('<h3 class="mtitle">' + t('achTitle') + ' · ' + Object.keys(save.ach || {}).length + '/' + ACH.length + '</h3><div class="rows achs">' + rows + '</div><div class="mbtns"><button class="pill" id="mClose">OK</button></div>', true);
+  $('mClose').onclick = () => { sfx('click'); closeModal(); };
+}
+
 // вибрация на телефоне (не везде есть — молча пропускаем)
 function buzz(p) { try { if (save.sound && navigator.vibrate) navigator.vibrate(p); } catch { /* нет */ } }
 
@@ -354,6 +426,9 @@ function checkMilestone() {
     const n = MILES[mileIdx++];
     if (mileIdx < MILES.length && run.count >= MILES[mileIdx]) continue; // перепрыгнули — празднуем только последнее
     banner(n === 100 ? t('milestone100') : t('milestone', { n }));
+    if (n >= 100) unlock('herd100');
+    if (n >= 300) unlock('herd300');
+    if (n >= 999) unlock('herd999');
     sfx('milestone');
   }
 }
@@ -373,7 +448,7 @@ function handleEvents() {
         const g = ev.op;
         if (g.op === '$') break;
         let txt = ev.delta >= 0 ? (g.op === 'x' ? opText(g) : '+' + ev.delta) : String(ev.delta);
-        if (ev.mystery) { txt = '? → ' + txt; sfx('chest'); }
+        if (ev.mystery) { txt = '? → ' + txt; sfx('chest'); if (g.op === 'x') unlock('lucky'); }
         floatText(txt, ev.x, 5.2, ev.d, ev.good ? 'good huge' : 'bad huge');
         sfx(ev.good ? 'good' : 'bad', g.op === 'x' ? 6 : 0);
         if (!ev.good) buzz(60);
@@ -382,6 +457,7 @@ function handleEvents() {
         break;
       }
       case 'golden':
+        unlock('golden');
         flash('gold');
         banner(t('golden'), 'gold', '+' + ev.n);
         sfx('chest');
@@ -418,6 +494,7 @@ function handleEvents() {
         break;
       case 'clash-hit': buzz([40, 30, 60]); flash('bad'); break;
       case 'combo':
+        if (ev.n >= 5) unlock('combo5');
         floatText(t('combo', { n: ev.n }) + '  +' + ev.bonus + ' ₸', run.cx, 4.6, ev.d + 2, 'gold combo');
         sfx('combo', ev.n);
         updateCoins();
@@ -484,6 +561,16 @@ function showResult() {
     save.lvl++;
   }
   S.store(save);
+  if (res.win) {
+    if (stars === 3) unlock('stars3');
+    if (!run.lostAny) unlock('noloss');
+    if (L.boss) unlock('boss');
+    if (daily) unlock('daily');
+  }
+  if (save.lvl >= 10) unlock('lvl10');
+  if (save.lvl >= 25) unlock('lvl25');
+  lastShare = { win: res.win, mult: res.mult, stars, peak, n: L.n, daily, boss: L.boss };
+  $('resShare').classList.toggle('hidden', !res.win);
   $('hud').classList.add('result-mode');
   $('hudCoins').querySelector('b').textContent = fmt(coinsBefore);
   clearLabels();
@@ -498,6 +585,7 @@ function showResult() {
   r.dataset.up = canUp ? '1' : '';
   $('resNext').textContent = res.win ? t('next') : canUp ? t('upgrade') : t('retry');
   $('resMenu').textContent = t('menu');
+  $('resShare').querySelector('span').textContent = t('share');
   // счётчик монет бежит
   const b = $('resCoins').querySelector('b');
   const t0 = performance.now();
@@ -541,6 +629,48 @@ function flyCoins(n, base, got) {
   }
 }
 
+// —— «Поделиться»: карточка с кадром забега ——
+let lastShare = null;
+async function shareCard() {
+  if (!lastShare) return;
+  sfx('click');
+  try {
+    world.render();
+    const src = world.renderer.domElement;
+    const W = 1200, H = 630, c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const k = Math.max(W / src.width, H / src.height);
+    g.drawImage(src, (W - src.width * k) / 2, (H - src.height * k) / 2, src.width * k, src.height * k);
+    const gr = g.createLinearGradient(0, H * 0.35, 0, H);
+    gr.addColorStop(0, 'rgba(10,6,2,0)'); gr.addColorStop(1, 'rgba(10,6,2,0.85)');
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.textAlign = 'left';
+    g.font = "400 88px 'Russo One'"; g.fillStyle = '#fff';
+    g.shadowColor = '#b5302a'; g.shadowOffsetY = 6; g.fillText(t('title').toUpperCase(), 56, 120); g.shadowColor = 'transparent';
+    g.font = "800 30px Rubik"; g.fillStyle = '#ffe9b0';
+    g.fillText(lastShare.daily ? t('daily_run') : (lastShare.boss ? t('boss') + ' · ' : '') + t('level') + ' ' + lastShare.n, 60, 168);
+    g.font = "400 96px 'Russo One'"; g.fillStyle = '#ffc21a';
+    g.fillText('★'.repeat(lastShare.stars || 0) + '☆'.repeat(3 - (lastShare.stars || 0)), 56, H - 170);
+    g.font = "400 54px 'Russo One'"; g.fillStyle = '#fff';
+    g.fillText(t('shareHerd', { n: lastShare.peak }) + '  ·  ×' + lastShare.mult, 60, H - 92);
+    g.font = "700 28px Rubik"; g.fillStyle = 'rgba(255,255,255,.85)';
+    g.fillText('gamemetric.dev/tabun', 62, H - 44);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
+    const file = new File([blob], 'tabun.jpg', { type: 'image/jpeg' });
+    const url = 'https://gamemetric.dev/tabun/';
+    const text = t('shareText', { n: lastShare.peak });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text, url });
+    else if (navigator.share) await navigator.share({ text, url });
+    else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'tabun.jpg';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+  } catch (e) { /* отмена или нет доступа — молча */ }
+}
+
 // —— ввод ——
 function bindInput() {
   const st = $('stage');
@@ -576,6 +706,8 @@ function bindUI() {
   $('pauseBtn').onclick = () => { sfx('click'); pause(); };
   $('setBtn').onclick = () => { sfx('click'); showSettings(false); };
   $('coatsBtn').onclick = () => { sfx('click'); showCoats(); };
+  $('achBtn').onclick = () => { sfx('click'); showAch(); };
+  $('resShare').onclick = () => shareCard();
   $('dailyBtn').onclick = () => { sfx('click'); daily = true; prepare(); startLevel(); };
   $('resNext').onclick = () => {
     sfx('click');
@@ -630,7 +762,9 @@ function frame(now) {
   if (fpsAcc > 2.5) {
     const fps = fpsN / fpsAcc;
     fpsT = fps;
-    if (fps < 42 && world.pixelRatio > 0.8) { lowSteps++; world.setPixelRatio(Math.max(0.75, world.pixelRatio - 0.35)); }
+    // тяжело: сначала сужаем круг детальных коней, потом уменьшаем чёткость
+    if (fps < 42 && (world.lodNear ?? 22) > 10) { world.lodNear = (world.lodNear ?? 22) - 6; for (const p of [world.gallop, world.idle, world.eat]) p.setNear?.(world.lodNear); }
+    else if (fps < 42 && world.pixelRatio > 0.8) { lowSteps++; world.setPixelRatio(Math.max(0.75, world.pixelRatio - 0.35)); }
     fpsAcc = 0; fpsN = 0;
   }
 }
@@ -642,7 +776,7 @@ window.__tabun = {
   start: startLevel, menu: showMenu, auto: autoTarget,
   setSave(s) { save = { ...save, ...s }; S.store(save); },
   layout() {
-    const sel = ['#pauseBtn', '#hudCoins', '#prog', '#setBtn', '#allGames', '#menuCoins', '#logo', '#lvlRow', '#playBtn', '#ups', '#coatsBtn', '#dailyBtn', '#aulInfo', '#resT', '#resCoins', '#resNext', '#resMenu', '#hint'];
+    const sel = ['#pauseBtn', '#hudCoins', '#prog', '#setBtn', '#achBtn', '#allGames', '#resShare', '#menuCoins', '#logo', '#lvlRow', '#playBtn', '#ups', '#coatsBtn', '#dailyBtn', '#aulInfo', '#starTotal', '#upsTitle', '#resT', '#resCoins', '#resNext', '#resMenu', '#hint'];
     const rects = [];
     for (const s of sel) {
       const el = document.querySelector(s);

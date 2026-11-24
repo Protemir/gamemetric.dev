@@ -141,9 +141,25 @@ export function horseMaterial() {
   return m;
 }
 
+// Два уровня детализации: ближние кони — полная модель, дальние — упрощённая (тот же клип и кадры)
+export class LodPool {
+  constructor(hi, lo, camera, near = 22) { this.hi = hi; this.lo = lo; this.cam = camera; this.near2 = near * near; }
+  setNear(n) { this.near2 = n * n; }
+  get frames() { return this.hi.frames; }
+  begin() { this.hi.begin(); }
+  end() { this.hi.end(); }
+  add(phase, m, color) {
+    if (!this.lo) return this.hi.add(phase, m, color);
+    const e = m.elements, dx = e[12] - this.cam.position.x, dz = e[14] - this.cam.position.z;
+    (dx * dx + dz * dz < this.near2 ? this.hi : this.lo).add(phase, m, color);
+  }
+}
+
 // Набор InstancedMesh'ей одного клипа; каждый кадр — свой меш.
 export class HorsePool {
-  constructor(frames, material, cap, scene) {
+  constructor(frames, material, cap, scene, tint = 1) {
+    this.tint = tint;
+    this.tmp = new THREE.Color();
     this.frames = frames;
     this.meshes = frames.map((g) => {
       const m = new THREE.InstancedMesh(g, material, cap);
@@ -165,7 +181,7 @@ export class HorsePool {
     const m = this.meshes[f];
     if (m.count >= this.cap) return;
     m.setMatrixAt(m.count, matrix);
-    m.setColorAt(m.count, color);
+    m.setColorAt(m.count, this.tint === 1 ? color : this.tmp.copy(color).multiplyScalar(this.tint));
     m.count++;
   }
   end() {
