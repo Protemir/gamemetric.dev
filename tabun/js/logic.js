@@ -212,6 +212,8 @@ export class Run {
     this.items = L.items.map((it, i) => ({ ...it, i, done: false, active: false }));
     this.rival = { count: L.rival, d: L.length + 22, bodies: [], start: L.rival };
     this.ladderStep = 0;
+    this.combo = 0;          // подряд выбранные лучшие ворота
+    this.bestCombo = 0;
     this.mult = 0;
     this.stepCost = Math.max(1, Math.ceil(L.rival * 0.05));
     this.finishD = L.length;
@@ -341,6 +343,22 @@ export class Run {
             this.sync(false, g.op === '+' || g.op === 'x' ? { x: side === 'left' ? -2.75 : side === 'right' ? 2.75 : this.cx, d: this.d } : null);
           }
           this.emit('gate', { item: it, side, good: this.count >= before && g.op !== '/', delta: this.count - before, op: g, x: side === 'left' ? -2.75 : side === 'right' ? 2.75 : 0, d: it.d });
+          if (!it.full) {
+            const val = (q) => (q.op === '$' ? before + 0.5 : applyOp(before, q));
+            const mine = val(g), other = val(side === 'left' ? it.right : it.left);
+            if (mine >= other) {
+              this.combo++;
+              this.bestCombo = Math.max(this.bestCombo, this.combo);
+              if (this.combo >= 2) {
+                const bonus = this.combo * 3;
+                this.coins += bonus;
+                this.emit('combo', { n: this.combo, bonus, x: this.cx, d: it.d });
+              }
+            } else {
+              if (this.combo >= 2) this.emit('combo-break', { n: this.combo });
+              this.combo = 0;
+            }
+          }
           if (this.count <= 0) return this.lose();
         }
       } else if (it.type === 'wild') {

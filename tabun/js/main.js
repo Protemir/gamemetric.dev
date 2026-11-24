@@ -67,6 +67,7 @@ async function boot() {
   $('gl').addEventListener('webglcontextlost', (e) => { e.preventDefault(); pause(); });
   $('gl').addEventListener('webglcontextrestored', () => location.reload());
   world.setHerdSet(save.set);
+  world.onBoom = () => sfx('boom');
   setSound(save.sound);
   onResize();
   window.addEventListener('resize', onResize);
@@ -112,6 +113,9 @@ function startLevel() {
   if (save.lvl <= 2 && !AUTO) { dragHintOn = true; $('dragHint').classList.remove('hidden'); $('dragHint').querySelector('span').textContent = t('drag'); }
   if (save.lvl === 1) showHint('gate', 1.2);
   sfx('click');
+  sfx('whoosh');
+  world.startIntro();
+  banner(L.boss ? t('boss') : t('level') + ' ' + L.n, 'intro');
 }
 
 function showMenu() {
@@ -124,6 +128,7 @@ function showMenu() {
   $('allGames').textContent = '← ' + t('allGames');
   $('allGames').classList.toggle('hidden', PORTAL);
   $('lvlName').textContent = t('level') + ' ' + save.lvl;
+  $('starTotal').textContent = '★ ' + S.totalStars(save);
   $('bossTag').textContent = t('boss');
   $('bossTag').classList.toggle('hidden', !L.boss);
   $('playBtn').textContent = t('play');
@@ -138,6 +143,7 @@ function showMenu() {
 
 function hideAll() {
   for (const id of ['menu', 'hud', 'result', 'modal']) $(id).classList.add('hidden');
+  $('hud').classList.remove('result-mode');
   $('dragHint').classList.add('hidden');
   $('hint').classList.add('hidden');
 }
@@ -291,10 +297,11 @@ function floatText(txt, x, y, d, cls = '') {
   $('labels').appendChild(el);
   el.addEventListener('animationend', () => el.remove());
 }
-function banner(txt) {
+function banner(txt, cls = '', sub = '') {
   const el = document.createElement('div');
-  el.className = 'banner';
+  el.className = 'banner ' + cls;
   el.textContent = txt;
+  if (sub) { const s = document.createElement('small'); s.textContent = sub; el.appendChild(s); }
   $('labels').appendChild(el);
   el.addEventListener('animationend', () => el.remove());
 }
@@ -302,19 +309,28 @@ function placeTags() {
   if (!herdTag) return;
   const sh = herdShape(Math.max(1, Math.min(run.count, run.cap)));
   if (run.count > 0 && run.state !== 'win') {
-    const p = world.project(run.cx * 0.9, 3.4, run.d + sh.b * 0.6);
+    const clash = run.state === 'clash';
+    const p = world.project(clash ? -3.2 : run.cx * 0.9, 3.4, run.d + sh.b * (clash ? 0.2 : 0.6));
     herdTag.style.display = '';
     herdTag.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
     if (herdTag._n !== run.count) { herdTag._n = run.count; herdTag.textContent = run.count; herdTag.style.fontSize = Math.round(24 + Math.min(18, Math.log2(Math.max(1, run.count)) * 1.8)) + 'px'; }
   } else herdTag.style.display = 'none';
   const rv = run.rival;
-  const rp = world.project(0, 2.8, rv.d - herdShape(Math.max(1, Math.min(rv.count, run.cap))).b * 0.5);
+  const rp = world.project(run.state === 'clash' ? 3.2 : 0, 2.8, rv.d - herdShape(Math.max(1, Math.min(rv.count, run.cap))).b * (run.state === 'clash' ? 0.1 : 0.5));
   const showR = rv.count > 0 && (run.state === 'clash' || rv.d - run.d < 90) && rp.vis;
   rivalTag.style.display = showR ? '' : 'none';
   if (showR) {
     rivalTag.style.transform = `translate(${rp.x}px, ${rp.y}px) translate(-50%, -100%)`;
     if (rivalTag._n !== rv.count) { rivalTag._n = rv.count; rivalTag.textContent = rv.count; }
   }
+}
+
+// вспышка по краям экрана: синяя — хорошо, красная — потери
+function flash(kind) {
+  const f = $('flash');
+  f.className = '';
+  void f.offsetWidth;
+  f.className = kind;
 }
 
 // вибрация на телефоне (не везде есть — молча пропускаем)
@@ -335,6 +351,10 @@ function checkMilestone() {
 
 // —— события забега ——
 let lastLossSfx = 0, lastClashSfx = 0, lastRecruitSfx = 0;
+const recruitAcc = { n: 0, t: 0, x: 0, d: 0 };
+function flushRecruits(now) {
+  if (recruitAcc.n && now - recruitAcc.t > 350) { floatText('+' + recruitAcc.n, recruitAcc.x, 2.4, recruitAcc.d, 'good huge'); recruitAcc.n = 0; }
+}
 function handleEvents() {
   const now = performance.now();
   for (const ev of run.events) {
@@ -347,17 +367,20 @@ function handleEvents() {
         floatText(txt, ev.x, 2.2, ev.d, ev.good ? 'good huge' : 'bad huge');
         sfx(ev.good ? 'good' : 'bad', g.op === 'x' ? 6 : 0);
         if (!ev.good) buzz(60);
+        flash(ev.good ? 'good' : 'bad');
         popTag(herdTag);
         break;
       }
       case 'chest':
+        flash('gold');
         floatText('+' + ev.v + ' ₸', ev.x, 2.2, ev.d, 'gold huge');
         sfx('chest');
         updateCoins();
         break;
       case 'recruit':
         if (now - lastRecruitSfx > 70) { sfx('recruit'); lastRecruitSfx = now; }
-        floatText('+1', ev.x, 2.2, ev.d, 'good');
+        if (!recruitAcc.n) recruitAcc.t = now;
+        recruitAcc.n++; recruitAcc.x = ev.x; recruitAcc.d = ev.d;
         popTag(herdTag);
         break;
       case 'loss':
@@ -375,9 +398,14 @@ function handleEvents() {
       case 'leader':
         floatText(t('leader', { n: ev.v }), run.cx, 3.4, run.d + 4, 'gold huge');
         break;
-      case 'clash-hit': buzz([40, 30, 60]); break;
+      case 'clash-hit': buzz([40, 30, 60]); flash('bad'); break;
+      case 'combo':
+        floatText(t('combo', { n: ev.n }) + '  +' + ev.bonus + ' ₸', run.cx, 4.6, ev.d + 2, 'gold combo');
+        sfx('combo', ev.n);
+        updateCoins();
+        break;
       case 'clash-start':
-        banner(t('clash'));
+        banner(t('clash'), 'clash', run.count + ' : ' + run.rival.count);
         sfx('drum');
         slowT = 0.9;
         break;
@@ -389,6 +417,7 @@ function handleEvents() {
         break;
       case 'win':
         sfx('win');
+        flash('gold');
         resultIn = 1.4;
         break;
       case 'lose':
@@ -398,6 +427,7 @@ function handleEvents() {
     }
   }
   run.events.length = 0;
+  flushRecruits(now);
 }
 
 function checkUpcomingHints() {
@@ -420,12 +450,20 @@ function showResult() {
   state = 'result';
   const res = run.result;
   const got = reward(L, res, save.up.income);
+  const coinsBefore = save.coins;
   save.coins += got;
   save.played++;
   save.best = Math.max(save.best, peak);
-  if (res.win) save.lvl++;
+  let stars = 0, oldStars = 0;
+  if (res.win) {
+    stars = S.starsFor(res.mult);
+    oldStars = Number(save.stars[L.n]) || 0;
+    save.stars[L.n] = Math.max(oldStars, stars);
+    save.lvl++;
+  }
   S.store(save);
-  $('hud').classList.add('hidden');
+  $('hud').classList.add('result-mode');
+  $('hudCoins').querySelector('b').textContent = fmt(coinsBefore);
   clearLabels();
   const r = $('result');
   r.classList.remove('hidden');
@@ -447,7 +485,38 @@ function showResult() {
     if (k < 1) requestAnimationFrame(tickC);
   };
   tickC();
+  // звёзды по одной
+  const sr = $('resStars');
+  sr.innerHTML = res.win ? [1, 2, 3].map((i) => `<i class="${i <= stars ? 'on' : ''}" style="animation-delay:${0.25 + i * 0.22}s">★</i>`).join('') : '';
+  if (res.win) for (let i = 1; i <= stars; i++) setTimeout(() => sfx('step', i * 2), 250 + i * 220);
+  // монеты летят в счётчик
+  if (got > 0) setTimeout(() => flyCoins(Math.min(12, 4 + Math.round(got / 60)), coinsBefore, got), 400);
   if (AUTO) setTimeout(() => { if (state === 'result') { showMenu(); setTimeout(startLevel, 300); } }, 1200);
+}
+
+function flyCoins(n, base, got) {
+  const from = $('resCoins').getBoundingClientRect();
+  const to = $('hudCoins').getBoundingClientRect();
+  let arrived = 0;
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('span');
+    c.className = 'coin fly';
+    c.style.left = from.left + 20 + Math.random() * 40 + 'px';
+    c.style.top = from.top + Math.random() * 20 + 'px';
+    c.style.setProperty('--dx', to.left + 18 - parseFloat(c.style.left) + 'px');
+    c.style.setProperty('--dy', to.top + 6 - parseFloat(c.style.top) + 'px');
+    c.style.animationDelay = i * 0.06 + 's';
+    document.getElementById('stage').appendChild(c);
+    c.addEventListener('animationend', () => {
+      c.remove();
+      sfx('coin');
+      arrived++;
+      if (state !== 'result') return;
+      const hc = $('hudCoins');
+      hc.querySelector('b').textContent = fmt(arrived >= n ? save.coins : base + Math.round((got * arrived) / n));
+      hc.classList.remove('bump'); void hc.offsetWidth; hc.classList.add('bump');
+    });
+  }
 }
 
 // —— ввод ——

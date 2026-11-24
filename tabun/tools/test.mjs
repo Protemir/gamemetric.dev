@@ -13,6 +13,19 @@ const SIZES = [[360, 640], [390, 844], [568, 320], [844, 390], [1280, 720]];
 const srv = await serve(root);
 let fails = 0;
 
+// первый запуск: чистый профиль, без ?menu — сразу скачка, без пустого экрана
+{
+  const b = await launch({ width: 390, height: 844, extra: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  await b.send('Page.enable');
+  await b.send('Page.navigate', { url: `${srv.url}/tabun/?lang=ru` });
+  let st = '';
+  for (let k = 0; k < 60; k++) { await sleep(250); try { st = await b.evaluate('window.__tabun?.state || ""'); if (st === 'play') break; } catch { /* */ } }
+  await sleep(1500);
+  const moved = await b.evaluate('__tabun.run ? __tabun.run.d : 0');
+  if (st !== 'play' || !(moved > 5)) { fails++; console.log('FAIL первый запуск: state=' + st + ', d=' + moved); } else console.log('ok   первый запуск сразу в скачку');
+  b.close();
+}
+
 for (const [W, H] of SIZES) {
   for (const lang of ['ru', 'en']) {
     const b = await launch({ width: W, height: H, extra: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });

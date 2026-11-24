@@ -123,6 +123,17 @@ export function sfx(name, arg = 0) {
       [0, 4, 7, 12, 16].forEach((s2, i) => tone(523 * Math.pow(2, s2 / 12), t + i * 0.06, 0.35, { type: 'triangle', vol: 0.12 }));
       noise(t, 0.6, { vol: 0.08, freq: 6000, type: 'highpass' });
       break;
+    case 'boom':
+      noise(t, 0.5, { vol: 0.22, freq: 300, slide: 0.3 });
+      noise(t + 0.05, 0.9, { vol: 0.06, freq: 5000, type: 'highpass' });
+      break;
+    case 'combo':
+      tone(660 * Math.pow(2, Math.min(arg, 8) / 12), t, 0.18, { type: 'square', vol: 0.06 });
+      tone(990 * Math.pow(2, Math.min(arg, 8) / 12), t + 0.07, 0.25, { type: 'triangle', vol: 0.08 });
+      break;
+    case 'whoosh':
+      noise(t, 0.6, { vol: 0.14, freq: 600, type: 'bandpass', q: 0.8, slide: 3 });
+      break;
     case 'clash':
       noise(t, 0.12, { vol: 0.3, freq: 600 + Math.random() * 400, q: 1 });
       tone(70 + Math.random() * 30, t, 0.1, { vol: 0.2, slide: 0.7 });

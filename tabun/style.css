@@ -170,3 +170,44 @@ html.shot #hud, html.shot #hint, html.shot #dragHint, html.shot .float, html.sho
 /* после проигрыша — подсветка доступных улучшений */
 .up.glow { animation: glow 1s ease-in-out 3; }
 @keyframes glow { 50% { box-shadow: 0 4px 0 rgba(0,0,0,.18), 0 0 0 4px #ffe066, 0 0 22px #ffcf3a; transform: translateY(-3px); } }
+
+/* —— эффекты —— */
+#flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+#flash.good { box-shadow: inset 0 0 90px 10px rgba(47,140,255,.75); animation: flash .55s ease-out; }
+#flash.bad { box-shadow: inset 0 0 110px 16px rgba(255,50,40,.8); animation: flash .6s ease-out; }
+#flash.gold { box-shadow: inset 0 0 110px 16px rgba(255,200,40,.8); animation: flash .8s ease-out; }
+@keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+.banner small { display: block; margin-top: 8px; font-size: .55em; text-align: center; letter-spacing: .06em; text-shadow: 0 3px 0 rgba(0,0,0,.3); }
+.banner.intro { top: 36%; font-size: 46px; text-shadow: 0 4px 0 #1559b5, 0 8px 24px rgba(0,0,0,.35); animation-duration: 1.6s; }
+.banner.clash { font-size: 64px; }
+.float.combo { font-size: 26px; }
+#starTotal { padding: 4px 10px; border-radius: 10px; background: rgba(20,14,8,.45); color: var(--gold); font-size: 16px; }
+#resStars { display: flex; justify-content: center; gap: 10px; margin: 10px 0 0; min-height: 0; }
+#resStars:empty { display: none; }
+#resStars i { font-style: normal; font: 400 52px/1 'Russo One', sans-serif; color: #d9ccb4; opacity: 0; animation: starIn .45s cubic-bezier(.2,1.6,.4,1) forwards; }
+#resStars i.on { color: #ffc21a; text-shadow: 0 3px 0 #c57a06, 0 0 18px rgba(255,200,40,.7); }
+#resStars i:nth-child(2) { font-size: 64px; margin-top: -8px; }
+@keyframes starIn { from { opacity: 0; transform: scale(2.4) rotate(-30deg); } to { opacity: 1; transform: none; } }
+.coin.fly { position: absolute; z-index: 60; width: 28px; height: 28px; pointer-events: none; animation: coinFly .75s cubic-bezier(.5,-0.3,.7,1) forwards; }
+@keyframes coinFly { to { transform: translate(var(--dx), var(--dy)) scale(.6); opacity: .9; } }
+#playBtn { position: relative; overflow: hidden; }
+#playBtn::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.65), transparent); transform: skewX(-20deg); animation: shine 2.6s ease-in-out infinite 1s; }
+@keyframes shine { 0% { left: -60%; } 45%, 100% { left: 130%; } }
+#menu:not(.hidden) #logo { animation: logoIn .7s cubic-bezier(.2,1.5,.4,1); }
+@keyframes logoIn { from { opacity: 0; transform: translateY(-30px) scale(.8); } }
+#menu:not(.hidden) #menuBottom { animation: rise .5s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } }
+@media (max-height: 460px) { #resStars i { font-size: 38px; } #resStars i:nth-child(2) { font-size: 46px; } .banner.clash { font-size: 48px; } }
+
+.banner.clash { top: 17%; }
+#hud.result-mode #pauseBtn, #hud.result-mode #prog, #hud.result-mode #hint, #hud.result-mode #dragHint { display: none; }
+#hud.result-mode { z-index: 5; }
+#result { z-index: 4; }
+
+/* низкий широкий экран: итоги левее, справа виден счётчик монет */
+@media (max-height: 460px) and (min-aspect-ratio: 3/2) { #result { justify-items: start; padding-left: max(16px, calc(50% - 300px)); } }
+
+/* баннеры не шире экрана */
+.banner { font-size: clamp(30px, 10.5vw, 56px); }
+.banner.intro { font-size: clamp(28px, 9vw, 46px); }
+.banner.clash { font-size: clamp(36px, 12vw, 64px); }

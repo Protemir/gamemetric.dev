@@ -56,6 +56,20 @@ await b.send('Emulation.setDeviceMetricsOverride', { width: 800, height: 450, de
 await sleep(400);
 ok(await ev('__tabun.world.w === innerWidth && __tabun.world.h === innerHeight'), 'размер холста следует за окном');
 
+// 4б) победа: звёзды сохранены, монеты долетели и счётчик сошёлся
+await ev('(__tabun.menu(), document.getElementById("modal").classList.add("hidden"), __tabun.start(), 1)');
+await sleep(200);
+await ev(fast);
+for (let k = 0; k < 40; k++) { await sleep(150); if (await ev('__tabun.state === "result"')) break; }
+const w = await ev('({ win: __tabun.run.result?.win, n: __tabun.run.L.n, st: __tabun.save.stars[__tabun.run.L.n], icons: document.querySelectorAll("#resStars i").length, combo: __tabun.run.bestCombo })');
+ok(w.win && w.st >= 1 && w.st <= 3 && w.icons === 3, 'звёзды за победу: ' + JSON.stringify(w));
+await sleep(2500);
+const cc = await ev('({ shown: document.querySelector("#hudCoins b").textContent.replace(/[^0-9]/g, ""), real: String(__tabun.save.coins), vis: document.getElementById("hudCoins").offsetParent !== null })');
+ok(cc.vis && cc.shown === cc.real, 'счётчик монет на итогах совпал с сохранением: ' + JSON.stringify(cc));
+await ev('(document.getElementById("resNext").click(), 1)');
+await sleep(300);
+ok(await ev('document.getElementById("starTotal").textContent.includes(String(Object.values(__tabun.save.stars).reduce((a,b)=>a+b,0)))'), 'звёзды в меню посчитаны');
+
 // 5) много уровней подряд: память GPU не растёт
 const mem = [];
 for (let i = 0; i < N; i++) {

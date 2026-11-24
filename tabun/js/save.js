@@ -1,11 +1,11 @@
 // Сохранение «Табуна» в localStorage. Если хранилища нет — играем без сохранения.
 const KEY = 'tabun.save.v1';
-const DEF = { lvl: 1, coins: 0, up: { herd: 0, income: 0, leader: 0 }, sets: ['steppe'], set: 'steppe', sound: true, daily: { last: '', streak: 0 }, best: 0, played: 0 };
+const DEF = { lvl: 1, coins: 0, up: { herd: 0, income: 0, leader: 0 }, sets: ['steppe'], set: 'steppe', sound: true, daily: { last: '', streak: 0 }, best: 0, played: 0, stars: {} };
 
 export function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (s && typeof s === 'object') return { ...DEF, ...s, up: { ...DEF.up, ...(s.up || {}) }, daily: { ...DEF.daily, ...(s.daily || {}) }, sets: Array.isArray(s.sets) && s.sets.length ? s.sets : ['steppe'] };
+    if (s && typeof s === 'object') return { ...DEF, ...s, up: { ...DEF.up, ...(s.up || {}) }, daily: { ...DEF.daily, ...(s.daily || {}) }, stars: s.stars && typeof s.stars === 'object' ? s.stars : {}, sets: Array.isArray(s.sets) && s.sets.length ? s.sets : ['steppe'] };
   } catch { /* испорчено или нет доступа */ }
   return structuredClone(DEF);
 }
@@ -22,6 +22,8 @@ export const UPS = {
 export const upCost = (key, lvl) => Math.round(UPS[key].base * Math.pow(UPS[key].k, lvl) / 5) * 5;
 export const startHerd = (s) => 5 + s.up.herd;
 export const leaderBonus = (s) => s.up.leader * 3;
+export const starsFor = (mult) => (mult >= 4 ? 3 : mult >= 2 ? 2 : 1);
+export const totalStars = (s) => Object.values(s.stars || {}).reduce((a, b) => a + (Number(b) || 0), 0);
 export const SETS = { steppe: 0, gold: 400, black: 800, grey: 1500, fire: 2500, pinto: 4000 };
 export const yurts = (s) => Math.min(12, 1 + Math.floor((s.up.herd + s.up.income + s.up.leader) / 3));
 

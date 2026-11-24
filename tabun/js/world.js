@@ -158,6 +158,11 @@ export class World {
     this.rings.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.scene.add(this.rings);
     this.leaderCol = new THREE.Color('#f4efe6');
+    this.rider = this.makeRider();
+    this.scene.add(this.rider);
+    this.eagles = this.makeEagles();
+    this.intro = 0;
+    this.fireworks = [];
 
     // тени-пятна под конями
     const shTex = canvasTex(64, 128, (g, w, h) => {
@@ -184,6 +189,69 @@ export class World {
     this.coatCache = {};
     this.emitAcc = 0;
   }
+
+  // всадник-батыр со знаменем: чапан, калпак, древко с полотнищем
+  makeRider() {
+    const g = new THREE.Group();
+    const L = (c) => new THREE.MeshLambertMaterial({ color: c });
+    const chapan = L('#b5302a'), trim = L('#e3b04b'), skin = L('#d9a882'), boot = L('#2a1a10'), hat = L('#f2ece0'), hatBrim = L('#1c1410'), pole = L('#5a3a20');
+    const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
+    add(new THREE.CylinderGeometry(0.17, 0.24, 0.62, 10), chapan, 0, 0.31, 0);          // корпус
+    add(new THREE.TorusGeometry(0.21, 0.035, 6, 16), trim, 0, 0.12, 0, Math.PI / 2);     // пояс
+    add(new THREE.SphereGeometry(0.13, 12, 10), skin, 0, 0.75, -0.02);                   // голова
+    add(new THREE.ConeGeometry(0.15, 0.26, 10), hat, 0, 0.93, -0.02);                    // калпак
+    add(new THREE.CylinderGeometry(0.17, 0.17, 0.04, 12), hatBrim, 0, 0.82, -0.02);
+    for (const sx of [-1, 1]) {
+      add(new THREE.BoxGeometry(0.11, 0.5, 0.13), chapan, sx * 0.22, -0.12, -0.05, 0.5, 0, sx * 0.25); // ноги
+      add(new THREE.BoxGeometry(0.12, 0.12, 0.2), boot, sx * 0.3, -0.36, -0.2);
+      add(new THREE.BoxGeometry(0.09, 0.42, 0.1), chapan, sx * 0.23, 0.36, -0.12, -0.9, 0, sx * 0.15); // руки вперёд
+    }
+    // знамя
+    const flagTex = (() => {
+      const c = document.createElement('canvas'); c.width = 128; c.height = 80;
+      const x = c.getContext('2d');
+      x.fillStyle = '#c4281f'; x.fillRect(0, 0, 128, 80);
+      x.fillStyle = '#e3b04b';
+      x.fillRect(0, 0, 10, 80);
+      for (let i = 0; i < 5; i++) { x.beginPath(); x.moveTo(10, i * 16); x.lineTo(20, i * 16 + 8); x.lineTo(10, i * 16 + 16); x.fill(); }
+      x.beginPath(); x.arc(70, 40, 16, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#c4281f'; x.beginPath(); x.arc(70, 40, 10, 0, Math.PI * 2); x.fill();
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+    })();
+    add(new THREE.CylinderGeometry(0.025, 0.025, 2.3, 6), pole, 0.3, 1.05, 0.1);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.6, 8, 1).translate(0.475, 0, 0), new THREE.MeshLambertMaterial({ map: flagTex, side: THREE.DoubleSide }));
+    flag.position.set(0.3, 1.88, 0.1);
+    g.add(flag);
+    g.userData.flag = flag;
+    g.userData.flagBase = flag.geometry.attributes.position.array.slice();
+    g.visible = false;
+    return g;
+  }
+
+  // беркуты кружат высоко над табуном
+  makeEagles() {
+    const list = [];
+    const mat = new THREE.MeshLambertMaterial({ color: '#3a2a1c', side: THREE.DoubleSide });
+    for (let i = 0; i < 3; i++) {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.2, 6).rotateX(Math.PI / 2), mat);
+      const wingGeo = new THREE.BufferGeometry();
+      wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.35, 2.1, 0.05, 0.1, 0, 0, 0.35, 0, 0, 0.35, 2.1, 0.05, 0.1, 2.2, 0, 0.45], 3));
+      wingGeo.computeVertexNormals();
+      const lw = new THREE.Mesh(wingGeo, mat), rw = new THREE.Mesh(wingGeo, mat);
+      rw.scale.x = -1;
+      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.5, 4).rotateX(-Math.PI / 2), mat);
+      tail.position.z = 0.75;
+      g.add(body, lw, rw, tail);
+      g.userData = { lw, rw, r: 18 + i * 7, h: 24 + i * 5, sp: 0.22 + i * 0.05, ph: i * 2.1 };
+      g.scale.setScalar(1.3);
+      this.scene.add(g);
+      list.push(g);
+    }
+    return list;
+  }
+
+  startIntro() { this.intro = 1.6; }
 
   coat(key) { return this.coatCache[key] || (this.coatCache[key] = new THREE.Color(COATS[key])); }
 
@@ -359,6 +427,7 @@ export class World {
     // валуны
     this.rockObjs = new Map();
     this.dust.clear(); this.sparks.clear();
+    this.fireworks = [];
     this.camPos.set(0, 9, 14);
     this.camLook.set(0, 0, -12);
     this.labels = [];
@@ -720,7 +789,18 @@ export class World {
       if (running && !menu) this.gallop.add(0.37 + t * gallopRate, m4, this.leaderCol);
       else this.idle.add(0.2 + t * 0.4, m4, this.leaderCol);
       shadow(lx, -ld, 1.3);
-    }
+      const R = this.rider;
+      R.visible = true;
+      const gal = running && !menu;
+      const bob = gal ? Math.abs(Math.sin((0.37 + t * gallopRate) * Math.PI * 2 / 1)) * 0.09 : 0;
+      R.position.set(lx, 1.55 + bob, -ld + 0.12);
+      R.rotation.set(gal ? -0.12 : 0, 0, 0);
+      // полотнище полощется
+      const f = R.userData.flag, base = R.userData.flagBase, arr = f.geometry.attributes.position.array;
+      for (let i = 0; i < arr.length; i += 3) { const x = base[i]; arr[i + 2] = base[i + 2] + Math.sin(t * (gal ? 11 : 4) - x * 5) * x * 0.22; }
+      f.geometry.attributes.position.needsUpdate = true;
+      f.rotation.y = gal ? Math.PI * 0.5 : 0.4;
+    } else if (this.rider) this.rider.visible = false;
     // волки
     let rc = 0;
     for (const w of run.wolves || []) {
@@ -821,6 +901,29 @@ export class World {
         this.dust.emit(b.x + (Math.random() - 0.5) * 0.5, 0.15, -b.d + 0.9, (Math.random() - 0.5) * 1.2, 0.6 + Math.random() * 0.8, 2 + Math.random() * 2, dc, 1.1 + Math.random() * 0.6, 0.6, 2.4, 0, 0.55);
       }
     }
+    // беркуты кружат над точкой, куда смотрит камера
+    for (const eg of this.eagles) {
+      const u = eg.userData;
+      const a = t * u.sp + u.ph;
+      eg.position.set(this.camLook.x + Math.cos(a) * u.r, u.h + Math.sin(t * 0.3 + u.ph) * 2, this.camLook.z - 10 + Math.sin(a) * u.r * 0.7);
+      eg.rotation.set(0, -a + Math.PI, Math.sin(a) * 0.25 + 0.3);
+      const flap = Math.sin(t * 0.7 + u.ph) > 0.6 ? Math.sin(t * 9 + u.ph) * 0.5 : 0.05;
+      u.lw.rotation.z = flap; u.rw.rotation.z = -flap;
+    }
+    // фейерверк по очереди
+    for (const fw of this.fireworks) {
+      fw.t -= dt;
+      if (fw.t <= 0 && !fw.done) {
+        fw.done = true;
+        const c = new THREE.Color(fw.col), w = new THREE.Color('#fff8d0');
+        for (let i = 0; i < 70; i++) {
+          const th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 2 - 1), sp = 6 + Math.random() * 3;
+          this.sparks.emit(fw.x, fw.y, fw.z, Math.sin(ph) * Math.cos(th) * sp, Math.cos(ph) * sp, Math.sin(ph) * Math.sin(th) * sp, i % 5 ? c : w, 1.3 + Math.random() * 0.5, 0.35, 0.12, 3, 1);
+        }
+        this.onBoom?.();
+      }
+    }
+    this.fireworks = this.fireworks.filter((f) => !f.done);
     this.dust.update(dt);
     this.sparks.update(dt);
     this.updateCamera(run, dt, menu);
@@ -856,6 +959,8 @@ export class World {
       this.shake = Math.max(this.shake, 0.12);
     } else if (ev.type === 'clash-hit') {
       this.shake = 0.6;
+      const dc = this.dustColor();
+      for (let i = 0; i < 60; i++) { const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 6; this.dust.emit(Math.cos(a) * 2, 0.4, -ev.d, Math.cos(a) * sp, 1 + Math.random() * 2, Math.sin(a) * sp * 0.6, dc, 1.4 + Math.random() * 0.6, 1.4, 4.5, 0, 0.85); }
     } else if (ev.type === 'step') {
       const a = this.arches?.[ev.i];
       if (a) { a.pulse = 1; }
@@ -863,6 +968,8 @@ export class World {
       for (let i = 0; i < 40; i++) this.sparks.emit((Math.random() - 0.5) * 10, 4 + Math.random() * 2, -ev.d, (Math.random() - 0.5) * 6, 3 + Math.random() * 4, (Math.random() - 0.5) * 4, cols[i % cols.length], 1.6, 0.3, 0.25, 6, 1);
     } else if (ev.type === 'win') {
       this.confetti(run);
+      const cols = ['#ffd23a', '#ff5a7a', '#3fa9ff', '#7be07b', '#ffffff', '#ff9a3a'];
+      for (let i = 0; i < 7; i++) this.fireworks.push({ t: 0.15 + i * 0.32, x: (Math.random() - 0.5) * 22, y: 16 + Math.random() * 8, z: -(run.d + 30 + Math.random() * 20), col: cols[i % cols.length] });
     } else if (ev.type === 'river') {
       // всплески — в цикле по коням в воде
     } else if (ev.type === 'gate') {
@@ -900,7 +1007,8 @@ export class World {
     const look = new THREE.Vector3(cx * 0.8, 0.6, -(cd + 10 + sh.b * 0.4));
     const pos = new THREE.Vector3(cx, hgt, -(cd - dist));
     if (menu) { look.set(-1.5, 1.0, -(cd - 1)); pos.set(6.5, 3.4, -(cd + 10)); }
-    const k = 1 - Math.exp(-dt * (menu ? 2 : 4));
+    if (this.intro > 0) this.intro -= dt;
+    const k = 1 - Math.exp(-dt * (menu ? 2 : this.intro > 0 ? 1.4 : 4));
     this.camPos.lerp(pos, k);
     this.camLook.lerp(look, k);
     const needHalfW = HALF + 2.2;

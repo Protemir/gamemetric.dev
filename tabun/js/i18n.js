@@ -28,6 +28,7 @@ const T = {
     hint_river: 'Река замедляет',
     hint_wolf: 'Волки! Каждый волк унесёт коня — обходи стаю',
     milestone: '{n} голов!', milestone100: 'Сотня!',
+    combo: 'Комбо ×{n}', stars: 'Звёзд: {n}', newBest: 'Новый рекорд!',
     hint_clash: 'В конце — табун баая. Кого больше, тот и победил',
   },
   en: {
@@ -58,6 +59,7 @@ const T = {
     hint_river: 'The river slows you down',
     hint_wolf: 'Wolves! Each wolf takes a horse: steer around the pack',
     milestone: '{n} horses!', milestone100: 'A hundred!',
+    combo: 'Combo ×{n}', stars: 'Stars: {n}', newBest: 'New record!',
     hint_clash: 'At the end waits the rival herd. The bigger herd wins',
   },
 };
