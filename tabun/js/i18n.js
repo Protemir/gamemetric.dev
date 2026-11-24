@@ -28,7 +28,7 @@ const T = {
     hint_river: 'Река замедляет',
     hint_wolf: 'Волки! Каждый волк унесёт коня — обходи стаю',
     milestone: '{n} голов!', milestone100: 'Сотня!',
-    combo: 'Комбо ×{n}', hint_raid: 'Барымта! Конокрады уводят коней — пропусти их или уйди в сторону', whip: 'Қамшы!', whipSub: 'Шабыт: 5 секунд', hint_whip: 'Золотая камча! Возьми — табун понесётся, волки разбегутся', quality: 'Графика', q_auto: 'Авто', q_high: 'Высокая', q_mid: 'Средняя', q_low: 'Низкая', upsTitle: 'Улучшения', daily_short: 'Байга дня', achGot: 'Достижение', achTitle: 'Достижения', share: 'Поделиться', shareHerd: 'Табун: {n}', shareText: 'Мой табун — {n} коней! Сможешь больше?', daily_run: 'Байга дня', hint_mystery: 'Ворота «?» — сюрприз: может быть ×2, а может и ÷2', hint_swap: 'Эти ворота меняются местами — лови момент!', golden: 'Алтын тұлпар!', music: 'Музыка', hint_golden: 'Золотой конь! Задень его — он стоит десятерых', stars: 'Звёзд: {n}', newBest: 'Новый рекорд!',
+    combo: 'Комбо ×{n}', settings: 'Настройки', language: 'Язык', loadErr: 'Не получилось загрузить игру. Проверьте интернет.', slow: 'Загрузка идёт дольше обычного…', retry: 'Повторить', aPause: 'Пауза', aSettings: 'Настройки', aAch: 'Достижения', hint_raid: 'Барымта! Конокрады уводят коней — пропусти их или уйди в сторону', whip: 'Қамшы!', whipSub: 'Шабыт: 5 секунд', hint_whip: 'Золотая камча! Возьми — табун понесётся, волки разбегутся', quality: 'Графика', q_auto: 'Авто', q_high: 'Высокая', q_mid: 'Средняя', q_low: 'Низкая', upsTitle: 'Улучшения', daily_short: 'Байга дня', achGot: 'Достижение', achTitle: 'Достижения', share: 'Поделиться', shareHerd: 'Табун: {n}', shareText: 'Мой табун — {n} {horses}! Сможешь больше?', daily_run: 'Байга дня', hint_mystery: 'Ворота «?» — сюрприз: может быть ×2, а может и ÷2', hint_swap: 'Эти ворота меняются местами — лови момент!', golden: 'Алтын тұлпар!', music: 'Музыка', hint_golden: 'Золотой конь! Задень его — он стоит десятерых', stars: 'Звёзд: {n}', newBest: 'Новый рекорд!',
     hint_clash: 'В конце — табун баая. Кого больше, тот и победил',
   },
   en: {
@@ -59,7 +59,7 @@ const T = {
     hint_river: 'The river slows you down',
     hint_wolf: 'Wolves! Each wolf takes a horse: steer around the pack',
     milestone: '{n} horses!', milestone100: 'A hundred!',
-    combo: 'Combo ×{n}', hint_raid: 'Barymta! Horse thieves: let them pass or steer away', whip: 'Kamshy!', whipSub: 'Rush: 5 seconds', hint_whip: 'A golden whip! Grab it: the herd surges and wolves flee', quality: 'Graphics', q_auto: 'Auto', q_high: 'High', q_mid: 'Medium', q_low: 'Low', upsTitle: 'Upgrades', daily_short: 'Daily', achGot: 'Achievement', achTitle: 'Achievements', share: 'Share', shareHerd: 'Herd: {n}', shareText: 'My herd hit {n} horses! Can you beat it?', daily_run: 'Daily Race', hint_mystery: 'A «?» gate is a surprise: maybe ×2, maybe ÷2', hint_swap: 'These gates swap places: time your move!', golden: 'Golden Tulpar!', music: 'Music', hint_golden: 'A golden horse! Touch it: it is worth ten', stars: 'Stars: {n}', newBest: 'New record!',
+    combo: 'Combo ×{n}', settings: 'Settings', language: 'Language', loadErr: 'Could not load the game. Check your connection.', slow: 'Loading is taking longer than usual…', retry: 'Retry', aPause: 'Pause', aSettings: 'Settings', aAch: 'Achievements', hint_raid: 'Barymta! Horse thieves: let them pass or steer away', whip: 'Kamshy!', whipSub: 'Rush: 5 seconds', hint_whip: 'A golden whip! Grab it: the herd surges and wolves flee', quality: 'Graphics', q_auto: 'Auto', q_high: 'High', q_mid: 'Medium', q_low: 'Low', upsTitle: 'Upgrades', daily_short: 'Daily', achGot: 'Achievement', achTitle: 'Achievements', share: 'Share', shareHerd: 'Herd: {n}', shareText: 'My herd hit {n} horses! Can you beat it?', daily_run: 'Daily Race', hint_mystery: 'A «?» gate is a surprise: maybe ×2, maybe ÷2', hint_swap: 'These gates swap places: time your move!', golden: 'Golden Tulpar!', music: 'Music', hint_golden: 'A golden horse! Touch it: it is worth ten', stars: 'Stars: {n}', newBest: 'New record!',
     hint_clash: 'At the end waits the rival herd. The bigger herd wins',
   },
 };
@@ -80,6 +80,15 @@ export function setLang(l) {
   try { localStorage.setItem('tabun.lang', l); } catch { /* нет доступа */ }
 }
 export const getLang = () => lang;
+// русское число: 1 конь, 2 коня, 5 коней
+export function plural(n, one, few, many) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  if (a > 10 && a < 20) return many;
+  if (b === 1) return one;
+  if (b >= 2 && b <= 4) return few;
+  return many;
+}
+
 export function t(key, vars) {
   let s = (T[lang] && T[lang][key]) ?? T.en[key] ?? key;
   if (vars) for (const k in vars) s = s.replace('{' + k + '}', vars[k]);

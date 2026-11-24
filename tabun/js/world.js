@@ -659,6 +659,7 @@ export class World {
     G.add(tufts);
     // кусты и камни
     const place = (src, n, scale, seed, minX, maxX) => {
+      if (!src) return; // модель не загрузилась — без неё
       const meshes = [];
       src.traverse((o) => { if (o.isMesh) meshes.push(o); });
       for (const m of meshes) {

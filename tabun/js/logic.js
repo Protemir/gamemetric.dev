@@ -62,6 +62,9 @@ export function slotOf(i, n, shape) {
 // Изгородь: { type:'fence', d, g0, g1 }. Река: { type:'river', d0, d1 }.
 const LEVEL_CACHE = new Map();
 
+// уровень, посчитанный в фоновом потоке, кладётся в общий кэш
+export function cacheLevel(key, L) { if (!LEVEL_CACHE.has(key)) LEVEL_CACHE.set(key, L); }
+
 export function level(n) {
   if (LEVEL_CACHE.has(n)) return LEVEL_CACHE.get(n);
   const L = genLevel(n);

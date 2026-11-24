@@ -9,7 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const SHOTS = process.argv.includes('--shots');
 const outDir = process.env.TABUN_SHOTS || path.join(root, 'tabun', 'tools', 'shots');
 if (SHOTS) fs.mkdirSync(outDir, { recursive: true });
-const SIZES = [[360, 640], [390, 844], [568, 320], [844, 390], [1280, 720]];
+const SIZES = process.env.SIZES ? process.env.SIZES.split(',').map((s) => s.split('x').map(Number)) : [[360, 640], [390, 844], [568, 320], [844, 390], [1280, 720]];
 const srv = await serve(root);
 let fails = 0;
 

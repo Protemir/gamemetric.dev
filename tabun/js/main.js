@@ -1,13 +1,13 @@
 // «Табун» — запуск, цикл, меню, ввод, итоги.
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
-import { level, dailyLevel, Run, DT, autoTarget, HALF, reward, herdShape, opText } from './logic.js';
+import { level, dailyLevel, cacheLevel, Run, DT, autoTarget, HALF, reward, herdShape, opText } from './logic.js';
 import { World } from './world.js';
 import { loadHorse, loadWolf, HERD_SETS, COATS } from './horses.js';
 import { loadRealHorse, loadRealWolf } from './realhorse.js';
 import { loadRiderProto } from './riderreal.js';
 import { initAudio, sfx, hooves, setSound, setMusic, music } from './audio.js';
-import { t, detectLang, setLang, getLang } from './i18n.js';
+import { t, detectLang, setLang, getLang, plural } from './i18n.js';
 import * as S from './save.js';
 import { ACH, achById } from './ach.js';
 
@@ -21,7 +21,7 @@ detectLang();
 
 let save = S.load();
 // ?level=N — только на этот запуск (для проверок и ссылок); в сохранение не попадает и снимается после первых итогов
-let levelOverride = P.has('level') ? Math.max(1, Number(P.get('level')) || 1) : null;
+let levelOverride = P.has('level') ? Math.min(1e4, Math.max(1, Math.floor(Number(P.get('level'))) || 1)) : null;
 const curLvl = () => levelOverride ?? save.lvl;
 let world = null, run = null, L = null;
 let state = 'loading';  // loading | menu | play | result | pause
@@ -53,19 +53,22 @@ async function boot() {
   $('loadT').textContent = t('title').toUpperCase();
   $('loadS').textContent = t('loading');
   document.title = getLang() === 'ru' ? 'Табун — веди табун через степь | GameMetric' : 'Tabun: Steppe Stampede — lead the herd | GameMetric';
-  const gl2 = (() => { try { return !!document.createElement('canvas').getContext('webgl2'); } catch { return false; } })();
+  const gl2 = (() => { try { const g = document.createElement('canvas').getContext('webgl2'); g?.getExtension('WEBGL_lose_context')?.loseContext(); return !!g; } catch { return false; } })();
   if (!gl2) { $('loadS').textContent = t('nogl'); return; }
   setLoad(0.05);
+  prewarm(curLvl());
+  const slowT = setTimeout(() => loadTrouble(t('slow')), 30000);
+  const opt = (p) => p.catch((e) => { console.warn('tabun: optional asset', e?.message || e); return null; });
   const loader = new GLTFLoader();
   let done = 0;
   const tick = () => setLoad(0.1 + (++done / 6) * 0.85);
   const [horse, rock, bush, wolf, riderProto] = await Promise.all([
     (TOY ? loadHorse('models/horse.glb') : loadRealHorse('models/warhorse.glb', 'models/warhorse-lo.glb')).then((h) => { tick(); return h; }),
     loader.loadAsync('models/rock.glb').then((g) => { tick(); return g; }),
-    loader.loadAsync('models/bush.glb').then((g) => { tick(); return g; }),
-    (TOY ? loadWolf('models/wolf.glb') : loadRealWolf('models/direwolf.glb')).then((w) => { tick(); return w; }),
-    (TOY ? Promise.resolve(null) : loadRiderProto('models/rider.glb')).then((r) => { tick(); return r; }),
-    document.fonts.load("400 40px 'Russo One'").then(tick, tick),
+    opt(loader.loadAsync('models/bush.glb')).then((g) => { tick(); return g; }),
+    opt(TOY ? loadWolf('models/wolf.glb') : loadRealWolf('models/direwolf.glb').catch(() => loadWolf('models/wolf.glb'))).then((w) => { tick(); return w; }),
+    opt(TOY ? Promise.resolve(null) : loadRiderProto('models/rider.glb')).then((r) => { tick(); return r; }),
+    (document.fonts?.load("400 40px 'Russo One'") || Promise.resolve()).then(tick, tick),
   ]);
   const norm = (scene, base) => {
     const box = new THREE.Box3().setFromObject(scene);
@@ -76,8 +79,11 @@ async function boot() {
     g.updateMatrixWorld(true);
     return { g, size };
   };
-  const r = norm(rock.scene, false), b = norm(bush.scene, true);
-  const assets = { horse, rock: r.g, rockScale: 1 / Math.max(r.size.x, r.size.y, r.size.z), bush: b.g, bushScale: 1.1 / b.size.y, wolf, riderProto };
+  clearTimeout(slowT);
+  const r = norm(rock.scene, false), b = bush ? norm(bush.scene, true) : null;
+  // волк не загрузился совсем — стая рисуется тёмными конями, игра не падает
+  const wolfA = wolf || { run: horse.gallop, stalk: horse.idle, bite: null, material: horse.material, textured: !!horse.textured };
+  const assets = { horse, rock: r.g, rockScale: 1 / Math.max(r.size.x, r.size.y, r.size.z), bush: b?.g || null, bushScale: b ? 1.1 / b.size.y : 1, wolf: wolfA, riderProto };
   world = new World($('gl'), assets);
   // телефон может отобрать WebGL при сворачивании — не даём экрану остаться чёрным
   $('gl').addEventListener('webglcontextlost', (e) => { e.preventDefault(); pause(); });
@@ -117,6 +123,12 @@ function prepare() {
   peak = run.count;
 }
 
+function setAria() {
+  $('pauseBtn').setAttribute('aria-label', t('aPause'));
+  $('setBtn').setAttribute('aria-label', t('aSettings'));
+  $('achBtn').setAttribute('aria-label', t('aAch'));
+}
+
 function startLevel() {
   if (state === 'play') return;
   initAudio();
@@ -127,6 +139,8 @@ function startLevel() {
   mileIdx = 0;
   while (mileIdx < MILES.length && run.count >= MILES[mileIdx]) mileIdx++;
   hideAll();
+  setAria();
+  setTimeout(pumpToast, 1500); // отложенные тосты — в начале следующего забега
   $('hud').classList.remove('hidden');
   $('progLvl').textContent = daily ? t('daily_run') : t('level') + ' ' + L.n;
   updateCoins();
@@ -147,6 +161,7 @@ function showMenu() {
   prepare();
   hideAll();
   $('menu').classList.remove('hidden');
+  setAria();
   $('logoT').textContent = t('title').toUpperCase();
   $('logoS').textContent = t('subtitle');
   $('allGames').textContent = '← ' + t('allGames');
@@ -214,7 +229,7 @@ function renderUps() {
     const name = key === 'herd' ? t('upHerd') : key === 'income' ? t('upIncome') : t('upLeader');
     const desc = key === 'herd' ? t('upHerdD') : key === 'income' ? t('upIncomeD') : t('upLeaderD', { n: 3 });
     const pips = Array.from({ length: 5 }, (_, i) => `<i class="${i < lvl % 5 || (lvl && lvl % 5 === 0 && lvl >= 5 && false) ? 'on' : ''}"></i>`).join('');
-    el.innerHTML = `<div class="top">${UP_ICONS[key]}<div><div class="nm">${name}</div><div class="lv">${t('lvl', { n: lvl + 1 })}</div></div></div><div class="ds">${desc}</div><div class="pips">${pips}</div><button class="buy">${max ? t('max') : `<span class="coin"></span>${cost}`}</button>`;
+    el.innerHTML = `<div class="top">${UP_ICONS[key]}<div><div class="nm">${name}</div><div class="lv">${t('lvl', { n: lvl + 1 })}</div></div></div><div class="ds">${desc}</div><div class="pips">${pips}</div><button class="buy">${max ? t('max') : `<span class="coin"></span>${fmt(cost)}`}</button>`;
     el.querySelector('.buy').addEventListener('click', () => {
       if (max || save.coins < cost) { sfx('bad'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); return; }
       save.coins -= cost;
@@ -247,17 +262,19 @@ const fmt = (n) => Math.round(n).toLocaleString(getLang() === 'ru' ? 'ru-RU' : '
 
 // —— окна ——
 function modal(html, wide = false) {
+  const fid = document.activeElement && document.activeElement.id;
   $('modalCard').innerHTML = html;
+  if (fid && $(fid) && $('modalCard').contains($(fid))) $(fid).focus();
   $('modalCard').classList.toggle('wide', wide);
   $('modal').classList.remove('hidden');
 }
 function closeModal() { $('modal').classList.add('hidden'); }
 
 function showDaily(d) {
-  modal(`<h3 class="mtitle">${t('daily')}</h3><p>${t('dailyD', { n: d.streak })}</p><div class="daily"><span class="coin"></span>+${d.amount}</div><button class="big disp" id="dailyTake">${t('take')}</button>`);
+  modal(`<h3 class="mtitle">${t('daily')}</h3><p>${t('dailyD', { n: d.streak })}</p><div class="daily"><span class="coin"></span>+${fmt(d.amount)}</div><button class="big disp" id="dailyTake">${t('take')}</button>`);
   $('dailyTake').onclick = () => {
     save.coins += d.amount;
-    save.daily = { last: S.dayKey(), streak: d.streak };
+    save.daily = { last: d.key || S.dayKey(), streak: d.streak };
     S.store(save);
     sfx('chest');
     closeModal();
@@ -271,7 +288,7 @@ function showCoats() {
   const rows = Object.entries(S.SETS).map(([k, price]) => {
     const own = save.sets.includes(k), sel = save.set === k;
     const dots = HERD_SETS[k].slice(0, 5).map((c) => `<i style="background:${COATS[c]}"></i>`).join('');
-    const btn = sel ? `<button class="on" disabled>${t('owned')}</button>` : own ? `<button data-k="${k}">${t('choose')}</button>` : `<button class="gold" data-k="${k}" ${save.coins < price ? 'disabled' : ''}><span class="coin" style="width:18px;height:18px"></span>${price}</button>`;
+    const btn = sel ? `<button class="on" disabled>${t('owned')}</button>` : own ? `<button data-k="${k}">${t('choose')}</button>` : `<button class="gold" data-k="${k}" ${save.coins < price ? 'disabled' : ''}><span class="coin" style="width:18px;height:18px"></span>${fmt(price)}</button>`;
     return `<div class="mrow"><div><div>${t('set_' + k)}</div><div class="dots">${dots}</div></div>${btn}</div>`;
   }).join('');
   modal(`<h3 class="mtitle">${t('coats')}</h3><div class="rows">${rows}</div><div class="mbtns"><button class="pill" id="mClose">OK</button></div>`, true);
@@ -295,7 +312,7 @@ function showCoats() {
 
 function showSettings(inGame) {
   const row = (label, val, id) => `<div class="mrow"><span>${label}</span><button id="${id}" class="${val ? 'on' : ''}">${val === null ? '' : val ? t('on') : t('off')}</button></div>`;
-  modal(`<h3 class="mtitle">${inGame ? t('pause') : '⚙'}</h3><div class="rows">${row(t('sound'), save.sound, 'mSound')}${row(t('music'), save.music !== false, 'mMusic')}<div class="mrow"><span>${t('quality')}</span><button id="mQual" class="on">${t('q_' + (save.quality || 'auto'))}</button></div><div class="mrow"><span>🌐</span><button id="mLang">${t('lang')}</button></div></div>
+  modal(`<h3 class="mtitle">${inGame ? t('pause') : t('settings')}</h3><div class="rows">${row(t('sound'), save.sound, 'mSound')}${row(t('music'), save.music !== false, 'mMusic')}<div class="mrow"><span>${t('quality')}</span><button id="mQual" class="on">${t('q_' + (save.quality || 'auto'))}</button></div><div class="mrow"><span>${t('language')}</span><button id="mLang">${t('lang')}</button></div></div>
     <div class="mbtns">${inGame ? `<button class="big disp" id="mResume">${t('resume')}</button><button class="pill" id="mMenu">${t('menu')}</button>` : `<button class="pill" id="mClose">OK</button>`}</div>`, true);
   $('mSound').onclick = () => { save.sound = !save.sound; setSound(save.sound); S.store(save); showSettings(inGame); };
   $('mMusic').onclick = () => { save.music = save.music === false; setMusic(save.music); S.store(save); showSettings(inGame); };
@@ -617,7 +634,7 @@ function showResult() {
   const achBonus = gained - got;
   if (levelOverride !== null && res.win && !daily) levelOverride = null;
   lastShare = { win: res.win, mult: res.mult, stars, peak, n: L.n, daily, boss: L.boss };
-  $('resShare').classList.toggle('hidden', !res.win);
+  $('resShare').classList.toggle('hidden', !res.win || PORTAL);
   $('hud').classList.add('result-mode');
   $('hudCoins').querySelector('b').textContent = fmt(coinsBefore);
   clearLabels();
@@ -645,10 +662,11 @@ function showResult() {
   // звёзды по одной
   const sr = $('resStars');
   sr.innerHTML = res.win ? [1, 2, 3].map((i) => `<i class="${i <= stars ? 'on' : ''}" style="animation-delay:${0.25 + i * 0.22}s">★</i>`).join('') : '';
-  if (res.win) for (let i = 1; i <= stars; i++) setTimeout(() => sfx('step', i * 2), 250 + i * 220);
+  if (res.win) for (let i = 1; i <= stars; i++) setTimeout(() => { if (state === 'result') sfx('step', i * 2); }, 250 + i * 220);
   // монеты летят в счётчик
-  if (gained > 0) setTimeout(() => flyCoins(Math.min(12, 4 + Math.round(gained / 60)), coinsBefore, gained), 400);
-  setTimeout(() => { if (state === 'result') level(curLvl()); }, 900);
+  if (gained > 0) setTimeout(() => { if (state === 'result') flyCoins(Math.min(12, 4 + Math.round(gained / 60)), coinsBefore, gained); }, 400);
+  prewarm(curLvl());
+  prewarm(0, { day: dayIndex(), diff: dailyDiff() });
   if (AUTO) setTimeout(() => { if (state === 'result') { showMenu(); setTimeout(startLevel, 300); } }, 1200);
 }
 
@@ -705,30 +723,44 @@ async function shareCard() {
     g.font = "700 28px Rubik"; g.fillStyle = 'rgba(255,255,255,.85)';
     g.fillText('gamemetric.dev/tabun', 62, H - 44);
     const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
-    const file = new File([blob], 'tabun.jpg', { type: 'image/jpeg' });
+    if (!blob) throw new Error('no image');
+    shareBlob = blob;
     const url = 'https://gamemetric.dev/tabun/';
-    const text = t('shareText', { n: lastShare.peak });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text, url });
+    const text = t('shareText', { n: lastShare.peak, horses: getLang() === 'ru' ? plural(lastShare.peak, 'конь', 'коня', 'коней') : '' });
+    let file = null;
+    try { file = new File([blob], 'tabun.jpg', { type: 'image/jpeg' }); } catch { file = null; }
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text, url });
     else if (navigator.share) await navigator.share({ text, url });
-    else {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = 'tabun.jpg';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    }
-  } catch (e) { /* отмена или нет доступа — молча */ }
+    else downloadShare(blob);
+  } catch (e) {
+    // отмена — ничего; любая другая ошибка — скачиваем картинку, чтобы кнопка не была «мёртвой»
+    if (e?.name !== 'AbortError' && shareBlob) downloadShare(shareBlob);
+  }
+}
+let shareBlob = null;
+function downloadShare(blob) {
+  try {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'tabun.jpg';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch { /* */ }
 }
 
 // —— ввод ——
 function bindInput() {
   const st = $('stage');
-  document.addEventListener('pointerdown', () => initAudio(), { capture: true });
+  // касание пальцем (pointerdown) не считается жестом для звука на Android/iOS — разблокируем и по отпусканию
+  for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click']) document.addEventListener(ev, () => initAudio(), { capture: true });
+  st.addEventListener('contextmenu', (e) => e.preventDefault());
   st.addEventListener('pointerdown', (e) => {
     if (state !== 'play') return;
     if (e.target.closest('button')) return;
     initAudio();
     if (drag) return; // второй палец не перехватывает управление
+    if (e.pointerType === 'mouse' && e.button !== 0) return; // правая/средняя кнопка — не руль
     drag = { x: e.clientX, cx: targetX, id: e.pointerId };
+    try { st.setPointerCapture(e.pointerId); } catch { /* */ }
   });
   window.addEventListener('pointermove', (e) => {
     if (!drag || state !== 'play' || e.pointerId !== drag.id) return;
@@ -741,12 +773,23 @@ function bindInput() {
   window.addEventListener('pointercancel', up);
   window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
+    const modalOpen = !$('modal').classList.contains('hidden');
+    if (e.code === 'Escape' && modalOpen) {
+      if (state === 'pause') $('mResume')?.click(); else if ($('mClose')) $('mClose').click(); else closeModal();
+      return;
+    }
+    if (e.code === 'KeyP' && state === 'pause' && modalOpen) { $('mResume')?.click(); return; }
     if (e.code === 'KeyP' || (e.code === 'Escape' && !PORTAL)) { if (state === 'play') pause(); }
     initAudio();
-    if ((e.code === 'Space' || e.code === 'Enter') && state === 'menu' && $('modal').classList.contains('hidden')) { e.preventDefault(); startLevel(); }
+    if (state === 'play' && /^(Arrow|Space)/.test(e.code)) e.preventDefault(); // в портале не прокручивать страницу
+    const onControl = e.target && e.target.closest && e.target.closest('button, a, input');
+    if ((e.code === 'Space' || e.code === 'Enter') && state === 'menu' && !modalOpen && !onControl) { e.preventDefault(); startLevel(); }
   });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pause();
+    else if (state === 'menu') { const ok = save.dailyWin === S.dayKey(); $('dailyBtn').querySelector('.badge').textContent = ok ? '✓' : '×2'; }
+  });
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 }
 const clampX = (x) => Math.max(-HALF + 0.4, Math.min(HALF - 0.4, x));
@@ -862,4 +905,28 @@ window.__tabun = {
   },
 };
 
-boot().catch((e) => { console.error(e); $('loadS').textContent = 'Error: ' + e.message; });
+function loadTrouble(msg) {
+  const s = $('loadS');
+  if (!s) return;
+  s.textContent = msg + ' ';
+  const btn = document.createElement('button');
+  btn.className = 'pill'; btn.style.cssText = 'margin-top:10px;background:#3a2a14;color:#fff';
+  btn.textContent = t('retry');
+  btn.onclick = () => location.reload();
+  s.appendChild(document.createElement('br'));
+  s.appendChild(btn);
+}
+
+// уровни считаются в фоновом потоке заранее, чтобы меню и старт не подвисали
+let genWorker = null;
+try {
+  genWorker = new Worker(new URL('./genworker.js', import.meta.url), { type: 'module' });
+  genWorker.onmessage = ({ data }) => { if (data && data.L) cacheLevel(data.key, data.L); };
+  genWorker.onerror = () => { genWorker = null; };
+} catch { genWorker = null; }
+function prewarm(n, dailyArgs) {
+  if (!genWorker) return;
+  try { genWorker.postMessage(dailyArgs ? { daily: true, ...dailyArgs } : { n }); } catch { /* */ }
+}
+
+boot().catch((e) => { console.error(e); loadTrouble(t('loadErr')); });

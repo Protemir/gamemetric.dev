@@ -347,3 +347,49 @@ html.shot #hud, html.shot #hint, html.shot #dragHint, html.shot .float, html.sho
 /* тост достижения не закрывает подсказку о препятствии */
 @media (max-width: 560px) { #toast { top: calc(156px + var(--safe-t)); } }
 @media (max-height: 460px) { #toast { top: auto; bottom: calc(14px + var(--safe-b)); } }
+
+/* вырез экрана слева и справа (iPhone лёжа) */
+:root { --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px); }
+#pauseBtn { left: calc(12px + var(--safe-l)); }
+#hudCoins { right: calc(12px + var(--safe-r)); }
+#menu { padding-left: calc(12px + var(--safe-l)); padding-right: calc(12px + var(--safe-r)); }
+@media (max-height: 460px) { #rail { left: calc(12px + var(--safe-l)); } }
+#rail { right: calc(12px + var(--safe-r)); }
+/* казахские буквы: запасной шрифт тот же, что у остального текста */
+.banner, #toast span, #toast em, .mtitle, .disp { font-family: 'Russo One', 'Rubik', system-ui, sans-serif; }
+/* длинные тексты на узких экранах переносятся, а не обрезаются */
+#toast { white-space: normal; max-width: calc(100vw - 24px); }
+#toast span { white-space: normal; }
+#dragHint span { white-space: normal; max-width: calc(100vw - 40px); text-align: center; display: block; }
+.up .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.up .top > div { min-width: 0; }
+.up .buy { font-size: 14px; white-space: nowrap; overflow: hidden; }
+/* iPhone SE и подобные: 320 px по ширине */
+@media (max-width: 340px) {
+  .topbar { gap: 5px; }
+  .iconbtn { width: 38px; height: 38px; border-radius: 12px; }
+  .iconbtn svg { width: 20px; height: 20px; }
+  .coins { height: 34px; font-size: 15px; padding: 0 10px 0 6px; }
+  .coins .coin { width: 20px; height: 20px; }
+  .pill.stars { height: 34px; font-size: 14px; padding: 0 8px; }
+  #allGames { padding: 0 10px; height: 34px; }
+  #menuBottom { padding: 8px; gap: 7px; }
+  #ups { gap: 5px; }
+  .up { padding: 6px 5px; }
+  .up .ic { width: 24px; height: 24px; }
+  .up .nm { font-size: 12px; }
+  .up .buy { font-size: 12px; height: 28px; }
+  #aulInfo { display: none; }
+  #playBtn { height: 60px; }
+  #playBtn .pl { font-size: 26px; }
+  #rail { top: 24%; }
+  .railbtn svg { width: 42px; height: 42px; padding: 10px; }
+}
+/* короткий вертикальный экран (568 и меньше) */
+@media (max-height: 600px) and (max-aspect-ratio: 1/1) {
+  #logo h1 { font-size: 44px; }
+  #logo p { display: none; }
+  #logo .orn { height: 10px; margin-top: 2px; }
+  #path .node { width: 28px; height: 28px; font-size: 12px; } #path .node.cur { width: 36px; height: 36px; font-size: 15px; } #path s { width: 14px; }
+  .up .pips { display: none; }
+}

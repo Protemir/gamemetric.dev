@@ -1,4 +1,5 @@
 // Сохранение «Табуна» в localStorage. Если хранилища нет — играем без сохранения.
+import { ACH } from './ach.js';
 const KEY = 'tabun.save.v1';
 const DEF = { lvl: 1, coins: 0, up: { herd: 0, income: 0, leader: 0 }, sets: ['steppe'], set: 'steppe', sound: true, daily: { last: '', streak: 0 }, best: 0, played: 0, stars: {}, music: true, ach: {}, quality: 'auto' };
 
@@ -20,7 +21,7 @@ function sanitize(s) {
   const stars = {};
   for (const [k, v] of Object.entries(obj(s.stars))) if (int(k, 1, 1e6, 0) && int(v, 0, 3, 0)) stars[int(k, 1, 1e6, 1)] = int(v, 0, 3, 0);
   const ach = {};
-  for (const k of Object.keys(obj(s.ach))) ach[k] = 1;
+  for (const k of Object.keys(obj(s.ach))) if (ACH.some((a) => a.id === k)) ach[k] = 1;
   const daily = obj(s.daily);
   const dd = obj(s.dailyDiff);
   return {
@@ -67,5 +68,5 @@ export function dailyState(s) {
   const y = new Date(); y.setDate(y.getDate() - 1);
   const streak = s.daily.last === dayKey(y) ? s.daily.streak + 1 : 1;
   const day = ((streak - 1) % 7) + 1;
-  return { streak, amount: 50 * day + (day === 7 ? 300 : 0) };
+  return { streak, amount: 50 * day + (day === 7 ? 300 : 0), key: today };
 }
