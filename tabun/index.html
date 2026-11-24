@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Табун — веди табун через степь | GameMetric</title>
+<meta name="description" content="Веди табун через степь: выбирай ворота ×2 и +10, собирай диких коней, обходи овраги и валуны, а в конце врежься в табун соперника. Кого больше — тот и победил. Бесплатно, на телефоне и ПК.">
+<link rel="canonical" href="https://gamemetric.dev/tabun/">
+<link rel="alternate" hreflang="ru" href="https://gamemetric.dev/tabun/?lang=ru">
+<link rel="alternate" hreflang="en" href="https://gamemetric.dev/tabun/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://gamemetric.dev/tabun/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#3f86d8">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://gamemetric.dev/tabun/">
+<meta property="og:title" content="Табун — степная скачка">
+<meta property="og:description" content="Собери табун в сотни коней: ворота ×2, дикие кони, овраги и валуны, а в конце — схватка с табуном баая.">
+<meta property="og:image" content="https://gamemetric.dev/tabun/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"Табун","alternateName":"Tabun: Steppe Stampede","url":"https://gamemetric.dev/tabun/","image":"https://gamemetric.dev/tabun/og.jpg","genre":["Arcade","Casual"],"playMode":"SinglePlayer","gamePlatform":"Web browser","inLanguage":["ru","en"],"isAccessibleForFree":true}
+</script>
+<link rel="preload" href="fonts/russo-one-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/rubik-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="models/horse.glb" as="fetch" crossorigin>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+<link rel="modulepreload" href="./vendor/three.module.js">
+<link rel="modulepreload" href="./vendor/three.core.js">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl"></canvas>
+
+  <div id="labels"></div>
+
+  <!-- игра -->
+  <div id="hud" class="hidden">
+    <button id="pauseBtn" class="iconbtn" aria-label="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg></button>
+    <div id="prog"><span id="progLvl" class="disp"></span><div id="progBar"><i></i><b></b></div><span id="progFlag">🏁</span></div>
+    <div class="coins" id="hudCoins"><span class="coin"></span><b>0</b></div>
+    <div id="hint" class="hidden"></div>
+    <div id="dragHint" class="hidden"><div class="hand"></div><span></span></div>
+  </div>
+
+  <!-- меню -->
+  <div id="menu" class="hidden">
+    <div class="topbar">
+      <button id="setBtn" class="iconbtn" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.6 5.1-1.7-.4a7 7 0 0 1-.6 1.5l1 1.5-1.8 1.8-1.5-1a7 7 0 0 1-1.5.6l-.4 1.7h-2.6l-.4-1.7a7 7 0 0 1-1.5-.6l-1.5 1-1.8-1.8 1-1.5a7 7 0 0 1-.6-1.5l-1.7-.4v-2.6l1.7-.4a7 7 0 0 1 .6-1.5l-1-1.5 1.8-1.8 1.5 1a7 7 0 0 1 1.5-.6l.4-1.7h2.6l.4 1.7a7 7 0 0 1 1.5.6l1.5-1 1.8 1.8-1 1.5c.3.5.5 1 .6 1.5l1.7.4z"/></svg></button>
+      <a id="allGames" href="/" class="pill"></a>
+      <div class="coins" id="menuCoins"><span class="coin"></span><b>0</b></div>
+    </div>
+    <div id="logo"><h1 class="disp" id="logoT"></h1><p id="logoS"></p></div>
+    <div id="menuBottom">
+      <div id="lvlRow"><span id="lvlName" class="disp"></span><span id="bossTag" class="hidden"></span></div>
+      <button id="playBtn" class="big disp"></button>
+      <div id="ups"></div>
+      <div id="menuRow2"><button id="coatsBtn" class="pill"></button><span id="aulInfo"></span></div>
+    </div>
+  </div>
+
+  <!-- итоги -->
+  <div id="result" class="hidden">
+    <div class="card">
+      <h2 id="resT" class="disp"></h2>
+      <p id="resSub"></p>
+      <div id="resMult" class="disp"></div>
+      <div id="resCoins" class="disp"><span class="coin"></span><b>+0</b></div>
+      <div class="row"><button id="resMenu" class="pill"></button><button id="resNext" class="big disp"></button></div>
+    </div>
+  </div>
+
+  <!-- окна -->
+  <div id="modal" class="hidden"><div class="card" id="modalCard"></div></div>
+
+  <div id="loading"><div class="disp" id="loadT">ТАБУН</div><div id="loadBar"><i></i></div><p id="loadS"></p></div>
+</div>
+</body>
+</html>

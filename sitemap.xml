@@ -72,4 +72,9 @@
     <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/xo/?lang=ru"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/xo/?lang=en"/>
   </url>
+  <url>
+    <loc>https://gamemetric.dev/tabun/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://gamemetric.dev/tabun/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gamemetric.dev/tabun/?lang=en"/>
+  </url>
 </urlset>

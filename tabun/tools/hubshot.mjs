@@ -1,0 +1,21 @@
+// Скриншот главной gamemetric.dev: node tools/hubshot.mjs WxH out.jpg [query]
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { serve, launch, sleep } from './cdp.mjs';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const [size, out, q = ''] = process.argv.slice(2);
+const [W, H] = size.split('x').map(Number);
+const srv = await serve(root);
+const b = await launch({ width: W, height: H });
+const errs = [];
+b.on((m) => { if (m.method === 'Runtime.exceptionThrown') errs.push(m.params.exceptionDetails.exception?.description); });
+await b.send('Runtime.enable'); await b.send('Page.enable');
+await b.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: W < 600 });
+await b.send('Page.navigate', { url: `${srv.url}/?${q}` });
+await sleep(2500);
+console.log('count', await b.evaluate('document.getElementById("count").textContent'), 'first card', await b.evaluate('document.querySelector(".card h3").textContent'));
+const r = await b.send('Page.captureScreenshot', { format: 'jpeg', quality: 80 });
+fs.writeFileSync(out, Buffer.from(r.data, 'base64'));
+if (errs.length) console.log('ERR', errs);
+b.close(); srv.close(); process.exit(0);
