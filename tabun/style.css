@@ -211,3 +211,5 @@ html.shot #hud, html.shot #hint, html.shot #dragHint, html.shot .float, html.sho
 .banner { font-size: clamp(30px, 10.5vw, 56px); }
 .banner.intro { font-size: clamp(28px, 9vw, 46px); }
 .banner.clash { font-size: clamp(36px, 12vw, 64px); }
+
+.banner.gold { color: #ffe066; text-shadow: 0 4px 0 #a35a00, 0 8px 24px rgba(0,0,0,.35); }

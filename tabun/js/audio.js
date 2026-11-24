@@ -1,12 +1,78 @@
 // Звук «Табуна»: всё синтезом WebAudio, кроме ржания (CC0, BigSoundBank).
 let ctx = null, master = null, neighBuf = null, noiseBuf = null;
 let enabled = true;
+let musicOn = true, musicBus = null, musicNext = 0, musicStep = 0, musicMode = 'off';
+const ksCache = new Map();
 let hoofNext = 0;
 let lastNeigh = 0;
 
 export function setSound(on) {
   enabled = on;
   if (master) master.gain.setTargetAtTime(on ? 0.8 : 0, ctx.currentTime, 0.05);
+}
+
+export function setMusic(on) {
+  musicOn = on;
+  musicMode = ""; // пусть music() сама выставит громкость под экран
+}
+
+// щипок струны: Karplus–Strong, буферы кешируются по частоте
+function pluckBuf(freq) {
+  const key = Math.round(freq * 10);
+  if (ksCache.has(key)) return ksCache.get(key);
+  const sr = ctx.sampleRate, len = Math.floor(sr * 1.4), N = Math.max(2, Math.round(sr / freq));
+  const b = ctx.createBuffer(1, len, sr), y = b.getChannelData(0);
+  for (let i = 0; i < N; i++) y[i] = Math.random() * 2 - 1;
+  for (let i = N; i < len; i++) y[i] = 0.4985 * (y[i - N] + y[i - N + 1 < i ? i - N + 1 : i - N]);
+  // мягкое начало, чтобы не щёлкало
+  for (let i = 0; i < 64; i++) y[i] *= i / 64;
+  ksCache.set(key, b);
+  return b;
+}
+function pluck(freq, t0, vol) {
+  const s = ctx.createBufferSource(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+  s.buffer = pluckBuf(freq);
+  f.type = 'lowpass'; f.frequency.value = 3200;
+  g.gain.value = vol;
+  s.connect(f).connect(g).connect(musicBus);
+  s.start(t0);
+}
+function drum(t0, vol) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.setValueAtTime(110, t0); o.frequency.exponentialRampToValueAtTime(48, t0 + 0.18);
+  g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25);
+  o.connect(g).connect(musicBus); o.start(t0); o.stop(t0 + 0.3);
+}
+// лад: ре-минорная пентатоника; кюй — «та-та-там» скачущим ритмом
+const NOTE = (n) => 146.83 * Math.pow(2, n / 12); // от D3
+const SCALE = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24];
+const MELODY = [
+  [7, 6, 5, 6, 7, 8, 7, 5, 6, 5, 4, 5, 6, 5, 4, 2],
+  [4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 4, 5, 4, 3, 2, 0],
+  [7, 7, 8, 9, 8, 7, 6, 7, 5, 6, 7, 6, 5, 4, 5, 2],
+  [2, 4, 5, 4, 2, 4, 5, 7, 6, 5, 4, 2, 4, 2, 1, 0],
+];
+const RHYTHM = [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1]; // скачущий триольный пульс
+// mode: 'menu' — спокойно, 'run' — скачка, 'off' — тишина
+export function music(mode) {
+  if (!ctx || !musicBus) return;
+  if (mode !== musicMode) { musicMode = mode; musicBus.gain.setTargetAtTime(mode === 'off' || !musicOn ? 0 : mode === 'menu' ? 0.55 : 0.8, ctx.currentTime, 0.35); }
+  if (mode === 'off' || !musicOn) return;
+  const t = ctx.currentTime;
+  const stepDur = mode === 'run' ? 0.125 : 0.19;
+  if (musicNext < t) musicNext = t + 0.05;
+  while (musicNext < t + 0.25) {
+    const bar = Math.floor(musicStep / 16) % MELODY.length, st = musicStep % 16;
+    if (RHYTHM[st]) {
+      const deg = MELODY[bar][st];
+      pluck(NOTE(SCALE[deg]), musicNext, st % 4 === 0 ? 0.32 : 0.22);
+      // вторая струна — квинта в бурдоне на сильных долях
+      if (st % 4 === 0) pluck(NOTE(SCALE[deg % 3 === 0 ? 0 : 3] - 12), musicNext, 0.2);
+    }
+    if (mode === 'run' && st % 4 === 0) drum(musicNext, st === 0 ? 0.5 : 0.32);
+    musicNext += stepDur * (st % 2 ? 0.86 : 1.14); // лёгкий свинг
+    musicStep++;
+  }
 }
 
 export function initAudio() {
@@ -19,6 +85,9 @@ export function initAudio() {
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -14; comp.ratio.value = 4;
   master.connect(comp).connect(ctx.destination);
+  musicBus = ctx.createGain();
+  musicBus.gain.value = 0;
+  musicBus.connect(master);
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;

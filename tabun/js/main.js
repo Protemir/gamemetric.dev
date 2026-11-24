@@ -4,7 +4,7 @@ import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
 import { level, Run, DT, autoTarget, HALF, reward, herdShape, opText } from './logic.js';
 import { World } from './world.js';
 import { loadHorse, loadWolf, HERD_SETS, COATS } from './horses.js';
-import { initAudio, sfx, hooves, setSound } from './audio.js';
+import { initAudio, sfx, hooves, setSound, setMusic, music } from './audio.js';
 import { t, detectLang, setLang, getLang } from './i18n.js';
 import * as S from './save.js';
 
@@ -69,6 +69,7 @@ async function boot() {
   world.setHerdSet(save.set);
   world.onBoom = () => sfx('boom');
   setSound(save.sound);
+  setMusic(save.music !== false);
   onResize();
   window.addEventListener('resize', onResize);
   bindInput();
@@ -246,9 +247,10 @@ function showCoats() {
 
 function showSettings(inGame) {
   const row = (label, val, id) => `<div class="mrow"><span>${label}</span><button id="${id}" class="${val ? 'on' : ''}">${val === null ? '' : val ? t('on') : t('off')}</button></div>`;
-  modal(`<h3 class="mtitle">${inGame ? t('pause') : '⚙'}</h3>${row(t('sound'), save.sound, 'mSound')}<div class="mrow"><span>🌐</span><button id="mLang">${t('lang')}</button></div>
+  modal(`<h3 class="mtitle">${inGame ? t('pause') : '⚙'}</h3>${row(t('sound'), save.sound, 'mSound')}${row(t('music'), save.music !== false, 'mMusic')}<div class="mrow"><span>🌐</span><button id="mLang">${t('lang')}</button></div>
     <div class="mbtns">${inGame ? `<button class="big disp" id="mResume">${t('resume')}</button><button class="pill" id="mMenu">${t('menu')}</button>` : `<button class="pill" id="mClose">OK</button>`}</div>`);
   $('mSound').onclick = () => { save.sound = !save.sound; setSound(save.sound); S.store(save); showSettings(inGame); };
+  $('mMusic').onclick = () => { save.music = save.music === false; setMusic(save.music); S.store(save); showSettings(inGame); };
   $('mLang').onclick = () => { setLang(getLang() === 'ru' ? 'en' : 'ru'); if (inGame) { $('progLvl').textContent = t('level') + ' ' + L.n; showSettings(true); } else { closeModal(); showMenu(); } };
   if (inGame) {
     $('mResume').onclick = () => { closeModal(); state = 'play'; lastT = performance.now(); };
@@ -364,13 +366,21 @@ function handleEvents() {
         const g = ev.op;
         if (g.op === '$') break;
         const txt = ev.delta >= 0 ? (g.op === 'x' ? opText(g) : '+' + ev.delta) : String(ev.delta);
-        floatText(txt, ev.x, 2.2, ev.d, ev.good ? 'good huge' : 'bad huge');
+        floatText(txt, ev.x, 5.2, ev.d, ev.good ? 'good huge' : 'bad huge');
         sfx(ev.good ? 'good' : 'bad', g.op === 'x' ? 6 : 0);
         if (!ev.good) buzz(60);
         flash(ev.good ? 'good' : 'bad');
         popTag(herdTag);
         break;
       }
+      case 'golden':
+        flash('gold');
+        banner(t('golden'), 'gold', '+' + ev.n);
+        sfx('chest');
+        sfx('milestone');
+        buzz([30, 40, 30]);
+        updateCoins();
+        break;
       case 'chest':
         flash('gold');
         floatText('+' + ev.v + ' ₸', ev.x, 2.2, ev.d, 'gold huge');
@@ -437,7 +447,7 @@ function checkUpcomingHints() {
     const d = it.d ?? it.d0;
     if (d - front > 45) break;
     if (d < front) continue;
-    if (it.type === 'wild') showHint('wild');
+    if (it.type === 'wild') showHint(it.golden ? 'golden' : 'wild');
     else if (it.type === 'wolf') showHint('wolf');
     else if (it.type === 'pit') showHint('pit');
     else if (it.type === 'fence') showHint('fence');
@@ -591,12 +601,14 @@ function frame(now) {
     $('progBar').firstElementChild.style.width = pr * 100 + '%';
     $('progBar').lastElementChild.style.left = pr * 100 + '%';
     hooves(run.count, run.state === 'run' || run.state === 'ladder' || run.state === 'clash', rdt);
+    music(run.state === 'run' || run.state === 'clash' || run.state === 'ladder' ? 'run' : 'off');
     if (resultIn > 0 && (resultIn -= rdt) <= 0) { resultIn = 0; showResult(); }
   } else if (state === 'result') {
     run.step(rdt, run.cx);
     run.events.length = 0;
     hooves(0, false, rdt);
-  } else hooves(0, false, rdt);
+    music('off');
+  } else { hooves(0, false, rdt); music(state === 'menu' ? 'menu' : 'off'); }
   world.update(run, state === 'pause' ? 0 : rdt * (state === 'play' ? timeScale : 1), state === 'menu');
   if (state === 'play') placeTags();
   world.render();

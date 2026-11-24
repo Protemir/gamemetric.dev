@@ -70,6 +70,14 @@ await ev('(document.getElementById("resNext").click(), 1)');
 await sleep(300);
 ok(await ev('document.getElementById("starTotal").textContent.includes(String(Object.values(__tabun.save.stars).reduce((a,b)=>a+b,0)))'), 'звёзды в меню посчитаны');
 
+// 4в) музыка: переключатель в настройках сохраняется
+await ev('(__tabun.menu(), document.getElementById("modal").classList.add("hidden"), document.getElementById("setBtn").click(), 1)');
+await sleep(300);
+await ev('(document.getElementById("mMusic").click(), 1)');
+await sleep(200);
+ok(await ev('__tabun.save.music === false && JSON.parse(localStorage.getItem("tabun.save.v1")).music === false && document.getElementById("mMusic").textContent.length > 0'), 'музыка выключается и это сохраняется');
+await ev('(document.getElementById("mMusic").click(), document.getElementById("modal").classList.add("hidden"), 1)');
+
 // 5) много уровней подряд: память GPU не растёт
 const mem = [];
 for (let i = 0; i < N; i++) {

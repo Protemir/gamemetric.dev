@@ -5,6 +5,7 @@ export const HALF = 5.5;          // полуширина трассы, м
 export const CAP = 150;           // столько коней живут телами; остальное — только число
 export const MAX_COUNT = 999;
 export const DT = 1 / 60;
+export const GOLDEN = 10;      // столько коней даёт Алтын тұлпар
 export const LADDER = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5];
 const LAT_SPEED = 11;             // как быстро центр табуна идёт за пальцем, м/с
 const HORSE_R = 0.45;             // «радиус» коня для столкновений
@@ -61,7 +62,7 @@ export function level(n) {
   return L;
 }
 
-export const THEMES = ['day', 'gold', 'day', 'dusk', 'day', 'gold', 'morning', 'dusk'];
+export const THEMES = ['day', 'gold', 'winter', 'dusk', 'day', 'gold', 'morning', 'winter'];
 
 function genLevel(n) {
   // уровень, который автопилот проходит плохо, перегенерируется с другим сидом
@@ -118,9 +119,15 @@ function genLevelOnce(n, variant) {
       E = Math.max(E, 3);
       d += ri(30, 38);
     } else if (type === 'wild') {
-      const k = ri(3, 4 + Math.min(10, n));
-      L.items.push({ type: 'wild', d: d + 4, x: pick([-3, -1.5, 0, 1.5, 3]), n: k, seed: ri(1, 1e6) });
-      E += Math.round(k * 0.8);
+      if (n >= 2 && R() < 0.18) {
+        // Алтын тұлпар: один золотой конь, стоит за десятерых
+        L.items.push({ type: 'wild', d: d + 4, x: pick([-3.5, 3.5]), n: 1, golden: true, seed: ri(1, 1e6) });
+        E += 8;
+      } else {
+        const k = ri(3, 4 + Math.min(10, n));
+        L.items.push({ type: 'wild', d: d + 4, x: pick([-3, -1.5, 0, 1.5, 3]), n: k, seed: ri(1, 1e6) });
+        E += Math.round(k * 0.8);
+      }
       d += ri(24, 30);
     } else if (type === 'wolf') {
       const k = ri(3, 4 + Math.min(6, Math.floor(n / 3)));
@@ -367,7 +374,7 @@ export class Run {
           const R = rng(it.seed);
           for (let k = 0; k < it.n; k++) {
             const a = R() * Math.PI * 2, r = Math.sqrt(R()) * (0.8 + it.n * 0.12);
-            this.wild.push({ id: this.nextId++, x: clamp(it.x + Math.cos(a) * r, -HALF + 0.5, HALF - 0.5), d: it.d + Math.sin(a) * r * 1.3, phase: R(), yaw: (R() - 0.5) * 1.2, item: it.i, coat: Math.floor(R() * 1e6) });
+            this.wild.push({ id: this.nextId++, x: clamp(it.x + Math.cos(a) * r, -HALF + 0.5, HALF - 0.5), d: it.d + Math.sin(a) * r * 1.3, phase: R(), yaw: (R() - 0.5) * 1.2, item: it.i, coat: Math.floor(R() * 1e6), golden: !!it.golden });
           }
         }
         if (it.active && this.d > it.d + 40) it.done = true;
@@ -411,7 +418,8 @@ export class Run {
           const ddx = b.x - h.x, ddd = b.d - h.d;
           if (ddx * ddx + ddd * ddd < 1.9) {
             this.wild.splice(w, 1);
-            this.count = Math.min(MAX_COUNT, this.count + 1);
+            this.count = Math.min(MAX_COUNT, this.count + (h.golden ? GOLDEN : 1));
+            if (h.golden) { this.coins += 30; this.emit('golden', { x: h.x, d: h.d, n: GOLDEN }); this.sync(false, { x: h.x, d: h.d }); }
             if (this.bodies.length < this.cap) {
               const nb = this.newBody(h.x, h.d, 1);
               nb.joined = 1;
@@ -419,7 +427,7 @@ export class Run {
               this.bodies.push(nb);
               this.resync = true;
             }
-            this.emit('recruit', { x: h.x, d: h.d });
+            if (!h.golden) this.emit('recruit', { x: h.x, d: h.d });
             break;
           }
         }

@@ -11,6 +11,7 @@ export const THEME = {
   day: { top: '#3f86d8', hor: '#d6e8f2', sun: '#fff2d6', sunI: 2.2, hemi: ['#d8ecff', '#7d6a3a', 1.15], fog: '#d6e4e6', grass: '#9fbf55', dirt: '#c9a874', mount: '#8aa3b8', sunDir: [0.35, 0.8, 0.45] },
   gold: { top: '#4f7fc4', hor: '#f3d29a', sun: '#ffd79a', sunI: 2.3, hemi: ['#ffe7c4', '#6b5330', 1.05], fog: '#ead2a6', grass: '#c9b550', dirt: '#d0a36a', mount: '#a49aa6', sunDir: [-0.6, 0.45, 0.35] },
   dusk: { top: '#3a5aa0', hor: '#f6c08e', sun: '#ffd2a6', sunI: 1.8, hemi: ['#ffe8d6', '#8a7a5c', 1.45], fog: '#ecc29c', grass: '#bdb25c', dirt: '#c99c6a', mount: '#8c84a4', sunDir: [0.55, 0.32, 0.6] },
+  winter: { top: '#6f97c4', hor: '#e8eef4', sun: '#fff6ea', sunI: 2.0, hemi: ['#eef4ff', '#9aa6b0', 1.35], fog: '#e6edf2', grass: '#f4f6f8', dirt: '#cfc6b8', mount: '#a9bcd2', sunDir: [0.4, 0.5, 0.5], snow: true },
   morning: { top: '#5d93d6', hor: '#f4e2cf', sun: '#fff0dc', sunI: 2.1, hemi: ['#e4efff', '#6d6440', 1.1], fog: '#e6e2d8', grass: '#a3c062', dirt: '#c7a679', mount: '#93a7c2', sunDir: [-0.4, 0.55, -0.5] },
 };
 
@@ -160,6 +161,10 @@ export class World {
     this.leaderCol = new THREE.Color('#f4efe6');
     this.rider = this.makeRider();
     this.scene.add(this.rider);
+    this.rivalRider = this.makeRider({ chapan: '#2a2440', trim: '#9aa0b0', hat: '#3a3030', flag: '#1f1f2e' });
+    this.scene.add(this.rivalRider);
+    this.rivalLeaderCol = new THREE.Color('#1c1614');
+    this.goldCol = new THREE.Color('#ffc21a');
     this.eagles = this.makeEagles();
     this.intro = 0;
     this.fireworks = [];
@@ -191,10 +196,10 @@ export class World {
   }
 
   // всадник-батыр со знаменем: чапан, калпак, древко с полотнищем
-  makeRider() {
+  makeRider(o = {}) {
     const g = new THREE.Group();
     const L = (c) => new THREE.MeshLambertMaterial({ color: c });
-    const chapan = L('#b5302a'), trim = L('#e3b04b'), skin = L('#d9a882'), boot = L('#2a1a10'), hat = L('#f2ece0'), hatBrim = L('#1c1410'), pole = L('#5a3a20');
+    const chapan = L(o.chapan || '#b5302a'), trim = L(o.trim || '#e3b04b'), skin = L('#d9a882'), boot = L('#2a1a10'), hat = L(o.hat || '#f2ece0'), hatBrim = L('#1c1410'), pole = L('#5a3a20');
     const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
     add(new THREE.CylinderGeometry(0.17, 0.24, 0.62, 10), chapan, 0, 0.31, 0);          // корпус
     add(new THREE.TorusGeometry(0.21, 0.035, 6, 16), trim, 0, 0.12, 0, Math.PI / 2);     // пояс
@@ -210,12 +215,12 @@ export class World {
     const flagTex = (() => {
       const c = document.createElement('canvas'); c.width = 128; c.height = 80;
       const x = c.getContext('2d');
-      x.fillStyle = '#c4281f'; x.fillRect(0, 0, 128, 80);
+      x.fillStyle = o.flag || '#c4281f'; x.fillRect(0, 0, 128, 80);
       x.fillStyle = '#e3b04b';
       x.fillRect(0, 0, 10, 80);
       for (let i = 0; i < 5; i++) { x.beginPath(); x.moveTo(10, i * 16); x.lineTo(20, i * 16 + 8); x.lineTo(10, i * 16 + 16); x.fill(); }
       x.beginPath(); x.arc(70, 40, 16, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#c4281f'; x.beginPath(); x.arc(70, 40, 10, 0, Math.PI * 2); x.fill();
+      x.fillStyle = o.flag || '#c4281f'; x.beginPath(); x.arc(70, 40, 10, 0, Math.PI * 2); x.fill();
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
     })();
     add(new THREE.CylinderGeometry(0.025, 0.025, 2.3, 6), pole, 0.3, 1.05, 0.1);
@@ -363,7 +368,7 @@ export class World {
       // края: зелень наползает
       for (let side = 0; side < 2; side++) {
         const gr = g.createLinearGradient(side ? w : 0, 0, side ? w - 34 : 34, 0);
-        gr.addColorStop(0, 'rgba(150,150,80,1)'); gr.addColorStop(1, 'rgba(150,150,80,0)');
+        gr.addColorStop(0, 'rgba(176,162,118,0.9)'); gr.addColorStop(1, 'rgba(176,162,118,0)');
         g.fillStyle = gr; g.fillRect(side ? w - 34 : 0, 0, 34, h);
       }
     }, { repeat: true });
@@ -394,7 +399,7 @@ export class World {
     this.sunDir = sd;
     this.hemi.color.set(T.hemi[0]); this.hemi.groundColor.set(T.hemi[1]); this.hemi.intensity = T.hemi[2];
     this.scene.fog.color.set(T.fog);
-    this.groundMat.color.set(T.grass).multiplyScalar(1.12);
+    this.groundMat.color.set(T.grass).multiplyScalar(T.snow ? 1.08 : 1.12);
     // дальний хребет — голубой, ближние холмы — степные, темнее
     const far = new THREE.Color(T.mount).lerp(new THREE.Color(T.fog), 0.12);
     const near = new THREE.Color(T.grass).multiplyScalar(0.62).lerp(new THREE.Color(T.mount), 0.3);
@@ -454,7 +459,7 @@ export class World {
     const merged = mergeTwo(tuftGeo, tg2);
     const tuftMat = new THREE.MeshBasicMaterial({ alphaMap: this.tuftTex, alphaTest: 0.35, side: THREE.DoubleSide, color: '#e6e0c8' });
     const N = 1300;
-    const gc = new THREE.Color(this.theme.grass);
+    const gc = this.theme.snow ? new THREE.Color('#b9b090') : new THREE.Color(this.theme.grass);
     const tc = [gc.clone().multiplyScalar(1.2), gc.clone().lerp(new THREE.Color('#f0e2a0'), 0.45), gc.clone().lerp(new THREE.Color('#e8d890'), 0.25), gc.clone().multiplyScalar(0.85), gc.clone().lerp(new THREE.Color('#fff4cc'), 0.6)];
     const tufts = new THREE.InstancedMesh(merged, tuftMat, N);
     let k = 0;
@@ -819,7 +824,12 @@ export class World {
     // дикие
     for (const w of run.wild) {
       m4.compose(v.set(w.x, 0, -w.d), q.setFromEuler(e.set(0, w.yaw + Math.PI, 0)), s.set(1, 1, 1));
-      (w.id % 3 === 0 ? this.idle : this.eat).add(w.phase + t * 0.35, m4, this.horseColor(w, 'wild'));
+      if (w.golden) {
+        m4.compose(v.set(w.x, 0, -w.d), q.setFromEuler(e.set(0, w.yaw + Math.PI, 0)), s.set(1.45, 1.45, 1.45));
+        this.idle.add(w.phase + t * 0.5, m4, this.goldCol);
+        shadow(w.x, -w.d, 2.2);
+        if (Math.random() < dt * 40) this.sparks.emit(w.x + (Math.random() - 0.5) * 1.6, 0.6 + Math.random() * 2, -w.d + (Math.random() - 0.5) * 2, 0, 1.2, 0, this.goldCol, 0.9, 0.22, 0.05, -0.5, 1);
+      } else (w.id % 3 === 0 ? this.idle : this.eat).add(w.phase + t * 0.35, m4, this.horseColor(w, 'wild'));
       shadow(w.x, -w.d);
     }
     // соперник
@@ -831,6 +841,24 @@ export class World {
       else this.idle.add(b.phase + t * 0.4, m4, this.horseColor(b, 'rival'));
       shadow(b.x, -b.d);
     }
+    // вожак баая: вороной, всадник в тёмном
+    const RR = this.rivalRider;
+    if (rv.count > 0 && rv.d - run.d < 140 && run.state !== 'win' && run.state !== 'ladder') {
+      const rsh = herdShape(Math.max(1, Math.min(rv.count, run.cap)));
+      const rd = rv.d - rsh.b - 2;
+      const sc = this.L?.boss ? 1.45 : 1.3;
+      m4.compose(v.set(0, 0, -rd), q.setFromEuler(e.set(0, Math.PI, 0)), s.set(sc, sc, sc));
+      if (rivalRun) this.gallop.add(0.11 + t * gallopRate, m4, this.rivalLeaderCol);
+      else this.idle.add(0.6 + t * 0.4, m4, this.rivalLeaderCol);
+      shadow(0, -rd, sc);
+      RR.visible = true;
+      RR.scale.setScalar(sc / 1.3);
+      RR.position.set(0, 1.55 * (sc / 1.3) + (rivalRun ? Math.abs(Math.sin((0.11 + t * gallopRate) * Math.PI * 2)) * 0.09 : 0), -rd - 0.12);
+      RR.rotation.set(rivalRun ? 0.12 : 0, Math.PI, 0);
+      const f = RR.userData.flag, base = RR.userData.flagBase, arr = f.geometry.attributes.position.array;
+      for (let i = 0; i < arr.length; i += 3) { const x = base[i]; arr[i + 2] = base[i + 2] + Math.sin(t * (rivalRun ? 11 : 3) - x * 5) * x * 0.2; }
+      f.geometry.attributes.position.needsUpdate = true;
+    } else RR.visible = false;
     // призраки
     for (const g of run.ghosts) {
       let col = g.rival ? this.coat('black') : this.coat(this.herdSet[g.coat % this.herdSet.length]);
@@ -909,6 +937,15 @@ export class World {
       eg.rotation.set(0, -a + Math.PI, Math.sin(a) * 0.25 + 0.3);
       const flap = Math.sin(t * 0.7 + u.ph) > 0.6 ? Math.sin(t * 9 + u.ph) * 0.5 : 0.05;
       u.lw.rotation.z = flap; u.rw.rotation.z = -flap;
+    }
+    // снегопад на зимних уровнях
+    if (this.theme?.snow) {
+      this.snowAcc = (this.snowAcc || 0) + dt * 120;
+      const wc = this.snowCol || (this.snowCol = new THREE.Color('#ffffff'));
+      while (this.snowAcc > 1) {
+        this.snowAcc--;
+        this.dust.emit(this.camLook.x + (Math.random() - 0.5) * 50, 10 + Math.random() * 10, this.camLook.z + 25 - Math.random() * 60, (Math.random() - 0.5) * 0.8, -1.6, 0.6, wc, 6, 0.3, 0.3, 0, 0.95);
+      }
     }
     // фейерверк по очереди
     for (const fw of this.fireworks) {
