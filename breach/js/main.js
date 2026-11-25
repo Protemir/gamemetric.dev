@@ -940,7 +940,7 @@ function openLobby(code) {
   closeSettings();
   if (net) net.close();
   knownPeers = null;
-  lobby = { mode: settings.mode, diff: settings.diff, teams: {}, names: {}, started: false };
+  lobby = { mode: settings.mode, diff: settings.diff, teams: {}, names: {}, ready: {}, started: false };
   const name = myName();
   $('lb-name').value = name;
   $('lb-code').textContent = code;
@@ -1059,14 +1059,16 @@ function hostSync() {
     if (!lobby.names[p.peer]) lobby.names[p.peer] = p.name;
   }
   for (const k of Object.keys(lobby.teams)) if (!net.peers.some((p) => p.peer === k)) delete lobby.teams[k];
+  lobby.ready ||= {};
+  for (const k of Object.keys(lobby.ready)) if (!net.peers.some((p) => p.peer === k)) delete lobby.ready[k];
   lobby.started = !!(game && game.role === 'host' && !game.over);
   lobby.fun = settings.fun;
   net.broadcast({ k: 'lobby', ...lobby });
-  // a friend arriving mid-match takes a bot's place
+  // a friend arriving mid-match takes a bot's place once they have picked a name and a team and pressed join
   if (game && game.role === 'host' && !game.over) {
     for (const p of net.peers) {
-      if (p.peer === net.id || game.soldiers.some((s) => s.peer === p.peer)) continue;
-      const s = game.addHuman(p.peer, lobby.names[p.peer] || p.name);
+      if (p.peer === net.id || game.soldiers.some((s) => s.peer === p.peer) || !lobby.ready[p.peer]) continue;
+      const s = game.addHuman(p.peer, lobby.names[p.peer] || p.name, lobby.teams[p.peer]);
       if (!s) continue;
       lobby.teams[p.peer] = s.team;
       s.sentStartAt = performance.now();
@@ -1098,12 +1100,17 @@ function renderLobby() {
   for (const [id, key] of [['lb-mode', 'mode'], ['lb-diff', 'diff']]) for (const b of $(id).querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === lobby[key]);
   $('lb-opts').classList.toggle('locked', !net.isHost);
   $('lb-start').hidden = !net.isHost;
+  const canJoin = !net.isHost && lobby.started && !game && !clientStarting;
+  const asked = !!lobby.ready?.[net.id];
+  $('lb-join').hidden = !canJoin;
+  $('lb-join').disabled = asked;
+  $('lb-join').textContent = t(asked ? 'joining' : 'joinMatch');
   const fun = Object.entries((net.isHost ? settings.fun : lobby.fun) || {}).filter(([, on]) => on).map(([k]) => [...document.querySelectorAll('#seg-fun [data-f]')].find((b) => b.dataset.f === k)?.dataset.t)
     .filter(Boolean)
     .map((k) => t(k));
   $('lb-fun').textContent = fun.length ? `${t('fun')}: ${fun.join(', ')}` : '';
   if (performance.now() < (lobbyNoteUntil || 0)) return;
-  $('lb-status').textContent = net.isHost ? '' : lobby.started ? t('inMatch') : t('waitHost');
+  $('lb-status').textContent = net.isHost ? '' : lobby.started ? t(game || lobby.ready?.[net.id] ? 'inMatch' : 'inMatchPick') : t('waitHost');
 }
 
 function botWord(n) {
@@ -1159,6 +1166,16 @@ $('lb-copy').onclick = async () => {
   lobbyNote(t('copied'));
 };
 $('lb-leave').onclick = () => toMenu();
+$('lb-join').onclick = () => {
+  if (!net || net.isHost) return;
+  const n = $('lb-name').value.trim().slice(0, 16);
+  if (n)
+    try {
+      localStorage.setItem(NAME_KEY, n);
+    } catch {}
+  sfx('click');
+  net.toHost({ k: 'join', name: n });
+};
 $('lb-start').onclick = () => {
   if (!net?.isHost) return;
   // humans first in their team, bots fill the rest; ids 0-4 assault, 5-9 guards
@@ -1172,6 +1189,7 @@ $('lb-start').onclick = () => {
     }
   }
   lobby.started = true;
+  lobby.ready = {};
   net.broadcast({ k: 'start', roster, mode: lobby.mode, diff: lobby.diff, fun: settings.fun });
   startGame({ role: 'host', roster, myPeer: net.id, mode: lobby.mode, diff: lobby.diff, team: lobby.teams[net.id], fun: settings.fun });
   setTimeout(hostSync, 100);
@@ -1183,7 +1201,14 @@ function onNetMessage(from, m) {
     if (m.k === 'team') {
       if (m.team !== 'A' && m.team !== 'B') return;
       const count = Object.entries(lobby.teams).filter(([p, x]) => x === m.team && p !== from).length;
-      if (count < 5 && !(game && game.role === 'host' && !game.over)) lobby.teams[from] = m.team;
+      // in the lobby anyone may switch; during a match only those still waiting to join
+      const playing = game && game.role === 'host' && !game.over && game.soldiers.some((s) => s.peer === from);
+      if (count < 5 && !playing) lobby.teams[from] = m.team;
+      hostSync();
+    } else if (m.k === 'join') {
+      const nm = String(m.name ?? '').replace(/[^\p{L}\p{N} _.\-]/gu, '').trim().slice(0, 16);
+      if (nm) lobby.names[from] = nm;
+      (lobby.ready ||= {})[from] = true;
       hostSync();
     } else if (m.k === 'name') {
       const nm = String(m.name ?? '').replace(/[^\p{L}\p{N} _.\-]/gu, '').trim().slice(0, 16);

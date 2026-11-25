@@ -3125,9 +3125,9 @@ export class Game {
   }
 
   // a friend joins mid-match: they take a bot's place from the next round (deathmatch: in a moment)
-  addHuman(peer, name) {
+  addHuman(peer, name, want) {
     const humans = (team) => this.soldiers.filter((s) => s.team === team && (s.peer || s.isPlayer)).length;
-    const order = this.variant === 'zombie' ? ['B', 'A'] : humans('A') <= humans('B') ? ['A', 'B'] : ['B', 'A'];
+    const order = want === 'A' || want === 'B' ? [want, want === 'A' ? 'B' : 'A'] : this.variant === 'zombie' ? ['B', 'A'] : humans('A') <= humans('B') ? ['A', 'B'] : ['B', 'A'];
     const pick = () => {
       const teams = order.filter((t) => this.soldiers.some((s) => s.team === t && s.brain));
       if (!teams.length) return null;
