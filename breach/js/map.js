@@ -262,7 +262,7 @@ export class GameMap {
     solid(41, 42, 41, 42, CEIL, K.PILLAR);
     solid(35, 37, 36, 38, 2.3, K.STATUE);
     // [from, to, radius]: the plinth, the vase's foot, belly and neck
-    round(35, 37, 36, 38, 36, 38, 0, [[0, 1.2, 0.95], [1.2, 1.45, 0.36], [1.45, 2.05, 0.5], [2.05, 2.3, 0.27]]);
+    round(35, 37, 36, 38, 36, 38, 0, [[0, 0.18, 0.95], [0.18, 1.05, 0.8], [1.05, 1.2, 0.95], [1.2, 1.45, 0.36], [1.45, 2.05, 0.5], [2.05, 2.3, 0.27]]);
     solid(31, 45, 31, 45, 1.2, K.PLANT);
     solid(31, 31, 31, 31, 2.2, K.CABINET);
     solid(40, 45, 40, 45, 1.2, K.PLANT);
@@ -514,7 +514,9 @@ export class GameMap {
   }
 
   // ---------- bullets and sight: DDA through the grid ----------
-  raycast(ox, oy, oz, dx, dy, dz, maxT) {
+  // exact: for shots and their marks; furniture models are met as they are drawn, and a shot that leaves
+  // the map over a low outer wall flies on instead of stopping at the map's invisible edge
+  raycast(ox, oy, oz, dx, dy, dz, maxT, exact = false) {
     let cx = Math.floor(ox), cz = Math.floor(oz);
     const stepX = dx > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1;
     const tdx = dx !== 0 ? Math.abs(1 / dx) : Infinity, tdz = dz !== 0 ? Math.abs(1 / dz) : Infinity;
@@ -522,7 +524,7 @@ export class GameMap {
     let tmz = dz !== 0 ? (dz > 0 ? cz + 1 - oz : oz - cz) * tdz : Infinity;
     let t0 = 0, axis = -1;
     for (let i = 0; i < 400; i++) {
-      if (!this.inb(cx, cz)) return { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c: -1 };
+      if (!this.inb(cx, cz)) return exact ? null : { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c: -1 };
       const c = cz * W + cx;
       const t1 = Math.min(tmx, tmz, maxT);
       const ya = oy + dy * t0, yb = oy + dy * t1;
@@ -537,6 +539,11 @@ export class GameMap {
           return r;
         }
         hh = rs.base;
+      }
+      if (exact && hh > 0 && this.propHit) {
+        const r = this.propHit(c, ox, oy, oz, dx, dy, dz, t0, t1);
+        if (r) return r;
+        if (r === null) hh = 0;
       }
       // from under the water into the deck: the pool's side
       if (!water && ya < -0.01 && axis >= 0) return { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c };
@@ -1084,6 +1091,23 @@ export class GameMap {
     const roofY = (x, z) => Math.min(R, E + Math.min(x - X0, X1 - x, z - Z0, Z1 - z) * Math.tan((17 * Math.PI) / 180));
     for (const [x, z] of [[21, 13], [53, 12], [47, 40]]) boxSolid('fire', x, roofY(x, z) - 1, z, x + 1.4, roofY(x + 0.7, z + 0.7) + 2.3, z + 1.4);
 
+    // the slabs: marble on top, ceiling underneath, trim on the open edges
+    for (let z = 0; z < H; z++)
+      for (let x = 0; x < W; x++) {
+        const c = z * W + x, dk = this.deck[c];
+        if (!dk) continue;
+        hface('pillar', x, z, x + 1, z + 1, dk, true, true, null);
+        hface('ceiling', x, z, x + 1, z + 1, dk - DECK_T, false, true, null);
+        for (let d = 0; d < 4; d++) {
+          const nx = x + DIRS[d][0], nz = z + DIRS[d][1];
+          if (!this.inb(nx, nz)) continue;
+          const nb = nz * W + nx;
+          if (this.deck[nb] || this.h[nb] >= dk) continue;
+          // the edge faces outward: drawn from the neighbour's side, so it is lit and turned the right way
+          vface('trim', x, z, d, dk - DECK_T, dk, true, false);
+        }
+      }
+
     const meshes = [];
     for (const [key, G] of Object.entries(groups)) {
       const geo = new THREE.BufferGeometry();
@@ -1122,23 +1146,6 @@ export class GameMap {
       under.position.set(35, WATER_Y - 0.01, 4);
       meshes.push(under);
     }
-
-    // the slabs: marble on top, ceiling underneath, trim on the open edges
-    for (let z = 0; z < H; z++)
-      for (let x = 0; x < W; x++) {
-        const c = z * W + x, dk = this.deck[c];
-        if (!dk) continue;
-        hface('pillar', x, z, x + 1, z + 1, dk, true, true, null);
-        hface('ceiling', x, z, x + 1, z + 1, dk - DECK_T, false, true, null);
-        for (let d = 0; d < 4; d++) {
-          const nx = x + DIRS[d][0], nz = z + DIRS[d][1];
-          if (!this.inb(nx, nz)) continue;
-          const nb = nz * W + nx;
-          if (this.deck[nb] || this.h[nb] >= dk) continue;
-          // the edge faces outward: drawn from the neighbour's side, so it is lit and turned the right way
-          vface('trim', x, z, d, dk - DECK_T, dk, true, false);
-        }
-      }
 
     // gallery and stair railings: posts and a handrail along the inner edge, white like the hall's trim
     {

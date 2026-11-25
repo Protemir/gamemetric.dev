@@ -370,7 +370,7 @@ export class NetGame {
       }
       const dx = e[0] - s.x, dy = e[1] - eye, dz = e[2] - s.z, d = Math.hypot(dx, dy, dz);
       if (d < 0.1) continue;
-      const hit = g.map.raycast(s.x, eye, s.z, dx / d, dy / d, dz / d, d + 0.2);
+      const hit = g.map.raycast(s.x, eye, s.z, dx / d, dy / d, dz / d, d + 0.2, true);
       if (hit && Math.abs(hit.t - d) < 0.3) {
         g.fx.decal(e[0], e[1], e[2], hit.nx, hit.ny, hit.nz);
         g.fx.spark(e[0], e[1], e[2], hit.nx, hit.ny, hit.nz, [0.6, 0.55, 0.45], 3, 2);

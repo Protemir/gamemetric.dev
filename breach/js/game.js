@@ -1,8 +1,8 @@
 // The match: soldiers, hostages, shooting, grenades, rounds, money, camera and view model.
 import * as THREE from '../vendor/three.module.min.js';
-import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos, WATER_Y, POOL_BOTTOM, DECK_T } from './map.js';
+import { GameMap, W, H, K, SURF, SUN, CEIL, mergeGeos, WATER_Y, POOL_BOTTOM, DECK_T, MODELLED } from './map.js';
 import { buildDecor } from './decor.js';
-import { buildProps, propsReady } from './props.js';
+import { buildProps, propsReady, propHitter } from './props.js';
 import { Chickens } from './chickens.js';
 import { Glass } from './glass.js';
 import { Rain } from './weather.js';
@@ -342,6 +342,7 @@ export class Game {
     this.vm.flash.material.map = this.fx.flashes[0].s.material.map;
     this.lightCache = new Float32Array(W * H).fill(-1);
     for (const m of buildProps(this)) this.scene.add(m);
+    this.map.propHit = propHitter(this.map, (k) => MODELLED.has(k));
 
     this.role = opts.role || 'solo';
     this.preview = !!opts.preview;
@@ -1231,7 +1232,7 @@ export class Game {
   }
 
   bullet(s, ox, oy, oz, dx, dy, dz, w, muzzle, tracer) {
-    const wall = this.map.raycast(ox, oy, oz, dx, dy, dz, 140);
+    const wall = this.map.raycast(ox, oy, oz, dx, dy, dz, 140, true);
     let maxT = wall ? wall.t : 140;
     let hit = null, who = null;
     for (const o of this.soldiers) {
@@ -1699,7 +1700,7 @@ export class Game {
 
   // blood behind someone who was hit: on the wall within reach, or on the floor
   splashBlood(ex, ey, ez, dx, dy, dz, big) {
-    const wall = this.map.raycast(ex, ey, ez, dx, dy, dz, 2.2);
+    const wall = this.map.raycast(ex, ey, ez, dx, dy, dz, 2.2, true);
     if (wall) this.fx.bloodDecal(ex + dx * wall.t, ey + dy * wall.t, ez + dz * wall.t, wall.nx, wall.ny, wall.nz, big ? 0.7 : 0.45);
     else if (big || Math.random() < 0.5) {
       const fy = this.map.groundAt(ex + dx * 0.8, ez + dz * 0.8, 0.05, ey);

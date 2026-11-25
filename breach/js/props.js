@@ -91,6 +91,70 @@ export function places() {
   return out;
 }
 
+// bullets against the models themselves: the grid's cells under a model are whole boxes, the model is
+// not, so a shot past a shelf's side or under a table met air. Returns (cell, ray, t0, t1) -> hit,
+// null for "no model surface in this cell along the ray" (a modelled cell is not drawn as a box), undefined elsewhere.
+export function propHitter(map, modelled) {
+  if (!P.ready) return null;
+  const W = 72;
+  const cells = new Map();
+  const mx = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  const side = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  for (const p of places()) {
+    const M = P.models[p.m];
+    if (!M || WALL.has(p.m)) continue;
+    const k = p.s ?? (p.h ? p.h / M.size.y : 1);
+    const mat = mx.compose(v.set(p.x, p.y || 0, p.z), q.setFromAxisAngle(up, p.yaw), s.set(k, p.sy ?? k, k)).clone();
+    const box = new THREE.Box3();
+    const meshes = M.parts.map((part) => {
+      part.geo.boundingBox || part.geo.computeBoundingBox();
+      box.union(part.geo.boundingBox);
+      const m = new THREE.Mesh(part.geo, side);
+      m.updateMatrixWorld(true);
+      return m;
+    });
+    box.applyMatrix4(mat);
+    const it = { mat, inv: mat.clone().invert(), nrm: new THREE.Matrix3().getNormalMatrix(mat), box, meshes };
+    for (let cz = Math.floor(box.min.z); cz <= Math.floor(box.max.z); cz++)
+      for (let cx = Math.floor(box.min.x); cx <= Math.floor(box.max.x); cx++) {
+        const c = cz * W + cx;
+        if (cx < 0 || cz < 0 || cx >= W || !modelled(map.kind[c])) continue;
+        (cells.get(c) || cells.set(c, []).get(c)).push(it);
+      }
+  }
+  const rc = new THREE.Raycaster(), wr = new THREE.Ray(), a = new THREE.Vector3(), b = new THREE.Vector3(), pw = new THREE.Vector3(), n = new THREE.Vector3(), out = [];
+  return (c, ox, oy, oz, dx, dy, dz, t0, t1) => {
+    const L = cells.get(c);
+    if (!L) return modelled(map.kind[c]) ? null : undefined;
+    let best = null;
+    wr.origin.set(ox, oy, oz);
+    wr.direction.set(dx, dy, dz);
+    for (const it of L) {
+      const enter = wr.intersectBox(it.box, pw);
+      if (!enter || pw.sub(wr.origin).length() > t1 + 0.01) continue;
+      a.set(ox, oy, oz).applyMatrix4(it.inv);
+      b.set(ox + dx * t1, oy + dy * t1, oz + dz * t1).applyMatrix4(it.inv);
+      const len = b.distanceTo(a);
+      if (len < 1e-6) continue;
+      rc.set(a, b.sub(a).divideScalar(len));
+      rc.far = len;
+      for (const m of it.meshes) {
+        out.length = 0;
+        m.raycast(rc, out);
+        for (const h of out) {
+          pw.copy(h.point).applyMatrix4(it.mat);
+          const t = (pw.x - ox) * dx + (pw.y - oy) * dy + (pw.z - oz) * dz;
+          if (t < t0 - 1e-4 || t > t1 + 1e-4 || (best && t >= best.t)) continue;
+          n.copy(h.face.normal).applyMatrix3(it.nrm).normalize();
+          if (n.x * dx + n.y * dy + n.z * dz > 0) n.negate();
+          best = { t: Math.max(t0, t), nx: n.x, ny: n.y, nz: n.z, c };
+        }
+      }
+    }
+    return best;
+  };
+}
+
 export function buildProps(game) {
   if (!P.ready) return [];
   const list = places();
