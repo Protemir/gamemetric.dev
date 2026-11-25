@@ -27,7 +27,7 @@ for (let k = 0; k < 150; k++) {
   try { if (await b.evaluate('!!window.__tabun && !!__tabun.run')) { ok = true; break; } } catch { /* грузится */ }
 }
 await sleep(3000);
-const info = await b.evaluate(`({ portal: window.TABUN_PORTAL, sdk: !!window.TABUN_SDK, lang: document.documentElement.lang, state: __tabun.state, d: Math.round(__tabun.run.d), allGames: document.getElementById('allGames').classList.contains('hidden'), share: document.getElementById('resShare').classList.contains('hidden') })`);
+const info = await b.evaluate(`({ portal: window.TABUN_PORTAL, sdk: !!window.TABUN_SDK, rewarded: String(window.TABUN_SDK?.advertisement?.isRewardedSupported), adBtn: !!document.getElementById('resAd'), lang: document.documentElement.lang, state: __tabun.state, d: Math.round(__tabun.run.d), allGames: document.getElementById('allGames').classList.contains('hidden'), share: document.getElementById('resShare').classList.contains('hidden') })`);
 console.log(JSON.stringify({ ok, ...info }));
 const shot = process.env.SHOT;
 if (shot) { const r = await b.send('Page.captureScreenshot', { format: 'jpeg', quality: 80 }); fs.writeFileSync(shot, Buffer.from(r.data, 'base64')); }

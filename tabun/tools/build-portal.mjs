@@ -29,9 +29,11 @@ for (const d of ['js', 'vendor', 'models', 'fonts', 'sounds']) fs.cpSync(path.jo
 if (portal === 'playgama') {
   const config = {
     advertisement: {
-      minimumDelayBetweenInterstitial: 120,
-      initialInterstitialDelay: 120,
+      // не чаще раза в минуту и не в первую минуту; в игре ещё: не после 1-го забега и 1,5 мин тишины после «×2»
+      minimumDelayBetweenInterstitial: 60,
+      initialInterstitialDelay: 60,
       interstitial: { placementFallback: 'level_end', placements: [{ id: 'level_end' }] },
+      rewarded: { placementFallback: 'double_coins', placements: [{ id: 'double_coins' }] },
     },
   };
   fs.writeFileSync(path.join(out, 'playgama-bridge-config.json'), JSON.stringify(config, null, 4) + '\n');

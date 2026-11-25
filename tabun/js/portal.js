@@ -91,17 +91,50 @@ function holdEvents() {
       bridge.advertisement.on(bridge.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, (s) => {
         if (s === 'opened') setHold(true, platformPaused);
         else if (s === 'closed' || s === 'failed') setHold(false, platformPaused);
+        if (s === 'opened') lastAdAt = performance.now();
+      });
+      bridge.advertisement.on(bridge.EVENT_NAME.REWARDED_STATE_CHANGED, (s) => {
+        if (s === 'opened') { setHold(true, platformPaused); lastAdAt = performance.now(); }
+        else if (s === 'closed' || s === 'failed') setHold(false, platformPaused);
+        if (s === 'rewarded' && rewardFn) { const f = rewardFn; rewardFn = null; f(); }
+        if ((s === 'closed' || s === 'failed') && rewardEnd) { const f = rewardEnd; rewardEnd = null; rewardFn = null; f(s === 'failed'); }
       });
       bridge.platform.on(bridge.EVENT_NAME.PAUSE_STATE_CHANGED, (p) => setHold(adOn, !!p));
     } catch {
       /* no events */
     }
 }
+// any ad seen (forced or chosen) buys the player a quiet stretch: no forced ad within QUIET ms of it
+let lastAdAt = -1e9, rewardFn = null, rewardEnd = null;
+const QUIET = 90000;
 holdEvents();
+
+// «×2 for an ad» on the results: only where the platform has rewarded ads (Playgama)
+export const portalRewardedOk = () => {
+  try {
+    return !!bridge && bridge.advertisement.isRewardedSupported !== false;
+  } catch {
+    return false;
+  }
+};
+// onReward() once the ad was watched to the end; onEnd(failed) when it is gone either way
+export function portalRewarded(onReward, onEnd) {
+  if (!portalRewardedOk()) return onEnd(true);
+  rewardFn = onReward;
+  rewardEnd = onEnd;
+  try {
+    const r = bridge.advertisement.showRewarded('double_coins');
+    if (r && r.catch) r.catch(() => {});
+  } catch {
+    rewardFn = rewardEnd = null;
+    onEnd(true);
+  }
+}
 
 // between levels: a full-screen ad if the platform has one (it decides the timing); mute(true/false) around it
 let muteForAd = () => {};
 export function portalInterstitial() {
+  if (performance.now() - lastAdAt < QUIET) return;
   if (bridge) {
     safe(() => bridge.advertisement.showInterstitial('level_end'));
     return;
@@ -169,6 +202,11 @@ export function onPortalMute(fn) {
     });
     b.advertisement.on(b.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, (s) => {
       st.ad = s === 'opened';
+      tell();
+    });
+    b.advertisement.on(b.EVENT_NAME.REWARDED_STATE_CHANGED, (s) => {
+      if (s === 'opened') st.ad = true;
+      else if (s === 'closed' || s === 'failed') st.ad = false;
       tell();
     });
   } catch {

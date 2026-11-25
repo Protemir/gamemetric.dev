@@ -7,7 +7,7 @@ import { loadHorse, loadWolf, HERD_SETS, COATS } from './horses.js';
 import { loadRealHorse, loadRealWolf } from './realhorse.js';
 import { loadRiderProto } from './riderreal.js';
 import { initAudio, sfx, hooves, setSound, setMusic, music, setPortalMute } from './audio.js';
-import { PORTAL as PORTAL_KIND, portalReady, portalGameplay, portalHappy, portalInterstitial, onPortalHold, onPortalMute, track } from './portal.js';
+import { PORTAL as PORTAL_KIND, portalReady, portalGameplay, portalHappy, portalInterstitial, portalRewarded, portalRewardedOk, onPortalHold, onPortalMute, track } from './portal.js';
 import { t, detectLang, setLang, getLang, plural } from './i18n.js';
 import * as S from './save.js';
 import { ACH, achById } from './ach.js';
@@ -612,7 +612,48 @@ function checkUpcomingHints() {
   if (run.finishD - front < 60 && L.n <= 2) showHint('clash');
 }
 
-function adBreak() { if (save.played >= 3) portalInterstitial(); }
+// реклама только между забегами: не после самого первого и не на итогах, где уже смотрели «×2»
+let adWatched = false;
+function adBreak() { if (save.played >= 2 && !adWatched && !adBusy) portalInterstitial(); }
+
+// «×2 монеты за рекламу» — игрок сам решает; награда одна на итоги
+let adBusy = false;
+function offerDouble(got) {
+  const btn = $('resAd');
+  adWatched = false;
+  const show = !!PORTAL_KIND && portalRewardedOk() && got > 0 && !AUTO;
+  btn.classList.toggle('hidden', !show);
+  btn.disabled = false;
+  btn.classList.remove('done');
+  btn.querySelector('span').textContent = t('adX2');
+  if (!show) return;
+  const mine = ++resultId;
+  btn.onclick = () => {
+    if (adBusy || btn.disabled || state !== 'result' || mine !== resultId) return;
+    sfx('click');
+    adBusy = true;
+    btn.disabled = true;
+    portalRewarded(
+      () => {
+        save.coins += got;
+        S.store(save);
+        adWatched = true;
+        if (state !== 'result' || mine !== resultId) return;
+        const b = $('resCoins').querySelector('b');
+        b.textContent = '+' + fmt(Number(b.dataset.v || 0) + got);
+        $('hudCoins').querySelector('b').textContent = fmt(save.coins);
+        btn.classList.add('done');
+        btn.querySelector('span').textContent = t('adX2Got');
+        sfx('coin');
+      },
+      () => {
+        adBusy = false;
+        if (!adWatched && mine === resultId) btn.disabled = false;
+      },
+    );
+  };
+}
+let resultId = 0;
 
 function showResult() {
   if (state !== 'play') return;
@@ -671,9 +712,12 @@ function showResult() {
   const t0 = performance.now();
   const tickC = () => {
     const k = Math.min(1, (performance.now() - t0) / 700);
+    if (adWatched) return; // удвоили во время счёта — число уже итоговое
     b.textContent = '+' + fmt(gained * k);
     if (k < 1) requestAnimationFrame(tickC);
   };
+  b.dataset.v = gained;
+  offerDouble(got);
   tickC();
   // звёзды по одной
   const sr = $('resStars');
@@ -906,7 +950,7 @@ window.__tabun = {
   start: startLevel, menu: showMenu, auto: autoTarget,
   setSave(s) { save = { ...save, ...s }; S.store(save); },
   layout() {
-    const sel = ['#pauseBtn', '#hudCoins', '#prog', '#setBtn', '#achBtn', '#allGames', '#resShare', '#menuCoins', '#logo', '#lvlRow', '#playBtn', '#ups', '#coatsBtn', '#dailyBtn', '#aulInfo', '#starTotal', '#upsTitle', '#resT', '#resCoins', '#resNext', '#resMenu', '#hint'];
+    const sel = ['#pauseBtn', '#hudCoins', '#prog', '#setBtn', '#achBtn', '#allGames', '#resShare', '#menuCoins', '#logo', '#lvlRow', '#playBtn', '#ups', '#coatsBtn', '#dailyBtn', '#aulInfo', '#starTotal', '#upsTitle', '#resT', '#resCoins', '#resNext', '#resMenu', '#resAd', '#hint'];
     const rects = [];
     for (const s of sel) {
       const el = document.querySelector(s);

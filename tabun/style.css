@@ -394,3 +394,10 @@ html.shot #hud, html.shot #hint, html.shot #dragHint, html.shot .float, html.sho
   #path .node { width: 28px; height: 28px; font-size: 12px; } #path .node.cur { width: 36px; height: 36px; font-size: 15px; } #path s { width: 14px; }
   .up .pips { display: none; }
 }
+/* «×2 монеты за рекламу» на итогах (только в порталах) */
+.card .adx2 { display: flex; width: fit-content; margin: -6px auto 12px; height: 40px; padding: 0 16px; border: 0; color: #3a2400; background: linear-gradient(180deg, #ffd96a, #f0a924); box-shadow: 0 2px 10px rgba(240,169,36,.35); font-weight: 800; }
+.card .adx2 svg { width: 16px; height: 16px; fill: currentColor; }
+.card .adx2:disabled { opacity: .6; }
+.card .adx2.done { opacity: 1; background: rgba(111,224,138,.2); color: #6fe08a; box-shadow: none; }
+.card .adx2.done svg { display: none; }
+@media (max-height: 460px) { .card .adx2 { height: 32px; margin: 0 auto 6px; font-size: 13px; } }
