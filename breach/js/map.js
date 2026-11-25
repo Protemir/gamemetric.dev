@@ -50,6 +50,37 @@ export const ROOMS = {
   7: { name: 'lounge', x0: 42, z0: 9, x1: 61, z1: 24 },
 };
 
+// where a ray meets a stack of upright cylinders, between t0 and t1
+function roundHit(s, ox, oy, oz, dx, dy, dz, t0, t1) {
+  let best = null, bt = t1 + 1e-6;
+  const px = ox - s.x, pz = oz - s.z, a = dx * dx + dz * dz;
+  for (const [y0, y1, r] of s.parts) {
+    if (a > 1e-9) {
+      const b = px * dx + pz * dz, k = px * px + pz * pz - r * r, disc = b * b - a * k;
+      if (disc >= 0) {
+        const t = (-b - Math.sqrt(disc)) / a;
+        const y = oy + dy * t;
+        if (t >= t0 - 1e-6 && t < bt && y >= y0 && y <= y1) {
+          bt = t;
+          best = { t, nx: (px + dx * t) / r, ny: 0, nz: (pz + dz * t) / r };
+        }
+      }
+    }
+    if (Math.abs(dy) > 1e-9)
+      for (const [yy, ny] of [[y1, 1], [y0, -1]]) {
+        if (ny > 0 !== dy < 0) continue;
+        const t = (yy - oy) / dy;
+        if (t < t0 - 1e-6 || t >= bt) continue;
+        const x = px + dx * t, z = pz + dz * t;
+        if (x * x + z * z <= r * r) {
+          bt = t;
+          best = { t, nx: 0, ny, nz: 0 };
+        }
+      }
+  }
+  return best;
+}
+
 export class GameMap {
   constructor() {
     const n = W * H;
@@ -117,6 +148,11 @@ export class GameMap {
         kind[c] = 0;
         lint[c] = 0;
       });
+    this.rounds = new Map();
+    const round = (x0, z0, x1, z1, x, z, base, parts) => {
+      const s = { x, z, base, parts };
+      each(x0, z0, x1, z1, (c) => this.rounds.set(c, s));
+    };
     const solid = (x0, z0, x1, z1, height, k) =>
       each(x0, z0, x1, z1, (c) => {
         h[c] = height;
@@ -225,6 +261,8 @@ export class GameMap {
     solid(30, 42, 30, 42, CEIL, K.PILLAR);
     solid(41, 42, 41, 42, CEIL, K.PILLAR);
     solid(35, 37, 36, 38, 2.3, K.STATUE);
+    // [from, to, radius]: the plinth, the vase's foot, belly and neck
+    round(35, 37, 36, 38, 36, 38, 0, [[0, 1.2, 0.95], [1.2, 1.45, 0.36], [1.45, 2.05, 0.5], [2.05, 2.3, 0.27]]);
     solid(31, 45, 31, 45, 1.2, K.PLANT);
     solid(31, 31, 31, 31, 2.2, K.CABINET);
     solid(40, 45, 40, 45, 1.2, K.PLANT);
@@ -278,6 +316,8 @@ export class GameMap {
     // front courtyard
     solid(33, 50, 38, 53, 0.8, K.FOUNTAIN);
     solid(35, 51, 36, 52, 2.2, K.STATUE);
+    // standing in the basin (its rim is 0.8): the column, the bowl, the spout
+    round(35, 51, 36, 52, 36, 52, 0.8, [[0, 0.6, 0.45], [0.6, 1.25, 0.31], [1.2, 1.28, 0.6], [1.28, 1.46, 1.08], [1.4, 1.9, 0.16], [1.9, 2.1, 0.4]]);
     solid(19, 51, 21, 56, 2.4, K.VAN);
     solid(50, 52, 51, 55, 1.4, K.CAR);
     solid(11, 48, 19, 48, 1.1, K.HEDGE);
@@ -488,7 +528,16 @@ export class GameMap {
       const ya = oy + dy * t0, yb = oy + dy * t1;
       const lo = Math.min(ya, yb), hi = Math.max(ya, yb);
       const water = this.kind[c] === K.WATER;
-      const hh = water ? 0 : this.h[c];
+      let hh = water ? 0 : this.h[c];
+      const rs = this.rounds?.get(c);
+      if (rs) {
+        const r = roundHit(rs, ox, oy, oz, dx, dy, dz, t0, t1);
+        if (r) {
+          r.c = c;
+          return r;
+        }
+        hh = rs.base;
+      }
       // from under the water into the deck: the pool's side
       if (!water && ya < -0.01 && axis >= 0) return { t: t0, nx: axis === 0 ? -stepX : 0, ny: 0, nz: axis === 1 ? -stepZ : 0, c };
       const dk0 = this.deck[c];
