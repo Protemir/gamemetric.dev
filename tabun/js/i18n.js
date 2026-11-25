@@ -70,7 +70,8 @@ export function detectLang() {
   let saved = null;
   try { saved = localStorage.getItem('tabun.lang'); } catch { /* нет доступа */ }
   const nav = (navigator.language || 'en').toLowerCase();
-  lang = q === 'ru' || q === 'en' ? q : saved === 'ru' || saved === 'en' ? saved : /^(ru|kk|uk|be|ky|uz|tg|az|hy)/.test(nav) ? 'ru' : 'en';
+  const pl = window.TABUN_LANG; // язык портала (Playgama, CrazyGames)
+  lang = q === 'ru' || q === 'en' ? q : saved === 'ru' || saved === 'en' ? saved : pl === 'ru' || pl === 'en' ? pl : /^(ru|kk|uk|be|ky|uz|tg|az|hy)/.test(nav) ? 'ru' : 'en';
   document.documentElement.lang = lang;
   return lang;
 }

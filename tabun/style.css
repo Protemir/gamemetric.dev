@@ -355,6 +355,7 @@ html.shot #hud, html.shot #hint, html.shot #dragHint, html.shot .float, html.sho
 #menu { padding-left: calc(12px + var(--safe-l)); padding-right: calc(12px + var(--safe-r)); }
 @media (max-height: 460px) { #rail { left: calc(12px + var(--safe-l)); } }
 #rail { right: calc(12px + var(--safe-r)); }
+@media (max-height: 460px) { #rail { right: auto; } } /* лёжа колонка слева — не растягивать на всю ширину */
 /* казахские буквы: запасной шрифт тот же, что у остального текста */
 .banner, #toast span, #toast em, .mtitle, .disp { font-family: 'Russo One', 'Rubik', system-ui, sans-serif; }
 /* длинные тексты на узких экранах переносятся, а не обрезаются */

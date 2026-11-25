@@ -20,9 +20,10 @@ async function grab(W, H, file, { logo = false, lang = 'ru' } = {}) {
   await b.evaluate('(__tabun.world.camOverride = { dist: 17, hgt: 8.5 }, 1)');
   for (let k = 0; k < 400; k++) { await sleep(50); if (await b.evaluate(`__tabun.run.front >= ${gateD - gap}`)) break; }
   if (logo) {
+    await b.evaluate('(__tabun.world.eagles.forEach((e) => e.scale.setScalar(0)), 1)'); // беркут не ложится на надпись
     await b.evaluate(`(() => {
       const d = document.createElement('div');
-      d.innerHTML = '<div style="font:400 120px/1 \\'Russo One\\';color:#fff;letter-spacing:.04em;text-shadow:0 7px 0 #b5302a,0 14px 34px rgba(0,0,0,.35)">${lang === 'ru' ? 'ТАБУН' : 'TABUN'}</div><div style="margin-top:12px;font:800 30px Rubik;letter-spacing:.24em;text-transform:uppercase;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.5)">${lang === 'ru' ? 'Степная скачка' : 'Steppe Stampede'}</div>';
+      d.innerHTML = '<div style="font:400 ${Math.round(Math.min(W, H) * 0.17)}px/1 \\'Russo One\\';color:#fff;letter-spacing:.04em;text-shadow:0 7px 0 #b5302a,0 14px 34px rgba(0,0,0,.35)">${lang === 'ru' ? 'ТАБУН' : 'TABUN'}</div><div style="margin-top:12px;font:800 ${Math.round(Math.min(W, H) * 0.042)}px Rubik;letter-spacing:.24em;text-transform:uppercase;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.5)">${lang === 'ru' ? 'Степная скачка' : 'Steppe Stampede'}</div>';
       d.style.cssText = 'position:absolute;left:0;right:0;top:34px;text-align:center;z-index:99;pointer-events:none';
       document.getElementById('stage').appendChild(d);
       return 1;
@@ -35,7 +36,12 @@ async function grab(W, H, file, { logo = false, lang = 'ru' } = {}) {
   b.close();
 }
 
-await grab(960, 540, path.join(root, 'img', 'tabun.jpg'));
-await grab(1200, 630, path.join(root, 'tabun', 'og.jpg'), { logo: true });
+if (process.env.PORTAL_ART) { // обложки порталов: node tabun/tools/art.mjs с PORTAL_ART=1 → dist/tabun-art
+  const dir = path.join(root, 'dist', 'tabun-art'); fs.mkdirSync(dir, { recursive: true });
+  for (const [w, h] of [[800, 800], [1080, 1920], [1920, 1080]]) await grab(w, h, path.join(dir, `cover-${w}x${h}.jpg`), { logo: true, lang: 'en' });
+} else {
+  await grab(960, 540, path.join(root, 'img', 'tabun.jpg'));
+  await grab(1200, 630, path.join(root, 'tabun', 'og.jpg'), { logo: true });
+}
 srv.close();
 process.exit(0);

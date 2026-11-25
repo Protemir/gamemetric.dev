@@ -234,7 +234,7 @@ export class World {
     this.scene.add(this.rider);
     this.rear = assets.horse.rear ? new HorsePool(assets.horse.rear, hm, 2, this.scene, TK) : null;
     this.rearT = -1;
-    this.wolfBite = assets.wolf.bite ? new HorsePool(assets.wolf.bite, wm, 40, this.scene) : null;
+    this.wolfBite = assets.wolf.bite && !window.TABUN_PORTAL ? new HorsePool(assets.wolf.bite, wm, 40, this.scene) : null;
     this.boost = 0;
     {
       // следы копыт: кольцевой буфер отпечатков на дороге
@@ -806,7 +806,7 @@ export class World {
       g.scale.setScalar(1.6);
       g.position.set(it.x, 1.0, -it.d);
       root.add(g);
-      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 7, 20, 1, true).translate(0, 3.5, 0), new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 7, 20, 1, true).translate(0, 3.5, 0), new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
       beam.position.set(it.x, 0, -it.d);
       root.add(beam);
       o.whip = g; o.beam = beam;
@@ -993,7 +993,9 @@ export class World {
     const win = run.state === 'win';
     if ((run.count > 0 || win) && (running || menu || win) && run.state !== 'lose') {
       const sh2 = herdShape(Math.max(1, Math.min(run.count, run.cap)));
-      const lx = run.cx;
+      // в схватке вожаки расходятся по сторонам, а не стоят друг в друге
+      this.clashOff = (this.clashOff || 0) + ((run.state === 'clash' ? 1 : 0) - (this.clashOff || 0)) * Math.min(1, dt * 3);
+      const lx = run.cx * (1 - this.clashOff) - 2.4 * this.clashOff;
       const ld = run.d + sh2.b + 1.9;
       if (this.rear) {
         if (menu && this.rearT < 0 && Math.random() < dt * 0.1) this.rearT = 0;
@@ -1033,7 +1035,8 @@ export class World {
       if (!show) continue;
       const sh3 = herdShape(Math.max(1, Math.min(run.count, run.cap)));
       const wide = run.state === 'clash' || run.state === 'ladder' || run.state === 'win';
-      const hx = h.side * Math.min(HALF + (wide ? 2.6 : 1.0), (menu ? 2.6 : sh3.a + 1.4) + Math.abs(run.cx) * 0.2) + (menu ? 0 : run.cx * 0.6);
+      // табунщики скачут по обочине: на дороге они проезжали бы сквозь изгороди и овраги
+      const hx = menu ? h.side * 2.6 : h.side * (wide ? HALF + 2.6 : HALF + 0.9) + run.cx * 0.12;
       const hd = run.d + (menu ? -1.5 - (h.side > 0 ? 1.2 : 0) : sh3.b * 0.35 - (h.side > 0 ? 1.6 : 0));
       const gal = running && !menu && run.state !== 'win';
       const hp = gal ? this.gallop : this.idle;
@@ -1107,16 +1110,17 @@ export class World {
       const rsh = herdShape(Math.max(1, Math.min(rv.count, run.cap)));
       const rd = rv.d - rsh.b - 2;
       const sc = this.L?.boss ? 1.45 : 1.3;
-      m4.compose(v.set(0, 0, -rd), q.setFromEuler(e.set(0, Math.PI, 0)), s.set(sc, sc, sc));
+      m4.compose(v.set(2.4 * (this.clashOff || 0), 0, -rd), q.setFromEuler(e.set(0, Math.PI, 0)), s.set(sc, sc, sc));
       if (rivalRun) this.gallop.add(0.11 + t * gallopRate, m4, this.rivalLeaderCol);
       else this.idle.add(0.6 + t * 0.4, m4, this.rivalLeaderCol);
-      shadow(0, -rd, sc);
+      const rx = 2.4 * (this.clashOff || 0);
+      shadow(rx, -rd, sc);
       RR.visible = true;
       RR.scale.setScalar(sc / 1.3);
       const rsk = this.seat(rivalRun ? this.gallop : this.idle, rivalRun ? 0.11 + t * gallopRate : 0.6 + t * 0.4);
-      if (rsk) { RR.position.set(-rsk.x * sc, rsk.y * sc, -rd - rsk.z * sc); RR.rotation.set(0, Math.PI, 0); }
+      if (rsk) { RR.position.set(rx - rsk.x * sc, rsk.y * sc, -rd - rsk.z * sc); RR.rotation.set(0, Math.PI, 0); }
       else {
-        RR.position.set(0, 1.55 * (sc / 1.3) + (rivalRun ? Math.abs(Math.sin((0.11 + t * gallopRate) * Math.PI * 2)) * 0.09 : 0), -rd - 0.12);
+        RR.position.set(rx, 1.55 * (sc / 1.3) + (rivalRun ? Math.abs(Math.sin((0.11 + t * gallopRate) * Math.PI * 2)) * 0.09 : 0), -rd - 0.12);
         RR.rotation.set(rivalRun ? 0.12 : 0, Math.PI, 0);
       }
       const f = RR.userData.flag, base = RR.userData.flagBase, arr = f.geometry.attributes.position.array;
@@ -1135,7 +1139,8 @@ export class World {
       if (g.kind === 'stolen') {
         const fade = g.t > 1.1 ? Math.max(0, 1 - (g.t - 1.1) / 0.5) : 1;
         if (fade <= 0) continue;
-        m4.compose(v.set(g.x - Math.sign(g.vx) * (1.6 + (g.off || 1) * 1.4), 0, -g.d + ((g.off || 1) - 2) * 0.9), q.setFromEuler(e.set(0, -Math.sign(g.vx) * Math.PI / 2, 0)), s.set(fade, fade, fade));
+        const k = Math.min(1, g.t * 4); // встаёт в связку плавно, без прыжка
+        m4.compose(v.set(g.x - Math.sign(g.vx) * (1.6 + (g.off || 1) * 1.4) * k, 0, -g.d + ((g.off || 1) - 2) * 0.9 * k), q.setFromEuler(e.set(0, -Math.sign(g.vx) * Math.PI / 2, 0)), s.set(fade, fade, fade));
         this.gallop.add(g.phase + t * 1.6, m4, col);
         continue;
       }
@@ -1179,10 +1184,10 @@ export class World {
         if (!it.done && Math.random() < dt * 20) this.sparks.emit(it.x + (Math.random() - 0.5) * 1.2, 0.3 + Math.random() * 2.5, -it.d + (Math.random() - 0.5) * 1.2, 0, 1.5, 0, this.goldCol, 0.8, 0.2, 0.05, -0.5, 1);
       }
       if (it.type === 'gate' && it.swap && !it.done) {
-        const ops = gateOpsAt(it, run.t);
+        const ops = it.lock || gateOpsAt(it, run.t);
         for (const p of Object.values(o.panels)) {
           const tx = p.g === ops.left ? -HALF / 2 : HALF / 2;
-          p.mesh.position.x += (tx - p.mesh.position.x) * Math.min(1, dt * 9);
+          p.mesh.position.x += (tx - p.mesh.position.x) * Math.min(1, dt * 14);
           p.x = p.mesh.position.x;
         }
       }
@@ -1199,9 +1204,9 @@ export class World {
         this.levelGroup.add(obj);
         this.rockObjs.set(rk, obj);
       }
-      obj.position.set(rk.x, 0.95, -rk.d);
+      obj.position.set(rk.x, 0.88, -rk.d);
       obj.rotation.set(0, 0, -rk.rot * rk.dir);
-      shadow(rk.x, -rk.d, 1.8);
+      shadow(rk.x, -rk.d, 1.1);
       if (Math.random() < dt * 30) this.dust.emit(rk.x - rk.dir * 0.8, 0.2, -rk.d + (Math.random() - 0.5), -rk.dir * 1.5, 0.8, 0, this.dustColor(), 0.9, 1.0, 2.6);
     }
     for (const [rk, obj] of this.rockObjs) if (!live.has(rk)) { this.levelGroup.remove(obj); this.rockObjs.delete(rk); }
@@ -1347,7 +1352,7 @@ export class World {
       for (let i = 0; i < 90; i++) this.sparks.emit(ev.x, 1.6, -ev.d, (Math.random() - 0.5) * 9, 2 + Math.random() * 7, (Math.random() - 0.5) * 9, i % 3 ? this.goldCol : this._white || (this._white = new THREE.Color('#fff6d0')), 1.2, 0.3, 0.1, 8, 1);
       this.shake = Math.max(this.shake, 0.25);
     } else if (ev.type === 'bite') {
-      const c = new THREE.Color('#8a3a2a');
+      const c = new THREE.Color('#9a8a72'); // пыль, без крови
       for (let i = 0; i < 8; i++) this.dust.emit(ev.x, 0.5, -ev.d, (Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3, i % 2 ? c : this.dustColor(), 0.8, 0.8, 2.4, 0, 0.9);
       this.shake = Math.max(this.shake, 0.18);
     } else if (ev.type === 'recruit') {

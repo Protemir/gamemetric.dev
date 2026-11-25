@@ -43,6 +43,7 @@ for (const s of steps) {
   if (cmd === 'wait') await sleep(Number(arg));
   else if (cmd === 'js') console.log('js>', JSON.stringify(await b.evaluate(arg)));
   else if (cmd === 'shot') await shoot(arg);
+  else if (cmd === 'cpu') await b.send('Emulation.setCPUThrottlingRate', { rate: Number(arg) }); // слабый телефон
   else if (cmd === 'tdrag') { // свайп пальцем
     const [x0, x1, y, ms] = arg.split(',').map(Number);
     await b.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y }] });

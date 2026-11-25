@@ -6,10 +6,11 @@ const ksCache = new Map();
 let hoofNext = 0;
 let lastNeigh = 0;
 
-export function setSound(on) {
-  enabled = on;
-  if (master) master.gain.setTargetAtTime(on ? 0.8 : 0, ctx.currentTime, 0.05);
-}
+let portalMuted = false;
+const applyVol = () => { if (master) master.gain.setTargetAtTime(enabled && !portalMuted ? 0.8 : 0, ctx.currentTime, 0.05); };
+export function setSound(on) { enabled = on; applyVol(); }
+// портал выключил звук, идёт реклама или вкладка скрыта
+export function setPortalMute(m) { portalMuted = !!m; applyVol(); }
 
 export function setMusic(on) {
   musicOn = on;
@@ -81,7 +82,7 @@ export function initAudio() {
   if (!AC) return;
   ctx = new AC();
   master = ctx.createGain();
-  master.gain.value = enabled ? 0.8 : 0;
+  master.gain.value = enabled && !portalMuted ? 0.8 : 0;
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -14; comp.ratio.value = 4;
   master.connect(comp).connect(ctx.destination);

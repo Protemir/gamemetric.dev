@@ -374,7 +374,8 @@ export class Run {
 
   stepRun(dt, targetX) {
     const L = this.L;
-    const inRiver = this.items.some((it) => it.type === 'river' && this.d > it.d0 - 2 && this.d < it.d1 + 2);
+    const hb = this.shape.b * 0.5; // река тормозит, пока в воде середина табуна, а не только его центр
+    const inRiver = this.items.some((it) => it.type === 'river' && this.d + hb > it.d0 - 1 && this.d - hb < it.d1 + 1);
     if (this.boostT > 0) this.boostT = Math.max(0, this.boostT - dt);
     const base = (L.speed0 + (L.speed1 - L.speed0) * this.progress) * (this.boostT > 0 ? 1.22 : 1);
     this.speed += ((inRiver ? base * 0.62 : base) - this.speed) * (1 - Math.exp(-dt * 4));
@@ -390,10 +391,15 @@ export class Run {
     for (const it of this.items) {
       if (it.done) continue;
       if (it.type === 'gate') {
+        // качели замирают за полсекунды до ворот: что игрок видит у морды вожака, то и засчитается
+        if (it.swap && !it.lock && it.d - front < Math.max(4, this.speed * 0.5)) it.lock = gateOpsAt(it, this.t);
         if (front >= it.d) {
           it.done = true;
-          const side = it.full ? 'full' : this.cx < 0 ? 'left' : 'right';
-          const ops = gateOpsAt(it, this.t);
+          // сторону выбирают сами кони (середина табуна), а не точка, куда тянет палец
+          let mx = this.cx;
+          if (this.bodies.length) { mx = 0; for (const b of this.bodies) mx += b.x; mx /= this.bodies.length; }
+          const side = it.full ? 'full' : mx < 0 ? 'left' : 'right';
+          const ops = it.lock || gateOpsAt(it, this.t);
           const g = it.full || ops[side];
           it.hit = side;
           it.hitOp = g;
@@ -443,7 +449,7 @@ export class Run {
         }
         if (it.active && this.d - sh.b > it.d + 8) it.done = true;
       } else if (it.type === 'whip') {
-        if (front >= it.d - 0.8 && this.bodies.some((b) => Math.abs(b.x - it.x) < 1.7 && Math.abs(b.d - it.d) < 1.8)) {
+        if (front >= it.d - 0.8 && this.bodies.some((b) => Math.abs(b.x - it.x) < 1.3 && Math.abs(b.d - it.d) < 1.8)) {
           it.done = true; it.taken = true;
           this.boostT = 5;
           this.emit('whip', { x: it.x, d: it.d });
@@ -487,7 +493,7 @@ export class Run {
         if (Math.abs(h.d - this.d) > sh.b + (mag ? 9 : 2.5)) continue;
         for (const b of this.bodies) {
           const ddx = b.x - h.x, ddd = b.d - h.d;
-          if (ddx * ddx + ddd * ddd < (mag ? 49 : 1.9)) {
+          if (ddx * ddx + ddd * ddd < (mag ? 49 : h.golden ? 4 : 1.9)) { // золотой нарисован в 1,45 раза крупнее
             this.wild.splice(w, 1);
             this.count = Math.min(MAX_COUNT, this.count + (h.golden ? GOLDEN : 1));
             if (h.golden) { this.coins += 30; this.emit('golden', { x: h.x, d: h.d, n: GOLDEN }); this.sync(false, { x: h.x, d: h.d }); }
@@ -531,7 +537,11 @@ export class Run {
       wf.x = clamp(wf.x + wf.vx * dt, -HALF + 0.3, HALF - 0.3);
       wf.d += wf.vd * dt;
       if (Math.abs(wf.d - this.d) > sh.b + 2) continue;
-      for (let i = this.bodies.length - 1; i >= 0; i--) {
+      // кусает того, к кому бежал, если дотянулся; иначе — кто подвернулся
+      const bi = this.bodies.indexOf(best);
+      for (let j = this.bodies.length; j >= 0; j--) {
+        const i = j === this.bodies.length ? bi : j;
+        if (i < 0 || (j < this.bodies.length && i === bi)) continue;
         const b = this.bodies[i];
         if ((b.x - wf.x) ** 2 + (b.d - wf.d) ** 2 < 1.1) {
           this.kill(i, 'wolf', { vx: wf.vx * 0.6, vy: 3.5, vd: -2 }, 1);
@@ -585,7 +595,7 @@ export class Run {
         if (Math.abs(this.d - it.d) > sh.b + 2) continue;
         for (let i = this.bodies.length - 1; i >= 0; i--) {
           const b = this.bodies[i];
-          if (b.d >= it.d - 0.3 && b.d < it.d + 0.6 && (b.x < it.g0 + 0.2 || b.x > it.g1 - 0.2)) this.kill(i, 'bump', { vx: (this.R() - 0.5) * 3, vy: 4, vd: -3 });
+          if (b.d >= it.d - 0.8 && b.d < it.d + 0.6 && (b.x < it.g0 + 0.3 || b.x > it.g1 - 0.3)) this.kill(i, 'bump', { vx: (this.R() - 0.5) * 3, vy: 4, vd: -3 });
         }
       }
     }

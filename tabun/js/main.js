@@ -6,7 +6,8 @@ import { World } from './world.js';
 import { loadHorse, loadWolf, HERD_SETS, COATS } from './horses.js';
 import { loadRealHorse, loadRealWolf } from './realhorse.js';
 import { loadRiderProto } from './riderreal.js';
-import { initAudio, sfx, hooves, setSound, setMusic, music } from './audio.js';
+import { initAudio, sfx, hooves, setSound, setMusic, music, setPortalMute } from './audio.js';
+import { PORTAL as PORTAL_KIND, portalReady, portalGameplay, portalHappy, portalInterstitial, onPortalHold, onPortalMute, track } from './portal.js';
 import { t, detectLang, setLang, getLang, plural } from './i18n.js';
 import * as S from './save.js';
 import { ACH, achById } from './ach.js';
@@ -15,7 +16,7 @@ const $ = (id) => document.getElementById(id);
 const P = new URLSearchParams(location.search);
 const AUTO = P.has('auto');
 const TOY = P.has('toy'); // ?toy — прежние мультяшные кони
-const PORTAL = window.top !== window.self || P.has('portal');
+const PORTAL = !!PORTAL_KIND || window.top !== window.self || P.has('portal');
 if (P.has('shot')) document.documentElement.classList.add('shot');
 detectLang();
 
@@ -37,6 +38,8 @@ let resultIn = 0;
 let daily = false;      // идёт «Байга дня»
 let dailyKey = null;    // день, к которому относится текущая байга
 const dayIndex = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5; };
+// подсмотреть сложность дня, ничего не фиксируя (для фоновой подготовки трассы)
+const peekDailyDiff = () => (save.dailyDiff && save.dailyDiff.day === dayIndex() ? save.dailyDiff.diff : Math.max(4, Math.min(30, save.lvl + 2)));
 const dailyDiff = () => {
   // одна трасса на весь день: сложность запоминается при первом открытии дня
   const day = dayIndex();
@@ -57,7 +60,7 @@ async function boot() {
   if (!gl2) { $('loadS').textContent = t('nogl'); return; }
   setLoad(0.05);
   prewarm(curLvl());
-  const slowT = setTimeout(() => loadTrouble(t('slow')), 30000);
+  loadSlowT = setTimeout(() => loadTrouble(t('slow')), 30000);
   const opt = (p) => p.catch((e) => { console.warn('tabun: optional asset', e?.message || e); return null; });
   const loader = new GLTFLoader();
   let done = 0;
@@ -79,10 +82,10 @@ async function boot() {
     g.updateMatrixWorld(true);
     return { g, size };
   };
-  clearTimeout(slowT);
+  clearTimeout(loadSlowT);
   const r = norm(rock.scene, false), b = bush ? norm(bush.scene, true) : null;
   // волк не загрузился совсем — стая рисуется тёмными конями, игра не падает
-  const wolfA = wolf || { run: horse.gallop, stalk: horse.idle, bite: null, material: horse.material, textured: !!horse.textured };
+  const wolfA = wolf || { run: horse.gallop, stalk: horse.idle, bite: null, material: horse.material, textured: false }; // простой тёмный материал, не как дикие кони
   const assets = { horse, rock: r.g, rockScale: 1 / Math.max(r.size.x, r.size.y, r.size.z), bush: b?.g || null, bushScale: b ? 1.1 / b.size.y : 1, wolf: wolfA, riderProto };
   world = new World($('gl'), assets);
   // телефон может отобрать WebGL при сворачивании — не даём экрану остаться чёрным
@@ -103,6 +106,10 @@ async function boot() {
   setTimeout(() => $('loading').remove(), 500);
   // первый запуск — сразу в скачку, без меню
   if (save.played === 0 && !P.has('menu')) startLevel(); else showMenu();
+  // порталы: игра загружена, звук и пауза платформы, реклама
+  portalReady();
+  onPortalMute(setPortalMute);
+  onPortalHold(() => pause());
   requestAnimationFrame(frame);
 }
 
@@ -268,7 +275,11 @@ function modal(html, wide = false) {
   $('modalCard').classList.toggle('wide', wide);
   $('modal').classList.remove('hidden');
 }
-function closeModal() { $('modal').classList.add('hidden'); }
+function closeModal() {
+  $('modal').classList.add('hidden');
+  // фокус не остаётся на кнопке, открывшей окно, — иначе пробел откроет его снова вместо скачки
+  if (state === 'menu' && document.activeElement && document.activeElement !== document.body && !$('modal').contains(document.activeElement)) document.activeElement.blur?.();
+}
 
 function showDaily(d) {
   modal(`<h3 class="mtitle">${t('daily')}</h3><p>${t('dailyD', { n: d.streak })}</p><div class="daily"><span class="coin"></span>+${fmt(d.amount)}</div><button class="big disp" id="dailyTake">${t('take')}</button>`);
@@ -601,10 +612,15 @@ function checkUpcomingHints() {
   if (run.finishD - front < 60 && L.n <= 2) showHint('clash');
 }
 
+function adBreak() { if (save.played >= 3) portalInterstitial(); }
+
 function showResult() {
   if (state !== 'play') return;
   state = 'result';
   const res = run.result;
+  portalGameplay(false, res.win ? 'win' : 'lose');
+  if (res.win) portalHappy();
+  track('level_end', { level: daily ? 0 : L.n, daily: daily ? 1 : 0, win: res.win ? 1 : 0, herd: peak, mult: res.mult || 0, played: save.played + 1 });
   const firstDaily = daily && res.win && save.dailyWin !== dailyKey;
   const rL = levelOverride !== null && !daily ? { ...L, base: Math.min(L.base, 40 + save.lvl * 10) } : L; // ?level не печатает деньги
   const got = reward(rL, res, save.up.income) * (firstDaily ? 2 : 1);
@@ -666,7 +682,7 @@ function showResult() {
   // монеты летят в счётчик
   if (gained > 0) setTimeout(() => { if (state === 'result') flyCoins(Math.min(12, 4 + Math.round(gained / 60)), coinsBefore, gained); }, 400);
   prewarm(curLvl());
-  prewarm(0, { day: dayIndex(), diff: dailyDiff() });
+  prewarm(0, { day: dayIndex(), diff: peekDailyDiff() });
   if (AUTO) setTimeout(() => { if (state === 'result') { showMenu(); setTimeout(startLevel, 300); } }, 1200);
 }
 
@@ -699,6 +715,7 @@ function flyCoins(n, base, got) {
 let lastShare = null;
 async function shareCard() {
   if (!lastShare) return;
+  shareBlob = null; // не скачать карточку прошлого забега, если новая не нарисовалась
   sfx('click');
   try {
     world.render();
@@ -804,11 +821,12 @@ function bindUI() {
   $('dailyBtn').onclick = () => { sfx('click'); daily = true; prepare(); startLevel(); };
   $('resNext').onclick = () => {
     sfx('click');
+    adBreak();
     if (run?.result?.win) showMenu();
     else if ($('result').dataset.up) { showMenu(); for (const el of $('ups').children) if (!el.classList.contains('poor')) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash', 'glow'); } }
     else startLevel();
   };
-  $('resMenu').onclick = () => { sfx('click'); showMenu(); };
+  $('resMenu').onclick = () => { sfx('click'); adBreak(); showMenu(); };
 }
 
 // —— цикл ——
@@ -818,6 +836,7 @@ function frame(now) {
   const rdt = Math.min(0.1, (now - (lastT || now)) / 1000);
   lastT = now;
   if (!world || !run) return;
+  portalGameplay(state === 'play' && !document.hidden); // портал слышит только смену
   if (state === 'play') {
     // клавиатура
     const k = (keys.ArrowLeft || keys.KeyA ? -1 : 0) + (keys.ArrowRight || keys.KeyD ? 1 : 0);
@@ -859,7 +878,7 @@ function frame(now) {
     if ((save.quality || 'auto') !== 'auto') { /* фиксированное качество — не трогаем */ }
     else if (fps < 42 && world.shadowsOn) world.setShadows(false);
     else if (fps < 42 && (world.lodNear ?? 22) > 10) { world.lodNear = (world.lodNear ?? 22) - 6; for (const p of [world.gallop, world.idle, world.eat]) p.setNear?.(world.lodNear); }
-    else if (fps < 42 && world.pixelRatio > 0.8) { lowSteps++; world.setPixelRatio(Math.max(0.75, world.pixelRatio - 0.35)); }
+    else if (fps < 42 && world.pixelRatio > 1.05) { lowSteps++; world.setPixelRatio(Math.max(1, world.pixelRatio - 0.35)); } // ниже 1 картинка превращается в кашу, а на слабом процессоре пиксели почти не помогают
     fpsAcc = 0; fpsN = 0;
   }
 }
@@ -929,4 +948,5 @@ function prewarm(n, dailyArgs) {
   try { genWorker.postMessage(dailyArgs ? { daily: true, ...dailyArgs } : { n }); } catch { /* */ }
 }
 
-boot().catch((e) => { console.error(e); loadTrouble(t('loadErr')); });
+let loadSlowT = 0;
+boot().catch((e) => { console.error(e); clearTimeout(loadSlowT); loadTrouble(t('loadErr')); });
