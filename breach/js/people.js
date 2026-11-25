@@ -21,7 +21,10 @@ export async function loadPeople() {
   addGear(A.soldier, -1, false);
   A.civil = prep(m.scene);
   A.clips = {};
-  for (const c of s.animations) A.clips[c.name] = c;
+  for (const c of s.animations) {
+    c.tracks = c.tracks.filter((t) => !t.name.endsWith('.scale'));
+    A.clips[c.name] = c;
+  }
   A.guard = prepGuard(gd.scene);
   addGear(A.guard, 1, true);
   // the civilian has other proportions: borrow only the rotations of the soldier's clips
@@ -421,7 +424,7 @@ export class SkinnedBody {
     this.root.add(this.aim);
     this.gun = new THREE.Mesh(thirdPersonGun('pistol').geo, this.gunMat);
     this.aim.add(this.gun);
-    this.gunKind = null;
+    this.gunKind = undefined;
     this.setGun(look === 'H' ? null : 'pistol');
     // soft contact shadow
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: A.shadow, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));

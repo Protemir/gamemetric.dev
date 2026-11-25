@@ -326,7 +326,16 @@ export class Bomb {
       this.y = a[4] / 100;
     }
     if (st === 'planted') this.at = g.time - (FUSE - a[5] / 10);
-    if (st !== was) {
+    const fresh = this.synced;
+    this.synced = true;
+    if (st !== was && !fresh) {
+      // the first look at it: just show how things stand
+      this.state = st;
+      if (st === 'dropped' || st === 'planted' || st === 'defused') this.place();
+      else this.mesh.visible = false;
+      if (st === 'planted') this.beepAt = g.time;
+      if (st === 'defused') this.led.material.color.setHex(0x30ff60);
+    } else if (st !== was) {
       this.state = st;
       if (st === 'dropped' || st === 'planted') this.place();
       else this.mesh.visible = false;

@@ -2,7 +2,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { Game } from './game.js';
 import { Hud, BUY_ITEMS, styleXhair } from './hud.js';
-import { initAudio, setVolume, sfx, rainSound, setHiddenAudio } from './audio.js';
+import { initAudio, setVolume, sfx, rainSound, setHiddenAudio, cutSfx } from './audio.js';
 import { t, lang, setLang } from './i18n.js';
 import { loadPeople } from './people.js';
 import { loadProps } from './props.js';
@@ -349,9 +349,15 @@ document.addEventListener('touchend', () => {
 matchMedia('(orientation: portrait)').addEventListener?.('change', (e) => {
   if (e.matches && touchOnly && game && game.role === 'solo' && state === 'play') touchPause();
 });
+function quietForPause() {
+  if (!game || game.role !== 'solo') return;
+  cutSfx();
+  window.speechSynthesis?.cancel();
+}
 function touchPause() {
   if (state !== 'play' || !game || game.over) return;
   if (buyOpen) closeBuy(false);
+  quietForPause();
   state = 'pause';
   $('pause').hidden = false;
   input.fire = false;
@@ -458,6 +464,7 @@ document.addEventListener('pointerlockchange', () => {
     return;
   }
   if (state === 'play' && game && !game.over && !buyOpen) {
+    quietForPause();
     state = 'pause';
     $('pause').hidden = false;
     input.keys.clear();
@@ -723,6 +730,7 @@ canvas.addEventListener('mousedown', (e) => {
   if (e.button === 0) {
     input.fire = true;
     input.fireTap = true;
+    if (game) game.player.triggerHeld = false;
     if (!game.player.alive) game.playerAction('next');
   }
   if (e.button === 2) game.playerAction('alt');

@@ -210,6 +210,12 @@ export class FX {
     this.decals.instanceMatrix.needsUpdate = true;
   }
 
+  // after a frame is drawn: new flashes and tracers have been seen and may start to fade
+  drawn() {
+    for (const p of this.flashes) p.fresh = false;
+    for (const t of this.tr) t.fresh = false;
+  }
+
   // textures that may no longer hang on any material when the match ends
   dispose() {
     this.denseTex?.dispose();
@@ -276,11 +282,11 @@ export class FX {
     this.sh.push({ x, y, z, vx, vy, vz, rx: Math.random() * 6, ry: Math.random() * 6, sx: (Math.random() - 0.5) * 30, sy: (Math.random() - 0.5) * 30, life: 9, floor, onTink, bounces: 0 });
   }
 
-  spark(x, y, z, nx, ny, nz, color, n = 6, speed = 3) {
+  spark(x, y, z, nx, ny, nz, color, n = 6, speed = 3, ceil = Infinity) {
     for (let i = 0; i < n; i++) {
       if (this.sp.length >= MAX_SPARKS) this.sp.shift();
       this.sp.push({
-        x, y, z,
+        x, y, z, ceil,
         vx: nx * speed * Math.random() + (Math.random() - 0.5) * speed,
         vy: ny * speed * Math.random() + Math.random() * speed * 0.8,
         vz: nz * speed * Math.random() + (Math.random() - 0.5) * speed,
@@ -386,6 +392,10 @@ export class FX {
         p.y = 0.01;
         p.vy *= -0.3;
       }
+      if (p.y > p.ceil) {
+        p.y = p.ceil;
+        p.vy = -Math.abs(p.vy) * 0.3;
+      }
     }
     for (const p of this.sp) {
       this.spPos[n * 3] = p.x;
@@ -406,8 +416,7 @@ export class FX {
     for (let i = this.tr.length - 1; i >= 0; i--) {
       const tr = this.tr[i];
       // a new one is drawn at least once, however long the frame was
-      if (tr.fresh) tr.fresh = false;
-      else if ((tr.life -= dt) <= 0) this.tr.splice(i, 1);
+      if (!tr.fresh && (tr.life -= dt) <= 0) this.tr.splice(i, 1);
     }
     let cx = 0, cy = 0, cz = 0;
     for (const tr of this.tr) {
@@ -449,10 +458,7 @@ export class FX {
     }
     for (const p of this.flashes) {
       if (p.life <= 0) continue;
-      if (p.fresh) {
-        p.fresh = false;
-        continue;
-      }
+      if (p.fresh) continue;
       p.life -= dt;
       if (p.life <= 0) p.s.visible = false;
       else {
@@ -553,8 +559,10 @@ export class FX {
         this.puff(x + Math.cos(a) * 0.4, gy + 0.35, z + Math.sin(a) * 0.4, [0.6, 0.54, 0.45], 2.2 + Math.random() * 0.9, 1.4 + Math.random() * 0.7, 0.18, 0.7, Math.cos(a) * sp, Math.sin(a) * sp, 1.3, true);
       }
       // embers and hot bits
-      this.spark(x, y + 0.25, z, 0, 1, 0, [1, 0.78, 0.4], 55, 12);
-      this.spark(x, y + 0.25, z, 0, 0.6, 0, [1, 0.48, 0.14], 35, 7);
+      const roof = o.hit ? o.hit(x, y + 0.3, z, 0, 1, 0, 30) : null;
+      const ceil = roof ? y + 0.3 + roof.t - 0.05 : Infinity;
+      this.spark(x, y + 0.25, z, 0, 1, 0, [1, 0.78, 0.4], 55, o.indoor ? 8 : 12, ceil);
+      this.spark(x, y + 0.25, z, 0, 0.6, 0, [1, 0.48, 0.14], 35, 7, ceil);
       // chunks of floor thrown out
       for (let i = 0; i < 24; i++) {
         if (this.db.length >= MAX_DEBRIS) this.db.shift();

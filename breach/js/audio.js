@@ -1,5 +1,5 @@
 // All sounds are synthesised with WebAudio: noise bursts and oscillators, panned by direction.
-let ctx = null, master = null, noiseBuf = null, compNode = null;
+let ctx = null, master = null, noiseBuf = null, compNode = null, bus = null;
 let volume = 0.8;
 const listener = { x: 0, y: 0, z: 0, yaw: 0, indoor: false };
 
@@ -17,6 +17,8 @@ export function initAudio() {
   comp.threshold.value = -14;
   comp.ratio.value = 6;
   master.connect(comp).connect(ctx.destination);
+  bus = ctx.createGain();
+  bus.connect(master);
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 1.5, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -106,9 +108,26 @@ function out(p) {
   if (ctx.createStereoPanner) {
     const s = ctx.createStereoPanner();
     s.pan.value = p.pan;
-    g.connect(s).connect(master);
-  } else g.connect(master);
+    g.connect(s).connect(bus || master);
+  } else g.connect(bus || master);
   return g;
+}
+
+// everything still sounding fades out in a moment
+export function cutSfx() {
+  if (!ctx || !bus) return;
+  const old = bus, now = ctx.currentTime;
+  bus = ctx.createGain();
+  bus.connect(master);
+  try {
+    old.gain.setValueAtTime(old.gain.value, now);
+    old.gain.linearRampToValueAtTime(0, now + 0.06);
+  } catch {}
+  setTimeout(() => {
+    try {
+      old.disconnect();
+    } catch {}
+  }, 300);
 }
 
 function noise(dest, t, dur, type, freq, q, vol, attack = 0.002, decayPow = 1) {

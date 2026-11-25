@@ -573,6 +573,7 @@ export class NetGame {
         break;
       case 'M':
         if (!m.team || m.team === me.team) g.hud.center(t(m.key), 2);
+        if (m.key === 'hostageRescued' && me.team === 'A') sfx('rescue');
         break;
       case 'NC':
         me.he = m.he;

@@ -404,7 +404,7 @@ export class GameMap {
     this.swimmer = !!(a.isPlayer || a.remote);
     {
       const cc = this.cellAt(a.x, a.z);
-      this.railOff = cc >= 0 && this.h[cc] < 1;
+      this.railOff = cc >= 0 && this.h[cc] < 1 && !(this.deck[cc] > 0 && a.feet > this.deck[cc] - 0.5);
     }
     let hit = false;
     for (let pass = 0; pass < 2; pass++) {

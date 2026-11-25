@@ -15,7 +15,7 @@ import { makeTextures } from './textures.js';
 import { makeBody, setBlocker } from './people.js';
 import { thirdPersonGun } from './actors.js';
 import { WEAPONS, GEAR, recoilKick, viewModel } from './weapons.js';
-import { sfx, setListener, setUnderwater, setQuack, getVolume } from './audio.js';
+import { sfx, setListener, setUnderwater, setQuack, getVolume, cutSfx } from './audio.js';
 import { Brain } from './bots.js';
 import { FX } from './fx.js';
 import { t, lang, BOT_NAMES } from './i18n.js';
@@ -111,7 +111,6 @@ class Soldier {
     // the same slot still has to be redrawn when a bought gun replaced the one that was in it
     if (!this.hasSlot(n) || (n === this.cur && !instant && this.shown === this.kind)) return;
     if (n !== this.cur) this.prev = this.cur;
-    (this.ready ||= {})[this.kind] = this.nextFire || 0;
     this.cur = n;
     this.shown = this.kind;
     this.reloadUntil = 0;
@@ -120,7 +119,7 @@ class Soldier {
     this.shots = 0;
     this.pinAt = this.throwAt = 0;
     this.switchUntil = instant ? 0 : this.g.time + (n === 3 ? 0.35 : 0.6);
-    this.nextFire = Math.max(Math.min(this.nextFire || 0, Math.max(this.g.time, this.switchUntil)), this.ready[this.kind] || 0);
+    this.nextFire = Math.max(Math.min(this.nextFire || 0, Math.max(this.g.time, this.switchUntil)), this.ready?.[this.kind] || 0);
     this.body.setGun(this.kind);
     if (this.isPlayer) {
       this.g.vm.setKind(this.kind, this.team);
@@ -657,6 +656,12 @@ export class Game {
     this.ping(s, o.x, o.feet + 1.9, o.z, o);
   }
   updateRadio() {
+    if (this.sayQ?.length)
+      for (let k = this.sayQ.length - 1; k >= 0; k--)
+        if (this.time >= this.sayQ[k].at) {
+          const q = this.sayQ.splice(k, 1)[0];
+          if (q.s.alive) this.say(q.s, 'win');
+        }
     for (let k = this.radioQ.length - 1; k >= 0; k--) {
       const q = this.radioQ[k];
       if (this.time < q.at) continue;
@@ -1111,6 +1116,7 @@ export class Game {
     }
     if (w.melee) {
       s.nextFire = this.time + w.rate;
+      (s.ready ||= {})[s.kind] = s.nextFire;
       this.knife(s, w);
       return true;
     }
@@ -1125,6 +1131,7 @@ export class Game {
     a.mag--;
     // keep the rhythm while the trigger stays down, so 45 fps fires as fast as 144
     s.nextFire = (w.auto && s.nextFire > this.time - 0.1 ? s.nextFire : this.time) + w.rate;
+    (s.ready ||= {})[s.kind] = s.nextFire;
     s.recoverAt = this.time + w.rate + 0.04;
     if (this.time - s.lastShot > w.rate * 2.2 + 0.12) s.shots = 0;
     s.lastShot = this.time;
@@ -1424,7 +1431,9 @@ export class Game {
     const fromBehind = Math.abs(angDiff(o.yaw, Math.atan2(-dx, -dz))) < Math.PI / 2;
     // heavy hits throw the body back
     const push = { shotgun: 2.6, he: 3.6, sniper: 1.8, deagle: 1.3, knife: 0.4 }[weapon] ?? 0.7;
-    o.body.die(fromBehind, push, dx, dz, head);
+    // 4: the player's own (unseen, unanimated) body does not throw a hat
+    o.body.die(fromBehind, push, dx, dz, head && !o.isPlayer);
+    o.body.setGun(null);
     o.body.root.visible = !o.isPlayer;
     o.nb = null;
     if (this.role !== 'client') this.dropFrom(o);
@@ -1450,7 +1459,7 @@ export class Game {
     this.hud.feed(by, o, weapon, head);
     if (this.fun.talk && o instanceof Soldier) {
       this.say(o, 'die');
-      if (by && by !== o && Math.random() < 0.45) setTimeout(() => !this.disposed && by.alive && this.say(by, 'win'), 900);
+      if (by && by !== o && Math.random() < 0.45) (this.sayQ ||= []).push({ at: this.time + 0.9, s: by });
     }
     if (this.fun.confetti) {
       this.confetti(o.x, o.feet + 1.2, o.z, 40);
@@ -1917,7 +1926,7 @@ export class Game {
           for (const o of this.soldiers) if (o.team === 'A') o.money = Math.min(16000, o.money + 150);
           this.hud.center(t('hostageRescued'), 2);
           this.nh?.onMsg('hostageRescued');
-          sfx('rescue');
+          if (this.player.team === 'A') sfx('rescue');
         }
       } else if (h.state === 'follow') {
         h.state = 'idle';
@@ -2603,6 +2612,7 @@ export class Game {
       if (w.melee) {
         if (this.phase === 'freeze' || this.time < p.nextFire || this.time < p.switchUntil) return;
         p.nextFire = this.time + 1.0;
+        (p.ready ||= {})[p.kind] = p.nextFire;
         p.spawnProtect = 0;
         this.knife(p, w, true);
         return;
@@ -2938,6 +2948,8 @@ export class Game {
       vm.setKind(src.kind, src.team, vm.skin);
       vm.draw = 0;
     }
+    vm.kick = Math.max(0, vm.kick - dt * 9);
+    vm.draw = Math.max(0, vm.draw - dt * (vm.kind === 'knife' ? 2.9 : 1.7));
     if (showVm) {
       const p = src;
       const hs = Math.hypot(p.vx, p.vz);
@@ -2945,8 +2957,6 @@ export class Game {
       const bobAmt = Math.min(1, hs / 5.5) * (p.onGround ? 1 : 0.3);
       vm.swayX += (-look.dx * 0.0004 - vm.swayX) * Math.min(1, dt * 10);
       vm.swayY += (look.dy * 0.0004 - vm.swayY) * Math.min(1, dt * 10);
-      vm.kick = Math.max(0, vm.kick - dt * 9);
-      vm.draw = Math.max(0, vm.draw - dt * (vm.kind === 'knife' ? 2.9 : 1.7));
       let reloadK = 0;
       if (p.reloadUntil) {
         const w = WEAPONS[p.kind];
@@ -3022,6 +3032,7 @@ export class Game {
     for (const o of this.hostages) cull(o);
     this.drawArc(this.player);
     r.render(this.scene, cam);
+    this.fx.drawn();
     for (const root of hidden) root.visible = true;
     if (showVm) {
       r.clearDepth();
@@ -3104,6 +3115,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    if (!this.opts.preview) cutSfx();
     this.hud?.hideKillCard?.();
     this.glass.dispose();
     if (this.fun.talk) window.speechSynthesis?.cancel();

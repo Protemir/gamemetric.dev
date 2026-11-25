@@ -74,6 +74,7 @@ export function setupTouch({ input, look, getGame, actions, getSens = () => 1 })
         if (a === 'fire') {
           input.fire = true;
           input.fireTap = true;
+          if (g) g.player.triggerHeld = false;
           if (g && !g.player.alive) g.playerAction('next');
         } else if (a === 'jump') {
           input.touch.jump = true;
