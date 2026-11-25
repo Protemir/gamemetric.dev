@@ -453,7 +453,7 @@ export class SkinnedBody {
       return;
     }
     const G = thirdPersonGun(kind);
-    this.gun.visible = true;
+    this.gun.visible = !(this.zombie && kind === 'knife');
     this.gun.geometry = G.geo;
     this.hold = G.hold;
   }

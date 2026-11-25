@@ -1,7 +1,7 @@
 // Weapons: stats, prices and first-person models.
 import * as THREE from '../vendor/three.module.min.js';
 import { mergeGeos } from './map.js';
-import { gunGeometry, firstPersonArms, GUN_INFO } from './guns.js';
+import { gunGeometry, firstPersonArms, zombieArms, GUN_INFO } from './guns.js';
 
 // dmg per bullet, rate = seconds between shots, spread in radians, recoil = view kick per shot,
 // speed = run speed m/s with it in hand, pen = how much damage gets through armour
@@ -83,6 +83,7 @@ function skinned(src, skin) {
 
 // first-person model in camera space: barrel along -z, origin at the right hand; muzzle position returned
 export function viewModel(kind, team, skin = 'none') {
+  if (kind === 'claws') return { geo: mergeGeos(zombieArms()), muzzle: GUN_INFO.knife.muzzle };
   const geo = mergeGeos([skinned(gunGeometry(kind), skin), ...firstPersonArms(kind, team)]);
   return { geo, muzzle: GUN_INFO[kind].muzzle };
 }

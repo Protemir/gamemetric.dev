@@ -112,7 +112,7 @@ for (const b of document.querySelectorAll('.langs button'))
 const hud = new Hud();
 let game = null;
 let preview = null; // the mansion behind the main menu
-let state = 'menu'; // menu | play | pause
+let state = 'menu'; // menu | loading | play | pause
 
 function seg(id, key) {
   const el = $(id);
@@ -291,7 +291,7 @@ function startGame(online) {
   $('pause').hidden = true;
   $('loading').hidden = false;
   // let the loading text paint before the heavy build
-  setTimeout(() => {
+  setTimeout(async () => {
     if (gen !== startGen || (online && !net)) {
       $('loading').hidden = true;
       clientStarting = false;
@@ -319,6 +319,14 @@ function startGame(online) {
     hud.attach(game);
     $('mo-menu').textContent = t(online ? 'backToLobby' : 'menu');
     applySize();
+    const g = game;
+    state = 'loading';
+    await g.warmup();
+    if (gen !== startGen) return;
+    if (game !== g || g.disposed) {
+      $('loading').hidden = true;
+      return;
+    }
     $('loading').hidden = true;
     $('hud').hidden = false;
     state = 'play';
@@ -406,7 +414,7 @@ function makePreview() {
 function lockPointer() {
   if (touchOnly) {
     // no mouse to capture: the game simply goes on
-    if (game && state !== 'menu') {
+    if (game && state !== 'menu' && state !== 'loading') {
       state = 'play';
       $('pause').hidden = true;
       $('settings').hidden = true;
@@ -460,7 +468,7 @@ document.addEventListener('pointerlockchange', () => {
       $('settings').hidden = true;
     }
     wantResume = false;
-    if (game) state = 'play';
+    if (game && state !== 'loading') state = 'play';
     return;
   }
   if (state === 'play' && game && !game.over && !buyOpen) {

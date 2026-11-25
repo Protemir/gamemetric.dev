@@ -375,6 +375,64 @@ function glove(at, color, wrap = 1) {
   return parts;
 }
 
+// a zombie's hand: grey-green skin, fingers spread like a rake, long yellow nails, the sleeve in rags
+function claw(from, dir, len, r, color) {
+  const g = new THREE.ConeGeometry(r, len, 6);
+  const d = new THREE.Vector3(...dir).normalize();
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d));
+  g.translate(from[0] + (d.x * len) / 2, from[1] + (d.y * len) / 2, from[2] + (d.z * len) / 2);
+  return paint(g, color, 0.5, 0.5);
+}
+function along(from, dir, len) {
+  const d = new THREE.Vector3(...dir).normalize();
+  return [from[0] + d.x * len, from[1] + d.y * len, from[2] + d.z * len];
+}
+export function zombieArms() {
+  const skin = 0x86a05e, dark = 0x5a6e3e, nail = 0xc9b77a, rag = 0x30342a;
+  const parts = [];
+  // the hand is raised, the back of it to us: fingers up and spread, hooked forward at the ends
+  const palm = new THREE.SphereGeometry(0.04, 10, 8);
+  palm.scale(1.2, 1.15, 0.6);
+  palm.translate(0, 0.01, 0);
+  parts.push(paint(palm, skin, 0.5, 0.1));
+  for (let i = 0; i < 4; i++) {
+    const fan = (i - 1.5) * 0.3, len = i === 0 || i === 3 ? 0.82 : 1;
+    const p0 = [-0.03 + i * 0.02, 0.035, -0.006];
+    const d1 = [fan - 0.12, 1, -0.3], d2 = [fan * 0.7 - 0.15, 0.55, -1];
+    parts.push(armSeg(p0, d1, 0.056 * len, 0.0098, 0.0088, i % 2 ? skin : dark));
+    const p1 = along(p0, d1, 0.05 * len);
+    parts.push(armSeg(p1, d2, 0.036 * len, 0.0088, 0.0078, skin));
+    const p2 = along(p1, d2, 0.032 * len);
+    parts.push(claw(p2, [fan * 0.5 - 0.25, -0.15, -1], 0.06 * len, 0.0076, nail));
+  }
+  // the thumb, out to the left with its own nail
+  const t0 = [-0.045, 0.0, -0.01], td = [-1, 0.55, -0.45];
+  parts.push(armSeg(t0, td, 0.05, 0.012, 0.01, skin));
+  parts.push(claw(along(t0, td, 0.046), [-0.4, 0.2, -1], 0.045, 0.007, nail));
+  // bare forearm with dark blotches, the sleeve torn off halfway
+  parts.push(armSeg([0.006, -0.01, 0.025], [0.32, -0.42, 1], 0.42, 0.034, 0.042, skin));
+  for (const [z, y, x, r] of [[0.1, -0.03, 0.04, 0.016], [0.17, -0.06, 0.06, 0.02], [0.05, -0.008, 0.02, 0.012]]) {
+    const g = new THREE.SphereGeometry(r, 7, 5);
+    g.scale(1, 0.6, 1.4);
+    g.translate(x, y + 0.012, z);
+    parts.push(paint(g, dark, 0.45, 0.05));
+  }
+  parts.push(armSeg([0.075, -0.1, 0.2], [0.32, -0.42, 1], 0.3, 0.05, 0.056, rag));
+  for (let i = 0; i < 6; i++) {
+    const t = (i / 6) * Math.PI * 2;
+    parts.push(claw([0.075 + Math.cos(t) * 0.046, -0.1 + Math.sin(t) * 0.046, 0.21], [-0.32, 0.42, -1], 0.045 + (i % 2) * 0.035, 0.016, rag));
+  }
+  // raised into view: the claws are the whole show
+  for (const p of parts) {
+    // undo most of the knife's roll (the view model holds it like a knife) so the palm faces down
+    p.rotateY(-0.15);
+    p.rotateZ(0.28);
+    p.scale(1.05, 1.05, 1.05);
+    p.translate(-0.005, -0.005, -0.07);
+  }
+  return parts;
+}
+
 export function firstPersonArms(kind, team) {
   const sleeve = team === 'A' ? 0x4a4e41 : 0x24252a;
   const cuff = team === 'A' ? 0x1d2126 : 0xc9c9c9;

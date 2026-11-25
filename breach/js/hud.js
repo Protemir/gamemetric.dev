@@ -2,6 +2,12 @@
 import { W, H } from './map.js';
 import { WEAPONS, GEAR } from './weapons.js';
 import { t, lang } from './i18n.js';
+
+// a weapon's name as shown; the horde's "knife" is its claws
+function wname(k, s, g) {
+  if (k === 'knife' && s?.team === 'B' && g?.variant === 'zombie') return t('claws');
+  return WEAPONS[k]?.name[lang] || '';
+}
 import { levelOf, rankName, medalsOf, xpOf, award } from './rank.js';
 import { sfx } from './audio.js';
 import * as THREE from '../vendor/three.module.min.js';
@@ -182,7 +188,7 @@ export class Hud {
     const me = this.game.player;
     row.className = 'feed-row' + (killer === me || victim === me ? ' mine' : '');
     const name = (s) => `<span class="${s.team === 'A' ? 'ta' : 'tb'}">${esc(s.name)}</span>`;
-    const w = WEAPONS[weapon]?.name[lang] || '';
+    const w = wname(weapon, killer, this.game);
     row.innerHTML = killer && killer !== victim ? `${name(killer)} <i>${esc(w)}${head ? ' ◉' : ''}</i> ${name(victim)}` : `<i>☠</i> ${name(victim)}`;
     this.feedEl.prepend(row);
     while (this.feedEl.children.length > 5) this.feedEl.lastChild.remove();
@@ -382,7 +388,7 @@ export class Hud {
     const el = $('killcard');
     el.className = by.team === 'A' ? 'ta' : 'tb';
     el.querySelector('.kc-name').textContent = by.name;
-    const w = WEAPONS[p.killWeapon]?.name[lang] || '';
+    const w = wname(p.killWeapon, by, this.game);
     el.querySelector('.kc-gun').textContent = w + (p.killHead ? ` · ${t('kcHead')}` : '');
     const hp = by.alive ? Math.max(1, Math.ceil(by.hp)) : 0;
     el.querySelector('.kc-hp i').style.width = `${hp}%`;
@@ -461,7 +467,7 @@ export class Hud {
     $('money').hidden = game.mode === 'dm';
     const a = src.ammoOf(src.kind);
     const wk = WEAPONS[src.kind];
-    $('wname').textContent = wk?.name[lang] || '';
+    $('wname').textContent = wk ? wname(src.kind, src, game) : '';
     if (wk && wk.mag && src !== p && game.role === 'client') {
       $('ammo').textContent = '';
       $('reserve').textContent = '';
@@ -485,7 +491,7 @@ export class Hud {
     for (const n of [1, 2, 3, 4, 5, 6]) {
       if (!src.hasSlot(n)) continue;
       const k = n === 4 ? 'he' : n === 5 ? 'flash' : n === 6 ? 'smoke' : src.slots[n];
-      slots.push(`<span class="${src.cur === n ? 'on' : ''}">${n} ${WEAPONS[k].name[lang].replace(/«|»|"/g, '')}${n === 5 && src.flash > 1 ? ' ×2' : ''}</span>`);
+      slots.push(`<span class="${src.cur === n ? 'on' : ''}">${n} ${wname(k, src, game).replace(/«|»|"/g, '')}${n === 5 && src.flash > 1 ? ' ×2' : ''}</span>`);
     }
     $('slots').innerHTML = slots.join('');
     // top bar

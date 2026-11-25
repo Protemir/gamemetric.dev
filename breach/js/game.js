@@ -239,8 +239,9 @@ class ViewModel {
   }
   setKind(kind, team, skin = this.skin || 'none') {
     this.skin = skin;
-    const key = kind + team + skin;
-    if (!this.cache[key]) this.cache[key] = viewModel(kind, team, skin);
+    const claws = this.zombie && team === 'B' && kind === 'knife';
+    const key = claws ? 'claws' : kind + team + skin;
+    if (!this.cache[key]) this.cache[key] = viewModel(claws ? 'claws' : kind, team, skin);
     const v = this.cache[key];
     this.mesh.geometry = v.geo;
     this.muzzle = v.muzzle;
@@ -249,6 +250,35 @@ class ViewModel {
     this.kind = kind;
     this.team = team;
   }
+}
+
+// talk mode: every fighter gets a character of his own, so ten bots are not one robot
+const CHARACTERS = [
+  { pitch: 0.55, rate: 0.88 }, // the gruff one
+  { pitch: 1.0, rate: 1.0 }, // plain
+  { pitch: 1.25, rate: 1.32 }, // the nervous chatterbox
+  { pitch: 1.8, rate: 1.15 }, // the squeaky one
+  { pitch: 0.75, rate: 0.78 }, // slow and dim
+  { pitch: 1.1, rate: 1.15 },
+  { pitch: 0.65, rate: 1.05 },
+  { pitch: 1.5, rate: 0.92 },
+];
+// how a line is said: dying is a squeal, a kill is said smugly
+const MOOD = { die: { pitch: 0.3, rate: 0.12 }, win: { pitch: -0.12, rate: -0.08 } };
+const MALE = /pavel|dmitr|david|mark|guy|ryan|andrew|christopher|eric|roger|steffan|brian|maxim|yuri|george|james|\bmale\b|мужск/i;
+const FEMALE = /irina|svetlana|dariya|ekaterina|zira|jenny|aria|ana\b|michelle|emma|sonia|libby|susan|hazel|female|женск|google(?!.*\bmale\b)/i;
+let voiceList = null;
+const speech = typeof window !== 'undefined' ? window.speechSynthesis : null;
+speech?.addEventListener?.('voiceschanged', () => (voiceList = null));
+// the language's voices, natural ones first, men before women (the fighters are men)
+function voicesFor(code) {
+  if (!speech) return [];
+  voiceList ||= {};
+  if (voiceList[code]) return voiceList[code];
+  const all = speech.getVoices().filter((v) => v.lang.toLowerCase().startsWith(code));
+  if (!all.length) return [];
+  const score = (v) => (/natural|online|neural/i.test(v.name) ? 0 : 2) + (MALE.test(v.name) ? 0 : FEMALE.test(v.name) ? 1.5 : 0.8);
+  return (voiceList[code] = all.sort((a, b) => score(a) - score(b)));
 }
 
 const LINES = {
@@ -308,6 +338,7 @@ export class Game {
     this.toys = new PoolToys(this);
     if (this.rainPending) this.rain = new Rain(this);
     this.vm = new ViewModel();
+    this.vm.zombie = this.variant === 'zombie';
     this.vm.flash.material.map = this.fx.flashes[0].s.material.map;
     this.lightCache = new Float32Array(W * H).fill(-1);
     for (const m of buildProps(this)) this.scene.add(m);
@@ -412,7 +443,7 @@ export class Game {
     this.vm.mesh.visible = true;
     for (const h of this.hostages) h.reset();
     this.spec = null;
-    this.hud.center(this.mode === 'dm' ? t(this.variant ? 'intro_' + this.variant : 'teamKills') : t('round') + ' ' + this.round, 2);
+    this.hud.center(this.mode === 'dm' ? t(this.introKey()) : t('round') + ' ' + this.round, 2);
     this.hud.onRound?.();
     sfx('start');
   }
@@ -867,7 +898,7 @@ export class Game {
     this.player.deadAt = 0;
     if (this.mode === 'dm') {
       this.dmKills = { A: 0, B: 0 };
-      this.hud.center(t(this.variant ? 'intro_' + this.variant : 'teamKills'), 3.5);
+      this.hud.center(t(this.introKey()), 3.5);
     } else {
       this.hud.center(`${t('round')} ${this.round}`, 2);
     }
@@ -1547,6 +1578,45 @@ export class Game {
     return this.smokes.list.length > 0 && this.smokes.blocks(ax, ay, az, bx, by, bz);
   }
 
+  introKey() {
+    if (!this.variant) return 'teamKills';
+    return 'intro_' + this.variant + (this.variant === 'zombie' && this.player.team === 'B' ? 'B' : '');
+  }
+
+  // shaders compiled and textures sent to the card before the first frame, behind the loading screen;
+  // otherwise the match opens with a frozen frame (half a second here, more on a weak card)
+  async warmup() {
+    const r = this.renderer;
+    // hidden things (the dead, effects waiting in pools, the bomb) get theirs too
+    const shown = [];
+    const show = (root) =>
+      root.traverse((o) => {
+        if (!o.visible) {
+          o.visible = true;
+          shown.push(o);
+        }
+      });
+    show(this.scene);
+    show(this.vm.scene);
+    try {
+      await r.compileAsync(this.scene, this.camera);
+      if (!this.disposed) await r.compileAsync(this.vm.scene, this.vm.cam);
+    } catch {}
+    for (const o of shown) o.visible = false;
+    if (this.disposed) return;
+    const tex = new Set();
+    this.scene.traverse((o) => {
+      for (const m of o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []) {
+        for (const v of Object.values(m)) if (v?.isTexture) tex.add(v);
+        if (m.uniforms) for (const u of Object.values(m.uniforms)) if (u?.value?.isTexture) tex.add(u.value);
+      }
+    });
+    for (const t of tex)
+      try {
+        r.initTexture(t);
+      } catch {}
+  }
+
   // ---------- the extra modes ----------
   // the kit for this mode, on spawn and after every step up the gun game ladder
   variantLoadout(s) {
@@ -2146,11 +2216,21 @@ export class Game {
     const L = LINES[lang]?.[what] || LINES.en[what];
     const u = new SpeechSynthesisUtterance(L[Math.floor(Math.random() * L.length)]);
     u.lang = lang === 'ru' ? 'ru-RU' : 'en-US';
-    const voice = ss.getVoices().find((v) => v.lang.startsWith(lang === 'ru' ? 'ru' : 'en'));
-    if (voice) u.voice = voice;
-    s.voicePitch ??= 1.5 + Math.random() * 0.5;
-    u.pitch = s.voicePitch;
-    u.rate = 1.2 + Math.random() * 0.25;
+    // the fighter's own voice and character, picked once: voices go round the fighters, the characters
+    // too, so neighbours never sound alike; a woman's voice taken lower when there is nothing else
+    const vs = voicesFor(lang === 'ru' ? 'ru' : 'en');
+    if (!s.talk || s.talk.n !== vs.length) {
+      const men = vs.filter((v) => !FEMALE.test(v.name));
+      const pool = men.length >= 2 || !vs.length ? men : vs;
+      const voice = pool.length ? pool[s.id % pool.length] : null;
+      const c = CHARACTERS[(s.id * 3 + (s.team === 'B' ? 1 : 0)) % CHARACTERS.length];
+      const fem = voice && FEMALE.test(voice.name);
+      s.talk = { n: vs.length, voice, pitch: fem ? c.pitch * 0.7 : c.pitch, rate: c.rate };
+    }
+    if (s.talk.voice) u.voice = s.talk.voice;
+    const m = MOOD[what] || { pitch: 0, rate: 0 };
+    u.pitch = Math.max(0.3, Math.min(2, s.talk.pitch + m.pitch + (Math.random() - 0.5) * 0.16));
+    u.rate = Math.max(0.6, Math.min(1.8, s.talk.rate + m.rate + (Math.random() - 0.5) * 0.1));
     u.volume = Math.max(0.15, 1 - d / 30) * (getVolume?.() ?? 0.8);
     try {
       ss.speak(u);
