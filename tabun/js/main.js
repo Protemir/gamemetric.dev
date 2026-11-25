@@ -7,7 +7,7 @@ import { loadHorse, loadWolf, HERD_SETS, COATS } from './horses.js';
 import { loadRealHorse, loadRealWolf } from './realhorse.js';
 import { loadRiderProto } from './riderreal.js';
 import { initAudio, sfx, hooves, setSound, setMusic, music, setPortalMute } from './audio.js';
-import { PORTAL as PORTAL_KIND, portalReady, portalGameplay, portalHappy, portalInterstitial, portalRewarded, portalRewardedOk, onPortalHold, onPortalMute, track } from './portal.js';
+import { PORTAL as PORTAL_KIND, portalReady, portalGameplay, portalHappy, portalInterstitial, portalRewarded, portalRewardedOk, portalLevel, onPortalHold, onPortalMute, track } from './portal.js';
 import { t, detectLang, setLang, getLang, plural } from './i18n.js';
 import * as S from './save.js';
 import { ACH, achById } from './ach.js';
@@ -142,6 +142,7 @@ function startLevel() {
   resultIn = 0;
   if (state !== 'menu' || !run) prepare();
   state = 'play';
+  portalLevel(daily ? 'daily' : 'steppe', daily ? dayIndex() : L.n);
   slowT = 0; timeScale = 1; acc = 0;
   mileIdx = 0;
   while (mileIdx < MILES.length && run.count >= MILES[mileIdx]) mileIdx++;

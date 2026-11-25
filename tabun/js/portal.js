@@ -15,7 +15,8 @@ bind(window.TABUN_SDK || null);
 
 const say = (msg) => {
   try {
-    const r = bridge.platform.sendMessage(msg);
+    // level_* carry which level it is, so the dashboard can show where players get stuck
+    const r = msg.startsWith('level_') && levelInfo ? bridge.platform.sendMessage(msg, levelInfo) : bridge.platform.sendMessage(msg);
     if (r && r.catch) r.catch(() => {});
   } catch {
     /* not important */
@@ -29,6 +30,12 @@ const safe = (fn) => {
     /* not important */
   }
 };
+
+// { world, level } of the run about to start: 'steppe' + level number, or 'daily' + day
+let levelInfo = null;
+export function portalLevel(world, level) {
+  levelInfo = { world: String(world), level: String(level) };
+}
 
 let readySent = false, readyWanted = false;
 export function portalReady() {

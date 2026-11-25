@@ -28,7 +28,7 @@ await b.send('Page.addScriptToEvaluateOnNewDocument', { source: `
   const emit = (ev, s) => (hs[ev] || []).forEach((f) => f(s));
   window.TABUN_SDK = {
     EVENT_NAME: { INTERSTITIAL_STATE_CHANGED: 'i', REWARDED_STATE_CHANGED: 'r', PAUSE_STATE_CHANGED: 'p', AUDIO_STATE_CHANGED: 'a' },
-    platform: { sendMessage() {}, on() {}, isAudioEnabled: true },
+    platform: { sendMessage(m, o) { (window.__msgs = window.__msgs || []).push(m + (o ? ':' + o.world + '/' + o.level : '')); }, on() {}, isAudioEnabled: true },
     analytics: { send() {} },
     advertisement: {
       on(ev, f) { (hs[ev] = hs[ev] || []).push(f); },
@@ -46,6 +46,7 @@ const fails = [];
 const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) fails.push(msg); };
 const click = (id) => ev(`document.getElementById('${id}').click()`);
 async function toResult() {
+  if ((await ev('__tabun.state')) === 'menu') await ev('__tabun.start()');
   for (let k = 0; k < 50 && (await ev('__tabun.state')) !== 'play'; k++) await sleep(200);
   await sleep(800);
   await ev('__tabun.run.lose()');
@@ -89,6 +90,11 @@ await ev(`(() => { const o = performance.now.bind(performance); performance.now 
 await toResult();
 await click('resMenu');
 check((await ads()).filter((a) => a.startsWith('inter')).length === 1, 'через 3 мин — одна обязательная при выходе из итогов');
+// события для аналитики Playgama: старт и проигрыш каждого забега с номером уровня
+const msgs = await ev('(window.__msgs || []).slice()');
+console.log('     события: ' + msgs.join(', '));
+check(msgs.includes('game_ready'), 'game_ready отправлен');
+check(msgs.filter((m) => m === 'level_started:steppe/1').length >= 1 && msgs.filter((m) => m.startsWith('level_failed:steppe/')).length === 4, 'level_started/level_failed с уровнем — на каждый забег');
 check(errors.length === 0, 'ошибок в консоли нет ' + errors.join(' | '));
 b.close();
 srv.close();
