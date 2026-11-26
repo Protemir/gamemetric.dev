@@ -213,11 +213,8 @@ export class World {
       this.idle = new LodPool(this.idle, il, this.camera);
       this.eat = new LodPool(this.eat, il, this.camera);
     }
-    const wm = assets.wolf.textured ? assets.wolf.material : toy;
-    this.wolfRun = new HorsePool(assets.wolf.run, wm, 90, this.scene);
-    this.wolfStalk = new HorsePool(assets.wolf.stalk, wm, 90, this.scene);
-    // у реалистичного волка цвет из текстуры, инстанс лишь чуть меняет оттенок
-    this.wolfCols = (assets.wolf.textured ? ['#ffffff', '#e2e2e2', '#d8d0c4', '#c8c8c8'] : ['#3e4144', '#4d4f4f', '#36332f', '#57534c']).map((c) => new THREE.Color(c));
+    this.toyMat = toy;
+    this.setWolf(assets.wolf);
     // красные круги под волками — видно издалека
     const ringTex = canvasTex(64, 64, (g, w) => {
       const gr = g.createRadialGradient(w / 2, w / 2, w * 0.18, w / 2, w / 2, w / 2);
@@ -232,9 +229,10 @@ export class World {
     this.leaderCol = new THREE.Color('#f4efe6');
     this.rider = this.makeRider();
     this.scene.add(this.rider);
-    this.rear = assets.horse.rear ? new HorsePool(assets.horse.rear, hm, 2, this.scene, TK) : null;
+    this.horseMat = hm; this.horseTint = TK;
+    this.rear = null;
+    this.setRear(assets.horse.rear);
     this.rearT = -1;
-    this.wolfBite = assets.wolf.bite && !window.TABUN_PORTAL ? new HorsePool(assets.wolf.bite, wm, 40, this.scene) : null;
     this.boost = 0;
     {
       // следы копыт: кольцевой буфер отпечатков на дороге
@@ -265,12 +263,12 @@ export class World {
     }
     // табунщики: два всадника по бокам табуна
     this.herders = [
-      { r: this.makeRider({ hue: 205, sat: 0.55, noFlag: true }), side: -1, coat: 'bay', ph: 0.61 },
-      { r: this.makeRider({ hue: 100, sat: 0.45, noFlag: true }), side: 1, coat: 'black', ph: 0.13 },
+      { r: this.makeRider({ hue: 205, sat: 0.55, noFlag: true, tex: 512 }), side: -1, coat: 'bay', ph: 0.61 },
+      { r: this.makeRider({ hue: 100, sat: 0.45, noFlag: true, tex: 512 }), side: 1, coat: 'black', ph: 0.13 },
     ];
     for (const h of this.herders) this.scene.add(h.r);
     // конокрады: тёмные кафтаны, без знамён
-    this.raiderRiders = [0, 1, 2].map(() => { const r = this.makeRider({ hue: 15, sat: 0.12, noFlag: true }); this.scene.add(r); return r; });
+    this.raiderRiders = [0, 1, 2].map(() => { const r = this.makeRider({ hue: 15, sat: 0.12, noFlag: true, tex: 512 }); this.scene.add(r); return r; });
     this.raidCol = new THREE.Color('#2b1d14');
     this.rivalRider = this.makeRider({ chapan: '#2a2440', trim: '#9aa0b0', hat: '#3a3030', flag: '#1f1f2e', hue: 232, sat: 0.38 });
     this.scene.add(this.rivalRider);
@@ -306,6 +304,23 @@ export class World {
     this.emitAcc = 0;
   }
 
+  // вожак на дыбы: кадры запекаются после старта (loadLate в main.js)
+  setRear(frames) {
+    if (!frames || this.rear) return;
+    this.rear = new HorsePool(frames, this.horseMat, 2, this.scene, this.horseTint);
+  }
+
+  // волки: модель грузится уже после старта (они бывают с 4-го уровня), до неё — тёмные кони
+  setWolf(wolf) {
+    for (const p of [this.wolfRun, this.wolfStalk, this.wolfBite]) if (p) for (const m of p.meshes) { this.scene.remove(m); m.dispose(); }
+    const wm = wolf.textured ? wolf.material : this.toyMat;
+    this.wolfRun = new HorsePool(wolf.run, wm, 90, this.scene);
+    this.wolfStalk = new HorsePool(wolf.stalk, wm, 90, this.scene);
+    this.wolfBite = wolf.bite && !window.TABUN_PORTAL ? new HorsePool(wolf.bite, wm, 40, this.scene) : null;
+    // у реалистичного волка цвет из текстуры, инстанс лишь чуть меняет оттенок
+    this.wolfCols = (wolf.textured ? ['#ffffff', '#e2e2e2', '#d8d0c4', '#c8c8c8'] : ['#3e4144', '#4d4f4f', '#36332f', '#57534c']).map((c) => new THREE.Color(c));
+  }
+
   // всадник-батыр со знаменем: чапан, калпак, древко с полотнищем
   makeRider(o = {}) {
     const g = new THREE.Group();
@@ -313,7 +328,7 @@ export class World {
     const chapan = L(o.chapan || '#b5302a'), trim = L(o.trim || '#e3b04b'), skin = L('#d9a882'), boot = L('#2a1a10'), hat = L(o.hat || '#f2ece0'), hatBrim = L('#1c1410'), pole = L('#5a3a20');
     const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
     const realRider = this.assets.riderProto;
-    if (realRider) g.add(makeSeatedRider(realRider, 0.78 * HORSE_H * 1.3, o.hue ?? 2, o.sat ?? 0.78));
+    if (realRider) g.add(makeSeatedRider(realRider, 0.78 * HORSE_H * 1.3, o.hue ?? 2, o.sat ?? 0.78, o.tex || 1024));
     if (!realRider) {
     add(new THREE.CylinderGeometry(0.17, 0.24, 0.62, 10), chapan, 0, 0.31, 0);          // корпус
     add(new THREE.TorusGeometry(0.21, 0.035, 6, 16), trim, 0, 0.12, 0, Math.PI / 2);     // пояс

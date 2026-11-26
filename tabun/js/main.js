@@ -52,6 +52,17 @@ try { shownHints = JSON.parse(localStorage.getItem('tabun.hints') || '{}'); } ca
 // —— загрузка ——
 function setLoad(p) { $('loadBar').firstElementChild.style.width = Math.round(p * 100) + '%'; }
 
+// волки грузятся, когда игрок впервые в меню или на итогах (там подвисание запекания незаметно);
+// стаи бывают с 4-го уровня, так что к ним модель уже готова
+let wolfLoading = false;
+function loadWolfLate() {
+  if (wolfLoading || !world) return;
+  wolfLoading = true;
+  try { world.setRear(world.assets.horse.bakeRear?.()); } catch (e) { console.warn('tabun: rear', e?.message || e); }
+  const p = TOY ? loadWolf('models/wolf.glb') : loadRealWolf('models/direwolf.glb').catch(() => loadWolf('models/wolf.glb'));
+  p.then((w) => w && world.setWolf(w)).catch((e) => console.warn('tabun: optional asset', e?.message || e));
+}
+
 async function boot() {
   $('loadT').textContent = t('title').toUpperCase();
   $('loadS').textContent = t('loading');
@@ -64,12 +75,12 @@ async function boot() {
   const opt = (p) => p.catch((e) => { console.warn('tabun: optional asset', e?.message || e); return null; });
   const loader = new GLTFLoader();
   let done = 0;
-  const tick = () => setLoad(0.1 + (++done / 6) * 0.85);
-  const [horse, rock, bush, wolf, riderProto] = await Promise.all([
+  const tick = () => setLoad(0.1 + (++done / 5) * 0.85);
+  // волки (845 КБ) не нужны до 4-го уровня — грузятся после старта, см. loadWolfLate
+  const [horse, rock, bush, riderProto] = await Promise.all([
     (TOY ? loadHorse('models/horse.glb') : loadRealHorse('models/warhorse.glb', 'models/warhorse-lo.glb')).then((h) => { tick(); return h; }),
     loader.loadAsync('models/rock.glb').then((g) => { tick(); return g; }),
     opt(loader.loadAsync('models/bush.glb')).then((g) => { tick(); return g; }),
-    opt(TOY ? loadWolf('models/wolf.glb') : loadRealWolf('models/direwolf.glb').catch(() => loadWolf('models/wolf.glb'))).then((w) => { tick(); return w; }),
     opt(TOY ? Promise.resolve(null) : loadRiderProto('models/rider.glb')).then((r) => { tick(); return r; }),
     (document.fonts?.load("400 40px 'Russo One'") || Promise.resolve()).then(tick, tick),
   ]);
@@ -84,8 +95,8 @@ async function boot() {
   };
   clearTimeout(loadSlowT);
   const r = norm(rock.scene, false), b = bush ? norm(bush.scene, true) : null;
-  // волк не загрузился совсем — стая рисуется тёмными конями, игра не падает
-  const wolfA = wolf || { run: horse.gallop, stalk: horse.idle, bite: null, material: horse.material, textured: false }; // простой тёмный материал, не как дикие кони
+  // пока волк не загружен (или не загрузился совсем) — стая рисуется тёмными конями, игра не падает
+  const wolfA = { run: horse.gallop, stalk: horse.idle, bite: null, material: horse.material, textured: false }; // простой тёмный материал, не как дикие кони
   const assets = { horse, rock: r.g, rockScale: 1 / Math.max(r.size.x, r.size.y, r.size.z), bush: b?.g || null, bushScale: b ? 1.1 / b.size.y : 1, wolf: wolfA, riderProto };
   world = new World($('gl'), assets);
   // телефон может отобрать WebGL при сворачивании — не даём экрану остаться чёрным
@@ -142,6 +153,7 @@ function startLevel() {
   resultIn = 0;
   if (state !== 'menu' || !run) prepare();
   state = 'play';
+  if (L.items.some((it) => it.type === 'wolf')) loadWolfLate(); // сразу уровень с волками (ссылка ?level) — грузим на облёте камеры
   portalLevel(daily ? 'daily' : 'steppe', daily ? dayIndex() : L.n);
   slowT = 0; timeScale = 1; acc = 0;
   mileIdx = 0;
@@ -162,6 +174,7 @@ function startLevel() {
 }
 
 function showMenu() {
+  loadWolfLate();
   // уровень из ссылки снимается, когда из итогов вернулись в меню (на старте — остаётся)
   if (state === 'result' || state === 'pause') levelOverride = null;
   state = 'menu';
@@ -659,6 +672,7 @@ let resultId = 0;
 function showResult() {
   if (state !== 'play') return;
   state = 'result';
+  setTimeout(loadWolfLate, 1200); // после того как монеты долетят
   const res = run.result;
   portalGameplay(false, res.win ? 'win' : 'lose');
   if (res.win) portalHappy();

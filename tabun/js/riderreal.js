@@ -13,8 +13,17 @@ export async function loadRiderProto(url) {
   return { root, height: box.max.y - box.min.y };
 }
 
-function recolor(img, hue, sat) {
-  const k = Math.min(1, 1024 / Math.max(img.width, img.height));
+// одна перекраска на сочетание картинка + цвет + размер: конокрады одинаковые, им хватает одной
+const recolored = new WeakMap();
+function recolor(img, hue, sat, size) {
+  let m = recolored.get(img);
+  if (!m) recolored.set(img, (m = new Map()));
+  const key = hue + '/' + sat + '/' + size;
+  if (!m.has(key)) m.set(key, recolorNow(img, hue, sat, size));
+  return m.get(key);
+}
+function recolorNow(img, hue, sat, size) {
+  const k = Math.min(1, size / Math.max(img.width, img.height));
   const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
   const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, c.width, c.height);
   const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
@@ -59,11 +68,12 @@ const SEAT = [
 ];
 
 // посаженный всадник: группа с началом координат в тазу, смотрит в −Z (как кони)
-export function makeSeatedRider(proto, height, hue, sat) {
+// texSize: вожаку полная текстура, дальним всадникам хватает 512 — перекраска в 4 раза быстрее
+export function makeSeatedRider(proto, height, hue, sat, texSize = 1024) {
   const model = SkeletonUtils.clone(proto.root);
   model.traverse((o) => {
     if (o.isMesh) {
-      const mats = [o.material].flat().map((m) => { const nm = m.clone(); if (m.map?.image) nm.map = recolor(m.map.image, hue, sat); return nm; });
+      const mats = [o.material].flat().map((m) => { const nm = m.clone(); if (m.map?.image) nm.map = recolor(m.map.image, hue, sat, texSize); return nm; });
       o.material = Array.isArray(o.material) ? mats : mats[0];
       o.frustumCulled = false;
       o.castShadow = true;

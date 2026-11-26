@@ -13,7 +13,8 @@ export async function loadRealHorse(url, loUrl) {
   const norm = {};
   const gallop = bakeTex(gltf, mesh, clip('canter_loop'), 16, norm);
   const idle = bakeTex(gltf, mesh, clip('idle_loop'), 20, norm);
-  const rear = clip('rear') ? bakeTex(gltf, mesh, clip('rear'), 30, norm) : null; // на дыбы — для вожака
+  // на дыбы — для вожака; запекается позже (bakeRear), в меню или на итогах, чтобы не держать загрузку
+  const bakeRear = () => (clip('rear') ? bakeTex(gltf, mesh, clip('rear'), 30, norm) : null);
   const material = texturedMaterial(mesh.material);
   // дальняя детализация: та же лошадь, упрощённая в Blender в 4 раза; UV и текстура те же
   let gallopLo = null, idleLo = null;
@@ -25,7 +26,7 @@ export async function loadRealHorse(url, loUrl) {
     gallopLo = bakeTex(lo, ml, clipLo('canter_loop'), 16, normLo);
     idleLo = bakeTex(lo, ml, clipLo('idle_loop'), 20, normLo);
   }
-  return { gallop, idle, eat: idle, gallopLo, idleLo, rear, material, textured: true };
+  return { gallop, idle, eat: idle, gallopLo, idleLo, rear: null, bakeRear, material, textured: true };
 }
 
 function bakeTex(gltf, mesh, clip, frames, norm, height = HORSE_H) {
@@ -46,13 +47,19 @@ function bakeTex(gltf, mesh, clip, frames, norm, height = HORSE_H) {
   }
   const sock = scene.getObjectByName('saddle_socket');
   const raw = [];
-  const acc = new Float32Array(16), M = new THREE.Matrix4(), L = new THREE.Matrix4(), v = new THREE.Vector3(), nn = new THREE.Vector3(), nm = new THREE.Matrix3();
+  // M = L·(Σ w·B_j)·bind = Σ w·(L·B_j·bind): матрица каждой кости собирается раз на кадр, а не на каждую вершину
+  const nb = mesh.skeleton.bones.length, BM = new Float32Array(nb * 16), acc = new Float32Array(16);
+  const M = new THREE.Matrix4(), L = new THREE.Matrix4();
   for (let f = 0; f < frames; f++) {
     mixer.setTime((f / frames) * clip.duration);
     scene.updateMatrixWorld(true);
     mesh.skeleton.update();
     const bm = mesh.skeleton.boneMatrices;
     L.copy(mesh.matrixWorld).multiply(mesh.bindMatrixInverse);
+    for (let j = 0; j < nb; j++) {
+      M.fromArray(bm, j * 16).multiply(mesh.bindMatrix).premultiply(L);
+      BM.set(M.elements, j * 16);
+    }
     const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
       acc.fill(0);
@@ -60,14 +67,17 @@ function bakeTex(gltf, mesh, clip, frames, norm, height = HORSE_H) {
         const w = W[i * 4 + k];
         if (!w) continue;
         const j = J[i * 4 + k] * 16;
-        for (let e = 0; e < 16; e++) acc[e] += w * bm[j + e];
+        for (let e = 0; e < 16; e++) acc[e] += w * BM[j + e];
       }
-      M.fromArray(acc).multiply(mesh.bindMatrix).premultiply(L);
-      v.set(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]).applyMatrix4(M);
-      nm.setFromMatrix4(M);
-      nn.set(N[i * 3], N[i * 3 + 1], N[i * 3 + 2]).applyMatrix3(nm).normalize();
-      pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z;
-      nor[i * 3] = nn.x; nor[i * 3 + 1] = nn.y; nor[i * 3 + 2] = nn.z;
+      const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
+      const iw = 1 / (acc[3] * x + acc[7] * y + acc[11] * z + acc[15] || 1);
+      pos[i * 3] = (acc[0] * x + acc[4] * y + acc[8] * z + acc[12]) * iw;
+      pos[i * 3 + 1] = (acc[1] * x + acc[5] * y + acc[9] * z + acc[13]) * iw;
+      pos[i * 3 + 2] = (acc[2] * x + acc[6] * y + acc[10] * z + acc[14]) * iw;
+      const a = N[i * 3], b = N[i * 3 + 1], c = N[i * 3 + 2];
+      const nx = acc[0] * a + acc[4] * b + acc[8] * c, ny = acc[1] * a + acc[5] * b + acc[9] * c, nz = acc[2] * a + acc[6] * b + acc[10] * c;
+      const il = 1 / (Math.sqrt(nx * nx + ny * ny + nz * nz) || 1);
+      nor[i * 3] = nx * il; nor[i * 3 + 1] = ny * il; nor[i * 3 + 2] = nz * il;
     }
     const s = sock ? sock.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3();
     raw.push({ pos, nor, sock: s });
