@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, '_site');
 
-const skipDirs = new Set(['.git', '.github', '.cloudflare', '.claude', '_site', 'dist', 'node_modules', 'tools', 'worker']);
+const skipDirs = new Set(['.git', '.github', '.cloudflare', '.claude', '_site', 'dist', 'node_modules', 'tools', 'worker', 'functions']);
 const skipFiles = new Set(['README.md', 'LICENSE', '.gitignore', 'deploy.mjs', 'report.mjs']);
 const skipPaths = new Set(['stats/worker.js']); // the play counter's server code
 
